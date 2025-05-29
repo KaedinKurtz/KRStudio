@@ -235,6 +235,59 @@
 		{
 			"isExternal" : true,
 			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/glm/glmConfig-release.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom/urdfdom-config.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/console_bridge/console_bridge-config-version.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/console_bridge/console_bridge-config.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/console_bridge/console_bridge-targets.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/console_bridge/console_bridge-targets-debug.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/console_bridge/console_bridge-targets-release.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers/urdfdom_headers-config-version.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers/urdfdom_headers-config.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers/urdfdom_headersExport.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom/urdfdomExport.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom/urdfdomExport-debug.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom/urdfdomExport-release.cmake"
 		}
 	],
 	"kind" : "cmakeFiles",

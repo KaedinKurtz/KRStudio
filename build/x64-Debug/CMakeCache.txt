@@ -283,6 +283,9 @@ Z_VCPKG_PWSH_PATH:FILEPATH=Z_VCPKG_PWSH_PATH-NOTFOUND
 // triplet
 _VCPKG_INSTALLED_DIR:PATH=C:/Users/kaedi/vcpkg/installed
 
+//The directory containing a CMake configuration file for console_bridge.
+console_bridge_DIR:PATH=C:/Users/kaedi/vcpkg/installed/x64-windows/share/console_bridge
+
 //The directory containing a CMake configuration file for glad.
 glad_DIR:PATH=C:/Users/kaedi/vcpkg/installed/x64-windows/share/glad
 
@@ -291,6 +294,12 @@ glfw3_DIR:PATH=C:/Users/kaedi/vcpkg/installed/x64-windows/share/glfw3
 
 //The directory containing a CMake configuration file for glm.
 glm_DIR:PATH=C:/Users/kaedi/vcpkg/installed/x64-windows/share/glm
+
+//The directory containing a CMake configuration file for urdfdom.
+urdfdom_DIR:PATH=C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom
+
+//The directory containing a CMake configuration file for urdfdom_headers.
+urdfdom_headers_DIR:PATH=C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers
 
 
 ########################

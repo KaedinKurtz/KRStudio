@@ -1518,6 +1518,18 @@
 			"value" : "C:/Users/kaedi/vcpkg/installed"
 		},
 		{
+			"name" : "console_bridge_DIR",
+			"properties" : 
+			[
+				{
+					"name" : "HELPSTRING",
+					"value" : "The directory containing a CMake configuration file for console_bridge."
+				}
+			],
+			"type" : "PATH",
+			"value" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/console_bridge"
+		},
+		{
 			"name" : "glad_DIR",
 			"properties" : 
 			[
@@ -1552,6 +1564,30 @@
 			],
 			"type" : "PATH",
 			"value" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/glm"
+		},
+		{
+			"name" : "urdfdom_DIR",
+			"properties" : 
+			[
+				{
+					"name" : "HELPSTRING",
+					"value" : "The directory containing a CMake configuration file for urdfdom."
+				}
+			],
+			"type" : "PATH",
+			"value" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom"
+		},
+		{
+			"name" : "urdfdom_headers_DIR",
+			"properties" : 
+			[
+				{
+					"name" : "HELPSTRING",
+					"value" : "The directory containing a CMake configuration file for urdfdom_headers."
+				}
+			],
+			"type" : "PATH",
+			"value" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers"
 		}
 	],
 	"kind" : "cache",
