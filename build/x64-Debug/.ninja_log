@@ -1,0 +1,18 @@
+# ninja log v6
+3	272	7702578838397772	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	aee4ab2cc8d3b03f
+4	509	7702580419771527	RoboticsSoftware.exe	918ad43e0ca60f1
+4	474	7702581460949891	RoboticsSoftware.exe	c1eade740c5dc338
+3	365	7702582745293832	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	aee4ab2cc8d3b03f
+366	984	7702582748929748	RoboticsSoftware.exe	c1eade740c5dc338
+5	374	7702583579342367	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	aee4ab2cc8d3b03f
+375	902	7702583583033371	RoboticsSoftware.exe	c1eade740c5dc338
+16	373	7702584474583589	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	aee4ab2cc8d3b03f
+374	910	7702584478160066	RoboticsSoftware.exe	c1eade740c5dc338
+6	362	7702586769211192	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	aee4ab2cc8d3b03f
+363	842	7702586772787195	RoboticsSoftware.exe	c1eade740c5dc338
+16	383	7702587721798849	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	aee4ab2cc8d3b03f
+384	896	7702587725474730	RoboticsSoftware.exe	c1eade740c5dc338
+16	377	7702589685341334	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	aee4ab2cc8d3b03f
+377	827	7702589688957446	RoboticsSoftware.exe	c1eade740c5dc338
+20	389	7702595579944377	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	aee4ab2cc8d3b03f
+390	1595	7702595583643296	RoboticsSoftware.exe	c1eade740c5dc338
