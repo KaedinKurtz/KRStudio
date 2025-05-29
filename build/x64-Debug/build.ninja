@@ -76,6 +76,24 @@ build CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj: CXX_COMPILER__Robotics
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
   TARGET_PDB = RoboticsSoftware.pdb
 
+build CMakeFiles\RoboticsSoftware.dir\src\Mesh.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Mesh.cpp || cmake_object_order_depends_target_RoboticsSoftware
+  DEFINES = -DGLFW_DLL
+  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd
+  INCLUDES = -ID:\RoboticsSoftware\include -IC:\Users\kaedi\vcpkg\installed\x64-windows\share\urdfdom_headers\..\..\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom_headers -external:W0
+  OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
+  OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
+  TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
+  TARGET_PDB = RoboticsSoftware.pdb
+
+build CMakeFiles\RoboticsSoftware.dir\src\Robot.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Robot.cpp || cmake_object_order_depends_target_RoboticsSoftware
+  DEFINES = -DGLFW_DLL
+  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd
+  INCLUDES = -ID:\RoboticsSoftware\include -IC:\Users\kaedi\vcpkg\installed\x64-windows\share\urdfdom_headers\..\..\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom_headers -external:W0
+  OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
+  OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
+  TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
+  TARGET_PDB = RoboticsSoftware.pdb
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target RoboticsSoftware
@@ -84,7 +102,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj: CXX_COMPILER__Robotics
 #############################################
 # Link the executable RoboticsSoftware.exe
 
-build RoboticsSoftware.exe: CXX_EXECUTABLE_LINKER__RoboticsSoftware_Debug CMakeFiles\RoboticsSoftware.dir\src\main.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Camera.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj | C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\glfw3dll.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\glad.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\glm.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_world.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_sensor.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_model_state.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_model.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\console_bridge.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\tinyxml.lib
+build RoboticsSoftware.exe: CXX_EXECUTABLE_LINKER__RoboticsSoftware_Debug CMakeFiles\RoboticsSoftware.dir\src\main.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Camera.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Mesh.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Robot.cpp.obj | C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\glfw3dll.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\glad.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\glm.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_world.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_sensor.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_model_state.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_model.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\console_bridge.lib C$:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\tinyxml.lib
   FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -MDd
   LINK_FLAGS = /machine:x64 /debug /INCREMENTAL /subsystem:console
   LINK_LIBRARIES = C:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\glfw3dll.lib  opengl32.lib  C:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\glad.lib  C:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\glm.lib  C:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_world.lib  C:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_sensor.lib  C:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_model_state.lib  C:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\urdfdom_model.lib  C:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\console_bridge.lib  C:\Users\kaedi\vcpkg\installed\x64-windows\debug\lib\tinyxml.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
