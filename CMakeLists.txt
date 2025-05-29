@@ -20,6 +20,8 @@ add_executable(RoboticsSoftware
     src/main.cpp
     src/Camera.cpp
     src/Shader.cpp
+    src/Mesh.cpp
+    src/Robot.cpp
 )
 
 # Link ALL necessary libraries to our executable
