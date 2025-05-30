@@ -5,14 +5,12 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <cmath>
-// No need to include <QTime> here
 
 Robot::Robot(const std::string& urdf_path) {
     loadModel(urdf_path);
 }
 
 void Robot::loadModel(const std::string& urdf_path) {
-    // ... (this function remains unchanged)
     urdf::ModelInterfaceSharedPtr urdf_robot = urdf::parseURDFFile(urdf_path);
     if (!urdf_robot) {
         std::cerr << "ERROR::ROBOT: Failed to parse URDF file: " << urdf_path << std::endl;
@@ -42,22 +40,24 @@ void Robot::loadModel(const std::string& urdf_path) {
     rootLink = linkMap[urdf_robot->getRoot()->name];
 }
 
-// CORRECTED UPDATE FUNCTION
 void Robot::update(double deltaTime) {
-    // Accumulate the delta time from the application's timer
-    m_totalTime += deltaTime * 50.0; // Multiplying to speed up the animation a bit
+    m_totalTime += deltaTime * 50.0;
 
     if (jointMap.count("joint_1")) {
-        // Use the framework-independent total time for a smooth sine-wave animation
         jointMap["joint_1"]->current_angle_rad = sin(glm::radians(m_totalTime));
+    }
+    if (jointMap.count("joint_2")) {
+        jointMap["joint_2"]->current_angle_rad = cos(glm::radians(m_totalTime));
     }
 }
 
 void Robot::draw(Shader& shader, Mesh& link_mesh) const {
-    // ... (this function remains unchanged)
     if (!rootLink) return;
 
     glm::mat4 identity = glm::mat4(1.0f);
+
+    // Set color for the base link (root) to a light grey
+    shader.setVec4("objectColor", glm::vec4(0.6f, 0.6f, 0.6f, 1.0f));
     shader.setMat4("model", identity);
     link_mesh.draw();
 
@@ -65,7 +65,6 @@ void Robot::draw(Shader& shader, Mesh& link_mesh) const {
 }
 
 void Robot::drawRecursive(const std::shared_ptr<Link>& link, Shader& shader, Mesh& mesh, const glm::mat4& parentTransform) const {
-    // ... (this function remains unchanged)
     if (!link) return;
 
     for (size_t i = 0; i < link->child_links.size(); ++i) {
@@ -76,6 +75,16 @@ void Robot::drawRecursive(const std::shared_ptr<Link>& link, Shader& shader, Mes
         glm::mat4 rotation_matrix = glm::rotate(glm::mat4(1.0f), (float)child_joint->current_angle_rad, child_joint->axis);
 
         glm::mat4 current_transform = parentTransform * translation_matrix * rotation_matrix;
+
+        glm::vec4 color;
+        // The joint connecting to the top link is "joint_2"
+        if (child_joint->name == "joint_2") {
+            color = glm::vec4(0.2f, 0.8f, 0.2f, 1.0f); // Green
+        }
+        else {
+            color = glm::vec4(1.0f, 0.5f, 0.2f, 1.0f); // Orange
+        }
+        shader.setVec4("objectColor", color);
 
         shader.setMat4("model", current_transform);
         mesh.draw();

@@ -49,3 +49,9 @@ if(WIN32)
     COMMENT "Running windeployqt to deploy Qt DLLs..."
   )
 endif()
+
+add_custom_command(TARGET RoboticsSoftware POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+                   "$<TARGET_FILE_DIR:RoboticsSoftware>/shaders"
+                   COMMENT "Copying shaders to output directory...")
