@@ -371,9 +371,6 @@ _VCPKG_INSTALLED_DIR:PATH=C:/Users/kaedi/vcpkg/installed
 //The directory containing a CMake configuration file for console_bridge.
 console_bridge_DIR:PATH=C:/Users/kaedi/vcpkg/installed/x64-windows/share/console_bridge
 
-//The directory containing a CMake configuration file for glad.
-glad_DIR:PATH=C:/Users/kaedi/vcpkg/installed/x64-windows/share/glad
-
 //The directory containing a CMake configuration file for glm.
 glm_DIR:PATH=C:/Users/kaedi/vcpkg/installed/x64-windows/share/glm
 

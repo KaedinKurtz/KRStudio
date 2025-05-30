@@ -14,7 +14,7 @@ public:
     Robot(const std::string& urdf_path);
     void update(double deltaTime);
     void draw(Shader& shader, Mesh& link_mesh) const;
-
+    std::map<std::string, double> getJointStates() const;
 private:
     struct Joint;
     struct Link {

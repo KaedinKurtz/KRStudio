@@ -92,3 +92,12 @@ void Robot::drawRecursive(const std::shared_ptr<Link>& link, Shader& shader, Mes
         drawRecursive(child_link, shader, mesh, current_transform);
     }
 }
+
+std::map<std::string, double> Robot::getJointStates() const
+{
+    std::map<std::string, double> states;
+    for (const auto& [name, joint_ptr] : jointMap) {
+        states[name] = joint_ptr->current_angle_rad;
+    }
+    return states;
+}

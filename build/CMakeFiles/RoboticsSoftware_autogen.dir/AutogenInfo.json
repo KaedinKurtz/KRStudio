@@ -413,6 +413,12 @@
 	"HEADERS" : 
 	[
 		[
+			"D:/RoboticsSoftware/include/DiagnosticsPanel.hpp",
+			"MU",
+			"6YEA5652QU/moc_DiagnosticsPanel.cpp",
+			null
+		],
+		[
 			"D:/RoboticsSoftware/include/MainWindow.hpp",
 			"MU",
 			"6YEA5652QU/moc_MainWindow.cpp",
@@ -490,6 +496,7 @@
 	"SOURCES" : 
 	[
 		[ "D:/RoboticsSoftware/src/Camera.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/DiagnosticsPanel.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/MainWindow.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Mesh.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Robot.cpp", "MU", null ],
