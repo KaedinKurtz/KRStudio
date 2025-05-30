@@ -1,10 +1,11 @@
 #version 330 core
-
-// This is the output color for the pixel
 out vec4 FragColor;
+
+// This uniform must be declared to receive the color from C++
+uniform vec4 objectColor; 
 
 void main()
 {
-    // Set the pixel to a nice orange color
-    FragColor = vec4(1.0, 0.5, 0.2, 1.0);
+    // This line must use the uniform, not a hardcoded color
+    FragColor = objectColor; 
 }

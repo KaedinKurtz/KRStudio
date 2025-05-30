@@ -7,6 +7,7 @@
 
 Shader::Shader(QOpenGLFunctions_3_3_Core* gl, const char* vertexPath, const char* fragmentPath) : m_gl(gl)
 {
+    // ... constructor code is unchanged ...
     std::string vertexCode;
     std::string fragmentCode;
     std::ifstream vShaderFile;
@@ -59,7 +60,14 @@ void Shader::setMat4(const std::string& name, const glm::mat4& mat) const {
     m_gl->glUniformMatrix4fv(m_gl->glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, &mat[0][0]);
 }
 
+// Add this new function implementation
+void Shader::setVec4(const std::string& name, const glm::vec4& value) const
+{
+    m_gl->glUniform4fv(m_gl->glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
+}
+
 void Shader::checkCompileErrors(unsigned int shader, std::string type) {
+    // ... this function is unchanged ...
     int success;
     char infoLog[1024];
     if (type != "PROGRAM") {
