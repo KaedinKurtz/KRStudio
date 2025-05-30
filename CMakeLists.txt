@@ -15,6 +15,8 @@ find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(urdfdom CONFIG REQUIRED)
 
+
+
 # Add our executable from the source file
 add_executable(RoboticsSoftware
     src/main.cpp
@@ -23,6 +25,14 @@ add_executable(RoboticsSoftware
     src/Mesh.cpp
     src/Robot.cpp
 )
+
+if(MSVC)
+  # /ZI enables the Program Database for "Edit and Continue"
+  # /Od disables optimizations, which is required for a reliable debug session
+  target_compile_options(RoboticsSoftware PRIVATE
+    $<$<CONFIG:Debug>:/ZI /Od>
+  )
+endif()
 
 # Link ALL necessary libraries to our executable
 target_link_libraries(RoboticsSoftware PRIVATE
