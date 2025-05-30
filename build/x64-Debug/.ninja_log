@@ -1,9 +1,19 @@
 # ninja log v6
-12	872	7702650464359211	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	fd6a1550fc492606
-872	1504	7702650472970589	RoboticsSoftware.exe	eb413faa24cb4cc2
-17	663	7702650464419244	CMakeFiles/RoboticsSoftware.dir/src/Shader.cpp.obj	57a0bf2bcc8d36ae
-19	585	7702650464439223	CMakeFiles/RoboticsSoftware.dir/src/Mesh.cpp.obj	4737401e95038756
-14	646	7702650464389215	CMakeFiles/RoboticsSoftware.dir/src/Camera.cpp.obj	20f0e0e4f873ae49
-11	19	7702650464119213	clean	8c45b54705a541e8
-14	316	7702658887600108	CMakeFiles/RoboticsSoftware.dir/src/Robot.cpp.obj	785781580b33df60
+17	427	7702661341276269	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	fd6a1550fc492606
 317	869	7702658890632634	RoboticsSoftware.exe	a07a62b023e4225d
+19	424	7702661192463983	CMakeFiles/RoboticsSoftware.dir/src/Shader.cpp.obj	57a0bf2bcc8d36ae
+22	181	7702661192494316	CMakeFiles/RoboticsSoftware.dir/src/Mesh.cpp.obj	4737401e95038756
+17	411	7702661192443946	CMakeFiles/RoboticsSoftware.dir/src/Camera.cpp.obj	20f0e0e4f873ae49
+14	316	7702658887600108	CMakeFiles/RoboticsSoftware.dir/src/Robot.cpp.obj	785781580b33df60
+18	27	7702661192133707	clean	8c45b54705a541e8
+28	224	7702663078156249	CMakeFiles/RoboticsSoftware.dir/src/Mesh.cpp.obj	469b4c9346674940
+23	471	7702663078106244	CMakeFiles/RoboticsSoftware.dir/src/Camera.cpp.obj	6bf0c3ff13cc0d30
+26	495	7702663078136240	CMakeFiles/RoboticsSoftware.dir/src/Shader.cpp.obj	55975de47f7d76fd
+20	550	7702663078076196	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	4c2e497e7d0bbeae
+14	23	7702664711461439	clean	8c45b54705a541e8
+20	219	7702664711801928	CMakeFiles/RoboticsSoftware.dir/src/Mesh.cpp.obj	469b4c9346674940
+15	470	7702664711756754	CMakeFiles/RoboticsSoftware.dir/src/Camera.cpp.obj	6bf0c3ff13cc0d30
+17	489	7702664711781797	CMakeFiles/RoboticsSoftware.dir/src/Shader.cpp.obj	55975de47f7d76fd
+12	515	7702664711726751	CMakeFiles/RoboticsSoftware.dir/src/main.cpp.obj	4c2e497e7d0bbeae
+22	721	7702664711831941	CMakeFiles/RoboticsSoftware.dir/src/Robot.cpp.obj	4f3e10377bc99dde
+722	1622	7702664718818478	RoboticsSoftware.exe	a07a62b023e4225d

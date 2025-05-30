@@ -51,7 +51,7 @@ build cmake_object_order_depends_target_RoboticsSoftware: phony || .
 
 build CMakeFiles\RoboticsSoftware.dir\src\main.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\main.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLFW_DLL
-  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd
+  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd /ZI /Od
   INCLUDES = -ID:\RoboticsSoftware\include -IC:\Users\kaedi\vcpkg\installed\x64-windows\share\urdfdom_headers\..\..\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom_headers -external:W0
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
@@ -60,7 +60,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\main.cpp.obj: CXX_COMPILER__RoboticsSo
 
 build CMakeFiles\RoboticsSoftware.dir\src\Camera.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Camera.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLFW_DLL
-  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd
+  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd /ZI /Od
   INCLUDES = -ID:\RoboticsSoftware\include -IC:\Users\kaedi\vcpkg\installed\x64-windows\share\urdfdom_headers\..\..\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom_headers -external:W0
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
@@ -69,7 +69,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\Camera.cpp.obj: CXX_COMPILER__Robotics
 
 build CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Shader.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLFW_DLL
-  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd
+  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd /ZI /Od
   INCLUDES = -ID:\RoboticsSoftware\include -IC:\Users\kaedi\vcpkg\installed\x64-windows\share\urdfdom_headers\..\..\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom_headers -external:W0
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
@@ -78,7 +78,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj: CXX_COMPILER__Robotics
 
 build CMakeFiles\RoboticsSoftware.dir\src\Mesh.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Mesh.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLFW_DLL
-  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd
+  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd /ZI /Od
   INCLUDES = -ID:\RoboticsSoftware\include -IC:\Users\kaedi\vcpkg\installed\x64-windows\share\urdfdom_headers\..\..\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom_headers -external:W0
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
@@ -87,7 +87,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\Mesh.cpp.obj: CXX_COMPILER__RoboticsSo
 
 build CMakeFiles\RoboticsSoftware.dir\src\Robot.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Robot.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLFW_DLL
-  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd
+  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd /ZI /Od
   INCLUDES = -ID:\RoboticsSoftware\include -IC:\Users\kaedi\vcpkg\installed\x64-windows\share\urdfdom_headers\..\..\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom -external:IC:\Users\kaedi\vcpkg\installed\x64-windows\include\urdfdom_headers -external:W0
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src

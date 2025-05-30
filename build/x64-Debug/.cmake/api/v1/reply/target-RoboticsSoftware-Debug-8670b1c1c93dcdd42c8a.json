@@ -20,6 +20,7 @@
 			"include",
 			"_find_package",
 			"find_package",
+			"target_compile_options",
 			"target_include_directories"
 		],
 		"files" : 
@@ -37,7 +38,7 @@
 			{
 				"command" : 1,
 				"file" : 1,
-				"line" : 19,
+				"line" : 21,
 				"parent" : 0
 			},
 			{
@@ -49,7 +50,7 @@
 			{
 				"command" : 2,
 				"file" : 1,
-				"line" : 28,
+				"line" : 38,
 				"parent" : 0
 			},
 			{
@@ -87,13 +88,19 @@
 			{
 				"command" : 7,
 				"file" : 1,
-				"line" : 36,
+				"line" : 32,
 				"parent" : 0
 			},
 			{
-				"command" : 7,
+				"command" : 8,
 				"file" : 1,
-				"line" : 37,
+				"line" : 46,
+				"parent" : 0
+			},
+			{
+				"command" : 8,
+				"file" : 1,
+				"line" : 47,
 				"parent" : 0
 			}
 		]
@@ -105,6 +112,14 @@
 			[
 				{
 					"fragment" : "/DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "/ZI"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "/Od"
 				}
 			],
 			"defines" : 
@@ -117,15 +132,15 @@
 			"includes" : 
 			[
 				{
-					"backtrace" : 10,
+					"backtrace" : 11,
 					"path" : "D:/RoboticsSoftware/include"
 				},
 				{
-					"backtrace" : 11,
+					"backtrace" : 12,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers/../../include"
 				},
 				{
-					"backtrace" : 11,
+					"backtrace" : 12,
 					"isSystem" : true,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/include"
 				},
