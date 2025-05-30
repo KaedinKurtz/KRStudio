@@ -20,6 +20,8 @@ class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_3_3_Core
 public:
     explicit ViewportWidget(QWidget* parent = nullptr);
     ~ViewportWidget();
+    const Robot* getRobot() const { return m_robot.get(); } // <-- ADD THIS
+    QTimer& getTimer() { return m_timer; }
 
 protected:
     void initializeGL() override;

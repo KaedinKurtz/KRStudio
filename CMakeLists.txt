@@ -21,6 +21,8 @@ add_executable(RoboticsSoftware
     src/ViewportWidget.cpp
     include/MainWindow.hpp
     include/ViewportWidget.hpp
+    src/DiagnosticsPanel.cpp
+    include/DiagnosticsPanel.hpp
 )
 
 target_include_directories(RoboticsSoftware PUBLIC include)
@@ -55,3 +57,9 @@ add_custom_command(TARGET RoboticsSoftware POST_BUILD
                    "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
                    "$<TARGET_FILE_DIR:RoboticsSoftware>/shaders"
                    COMMENT "Copying shaders to output directory...")
+
+add_custom_command(TARGET RoboticsSoftware POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                   "${CMAKE_CURRENT_SOURCE_DIR}/simple_arm.urdf"
+                   "$<TARGET_FILE_DIR:RoboticsSoftware>/simple_arm.urdf"
+                   COMMENT "Copying simple_arm.urdf to output directory...")
