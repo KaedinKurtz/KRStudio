@@ -2,13 +2,19 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QTimer>
 
-// Qt Advanced Docking System includes
-#include <DockManager.h>
-#include <DockWidget.h>
+// Add the include for QResizeEvent
+#include <QResizeEvent>
 
-class ViewportWidget;
+// Forward declarations
+class QWidget; // Add QWidget forward declaration
 class StaticToolbar;
+class ViewportWidget;
+namespace ads {
+    class CDockManager;
+    class CDockWidget;
+}
 
 class MainWindow : public QMainWindow
 {
@@ -18,12 +24,15 @@ public:
     MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
-private:
-    ViewportWidget* m_viewport;             // Instance of your viewport
-    ads::CDockManager* m_dockManager;
-    StaticToolbar* m_staticToolbar;         // Your static toolbar instance
+protected:
 
-    // DockWidgets
-    ads::CDockWidget* m_toolbarDock;        // Dock widget for the static toolbar
-    ads::CDockWidget* m_viewportDock;       // Dock widget for the viewport
+
+private:
+    // --- Member variables updated for the new layout ---
+    QWidget* m_centralContainer; // The main container is now a member
+    StaticToolbar* m_fixedTopToolbar;
+    QWidget* m_adsHostWidget;
+    ads::CDockManager* m_dockManager;
+    ViewportWidget* m_viewport;
+    ads::CDockWidget* m_viewportDock;
 };

@@ -172,9 +172,13 @@ void ViewportWidget::keyPressEvent(QKeyEvent* event) {
     }
     else if (event->key() == Qt::Key_R) {
         qDebug() << "R key pressed - Forcing setToKnownGoodView";
-        float aspectRatio = static_cast<float>(width()) / std::max(1, height());
-        m_camera.setToKnownGoodView(aspectRatio);
+
+        // --- THIS IS THE FIX ---
+        // The function no longer takes the aspectRatio argument.
+        // Simply call it without any parameters.
+        m_camera.setToKnownGoodView();
+
         update();
     }
-    QOpenGLWidget::keyPressEvent(event);
+    QOpenGLWidget::keyPressEvent(event); // Call base class
 }

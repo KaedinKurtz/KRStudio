@@ -171,6 +171,10 @@
         <file>icons/digitalTwin.png</file>
         <file>icons/icons8-memory-slot-48.png</file>
         <file>icons/icons8-cpu-48.png</file>
+        <file>icons/Kurtz Robotics Logo Orange.png</file>
+        <file>icons/KRLogo.PNG</file>
+        <file>icons/KRLogoFilled.png</file>
+        <file>icons/kRLogoSquare.png</file>
     </qresource>
     <qresource prefix="/styles">
         <file>dark_style.qss</file>

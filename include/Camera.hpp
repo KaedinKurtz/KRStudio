@@ -17,7 +17,7 @@ public:
     void defaultInitialView(); // To go back to the very start
 
     void forceRecalculateView(glm::vec3 newPosition, glm::vec3 newTarget, float newDistance);
-    void setToKnownGoodView(float aspectRatio); // New method
+    void setToKnownGoodView();
 
 private:
     void updateCameraVectors();

@@ -16,18 +16,23 @@ glm::mat4 Camera::getViewMatrix() {
 }
 
 glm::mat4 Camera::getProjectionMatrix(float aspectRatio) {
+    if (aspectRatio <= 0) {
+        qWarning() << "Warning: Invalid aspect ratio in getProjectionMatrix:" << aspectRatio << ". Using 1.0 as fallback.";
+        aspectRatio = 1.0f;
+    }
     if (m_IsPerspective) {
-        float fovRadians = glm::radians(45.0f); // Your vertical FoV
-        qDebug() << "Perspective Projection: FoV_rad:" << fovRadians << "Aspect:" << aspectRatio << "Near:" << 0.1f << "Far:" << 100.0f;
-        if (aspectRatio <= 0) { // Guard against invalid aspect ratio
-            qWarning() << "Warning: Invalid aspect ratio in getProjectionMatrix:" << aspectRatio;
-            aspectRatio = 1.0f; // Fallback
-        }
+        float fovRadians = glm::radians(45.0f);
         return glm::perspective(fovRadians, aspectRatio, 0.1f, 100.0f);
     }
     else {
-        // ... (ortho logic)
+        float ortho_size = m_Distance * 0.5f;
+        return glm::ortho(-ortho_size * aspectRatio, ortho_size * aspectRatio, -ortho_size, ortho_size, -100.0f, 100.0f);
     }
+
+    // --- THIS IS THE FIX ---
+    // Add this fallback return statement to ensure the function always returns
+    // something and silence the compiler warning. It returns an identity matrix.
+    return glm::mat4(1.0f);
 }
 
 void Camera::logState(const std::string& contextMessage) const {
@@ -107,16 +112,19 @@ void Camera::resetView(float aspectRatio, const glm::vec3& target, float objectV
     logState("Camera View Reset/Reframed");
 }
 
-void Camera::setToKnownGoodView(float aspectRatio) {
-    qDebug() << "Camera::setToKnownGoodView - FORCING SUPER SIMPLE VIEW with AR:" << aspectRatio;
+void Camera::setToKnownGoodView() {
+    // Remove or comment out any lines that used aspectRatio
+    // Q_UNUSED(aspectRatio);
+    qDebug() << "Camera::setToKnownGoodView - FORCING SUPER SIMPLE VIEW";
+
     m_FocalPoint = glm::vec3(0.0f, 0.0f, 0.0f);
-    m_Position = glm::vec3(0.0f, 0.0f, 7.0f); // Try a specific position
-    m_Up = glm::vec3(0.0f, 1.0f, 0.0f);
+    m_IsPerspective = true;
+
     m_Distance = 7.0f;
     m_Yaw = 0.0f;
     m_Pitch = 0.0f;
-    m_IsPerspective = true;
-    // updateCameraVectors(); // Not strictly needed if setting Position/FocalPoint/Up directly
+
+    updateCameraVectors();
     logState("Camera after FORCED simple setToKnownGoodView");
 }
 
