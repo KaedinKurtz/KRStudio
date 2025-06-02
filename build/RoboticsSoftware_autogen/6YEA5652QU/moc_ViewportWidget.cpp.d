@@ -133,6 +133,7 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_ViewportWidget
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qversiontagging.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qxptype_traits.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qyieldcpu.h \
+  C:/Qt/6.9.0/msvc2022_64/include/QtGui/QOpenGLContext \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/QSurfaceFormat \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qaction.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbitmap.h \
