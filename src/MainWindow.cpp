@@ -1,82 +1,115 @@
 // src/MainWindow.cpp
 #include "MainWindow.hpp"
 #include "ViewportWidget.hpp"
-#include "StaticToolbar.hpp" // Your custom toolbar header
+#include "StaticToolbar.hpp"
 
+#include <QVBoxLayout>
+#include <QWidget>
+#include <DockManager.h>
+#include <DockWidget.h>
 #include <QMenuBar>
-#include <QMenu>
-#include <QAction>
 #include <QStatusBar>
+#include <algorithm>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    // 1. Initialize the Qt Advanced Docking System Manager
-    // This should be one of the first things for ADS to take over the window.
-    m_dockManager = new ads::CDockManager(this);
+    // 1. Create the main container and its vertical layout
+    m_centralContainer = new QWidget(this);
+    QVBoxLayout* mainLayout = new QVBoxLayout(m_centralContainer);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
 
-    // 2. Setup the Static Toolbar
-    m_staticToolbar = new StaticToolbar(this);
-    m_toolbarDock = new ads::CDockWidget("Main Toolbar"); // Assign to member
-    m_toolbarDock->setWidget(m_staticToolbar);
+    // 2. Add the static toolbar to the TOP
+    m_fixedTopToolbar = new StaticToolbar(this);
+    mainLayout->addWidget(m_fixedTopToolbar, 0);
 
-    // --- Configure the static toolbar dock widget ---
-    m_toolbarDock->setFeature(ads::CDockWidget::DockWidgetMovable, false);
-    m_toolbarDock->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
-    m_toolbarDock->setFeature(ads::CDockWidget::DockWidgetClosable, false);
-    // else {
-    m_toolbarDock->setFeature(ads::CDockWidget::NoTab, true); // Fallback if titleBar() hiding isn't perfect
-    // }
-    m_dockManager->addDockWidget(ads::TopDockWidgetArea, m_toolbarDock);
+    // 3. Create the host widget for the docking system
+    // Remove any internal layout from m_adsHostWidget; it's just a container.
 
-    // 3. Setup the ViewportWidget as a dockable widget
-    m_viewport = new ViewportWidget(this);
-    m_viewportDock = new ads::CDockWidget("3D Viewport");
+    // 4. Set our container as the central widget
+    this->setCentralWidget(m_centralContainer);
+
+    // 5. Initialize the Dock Manager and parent it to our host widget
+    m_dockManager = new ads::CDockManager();
+
+    mainLayout->addWidget(m_dockManager, 1);
+
+    // 6. Setup the FIRST ViewportWidget and its Dock
+    m_viewport = new ViewportWidget(this); // This will be your first viewport
+
+    // ---> NEW SIZING HINTS FOR THE CONTENT AND ITS DOCK <---
+    // a) Tell the m_viewport (QOpenGLWidget) that it wants to expand
+    m_viewport->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    // b) Give m_viewport a substantial minimum size to influence its sizeHint
+    m_viewport->setMinimumSize(600, 400); // Adjust if needed
+
+    m_viewportDock = new ads::CDockWidget("3D Viewport 1"); // Renamed for clarity
     m_viewportDock->setWidget(m_viewport);
 
-    // --- Configure the viewport dock widget features ---
+    // c) Also tell the m_viewportDock that it wants to expand
+    m_viewportDock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
     m_viewportDock->setFeature(ads::CDockWidget::DockWidgetClosable, false);
     m_viewportDock->setFeature(ads::CDockWidget::DockWidgetMovable, true);
     m_viewportDock->setFeature(ads::CDockWidget::DockWidgetFloatable, true);
 
+    // Use CenterDockWidgetArea for the first viewport
+    m_dockManager->addDockWidget(ads::CenterDockWidgetArea, m_viewportDock);
+
+    // 7. Setup the SECOND ViewportWidget and its Dock
+    ViewportWidget* m_viewport2 = new ViewportWidget(this); // Create a second ViewportWidget
+    m_viewport2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_viewport2->setMinimumSize(600, 400); // Adjust if needed
+
+    ads::CDockWidget* m_viewportDock2 = new ads::CDockWidget("3D Viewport 2"); // Create a second CDockWidget
+    m_viewportDock2->setWidget(m_viewport2);
+
+    m_viewportDock2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_viewportDock2->setFeature(ads::CDockWidget::DockWidgetClosable, false);
+    m_viewportDock2->setFeature(ads::CDockWidget::DockWidgetMovable, true);
+    m_viewportDock2->setFeature(ads::CDockWidget::DockWidgetFloatable, true);
+
+    // Add the second viewport dock. You can choose a different area, or let the dock manager arrange it.
+    // For example, to place it next to the first one (e.g., to the right):
+    m_dockManager->addDockWidget(ads::RightDockWidgetArea, m_viewportDock2);
+
+    // Viewport reset connection for the first viewport
     connect(m_viewportDock, &ads::CDockWidget::topLevelChanged, this, [this](bool isFloating) {
         Q_UNUSED(isFloating);
         if (m_viewport) {
             QTimer::singleShot(0, m_viewport, [viewport_ptr = m_viewport]() {
                 if (viewport_ptr) {
-                    int w = viewport_ptr->width();
-                    int h = viewport_ptr->height();
-                    float aspectRatio = static_cast<float>(w) / std::max(1, h);
-                    qDebug() << "Timer fired: Attempting to set known good view for viewport:" << viewport_ptr
-                        << "with current size:" << w << "x" << h << "Aspect:" << aspectRatio;
-
-                    viewport_ptr->getCamera().setToKnownGoodView(aspectRatio);
+                    viewport_ptr->getCamera().setToKnownGoodView();
                     viewport_ptr->update();
                 }
                 });
         }
         });
 
-    m_dockManager->addDockWidget(ads::BottomDockWidgetArea, m_viewportDock);
+    // Viewport reset connection for the second viewport
+    connect(m_viewportDock2, &ads::CDockWidget::topLevelChanged, this, [m_viewport2](bool isFloating) {
+        Q_UNUSED(isFloating);
+        if (m_viewport2) {
+            QTimer::singleShot(0, m_viewport2, [viewport_ptr = m_viewport2]() {
+                if (viewport_ptr) {
+                    viewport_ptr->getCamera().setToKnownGoodView();
+                    viewport_ptr->update();
+                }
+                });
+        }
+        });
 
-    // --- Main Menu Bar (hide it as before) ---
-    if (menuBar())
-    {
+    // Window Setup
+    if (menuBar()) {
         menuBar()->setVisible(false);
     }
-    // Or, if you want some basic menus for ADS (like listing dock widgets):
-    // QMenu* viewMenu = menuBar()->addMenu(tr("&View"));
-    // m_dockManager->addDockWidgetActionsToMenu(viewMenu); // Example, API may vary
-
-    // --- Window Setup ---
     resize(1600, 900);
-    setWindowTitle("Robotics Software - Dockable Viewport");
+    setWindowTitle("KR Studio V0.1");
+    setWindowIcon(QIcon(":/icons/kRLogoSquare.png"));
     statusBar()->showMessage("Ready.");
 }
 
 MainWindow::~MainWindow()
 {
-    // Qt's parent-child mechanism handles m_dockManager.
-    // m_viewport and m_staticToolbar are widgets set into CDockWidgets,
-    // which are managed by the CDockManager.
 }

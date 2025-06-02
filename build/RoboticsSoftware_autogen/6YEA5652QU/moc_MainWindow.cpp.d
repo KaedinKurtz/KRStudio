@@ -1,12 +1,10 @@
 D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_MainWindow.cpp: D:/RoboticsSoftware/include/MainWindow.hpp \
-  C:/Qt/6.9.0/msvc2022_64/include/QtCore/QDebug \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/QList \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/QObject \
-  C:/Qt/6.9.0/msvc2022_64/include/QtCore/QPair \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/QRect \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/QSize \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/QSizeF \
-  C:/Qt/6.9.0/msvc2022_64/include/QtCore/QtGlobal \
+  C:/Qt/6.9.0/msvc2022_64/include/QtCore/QTimer \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20functional.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20iterator.h \
@@ -127,6 +125,7 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_MainWindow.cpp
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtenvironmentvariables.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtextstream.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtformat_impl.h \
+  C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtimer.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtmetamacros.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtnoop.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtpreprocessorsupport.h \
@@ -144,8 +143,7 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_MainWindow.cpp
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qversiontagging.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qxptype_traits.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/qyieldcpu.h \
-  C:/Qt/6.9.0/msvc2022_64/include/QtGui/QMouseEvent \
-  C:/Qt/6.9.0/msvc2022_64/include/QtGui/QPixmap \
+  C:/Qt/6.9.0/msvc2022_64/include/QtGui/QResizeEvent \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/QTransform \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qaction.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbitmap.h \
@@ -184,28 +182,11 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_MainWindow.cpp
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qvectornd.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QFrame \
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QMainWindow \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QPushButton \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QRubberBand \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QStyle \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QWidget \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qabstractbutton.h \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qframe.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qmainwindow.h \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qpushbutton.h \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qrubberband.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qsizepolicy.h \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qstyle.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtabwidget.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgets-config.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsexports.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h \
-  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h \
-  D:/RoboticsSoftware/ads/src/AutoHideTab.h \
-  D:/RoboticsSoftware/ads/src/DockContainerWidget.h \
-  D:/RoboticsSoftware/ads/src/DockManager.h \
-  D:/RoboticsSoftware/ads/src/DockWidget.h \
-  D:/RoboticsSoftware/ads/src/FloatingDockContainer.h \
-  D:/RoboticsSoftware/ads/src/PushButton.h \
-  D:/RoboticsSoftware/ads/src/ads_globals.h
+  C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h
