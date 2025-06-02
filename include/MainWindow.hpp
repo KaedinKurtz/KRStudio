@@ -1,8 +1,14 @@
 #pragma once
+
 #include <QMainWindow>
 
+// Qt Advanced Docking System includes
+// Adjust paths if your installation structure is different (e.g., "ads/DockManager.h")
+#include <DockManager.h>
+#include <DockWidget.h>
+
 class ViewportWidget;
-class DiagnosticsPanel;
+class StaticToolbar; // Forward declare our custom toolbar widget
 
 class MainWindow : public QMainWindow
 {
@@ -12,10 +18,10 @@ public:
     MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
-private slots: // <-- Add a private slots section
-    void updateUI();
-
 private:
     ViewportWidget* m_viewport;
-    DiagnosticsPanel* m_diagnosticsPanel;
+    ads::CDockManager* m_dockManager;
+    StaticToolbar* m_staticToolbar; // Instance of your toolbar UI widget
+    // ads::CDockWidget* m_toolbarDock; // The ADS wrapper for the toolbar
+                                     // Not strictly needed as a member if only added once
 };
