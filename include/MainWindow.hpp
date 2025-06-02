@@ -1,14 +1,14 @@
+// include/MainWindow.hpp
 #pragma once
 
 #include <QMainWindow>
 
 // Qt Advanced Docking System includes
-// Adjust paths if your installation structure is different (e.g., "ads/DockManager.h")
 #include <DockManager.h>
 #include <DockWidget.h>
 
 class ViewportWidget;
-class StaticToolbar; // Forward declare our custom toolbar widget
+class StaticToolbar;
 
 class MainWindow : public QMainWindow
 {
@@ -19,9 +19,11 @@ public:
     ~MainWindow();
 
 private:
-    ViewportWidget* m_viewport;
+    ViewportWidget* m_viewport;             // Instance of your viewport
     ads::CDockManager* m_dockManager;
-    StaticToolbar* m_staticToolbar; // Instance of your toolbar UI widget
-    // ads::CDockWidget* m_toolbarDock; // The ADS wrapper for the toolbar
-                                     // Not strictly needed as a member if only added once
+    StaticToolbar* m_staticToolbar;         // Your static toolbar instance
+
+    // DockWidgets
+    ads::CDockWidget* m_toolbarDock;        // Dock widget for the static toolbar
+    ads::CDockWidget* m_viewportDock;       // Dock widget for the viewport
 };

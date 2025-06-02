@@ -1,71 +1,82 @@
+// src/MainWindow.cpp
 #include "MainWindow.hpp"
 #include "ViewportWidget.hpp"
-#include "StaticToolbar.hpp" // Include your custom toolbar header
+#include "StaticToolbar.hpp" // Your custom toolbar header
 
 #include <QMenuBar>
 #include <QMenu>
-#include <QAction> // Required for QAction
+#include <QAction>
 #include <QStatusBar>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    if (menuBar()) // Check if a menu bar exists (QMainWindow creates one by default)
+    // 1. Initialize the Qt Advanced Docking System Manager
+    // This should be one of the first things for ADS to take over the window.
+    m_dockManager = new ads::CDockManager(this);
+
+    // 2. Setup the Static Toolbar
+    m_staticToolbar = new StaticToolbar(this);
+    m_toolbarDock = new ads::CDockWidget("Main Toolbar"); // Assign to member
+    m_toolbarDock->setWidget(m_staticToolbar);
+
+    // --- Configure the static toolbar dock widget ---
+    m_toolbarDock->setFeature(ads::CDockWidget::DockWidgetMovable, false);
+    m_toolbarDock->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
+    m_toolbarDock->setFeature(ads::CDockWidget::DockWidgetClosable, false);
+    // else {
+    m_toolbarDock->setFeature(ads::CDockWidget::NoTab, true); // Fallback if titleBar() hiding isn't perfect
+    // }
+    m_dockManager->addDockWidget(ads::TopDockWidgetArea, m_toolbarDock);
+
+    // 3. Setup the ViewportWidget as a dockable widget
+    m_viewport = new ViewportWidget(this);
+    m_viewportDock = new ads::CDockWidget("3D Viewport");
+    m_viewportDock->setWidget(m_viewport);
+
+    // --- Configure the viewport dock widget features ---
+    m_viewportDock->setFeature(ads::CDockWidget::DockWidgetClosable, false);
+    m_viewportDock->setFeature(ads::CDockWidget::DockWidgetMovable, true);
+    m_viewportDock->setFeature(ads::CDockWidget::DockWidgetFloatable, true);
+
+    connect(m_viewportDock, &ads::CDockWidget::topLevelChanged, this, [this](bool isFloating) {
+        Q_UNUSED(isFloating);
+        if (m_viewport) {
+            QTimer::singleShot(0, m_viewport, [viewport_ptr = m_viewport]() {
+                if (viewport_ptr) {
+                    int w = viewport_ptr->width();
+                    int h = viewport_ptr->height();
+                    float aspectRatio = static_cast<float>(w) / std::max(1, h);
+                    qDebug() << "Timer fired: Attempting to set known good view for viewport:" << viewport_ptr
+                        << "with current size:" << w << "x" << h << "Aspect:" << aspectRatio;
+
+                    viewport_ptr->getCamera().setToKnownGoodView(aspectRatio);
+                    viewport_ptr->update();
+                }
+                });
+        }
+        });
+
+    m_dockManager->addDockWidget(ads::BottomDockWidgetArea, m_viewportDock);
+
+    // --- Main Menu Bar (hide it as before) ---
+    if (menuBar())
     {
         menuBar()->setVisible(false);
     }
-
-    // 1. Setup the Viewport as the central widget (ADS will dock around it)
-    m_viewport = new ViewportWidget(this);
-    setCentralWidget(m_viewport);
-
-    // 2. Initialize the Qt Advanced Docking System Manager
-    m_dockManager = new ads::CDockManager(this);
-
-    // 3. Create an instance of your StaticToolbar
-    m_staticToolbar = new StaticToolbar(this); // Parent can be this or nullptr
-
-    // 4. Create a CDockWidget to hold your toolbar
-    ads::CDockWidget* toolbarDockWidget = new ads::CDockWidget("Main Toolbar");
-    toolbarDockWidget->setWidget(m_staticToolbar);
-
-    // Optional: Customize dock widget features (closable, floatable, movable)
-    // By default, they are usually all enabled.
-    toolbarDockWidget->setFeature(ads::CDockWidget::DockWidgetClosable, false);
-    toolbarDockWidget->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
-    toolbarDockWidget->setFeature(ads::CDockWidget::DockWidgetMovable, false);
-    
-    // Set an icon for the dock widget tab (optional)
-    // toolbarDockWidget->setIcon(QIcon(":/icons/your_toolbar_icon.png"));
-
-    // 5. Add the dock widget to the dock manager
-    // You can choose TopDockWidgetArea, LeftDockWidgetArea, RightDockWidgetArea, BottomDockWidgetArea
-    m_dockManager->addDockWidget(ads::TopDockWidgetArea, toolbarDockWidget);
-
-    // --- Standard Menu and Status Bar Setup ---
-    QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
-    QAction* exitAction = new QAction(tr("E&xit"), this);
-    connect(exitAction, &QAction::triggered, this, &MainWindow::close);
-    fileMenu->addAction(exitAction);
-
-    // Add other menus (View menu for managing dock widgets is often useful with ADS)
-    QMenu* viewMenu = menuBar()->addMenu(tr("&View"));
-    // Add actions to show/hide dock widgets (ADS provides ways to do this)
-    // For example, ADS manager might have a method to create a menu for all dock widgets
-    // or you can add actions manually: viewMenu->addAction(toolbarDockWidget->toggleViewAction());
-
+    // Or, if you want some basic menus for ADS (like listing dock widgets):
+    // QMenu* viewMenu = menuBar()->addMenu(tr("&View"));
+    // m_dockManager->addDockWidgetActionsToMenu(viewMenu); // Example, API may vary
 
     // --- Window Setup ---
-    resize(1600, 900); // Increased size to better accommodate toolbar
-    setWindowTitle("Robotics Software (Qt ADS Integration)");
+    resize(1600, 900);
+    setWindowTitle("Robotics Software - Dockable Viewport");
     statusBar()->showMessage("Ready.");
 }
 
 MainWindow::~MainWindow()
 {
-    // Qt's parent-child ownership should handle deletion of m_dockManager,
-    // which in turn owns the dock widgets and their contents.
-    // If m_staticToolbar was not given a parent or given to the dock widget,
-    // and m_toolbarDock was a member, ensure proper cleanup if necessary.
-    // However, setWidget() for CDockWidget usually takes ownership.
+    // Qt's parent-child mechanism handles m_dockManager.
+    // m_viewport and m_staticToolbar are widgets set into CDockWidgets,
+    // which are managed by the CDockManager.
 }

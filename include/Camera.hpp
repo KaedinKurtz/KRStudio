@@ -1,5 +1,6 @@
 #pragma once
 #include <glm/glm.hpp>
+#include <string>
 
 class Camera {
 public:
@@ -9,6 +10,15 @@ public:
     void processMouseMovement(double xoffset, double yoffset, bool isPanning);
     void processMouseScroll(double yoffset);
     void toggleProjection();
+
+    void logState(const std::string& contextMessage = "") const; // New logging method
+
+    void resetView(float aspectRatio, const glm::vec3& target = glm::vec3(0.0f), float objectSize = 1.0f); // Example
+    void defaultInitialView(); // To go back to the very start
+
+    void forceRecalculateView(glm::vec3 newPosition, glm::vec3 newTarget, float newDistance);
+    void setToKnownGoodView(float aspectRatio); // New method
+
 private:
     void updateCameraVectors();
     glm::vec3 m_Position;
