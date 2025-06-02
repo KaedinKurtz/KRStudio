@@ -165,6 +165,12 @@
         <file>icons/icons8-power-48.png</file>
         <file>icons/icons8-pin-48.png</file>
         <file>icons/icons8-circle-67.png</file>
+        <file>icons/icons8-advance-48.png</file>
+        <file>icons/icons8-skip-to-start-48.png</file>
+        <file>icons/icons8-end-48.png</file>
+        <file>icons/digitalTwin.png</file>
+        <file>icons/icons8-memory-slot-48.png</file>
+        <file>icons/icons8-cpu-48.png</file>
     </qresource>
     <qresource prefix="/styles">
         <file>dark_style.qss</file>
