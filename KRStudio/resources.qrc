@@ -1,0 +1,108 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/icons8-add-file-48.png</file>
+        <file>icons/icons8-export-48.png</file>
+        <file>icons/icons8-help-48.png</file>
+        <file>icons/icons8-import-48.png</file>
+        <file>icons/icons8-measure-48.png</file>
+        <file>icons/icons8-open-document-48.png</file>
+        <file>icons/icons8-redo-48.png</file>
+        <file>icons/icons8-rotate-48.png</file>
+        <file>icons/icons8-save-48.png</file>
+        <file>icons/icons8-settings-48.png</file>
+        <file>icons/icons8-trigonometry-48.png</file>
+        <file>icons/icons8-undo-48.png</file>
+        <file>icons/chevron.png</file>
+        <file>icons/orthographic.png</file>
+        <file>icons/perspective.png</file>
+        <file>icons/icons8-3d-rotate-48.png</file>
+        <file>icons/icons8-hand-48.png</file>
+        <file>icons/shaded.png</file>
+        <file>icons/shadededges.png</file>
+        <file>icons/wireframe.png</file>
+        <file>icons/icons8-light-48 (1).png</file>
+        <file>icons/icons8-light-48.png</file>
+        <file>icons/collisionBox-1.png</file>
+        <file>icons/coordinateAxes.png</file>
+        <file>icons/coordinateAxesMulti.png</file>
+        <file>icons/groundplane.png</file>
+        <file>icons/cubeView.png</file>
+        <file>icons/icons8-code-48.png</file>
+        <file>icons/icons8-robot-48.png</file>
+        <file>icons/robotrotate.png</file>
+        <file>icons/icons8-close-48.png</file>
+        <file>icons/icons8-emergency-stop-button-96.png</file>
+        <file>icons/icons8-move-left-48.png</file>
+        <file>icons/icons8-movement-48.png</file>
+        <file>icons/icons8-move-right-48.png</file>
+        <file>icons/icons8-walking-48.png</file>
+        <file>icons/icons8-bone-64.PNG</file>
+        <file>icons/icons8-elbow-64.png</file>
+        <file>icons/icons8-chain-48.png</file>
+        <file>icons/icons8-expand-influence-48.png</file>
+        <file>icons/icons8-insert-clip-48.png</file>
+        <file>icons/icons8-edit-property-48.png</file>
+        <file>icons/icons8-engineering-48.png</file>
+        <file>icons/icons8-minecraft-pickaxe-48.png</file>
+        <file>icons/icons8-spring-in-motion-48.png</file>
+        <file>icons/icons8-transform-clip-48.png</file>
+        <file>icons/icons8-view-48.png</file>
+        <file>icons/icons8-wacom-tablet-48.png</file>
+        <file>icons/icons8-deployment-48.png</file>
+        <file>icons/workspace.png</file>
+        <file>icons/icons8-star-48.png</file>
+        <file>icons/icons8-souvenir-from-vacation-48.png</file>
+        <file>icons/icons8-topic-push-notification-48.png</file>
+        <file>icons/icons8-delete-message-48.png</file>
+        <file>icons/icons8-high-priority-message-48.png</file>
+        <file>icons/icons8-sphere-48.png</file>
+        <file>icons/icons8-home-automation-48.png</file>
+        <file>icons/icons8-merge-documents-48.png</file>
+        <file>icons/icons8-rental-house-contract-48.png</file>
+        <file>icons/icons8-temperature-inside-48.png</file>
+        <file>icons/icons8-foreclosure-48.png</file>
+        <file>icons/icons8-smart-home-48.png</file>
+        <file>icons/addPrimative.png</file>
+        <file>icons/icons8-cursor-48.png</file>
+        <file>icons/rotate.png</file>
+        <file>icons/icons8-zoom-to-extents-48.png</file>
+        <file>icons/icons8-switch-48.png</file>
+        <file>icons/icons8-switch-48 (1).png</file>
+        <file>icons/icons8-transfer-48.png</file>
+        <file>icons/SceneReconstruction.png</file>
+        <file>icons/playHouse.png</file>
+        <file>icons/SLAM.png</file>
+        <file>icons/LiveSLAM.png</file>
+        <file>icons/Point Cloud Insert.png</file>
+        <file>icons/Point Cloud.png</file>
+        <file>icons/icons8-construction-48.png</file>
+        <file>icons/annotation.png</file>
+        <file>icons/icons8-live-photos-48.png</file>
+        <file>icons/icons8-camera-48.png</file>
+        <file>icons/icons8-dome-camera-48.png</file>
+        <file>icons/icons8-slr-48.png</file>
+        <file>icons/touch sensor.png</file>
+        <file>icons/loadcell.png</file>
+        <file>icons/icons8-scenic-view-48.png</file>
+        <file>icons/icons8-view-all-48.png</file>
+        <file>icons/icons8-browse-page-48.png</file>
+        <file>icons/Laser Gate.png</file>
+        <file>icons/liitSwitch.png</file>
+        <file>icons/icons8-camera-automation-48.png</file>
+        <file>icons/icons8-browse-podcasts-48.png</file>
+        <file>icons/icons8-record-48.png</file>
+        <file>icons/icons8-play-48.png</file>
+        <file>icons/liveweb.png</file>
+        <file>icons/icons8-control-panel-48.png</file>
+        <file>icons/icons8-laravel-48.png</file>
+        <file>icons/icons8-eye-48 (1).png</file>
+        <file>icons/icons8-mind-map-48.png</file>
+        <file>icons/icons8-replace-48.png</file>
+        <file>icons/icons8-gps-signal-48.png</file>
+    </qresource>
+    <qresource prefix="/styles">
+        <file>dark_style.qss</file>
+        <file>icons/Point Cloud Insert.png</file>
+        <file>icons/Point Cloud.png</file>
+    </qresource>
+</RCC>

@@ -1,13 +1,17 @@
-#ifndef MAINWINDOW_HPP
-#define MAINWINDOW_HPP
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
 
 #include <QMainWindow>
 
-QT_BEGIN_NAMESPACE
-namespace Ui {
-class MainWindow;
-}
-QT_END_NAMESPACE
+// Forward declarations
+namespace Ui { class MainWindow; }
+namespace ads { class CDockManager; } // For ADS
+
+// Forward declare your custom panels
+class PropertiesPanel;
+class ViewportPanel;
+class GraphPanel;
+class MonitorPanel;
 
 class MainWindow : public QMainWindow
 {
@@ -19,5 +23,13 @@ public:
 
 private:
     Ui::MainWindow *ui;
+    ads::CDockManager* m_dockManager; // ADS Dock Manager
+
+    // Optional: Keep pointers if you need to access panels later
+    // PropertiesPanel* m_propertiesPanel;
+    // ViewportPanel* m_viewportPanel;
+    // GraphPanel* m_graphPanel;
+    // MonitorPanel* m_monitorPanel;
 };
-#endif // MAINWINDOW_HPP
+
+#endif // MAINWINDOW_H

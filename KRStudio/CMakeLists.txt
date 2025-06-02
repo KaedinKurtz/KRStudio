@@ -11,11 +11,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+add_subdirectory(ads)
 
 set(PROJECT_SOURCES
         main.cpp
         mainwindow.cpp
-        mainwindow.hpp
+        mainwindow.h
         mainwindow.ui
 )
 
@@ -23,18 +24,18 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(KRStudio
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        propertiespanel.h
+        propertiespanel.ui
+        propertiespanel.cpp
+        static_toolbar.ui
+        resources.qrc
+        dark_style.qss
     )
-# Define target properties for Android with Qt 6 as:
-#    set_property(TARGET KRStudio APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-#                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-# For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
 else()
     if(ANDROID)
         add_library(KRStudio SHARED
             ${PROJECT_SOURCES}
         )
-# Define properties for Android with Qt 5 after find_package() calls as:
-#    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
         add_executable(KRStudio
             ${PROJECT_SOURCES}
@@ -42,7 +43,29 @@ else()
     endif()
 endif()
 
-target_link_libraries(KRStudio PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+# --- MODIFIED/CORRECTED SECTION START ---
+
+
+# This is the CONSOLIDATED linking command for better practice.
+# I've combined your two separate calls into one.
+target_include_directories(KRStudio PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/ads/src
+)
+
+# 2. Tell CMake the EXACT FOLDER that contains the .lib file
+#    This path is now corrected based on the file path you provided.
+target_link_directories(KRStudio PRIVATE
+    "D:/RoboticsSoftware/KRStudio/ads/build/Desktop_Qt_6_9_0_MSVC2022_64bit-Debug/x64/lib"
+)
+
+# 3. Tell CMake to link the libraries by their target names.
+#    We are using the specific target name that corresponds to the debug library.
+target_link_libraries(KRStudio PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    qtadvanceddocking-qt6
+)
+
+# --- MODIFIED/CORRECTED SECTION END ---
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
