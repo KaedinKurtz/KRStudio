@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1818</width>
-    <height>642</height>
+    <width>1804</width>
+    <height>702</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -29,7 +29,25 @@
    <property name="autoFillBackground">
     <bool>false</bool>
    </property>
-   <layout class="QGridLayout" name="gridLayout">
+   <layout class="QGridLayout" name="MainGridLayout" rowstretch="3,11,2" columnstretch="2,5,3">
+    <property name="leftMargin">
+     <number>2</number>
+    </property>
+    <property name="topMargin">
+     <number>2</number>
+    </property>
+    <property name="rightMargin">
+     <number>2</number>
+    </property>
+    <property name="bottomMargin">
+     <number>2</number>
+    </property>
+    <property name="spacing">
+     <number>2</number>
+    </property>
+    <item row="1" column="1">
+     <widget class="QWidget" name="viewPort" native="true"/>
+    </item>
     <item row="1" column="0">
      <widget class="QWidget" name="propertiesBar" native="true">
       <property name="minimumSize">
@@ -46,8 +64,102 @@
       </property>
      </widget>
     </item>
-    <item row="1" column="1">
-     <widget class="QWidget" name="viewPort" native="true"/>
+    <item row="0" column="0" colspan="3">
+     <widget class="QWidget" name="toolBar" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>120</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>120</height>
+       </size>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QTabWidget" name="toolbar_tabs">
+         <property name="tabPosition">
+          <enum>QTabWidget::TabPosition::North</enum>
+         </property>
+         <property name="tabShape">
+          <enum>QTabWidget::TabShape::Rounded</enum>
+         </property>
+         <property name="currentIndex">
+          <number>8</number>
+         </property>
+         <property name="elideMode">
+          <enum>Qt::TextElideMode::ElideNone</enum>
+         </property>
+         <property name="tabsClosable">
+          <bool>false</bool>
+         </property>
+         <property name="movable">
+          <bool>true</bool>
+         </property>
+         <widget class="QWidget" name="general_toolbar">
+          <attribute name="title">
+           <string>General</string>
+          </attribute>
+         </widget>
+         <widget class="QWidget" name="robot_toolbar">
+          <attribute name="title">
+           <string>Robot</string>
+          </attribute>
+         </widget>
+         <widget class="QWidget" name="environment_toolbar">
+          <attribute name="title">
+           <string>Environment</string>
+          </attribute>
+         </widget>
+         <widget class="QWidget" name="sensor_toolbar">
+          <attribute name="title">
+           <string>Sensor</string>
+          </attribute>
+         </widget>
+         <widget class="QWidget" name="device_toolbar">
+          <attribute name="title">
+           <string>Devices</string>
+          </attribute>
+         </widget>
+         <widget class="QWidget" name="script_toolbar">
+          <attribute name="title">
+           <string>Script</string>
+          </attribute>
+         </widget>
+         <widget class="QWidget" name="motion_toolbar">
+          <attribute name="title">
+           <string>Motion</string>
+          </attribute>
+         </widget>
+         <widget class="QWidget" name="simulation_toolbar">
+          <attribute name="title">
+           <string>Simulation</string>
+          </attribute>
+         </widget>
+         <widget class="QWidget" name="diagnostics_toolbar">
+          <attribute name="title">
+           <string>Diagnostics</string>
+          </attribute>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
     </item>
     <item row="1" column="2">
      <widget class="QWidget" name="monitorBar" native="true">
@@ -81,103 +193,6 @@
       </property>
      </widget>
     </item>
-    <item row="0" column="0" colspan="3">
-     <widget class="QWidget" name="toolBar" native="true">
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>120</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>120</height>
-       </size>
-      </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_3">
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QTabWidget" name="toolbar_tabs_3">
-         <property name="tabPosition">
-          <enum>QTabWidget::TabPosition::North</enum>
-         </property>
-         <property name="tabShape">
-          <enum>QTabWidget::TabShape::Rounded</enum>
-         </property>
-         <property name="currentIndex">
-          <number>8</number>
-         </property>
-         <property name="elideMode">
-          <enum>Qt::TextElideMode::ElideNone</enum>
-         </property>
-         <property name="tabsClosable">
-          <bool>false</bool>
-         </property>
-         <property name="movable">
-          <bool>true</bool>
-         </property>
-         <widget class="QWidget" name="general_toolbar_3">
-          <attribute name="title">
-           <string>General</string>
-          </attribute>
-         </widget>
-         <widget class="QWidget" name="robot_toolbar_3">
-          <attribute name="title">
-           <string>Robot</string>
-          </attribute>
-         </widget>
-         <widget class="QWidget" name="environment_toolbar_3">
-          <attribute name="title">
-           <string>Environment</string>
-          </attribute>
-         </widget>
-         <widget class="QWidget" name="sensor_toolbar_3">
-          <attribute name="title">
-           <string>Sensor</string>
-          </attribute>
-         </widget>
-         <widget class="QWidget" name="device_toolbar_3">
-          <attribute name="title">
-           <string>Devices</string>
-          </attribute>
-         </widget>
-         <widget class="QWidget" name="script_toolbar_3">
-          <attribute name="title">
-           <string>Script</string>
-          </attribute>
-         </widget>
-         <widget class="QWidget" name="motion_toolbar_3">
-          <attribute name="title">
-           <string>Motion</string>
-          </attribute>
-         </widget>
-         <widget class="QWidget" name="simulation_toolbar_3">
-          <attribute name="title">
-           <string>Simulation</string>
-          </attribute>
-         </widget>
-         <widget class="QWidget" name="diagnostics_toolbar_3">
-          <attribute name="title">
-           <string>Diagnostics</string>
-          </attribute>
-         </widget>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -185,7 +200,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1818</width>
+     <width>1804</width>
      <height>22</height>
     </rect>
    </property>
