@@ -27,7 +27,7 @@ add_executable(RoboticsSoftware
     include/StaticToolbar.hpp
     src/static_toolbar.ui
     resources.qrc
-)
+ "src/Grid.cpp")
 
 # --- Include Directories ---
 target_include_directories(RoboticsSoftware PUBLIC

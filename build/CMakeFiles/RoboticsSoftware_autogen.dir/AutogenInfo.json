@@ -505,6 +505,7 @@
 	[
 		[ "D:/RoboticsSoftware/src/Camera.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/DiagnosticsPanel.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/Grid.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/MainWindow.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Mesh.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Robot.cpp", "MU", null ],
