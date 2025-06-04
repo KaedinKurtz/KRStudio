@@ -8,9 +8,12 @@ int main(int argc, char* argv[])
 
     // --- Set the default OpenGL format for the entire application ---
     QSurfaceFormat format;
-    format.setDepthBufferSize(24); // Request a 24-bit depth buffer
-    format.setVersion(3, 3);       // Request OpenGL 3.3
-    format.setProfile(QSurfaceFormat::CoreProfile); // Request a Core Profile context
+    format.setDepthBufferSize(24);
+    format.setStencilBufferSize(8);
+    format.setVersion(3, 3); // Or your target OpenGL version
+    format.setProfile(QSurfaceFormat::CoreProfile);
+    format.setSamples(4); // Request a Core Profile context
+    format.setOption(QSurfaceFormat::StereoBuffers, true);
     QSurfaceFormat::setDefaultFormat(format);
     // ----------------------------------------------------------------
 

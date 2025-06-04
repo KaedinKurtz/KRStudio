@@ -9,6 +9,7 @@
 #include "Robot.hpp"
 #include "Shader.hpp"
 #include "Mesh.hpp"
+#include "Grid.hpp"
 #include <memory>
 
 class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_3_3_Core
@@ -42,6 +43,7 @@ private:
     std::unique_ptr<Robot> m_robot;
     std::unique_ptr<Shader> m_shader;
     std::unique_ptr<Mesh> m_mesh;
+    std::unique_ptr<Grid> m_grid;
 
     QTimer m_animationTimer;
     QPoint m_lastMousePos;
