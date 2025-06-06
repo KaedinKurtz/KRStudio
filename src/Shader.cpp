@@ -126,3 +126,4 @@ bool Shader::checkCompileErrors(unsigned int objectID, std::string type) {
     }
     return true;
 }
+

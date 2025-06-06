@@ -21,6 +21,7 @@
 			"include",
 			"_find_package",
 			"find_package",
+			"include_directories",
 			"target_include_directories"
 		],
 		"files" : 
@@ -57,13 +58,13 @@
 			{
 				"command" : 2,
 				"file" : 1,
-				"line" : 39,
+				"line" : 43,
 				"parent" : 0
 			},
 			{
 				"command" : 3,
 				"file" : 1,
-				"line" : 56,
+				"line" : 60,
 				"parent" : 0
 			},
 			{
@@ -181,7 +182,7 @@
 			{
 				"command" : 7,
 				"file" : 1,
-				"line" : 46,
+				"line" : 50,
 				"parent" : 0
 			},
 			{
@@ -213,13 +214,19 @@
 			{
 				"command" : 8,
 				"file" : 1,
-				"line" : 33,
+				"line" : 36,
 				"parent" : 0
 			},
 			{
-				"command" : 8,
+				"command" : 9,
 				"file" : 1,
-				"line" : 48,
+				"line" : 37,
+				"parent" : 0
+			},
+			{
+				"command" : 9,
+				"file" : 1,
+				"line" : 52,
 				"parent" : 0
 			}
 		]
@@ -300,18 +307,22 @@
 				},
 				{
 					"backtrace" : 32,
+					"path" : "D:/RoboticsSoftware/external"
+				},
+				{
+					"backtrace" : 33,
 					"path" : "D:/RoboticsSoftware/include"
 				},
 				{
-					"backtrace" : 32,
+					"backtrace" : 33,
 					"path" : "D:/RoboticsSoftware/ads/src"
 				},
 				{
-					"backtrace" : 33,
+					"backtrace" : 34,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers/../../include"
 				},
 				{
-					"backtrace" : 33,
+					"backtrace" : 34,
 					"isSystem" : true,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/include"
 				},
@@ -384,19 +395,21 @@
 				7,
 				8,
 				9,
-				16,
-				19
+				17,
+				18,
+				19,
+				22
 			]
 		}
 	],
 	"dependencies" : 
 	[
 		{
-			"backtrace" : 0,
-			"id" : "RoboticsSoftware_autogen::@6890427a1f51a3e7e1df"
+			"id" : "RoboticsSoftware_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
 		},
 		{
-			"id" : "RoboticsSoftware_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
+			"backtrace" : 0,
+			"id" : "RoboticsSoftware_autogen::@6890427a1f51a3e7e1df"
 		}
 	],
 	"id" : "RoboticsSoftware::@6890427a1f51a3e7e1df",
@@ -547,8 +560,10 @@
 				7,
 				8,
 				9,
-				16,
-				19
+				17,
+				18,
+				19,
+				22
 			]
 		},
 		{
@@ -559,24 +574,25 @@
 				11,
 				12,
 				13,
-				17
+				14,
+				20
 			]
 		},
 		{
 			"name" : "",
 			"sourceIndexes" : 
 			[
-				14,
 				15,
-				18
+				16,
+				21
 			]
 		},
 		{
 			"name" : "CMake Rules",
 			"sourceIndexes" : 
 			[
-				20,
-				21
+				23,
+				24
 			]
 		}
 	],
@@ -665,6 +681,11 @@
 		},
 		{
 			"backtrace" : 2,
+			"path" : "include/PropertiesPanel.hpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 2,
 			"path" : "src/static_toolbar.ui",
 			"sourceGroupIndex" : 2
 		},
@@ -677,6 +698,18 @@
 			"backtrace" : 2,
 			"compileGroupIndex" : 0,
 			"path" : "src/Grid.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "src/Scene.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "src/PropertiesPanel.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
