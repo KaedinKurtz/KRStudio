@@ -2,157 +2,147 @@
  * @file MainWindow.cpp
  * @brief Implementation of the main application window.
  *
- * This file defines the main window of the application, which is responsible for
- * setting up the user interface layout, including a static toolbar and a
- * flexible docking system for hosting multiple 3D viewports.
+ * This file defines the main window of the application. It is responsible for
+ * creating and owning the central Scene, initializing the UI layout (toolbar,
+ * docking system), and creating the ViewportWidgets that render the scene.
  */
 
 #include "MainWindow.hpp"
-#include "ViewportWidget.hpp"
 #include "StaticToolbar.hpp"
+#include "PropertiesPanel.hpp"
+#include "Scene.hpp"
+#include "ViewportWidget.hpp"
+#include "components.hpp" 
+#include "Camera.hpp"
 
 #include <QVBoxLayout>
 #include <QWidget>
-#include <DockManager.h>  // From the Advanced Docking System library
-#include <DockWidget.h>   // From the Advanced Docking System library
 #include <QMenuBar>
 #include <QStatusBar>
-#include <algorithm>
+#include <QTimer>
+#include <DockManager.h>
+#include <DockWidget.h>
+#include <DockAreaWidget.h>
 
- /**
-  * @brief Constructs the main window and initializes its UI components.
-  * @param parent The parent widget, typically nullptr for the main window.
-  */
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    // --- 1. Create the main container and its vertical layout ---
-    // This central container will hold all other UI elements.
+    // --- 1. Create the Scene ---
+    m_scene = std::make_unique<Scene>();
+    auto& registry = m_scene->getRegistry();
+
+    // --- NEW: Set the global SceneProperties in the context ---
+    registry.ctx().emplace<SceneProperties>();
+
+
+    // --- 2. Create Entities in the Scene ---
+    // A. Create the Grid Entity (now without fog properties)
+    auto gridEntity = registry.create();
+    registry.emplace<TagComponent>(gridEntity, "Primary Grid");
+    registry.emplace<TransformComponent>(gridEntity);
+    auto& gridComp = registry.emplace<GridComponent>(gridEntity);
+    gridComp.levels.emplace_back(0.001f, glm::vec3(0.6f, 0.6f, 0.4f), 0.80f, .4f);
+    gridComp.levels.emplace_back(0.01f, glm::vec3(0.25f, 0.3f, 0.4f), 2.0f, 1.0f);
+    gridComp.levels.emplace_back(0.1f, glm::vec3(0.9f, 0.85f, 0.6f), 10.0f, 5.0f);
+    gridComp.levels.emplace_back(1.0f, glm::vec3(0.7f, 0.5f, 0.2f), 200.0f, 7.0f);
+    gridComp.levels.emplace_back(10.0f, glm::vec3(0.2f, 0.7f, 0.9f), 200.0f, 20.0f);
+
+    // B. Create two Camera Entities for our two viewports
+    auto cameraEntity1 = registry.create();
+    auto& camComp1 = registry.emplace<CameraComponent>(cameraEntity1);
+    camComp1.camera.setToKnownGoodView();
+
+    auto cameraEntity2 = registry.create();
+    auto& camComp2 = registry.emplace<CameraComponent>(cameraEntity2);
+    camComp2.camera.forceRecalculateView(glm::vec3(10.0f, 5.0f, 10.0f), glm::vec3(0.0f), 0.0f);
+
+    // C. Create a Cube Entity to represent the robot base for now
+    auto cubeEntity = registry.create();
+    registry.emplace<TagComponent>(cubeEntity, "Robot Base");
+    // Place it at the origin
+    registry.emplace<TransformComponent>(cubeEntity);
+    // Mark it as renderable
+    registry.emplace<RenderableMeshComponent>(cubeEntity);
+
+
+    // --- 3. Setup the UI Layout ---
     m_centralContainer = new QWidget(this);
     QVBoxLayout* mainLayout = new QVBoxLayout(m_centralContainer);
-    // Remove any margins or spacing to have the contents fill the entire area.
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
 
-    // --- 2. Add the static toolbar to the TOP of the layout ---
-    // This toolbar will remain fixed at the top of the window.
     m_fixedTopToolbar = new StaticToolbar(this);
-    // The '0' stretch factor means it takes up only its required height.
     mainLayout->addWidget(m_fixedTopToolbar, 0);
 
-    // --- 3. Initialize the Dock Manager ---
-    // The dock manager will control the layout of all dockable widgets.
-    // It is created without a parent here and will be added to the layout.
     m_dockManager = new ads::CDockManager();
-    // Add the dock manager to the layout, giving it a stretch factor of '1'.
-    // This makes it expand to fill all available vertical space below the toolbar.
     mainLayout->addWidget(m_dockManager, 1);
 
-    // --- 4. Set the container as the central widget of the QMainWindow ---
     this->setCentralWidget(m_centralContainer);
 
+    // --- 4. Setup the FIRST ViewportWidget and its Dock ---
+    ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), cameraEntity1, this);
+    viewport1->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    viewport1->setMinimumSize(400, 300);
 
-    // --- 5. Setup the FIRST ViewportWidget and its Dock ---
-    m_viewport = new ViewportWidget(this); // This will be your first 3D view
+    ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Perspective)");
+    viewportDock1->setWidget(viewport1);
+    viewportDock1->setFeature(ads::CDockWidget::DockWidgetClosable, false);
+    m_dockManager->addDockWidget(ads::CenterDockWidgetArea, viewportDock1);
 
-    // ---> NEW SIZING HINTS FOR THE CONTENT AND ITS DOCK <---
-    // a) Tell the viewport (QOpenGLWidget) that it wants to expand.
-    // This is a hint to the layout system that it should grow to fill available space.
-    m_viewport->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    // b) Give the viewport a substantial minimum size. This influences its initial
-    // sizeHint() and prevents it from starting too small.
-    m_viewport->setMinimumSize(600, 400);
+    // --- 5. Setup the SECOND ViewportWidget and its Dock ---
+    ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), cameraEntity2, this);
+    viewport2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    viewport2->setMinimumSize(400, 300);
 
-    // Create a dock widget to contain the viewport. This is the handle that
-    // the user can drag, float, and dock.
-    m_viewportDock = new ads::CDockWidget("3D Viewport 1");
-    m_viewportDock->setWidget(m_viewport); // Place the viewport inside the dock widget.
-
-    // c) Also tell the dock widget itself that it wants to expand.
-    m_viewportDock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-
-    // Configure the features of the dock widget.
-    m_viewportDock->setFeature(ads::CDockWidget::DockWidgetClosable, false); // Cannot be closed.
-    m_viewportDock->setFeature(ads::CDockWidget::DockWidgetMovable, true);   // Can be moved.
-    m_viewportDock->setFeature(ads::CDockWidget::DockWidgetFloatable, true); // Can be undocked into a floating window.
-
-    // Add the first viewport to the central area of the docking manager.
-    m_dockManager->addDockWidget(ads::CenterDockWidgetArea, m_viewportDock);
+    ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Top Down)");
+    viewportDock2->setWidget(viewport2);
+    viewportDock2->setFeature(ads::CDockWidget::DockWidgetClosable, false);
+    m_dockManager->addDockWidget(ads::RightDockWidgetArea, viewportDock2);
 
 
-    // --- 6. Setup the SECOND ViewportWidget and its Dock ---
-    ViewportWidget* m_viewport2 = new ViewportWidget(this);
-    m_viewport2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_viewport2->setMinimumSize(600, 400);
+    // --- 8. Setup the Properties Panel ---
+    PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this);
 
-    ads::CDockWidget* m_viewportDock2 = new ads::CDockWidget("3D Viewport 2");
-    m_viewportDock2->setWidget(m_viewport2);
+    ads::CDockWidget* propertiesDock = new ads::CDockWidget("Properties");
+    propertiesDock->setWidget(propertiesPanel);
 
-    m_viewportDock2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_viewportDock2->setFeature(ads::CDockWidget::DockWidgetClosable, false);
-    m_viewportDock2->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-    m_viewportDock2->setFeature(ads::CDockWidget::DockWidgetFloatable, true);
-
-    // Add the second viewport to the right side of the docking area,
-    // creating a split view with the first viewport.
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, m_viewportDock2);
+    // Dock it to the left of the main viewport area
+    m_dockManager->addDockWidget(ads::LeftDockWidgetArea, propertiesDock);
 
 
-    // --- 7. Setup Signal/Slot connections to reset viewports on state change ---
-
-    // Connection for the FIRST viewport.
-    // The `topLevelChanged` signal is emitted when a dock widget is floated or docked.
-    connect(m_viewportDock, &ads::CDockWidget::topLevelChanged, this, [this](bool isFloating) {
-        Q_UNUSED(isFloating); // We don't need to use the 'isFloating' flag.
-        if (m_viewport) {
-            // Use QTimer::singleShot with a 0ms delay to defer the execution.
-            // This ensures the operation runs after the current event (docking) has
-            // been fully processed, preventing potential rendering glitches.
-            QTimer::singleShot(0, m_viewport, [viewport_ptr = m_viewport]() {
-                if (viewport_ptr) {
-                    // Reset the camera to its default position and schedule a repaint.
-                    viewport_ptr->getCamera().setToKnownGoodView();
-                    viewport_ptr->update();
-                }
-                });
-        }
-        });
-
-    // Connection for the SECOND viewport.
-    // The logic is identical to the first viewport's connection.
-    connect(m_viewportDock2, &ads::CDockWidget::topLevelChanged, this, [m_viewport2](bool isFloating) {
+    // --- 6. Setup Signal/Slot connections ---
+    connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [viewport1](bool isFloating) {
         Q_UNUSED(isFloating);
-        if (m_viewport2) {
-            // We capture m_viewport2 directly in the lambda.
-            QTimer::singleShot(0, m_viewport2, [viewport_ptr = m_viewport2]() {
-                if (viewport_ptr) {
-                    viewport_ptr->getCamera().setToKnownGoodView();
-                    viewport_ptr->update();
-                }
+        if (viewport1) {
+            QTimer::singleShot(0, viewport1, [=]() {
+                viewport1->getCamera().setToKnownGoodView();
+                viewport1->update();
                 });
         }
         });
 
-    // --- 8. Final Window Setup ---
-    // Hide the default QMainWindow menu bar as we are using a custom toolbar.
+    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, [viewport2](bool isFloating) {
+        Q_UNUSED(isFloating);
+        if (viewport2) {
+            QTimer::singleShot(0, viewport2, [=]() {
+                viewport2->getCamera().setToKnownGoodView();
+                viewport2->update();
+                });
+        }
+        });
+
+
+    // --- 7. Final Window Setup ---
     if (menuBar()) {
         menuBar()->setVisible(false);
     }
-    // Set a good default size for the main window.
     resize(1600, 900);
-    // Set the window title and icon.
-    setWindowTitle("KR Studio V0.1");
-    setWindowIcon(QIcon(":/icons/kRLogoSquare.png")); // Icon loaded from Qt resources.
-    // Set an initial message in the status bar.
+    setWindowTitle("KR Studio - ECS Refactor");
+    setWindowIcon(QIcon(":/icons/kRLogoSquare.png"));
     statusBar()->showMessage("Ready.");
 }
 
-/**
- * @brief Destroys the MainWindow.
- *
- * Qt's parent-child ownership system will handle the deletion of all child
- * widgets, so no explicit cleanup is needed here for the dynamically allocated UI elements.
- */
 MainWindow::~MainWindow()
 {
 }

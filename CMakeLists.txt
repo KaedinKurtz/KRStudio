@@ -25,11 +25,15 @@ add_executable(RoboticsSoftware
     include/ViewportWidget.hpp
     include/DiagnosticsPanel.hpp
     include/StaticToolbar.hpp
+    include/PropertiesPanel.hpp
     src/static_toolbar.ui
     resources.qrc
- "src/Grid.cpp")
+    src/Grid.cpp 
+    src/Scene.cpp
+    src/PropertiesPanel.cpp)
 
 # --- Include Directories ---
+include_directories(external)
 target_include_directories(RoboticsSoftware PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include" # For your .hpp files
     "D:/RoboticsSoftware/ads/src"         # For ADS headers
