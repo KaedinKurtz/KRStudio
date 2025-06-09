@@ -32,12 +32,11 @@ MainWindow::MainWindow(QWidget* parent)
     m_scene = std::make_unique<Scene>();
     auto& registry = m_scene->getRegistry();
 
-    // --- NEW: Set the global SceneProperties in the context ---
+    // Set the global SceneProperties in the context
     registry.ctx().emplace<SceneProperties>();
 
 
     // --- 2. Create Entities in the Scene ---
-    // A. Create the Grid Entity (now without fog properties)
     auto gridEntity = registry.create();
     registry.emplace<TagComponent>(gridEntity, "Primary Grid");
     registry.emplace<TransformComponent>(gridEntity);
@@ -48,7 +47,6 @@ MainWindow::MainWindow(QWidget* parent)
     gridComp.levels.emplace_back(1.0f, glm::vec3(0.7f, 0.5f, 0.2f), 200.0f, 7.0f);
     gridComp.levels.emplace_back(10.0f, glm::vec3(0.2f, 0.7f, 0.9f), 200.0f, 20.0f);
 
-    // B. Create two Camera Entities for our two viewports
     auto cameraEntity1 = registry.create();
     auto& camComp1 = registry.emplace<CameraComponent>(cameraEntity1);
     camComp1.camera.setToKnownGoodView();
@@ -57,12 +55,9 @@ MainWindow::MainWindow(QWidget* parent)
     auto& camComp2 = registry.emplace<CameraComponent>(cameraEntity2);
     camComp2.camera.forceRecalculateView(glm::vec3(10.0f, 5.0f, 10.0f), glm::vec3(0.0f), 0.0f);
 
-    // C. Create a Cube Entity to represent the robot base for now
     auto cubeEntity = registry.create();
     registry.emplace<TagComponent>(cubeEntity, "Robot Base");
-    // Place it at the origin
     registry.emplace<TransformComponent>(cubeEntity);
-    // Mark it as renderable
     registry.emplace<RenderableMeshComponent>(cubeEntity);
 
 
@@ -80,21 +75,16 @@ MainWindow::MainWindow(QWidget* parent)
 
     this->setCentralWidget(m_centralContainer);
 
-    // --- 4. Setup the FIRST ViewportWidget and its Dock ---
+    // --- 4. Setup Viewports ---
     ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), cameraEntity1, this);
-    viewport1->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     viewport1->setMinimumSize(400, 300);
-
     ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Perspective)");
     viewportDock1->setWidget(viewport1);
     viewportDock1->setFeature(ads::CDockWidget::DockWidgetClosable, false);
     m_dockManager->addDockWidget(ads::CenterDockWidgetArea, viewportDock1);
 
-    // --- 5. Setup the SECOND ViewportWidget and its Dock ---
     ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), cameraEntity2, this);
-    viewport2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     viewport2->setMinimumSize(400, 300);
-
     ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Top Down)");
     viewportDock2->setWidget(viewport2);
     viewportDock2->setFeature(ads::CDockWidget::DockWidgetClosable, false);
@@ -103,13 +93,15 @@ MainWindow::MainWindow(QWidget* parent)
 
     // --- 8. Setup the Properties Panel ---
     PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this);
+    // FIX: Give the panel content itself a minimum width.
+    propertiesPanel->setMinimumWidth(700);
 
     ads::CDockWidget* propertiesDock = new ads::CDockWidget("Properties");
     propertiesDock->setWidget(propertiesPanel);
-
-    // Dock it to the left of the main viewport area
-    m_dockManager->addDockWidget(ads::LeftDockWidgetArea, propertiesDock);
-
+    // FIX: Tell the dock widget to respect the minimum size of its content (the PropertiesPanel).
+    propertiesDock->setMinimumSizeHintMode(ads::CDockWidget::MinimumSizeHintFromContentMinimumSize);
+    // Dock it into the same area as the second viewport. The splitter will handle it.
+    m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock);
 
     // --- 6. Setup Signal/Slot connections ---
     connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [viewport1](bool isFloating) {
@@ -141,6 +133,7 @@ MainWindow::MainWindow(QWidget* parent)
     setWindowTitle("KR Studio - ECS Refactor");
     setWindowIcon(QIcon(":/icons/kRLogoSquare.png"));
     statusBar()->showMessage("Ready.");
+
 }
 
 MainWindow::~MainWindow()

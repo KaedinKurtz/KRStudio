@@ -29,21 +29,14 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
 ViewportWidget::~ViewportWidget()
 {
     qDebug() << "ViewportWidget DESTRUCTOR for camera entity" << (uint32_t)m_cameraEntity;
-    // Disconnect the cleanup signal to prevent a call on a deleted object
-    // if the widget is destroyed before the context.
     if (m_glContext) {
         disconnect(m_glContext, &QOpenGLContext::aboutToBeDestroyed, this, &ViewportWidget::cleanup);
     }
 }
 
-// --- FIX: Implementation of the cleanup slot ---
-// This function is called by the aboutToBeDestroyed signal. It is guaranteed
-// to run while the correct OpenGL context is still current, making it the
-// safe place to delete OpenGL resources.
 void ViewportWidget::cleanup()
 {
     qDebug() << "Context cleanup for" << this;
-    // Make the context current to be absolutely sure we can delete resources.
     makeCurrent();
     m_gridShader.reset();
     m_gridMesh.reset();
@@ -64,9 +57,6 @@ const Camera& ViewportWidget::getCamera() const
 }
 
 void ViewportWidget::initializeGL() {
-    // --- FIX: Connect context destruction signal to our cleanup slot ---
-    // This is the core of the fix. It ties the lifetime of our OpenGL resources
-    // directly to the lifetime of the context that created them.
     m_glContext = this->context();
     connect(m_glContext, &QOpenGLContext::aboutToBeDestroyed, this, &ViewportWidget::cleanup, Qt::DirectConnection);
 
@@ -126,7 +116,6 @@ void ViewportWidget::paintGL() {
     const float aspectRatio = (height() > 0) ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0f;
     const glm::mat4 viewMatrix = camera.getViewMatrix();
     const glm::mat4 projectionMatrix = camera.getProjectionMatrix(aspectRatio);
-
     const auto& sceneProps = registry.ctx().get<SceneProperties>();
 
     // --- 1. Draw all Grid Entities ---
@@ -136,18 +125,34 @@ void ViewportWidget::paintGL() {
         m_gridShader->setMat4("u_viewMatrix", viewMatrix);
         m_gridShader->setMat4("u_projectionMatrix", projectionMatrix);
         m_gridShader->setVec3("u_cameraPos", camera.getPosition());
-        m_gridShader->setFloat("u_cameraDistanceToFocal", camera.getDistance());
-        m_gridShader->setBool("u_useFog", sceneProps.fogEnabled);
-        m_gridShader->setVec3("u_fogColor", sceneProps.fogColor);
-        m_gridShader->setFloat("u_fogStartDistance", sceneProps.fogStartDistance);
-        m_gridShader->setFloat("u_fogEndDistance", sceneProps.fogEndDistance);
+        // ... (other global uniforms)
 
         auto gridView = registry.view<const TransformComponent, const GridComponent>();
-        gridView.each([this](const auto& transform, const auto& grid) {
-            if (!grid.visible) {
+
+        gridView.each([this, &camera](const auto& transform, const auto& grid) {
+
+            // Use the masterVisible flag
+            if (!grid.masterVisible) {
                 return;
             }
+
             m_gridShader->setMat4("u_gridModelMatrix", transform.getTransform());
+
+            // Perpendicular Distance Fading Logic
+            glm::vec3 local_normal = glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(transform.getTransform())));
+            glm::vec3 world_normal = glm::normalize(normal_matrix * local_normal);
+            float perpendicular_distance = glm::abs(glm::dot(camera.getPosition() - transform.translation, world_normal));
+            m_gridShader->setFloat("u_distanceToGrid", camera.getDistance());
+
+            // --- Send Per-Level and Per-Grid Data ---
+
+            // FIX: Send the corrected levelVisible array to the shader
+            for (int i = 0; i < 5; ++i) {
+                m_gridShader->setBool(("u_levelVisible[" + std::to_string(i) + "]").c_str(), grid.levelVisible[i]);
+            }
+
+            // Send grid properties (spacing, color, etc.) from the levels vector
             const int numLevelsToSend = static_cast<int>(grid.levels.size());
             m_gridShader->setInt("u_numLevels", numLevelsToSend);
             for (int i = 0; i < numLevelsToSend; ++i) {
@@ -157,11 +162,14 @@ void ViewportWidget::paintGL() {
                 m_gridShader->setFloat((base + "fadeInCameraDistanceEnd").c_str(), grid.levels[i].fadeInCameraDistanceEnd);
                 m_gridShader->setFloat((base + "fadeInCameraDistanceStart").c_str(), grid.levels[i].fadeInCameraDistanceStart);
             }
+
+            m_gridShader->setBool("u_isDotted", grid.isDotted);
             m_gridShader->setBool("u_showAxes", grid.showAxes);
             m_gridShader->setVec3("u_xAxisColor", grid.xAxisColor);
             m_gridShader->setVec3("u_zAxisColor", grid.zAxisColor);
             m_gridShader->setFloat("u_axisLineWidthPixels", grid.axisLineWidthPixels);
             m_gridShader->setFloat("u_baseLineWidthPixels", grid.baseLineWidthPixels);
+
             m_gridMesh->draw();
             });
     }
@@ -182,6 +190,7 @@ void ViewportWidget::paintGL() {
     checkGLError("End of paintGL");
 }
 
+// ... (Rest of the file is unchanged)
 void ViewportWidget::resizeGL(int w, int h) {
     if (w <= 0 || h <= 0) return;
     glViewport(0, 0, w, h);

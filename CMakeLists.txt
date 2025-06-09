@@ -26,11 +26,16 @@ add_executable(RoboticsSoftware
     include/DiagnosticsPanel.hpp
     include/StaticToolbar.hpp
     include/PropertiesPanel.hpp
+    include/gridPropertiesWidget.hpp
     src/static_toolbar.ui
     resources.qrc
     src/Grid.cpp 
     src/Scene.cpp
-    src/PropertiesPanel.cpp)
+    src/PropertiesPanel.cpp
+    src/gridPropertiesWidget.cpp
+)
+
+target_compile_definitions(RoboticsSoftware PRIVATE GLM_ENABLE_EXPERIMENTAL)
 
 # --- Include Directories ---
 include_directories(external)
