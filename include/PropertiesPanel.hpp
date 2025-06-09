@@ -24,8 +24,10 @@ public:
 
 private slots:
     void onGridAdded(entt::registry& registry, entt::entity entity);
+    void onGridRemoved(entt::registry& registry, entt::entity entity);
 
 private:
+    void ensureGridIsInitialized(entt::entity gridEntity);
     void addGridEditor(entt::entity entity);
 
     std::unique_ptr<Ui::PropertiesPanel> ui;

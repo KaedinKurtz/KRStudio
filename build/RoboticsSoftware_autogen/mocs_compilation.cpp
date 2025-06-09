@@ -4,3 +4,4 @@
 #include "6YEA5652QU/moc_PropertiesPanel.cpp"
 #include "6YEA5652QU/moc_StaticToolbar.cpp"
 #include "6YEA5652QU/moc_ViewportWidget.cpp"
+#include "6YEA5652QU/moc_gridPropertiesWidget.cpp"

@@ -442,6 +442,12 @@
 			"MU",
 			"6YEA5652QU/moc_ViewportWidget.cpp",
 			null
+		],
+		[
+			"D:/RoboticsSoftware/include/gridPropertiesWidget.hpp",
+			"MU",
+			"6YEA5652QU/moc_gridPropertiesWidget.cpp",
+			null
 		]
 	],
 	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
@@ -449,6 +455,7 @@
 	"MOC_COMPILATION_FILE" : "D:/RoboticsSoftware/build/RoboticsSoftware_autogen/mocs_compilation.cpp",
 	"MOC_DEFINITIONS" : 
 	[
+		"GLM_ENABLE_EXPERIMENTAL",
 		"QT_CORE_LIB",
 		"QT_GUI_LIB",
 		"QT_OPENGLWIDGETS_LIB",
@@ -521,6 +528,7 @@
 		[ "D:/RoboticsSoftware/src/Shader.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/StaticToolbar.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/ViewportWidget.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/gridPropertiesWidget.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/main.cpp", "MU", null ]
 	],
 	"UIC_OPTIONS" : [],

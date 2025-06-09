@@ -78,11 +78,19 @@ void Camera::processMouseMovement(double xoffset, double yoffset, bool isPanning
 }
 
 void Camera::processMouseScroll(double yoffset) {
-    // ... your implementation ...
-    float zoomSensitivity = 0.5f;
-    m_Distance -= static_cast<float>(yoffset) * zoomSensitivity;
-    if (m_Distance < 0.1f) m_Distance = 0.1f;
-    if (m_Distance > 100.0f) m_Distance = 100.0f;
+    // FIX: Use proportional (percentage-based) zooming.
+    // This feels natural at any distance because it modifies the distance
+    // by a percentage rather than a fixed amount. 0.95 is a good starting
+    // point, make it closer to 1.0 for slower zoom, further for faster.
+    m_Distance *= pow(0.95f, static_cast<float>(yoffset));
+
+    // Clamp the distance to prevent zooming through the near plane or too far away.
+    if (m_Distance < 0.01f) {
+        m_Distance = 0.01f;
+    }
+    if (m_Distance > 1000.0f) {
+        m_Distance = 1000.0f;
+    }
     updateCameraVectors();
 }
 

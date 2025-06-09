@@ -30,18 +30,17 @@ struct TransformComponent
 
 struct GridComponent
 {
-    // --- ADD THIS LINE ---
-    bool visible = true;
-    bool visible2 = true;
-    bool visible3 = true;
-    bool visible4 = true;
-    bool visible5 = true;
+    bool masterVisible = true;              // Master switch for the whole grid
+    bool levelVisible[5] = { true, true, true, true, true }; // Per-level toggles
 
     std::vector<GridLevel> levels;
-    float baseLineWidthPixels = 1.0f;
+    float baseLineWidthPixels = 1.5f;
 
     bool showAxes = true;
     bool isMetric = true;
+
+    bool isDotted = false;       // For switching between lines and dots
+    bool snappingEnabled = false; // For the grid snap toggle
 
     glm::vec3 xAxisColor = { 1.0f, 0.2f, 0.2f };
     glm::vec3 zAxisColor = { 0.2f, 0.2f, 1.0f };
