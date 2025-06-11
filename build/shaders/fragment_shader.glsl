@@ -1,22 +1,40 @@
-// Specifies the GLSL version.
-#version 330 core
 
-// Output variable for the final color of the fragment (pixel).
-// 'out vec4 FragColor;' declares 'FragColor' as a 4-component vector (red, green, blue, alpha).
-// The GPU will write the value assigned to this variable to the framebuffer for the current pixel.
+
+// =================================================================
+//                      fragment_shader.glsl
+// =================================================================
+#version 330 core
 out vec4 FragColor;
 
-// Uniform variable for the object's color.
-// This 'objectColor' is set from your C++ application (e.g., using shader->setVec4("objectColor", ...)).
-// It allows you to draw different objects with different colors using the same shader.
-uniform vec4 objectColor; 
+// Data received from the vertex shader (already in world space)
+in vec3 FragPos;
+in vec3 Normal;
+
+// Uniforms from the C++ application
+uniform vec3 objectColor;
+uniform vec3 lightColor;
+uniform vec3 lightPos;
+uniform vec3 viewPos; // Camera's position
 
 void main()
 {
-    // This is the core of the fragment shader.
-    // It determines the color of the current pixel being processed.
-    // In this case, it simply assigns the value of the 'objectColor' uniform
-    // to the output 'FragColor'.
-    // So, every pixel covered by the object being drawn will get this uniform color.
-    FragColor = objectColor; 
+    // Ambient lighting component
+    float ambientStrength = 0.1;
+    vec3 ambient = ambientStrength * lightColor;
+  	
+    // Diffuse lighting component
+    vec3 norm = normalize(Normal);
+    vec3 lightDir = normalize(lightPos - FragPos);
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = diff * lightColor;
+    
+    // Specular lighting component
+    float specularStrength = 0.5;
+    vec3 viewDir = normalize(viewPos - FragPos);
+    vec3 reflectDir = reflect(-lightDir, norm);  
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
+    vec3 specular = specularStrength * spec * lightColor;
+        
+    vec3 result = (ambient + diffuse + specular) * objectColor;
+    FragColor = vec4(result, 1.0);
 }

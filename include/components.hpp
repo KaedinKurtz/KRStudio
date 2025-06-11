@@ -6,6 +6,7 @@
 #include <vector>
 #include "Grid.hpp"
 #include "Camera.hpp"
+#include "IntersectionSystem.hpp"
 
 struct SceneProperties
 {
@@ -39,6 +40,8 @@ struct GridComponent
     bool showAxes = true;
     bool isMetric = true;
 
+    bool showIntersections = true;
+
     bool isDotted = false;       // For switching between lines and dots
     bool snappingEnabled = false; // For the grid snap toggle
 
@@ -68,6 +71,13 @@ struct GridComponent
 struct RenderableMeshComponent
 {
     glm::vec4 color = { 0.8f, 0.8f, 0.8f, 1.0f };
+    bool placeholder = true;
+
+    std::vector<glm::vec3> vertices;
+    std::vector<unsigned int> indices;
+
+    const std::vector<glm::vec3>& getVertices() const { return vertices; }
+    const std::vector<unsigned int>& getIndices() const { return indices; }
 };
 
 struct TagComponent
@@ -82,4 +92,8 @@ struct CameraComponent
 {
     Camera camera;
     bool isPrimary = true;
+};
+
+struct IntersectionComponent {
+    IntersectionSystem::IntersectionResult result;
 };

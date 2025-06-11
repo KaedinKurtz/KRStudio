@@ -181,7 +181,6 @@ RoboticsSoftware_autogen/timestamp: \
 	C:/Qt/6.9.0/msvc2022_64/include/QtCore/qversiontagging.h \
 	C:/Qt/6.9.0/msvc2022_64/include/QtCore/qxptype_traits.h \
 	C:/Qt/6.9.0/msvc2022_64/include/QtCore/qyieldcpu.h \
-	C:/Qt/6.9.0/msvc2022_64/include/QtGui/QOpenGLContext \
 	C:/Qt/6.9.0/msvc2022_64/include/QtGui/QResizeEvent \
 	C:/Qt/6.9.0/msvc2022_64/include/QtGui/QSurfaceFormat \
 	C:/Qt/6.9.0/msvc2022_64/include/QtGui/QTransform \
@@ -818,6 +817,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/external/entt/signal/fwd.hpp \
 	D:/RoboticsSoftware/external/entt/signal/sigh.hpp \
 	D:/RoboticsSoftware/include/DiagnosticsPanel.hpp \
+	D:/RoboticsSoftware/include/IntersectionSystem.hpp \
 	D:/RoboticsSoftware/include/MainWindow.hpp \
 	D:/RoboticsSoftware/include/PropertiesPanel.hpp \
 	D:/RoboticsSoftware/include/StaticToolbar.hpp \
@@ -827,6 +827,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/src/Camera.cpp \
 	D:/RoboticsSoftware/src/DiagnosticsPanel.cpp \
 	D:/RoboticsSoftware/src/Grid.cpp \
+	D:/RoboticsSoftware/src/IntersectionSystem.cpp \
 	D:/RoboticsSoftware/src/MainWindow.cpp \
 	D:/RoboticsSoftware/src/Mesh.cpp \
 	D:/RoboticsSoftware/src/PropertiesPanel.cpp \

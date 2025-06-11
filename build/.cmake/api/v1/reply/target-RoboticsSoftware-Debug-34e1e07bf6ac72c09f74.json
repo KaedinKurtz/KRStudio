@@ -8,32 +8,32 @@
 			"path" : "RoboticsSoftware.pdb"
 		}
 	],
-	"backtrace" : 2,
+	"backtrace" : 5,
 	"backtraceGraph" : 
 	{
 		"commands" : 
 		[
 			"_add_executable",
 			"add_executable",
-			"target_link_directories",
+			"_qt_internal_create_executable",
+			"qt6_add_executable",
+			"qt_add_executable",
 			"target_link_libraries",
 			"set_target_properties",
 			"include",
 			"_find_package",
 			"find_package",
 			"target_compile_definitions",
-			"include_directories",
 			"target_include_directories"
 		],
 		"files" : 
 		[
 			"C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake",
+			"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6Core/Qt6CoreMacros.cmake",
 			"CMakeLists.txt",
-			"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets.cmake",
-			"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfig.cmake",
-			"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6/Qt6Config.cmake",
 			"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6Core/Qt6CoreTargets.cmake",
 			"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6Core/Qt6CoreConfig.cmake",
+			"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6/Qt6Config.cmake",
 			"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6Gui/Qt6GuiTargets.cmake",
 			"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6Gui/Qt6GuiConfig.cmake",
 			"C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom/urdfdomExport.cmake",
@@ -42,198 +42,172 @@
 		"nodes" : 
 		[
 			{
-				"file" : 1
+				"file" : 2
 			},
 			{
-				"command" : 1,
-				"file" : 1,
-				"line" : 14,
-				"parent" : 0
-			},
-			{
-				"command" : 0,
-				"file" : 0,
-				"line" : 598,
-				"parent" : 1
-			},
-			{
-				"command" : 2,
-				"file" : 1,
+				"command" : 4,
+				"file" : 2,
 				"line" : 48,
 				"parent" : 0
 			},
 			{
 				"command" : 3,
 				"file" : 1,
-				"line" : 65,
-				"parent" : 0
+				"line" : 938,
+				"parent" : 1
 			},
 			{
-				"command" : 7,
+				"command" : 2,
 				"file" : 1,
-				"line" : 12,
+				"line" : 639,
+				"parent" : 2
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 688,
+				"parent" : 3
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 598,
+				"parent" : 4
+			},
+			{
+				"command" : 5,
+				"file" : 2,
+				"line" : 88,
 				"parent" : 0
 			},
 			{
-				"command" : 6,
-				"file" : 0,
-				"line" : 893,
-				"parent" : 5
+				"command" : 5,
+				"file" : 1,
+				"line" : 640,
+				"parent" : 2
 			},
 			{
-				"file" : 4,
-				"parent" : 6
+				"command" : 9,
+				"file" : 2,
+				"line" : 13,
+				"parent" : 0
 			},
 			{
-				"command" : 7,
-				"file" : 4,
-				"line" : 212,
-				"parent" : 7
-			},
-			{
-				"command" : 6,
+				"command" : 8,
 				"file" : 0,
 				"line" : 893,
 				"parent" : 8
 			},
 			{
-				"file" : 3,
+				"file" : 5,
 				"parent" : 9
 			},
 			{
-				"command" : 5,
-				"file" : 3,
-				"line" : 55,
+				"command" : 9,
+				"file" : 5,
+				"line" : 212,
 				"parent" : 10
 			},
 			{
-				"file" : 2,
+				"command" : 8,
+				"file" : 0,
+				"line" : 893,
 				"parent" : 11
 			},
 			{
-				"command" : 4,
-				"file" : 2,
-				"line" : 61,
+				"file" : 4,
 				"parent" : 12
 			},
 			{
 				"command" : 7,
 				"file" : 4,
-				"line" : 212,
-				"parent" : 7
+				"line" : 57,
+				"parent" : 13
 			},
 			{
-				"command" : 6,
-				"file" : 0,
-				"line" : 893,
+				"file" : 3,
 				"parent" : 14
 			},
 			{
-				"file" : 6,
+				"command" : 6,
+				"file" : 3,
+				"line" : 61,
 				"parent" : 15
 			},
 			{
-				"command" : 5,
-				"file" : 6,
-				"line" : 57,
-				"parent" : 16
+				"command" : 9,
+				"file" : 5,
+				"line" : 212,
+				"parent" : 10
 			},
 			{
-				"file" : 5,
+				"command" : 8,
+				"file" : 0,
+				"line" : 893,
 				"parent" : 17
 			},
 			{
-				"command" : 4,
-				"file" : 5,
-				"line" : 61,
+				"file" : 7,
 				"parent" : 18
 			},
 			{
 				"command" : 7,
-				"file" : 4,
-				"line" : 212,
-				"parent" : 7
+				"file" : 7,
+				"line" : 55,
+				"parent" : 19
 			},
 			{
-				"command" : 6,
-				"file" : 0,
-				"line" : 893,
+				"file" : 6,
 				"parent" : 20
 			},
 			{
-				"file" : 8,
+				"command" : 6,
+				"file" : 6,
+				"line" : 61,
 				"parent" : 21
 			},
 			{
-				"command" : 5,
-				"file" : 8,
-				"line" : 55,
-				"parent" : 22
+				"command" : 9,
+				"file" : 2,
+				"line" : 16,
+				"parent" : 0
 			},
 			{
-				"file" : 7,
+				"command" : 8,
+				"file" : 0,
+				"line" : 893,
 				"parent" : 23
 			},
 			{
-				"command" : 4,
-				"file" : 7,
-				"line" : 61,
+				"file" : 9,
 				"parent" : 24
 			},
 			{
 				"command" : 7,
-				"file" : 1,
-				"line" : 55,
-				"parent" : 0
+				"file" : 9,
+				"line" : 52,
+				"parent" : 25
 			},
 			{
-				"command" : 6,
-				"file" : 0,
-				"line" : 893,
+				"file" : 8,
 				"parent" : 26
 			},
 			{
-				"file" : 10,
+				"command" : 6,
+				"file" : 8,
+				"line" : 61,
 				"parent" : 27
 			},
 			{
-				"command" : 5,
-				"file" : 10,
-				"line" : 52,
-				"parent" : 28
-			},
-			{
-				"file" : 9,
-				"parent" : 29
-			},
-			{
-				"command" : 4,
-				"file" : 9,
-				"line" : 61,
-				"parent" : 30
-			},
-			{
-				"command" : 8,
-				"file" : 1,
-				"line" : 38,
-				"parent" : 0
-			},
-			{
-				"command" : 9,
-				"file" : 1,
-				"line" : 41,
-				"parent" : 0
-			},
-			{
 				"command" : 10,
-				"file" : 1,
-				"line" : 42,
+				"file" : 2,
+				"line" : 76,
 				"parent" : 0
 			},
 			{
-				"command" : 10,
-				"file" : 1,
-				"line" : 57,
+				"command" : 11,
+				"file" : 2,
+				"line" : 78,
 				"parent" : 0
 			}
 		]
@@ -247,66 +221,66 @@
 					"fragment" : "/DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"fragment" : "-Zc:__cplusplus"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"fragment" : "-permissive-"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"fragment" : "-utf-8"
 				}
 			],
 			"defines" : 
 			[
 				{
-					"backtrace" : 32,
+					"backtrace" : 29,
 					"define" : "GLM_ENABLE_EXPERIMENTAL"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"define" : "QT_CORE_LIB"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 6,
 					"define" : "QT_GUI_LIB"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 6,
 					"define" : "QT_OPENGLWIDGETS_LIB"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 6,
 					"define" : "QT_OPENGL_LIB"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 6,
 					"define" : "QT_WIDGETS_LIB"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"define" : "UNICODE"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"define" : "WIN32"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"define" : "WIN64"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"define" : "_ENABLE_EXTENDED_ALIGNED_STORAGE"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"define" : "_UNICODE"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"define" : "_WIN64"
 				}
 			],
@@ -317,68 +291,68 @@
 					"path" : "D:/RoboticsSoftware/build/RoboticsSoftware_autogen/include"
 				},
 				{
-					"backtrace" : 33,
-					"path" : "D:/RoboticsSoftware/external"
-				},
-				{
-					"backtrace" : 34,
+					"backtrace" : 30,
 					"path" : "D:/RoboticsSoftware/include"
 				},
 				{
-					"backtrace" : 34,
+					"backtrace" : 30,
+					"path" : "D:/RoboticsSoftware/external"
+				},
+				{
+					"backtrace" : 30,
 					"path" : "D:/RoboticsSoftware/ads/src"
 				},
 				{
-					"backtrace" : 35,
+					"backtrace" : 30,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers/../../include"
 				},
 				{
-					"backtrace" : 35,
+					"backtrace" : 30,
 					"isSystem" : true,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/include"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"isSystem" : true,
 					"path" : "C:/Qt/6.9.0/msvc2022_64/include/QtCore"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"isSystem" : true,
 					"path" : "C:/Qt/6.9.0/msvc2022_64/include"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 7,
 					"isSystem" : true,
 					"path" : "C:/Qt/6.9.0/msvc2022_64/mkspecs/win32-msvc"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 6,
 					"isSystem" : true,
 					"path" : "C:/Qt/6.9.0/msvc2022_64/include/QtGui"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 6,
 					"isSystem" : true,
 					"path" : "C:/Qt/6.9.0/msvc2022_64/include/QtWidgets"
 				},
 				{
-					"backtrace" : 4,
-					"isSystem" : true,
-					"path" : "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets"
-				},
-				{
-					"backtrace" : 4,
+					"backtrace" : 6,
 					"isSystem" : true,
 					"path" : "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 6,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets"
+				},
+				{
+					"backtrace" : 6,
 					"isSystem" : true,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/include/urdfdom"
 				},
 				{
-					"backtrace" : 4,
+					"backtrace" : 6,
 					"isSystem" : true,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/include/urdfdom_headers"
 				}
@@ -388,9 +362,9 @@
 			{
 				"backtraces" : 
 				[
-					4,
-					4,
-					4
+					7,
+					7,
+					6
 				],
 				"standard" : "17"
 			},
@@ -406,11 +380,12 @@
 				7,
 				8,
 				9,
-				18,
-				19,
-				20,
-				21,
-				24
+				10,
+				11,
+				12,
+				13,
+				23,
+				26
 			]
 		}
 	],
@@ -438,107 +413,102 @@
 				"role" : "flags"
 			},
 			{
-				"backtrace" : 3,
-				"fragment" : "-LIBPATH:D:\\RoboticsSoftware\\ads\\build\\Desktop_Qt_6_9_0_MSVC2022_64bit-Debug\\x64\\lib",
-				"role" : "libraryPath"
-			},
-			{
-				"backtrace" : 4,
+				"backtrace" : 6,
 				"fragment" : "C:\\Qt\\6.9.0\\msvc2022_64\\lib\\Qt6OpenGLWidgetsd.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
+				"backtrace" : 6,
 				"fragment" : "opengl32.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
+				"backtrace" : 6,
 				"fragment" : "C:\\Users\\kaedi\\vcpkg\\installed\\x64-windows\\debug\\lib\\glm.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
+				"backtrace" : 6,
 				"fragment" : "C:\\Users\\kaedi\\vcpkg\\installed\\x64-windows\\debug\\lib\\urdfdom_world.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
+				"backtrace" : 6,
 				"fragment" : "C:\\Users\\kaedi\\vcpkg\\installed\\x64-windows\\debug\\lib\\urdfdom_sensor.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
+				"backtrace" : 6,
 				"fragment" : "C:\\Users\\kaedi\\vcpkg\\installed\\x64-windows\\debug\\lib\\urdfdom_model_state.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
-				"fragment" : "qtadvanceddocking-qt6d.lib",
+				"backtrace" : 6,
+				"fragment" : "D:\\RoboticsSoftware\\ads\\build\\Desktop_Qt_6_9_0_MSVC2022_64bit-Debug\\x64\\lib\\qtadvanceddocking-qt6d.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
+				"backtrace" : 6,
 				"fragment" : "C:\\Qt\\6.9.0\\msvc2022_64\\lib\\Qt6Widgetsd.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 13,
+				"backtrace" : 6,
 				"fragment" : "C:\\Qt\\6.9.0\\msvc2022_64\\lib\\Qt6OpenGLd.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
+				"backtrace" : 6,
 				"fragment" : "C:\\Qt\\6.9.0\\msvc2022_64\\lib\\Qt6Guid.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
+				"backtrace" : 7,
 				"fragment" : "C:\\Qt\\6.9.0\\msvc2022_64\\lib\\Qt6Cored.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 19,
+				"backtrace" : 16,
 				"fragment" : "mpr.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 19,
+				"backtrace" : 16,
 				"fragment" : "userenv.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 25,
+				"backtrace" : 22,
 				"fragment" : "d3d11.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 25,
+				"backtrace" : 22,
 				"fragment" : "dxgi.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 25,
+				"backtrace" : 22,
 				"fragment" : "dxguid.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 25,
+				"backtrace" : 22,
 				"fragment" : "d3d12.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 4,
+				"backtrace" : 6,
 				"fragment" : "C:\\Users\\kaedi\\vcpkg\\installed\\x64-windows\\debug\\lib\\urdfdom_model.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 31,
+				"backtrace" : 28,
 				"fragment" : "C:\\Users\\kaedi\\vcpkg\\installed\\x64-windows\\debug\\lib\\console_bridge.lib",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 31,
+				"backtrace" : 28,
 				"fragment" : "C:\\Users\\kaedi\\vcpkg\\installed\\x64-windows\\debug\\lib\\tinyxml.lib",
 				"role" : "libraries"
 			},
@@ -572,41 +542,43 @@
 				7,
 				8,
 				9,
-				18,
-				19,
-				20,
-				21,
-				24
+				10,
+				11,
+				12,
+				13,
+				23,
+				26
 			]
 		},
 		{
 			"name" : "Header Files",
 			"sourceIndexes" : 
 			[
-				10,
-				11,
-				12,
-				13,
 				14,
 				15,
-				22
+				16,
+				17,
+				18,
+				19,
+				20,
+				24
 			]
 		},
 		{
 			"name" : "",
 			"sourceIndexes" : 
 			[
-				16,
-				17,
-				23
+				21,
+				22,
+				25
 			]
 		},
 		{
 			"name" : "CMake Rules",
 			"sourceIndexes" : 
 			[
-				25,
-				26
+				27,
+				28
 			]
 		}
 	],
@@ -620,121 +592,132 @@
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/main.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/Camera.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/Shader.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/Mesh.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/Robot.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/MainWindow.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/ViewportWidget.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/DiagnosticsPanel.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/StaticToolbar.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
-			"path" : "include/MainWindow.hpp",
-			"sourceGroupIndex" : 1
-		},
-		{
-			"backtrace" : 2,
-			"path" : "include/ViewportWidget.hpp",
-			"sourceGroupIndex" : 1
-		},
-		{
-			"backtrace" : 2,
-			"path" : "include/DiagnosticsPanel.hpp",
-			"sourceGroupIndex" : 1
-		},
-		{
-			"backtrace" : 2,
-			"path" : "include/StaticToolbar.hpp",
-			"sourceGroupIndex" : 1
-		},
-		{
-			"backtrace" : 2,
-			"path" : "include/PropertiesPanel.hpp",
-			"sourceGroupIndex" : 1
-		},
-		{
-			"backtrace" : 2,
-			"path" : "include/gridPropertiesWidget.hpp",
-			"sourceGroupIndex" : 1
-		},
-		{
-			"backtrace" : 2,
-			"path" : "src/static_toolbar.ui",
-			"sourceGroupIndex" : 2
-		},
-		{
-			"backtrace" : 2,
-			"path" : "resources.qrc",
-			"sourceGroupIndex" : 2
-		},
-		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/Grid.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/Scene.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/PropertiesPanel.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
-			"backtrace" : 2,
+			"backtrace" : 5,
 			"compileGroupIndex" : 0,
 			"path" : "src/gridPropertiesWidget.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 5,
+			"path" : "include/MainWindow.hpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 5,
+			"path" : "include/ViewportWidget.hpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 5,
+			"path" : "include/DiagnosticsPanel.hpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 5,
+			"path" : "include/StaticToolbar.hpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 5,
+			"path" : "include/PropertiesPanel.hpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 5,
+			"path" : "include/gridPropertiesWidget.hpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 5,
+			"path" : "include/IntersectionSystem.hpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 5,
+			"path" : "src/static_toolbar.ui",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 5,
+			"path" : "resources.qrc",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 5,
+			"compileGroupIndex" : 0,
+			"path" : "src/IntersectionSystem.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{

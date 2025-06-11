@@ -343,11 +343,6 @@
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6Widgets/Qt6QModernWindowsStylePluginTargets-relwithdebinfo.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6Widgets/Qt6QModernWindowsStylePluginAdditionalTargetInfo.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6Widgets/Qt6WidgetsVersionlessAliasTargets.cmake",
-		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfigVersion.cmake",
-		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfigVersionImpl.cmake",
-		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfig.cmake",
-		"C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake",
-		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsDependencies.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGL/Qt6OpenGLConfigVersion.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGL/Qt6OpenGLConfigVersionImpl.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGL/Qt6OpenGLConfig.cmake",
@@ -372,6 +367,11 @@
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLPrivate/Qt6OpenGLPrivateAdditionalTargetInfo.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLPrivate/Qt6OpenGLPrivateVersionlessAliasTargets.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGL/Qt6OpenGLVersionlessAliasTargets.cmake",
+		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfigVersion.cmake",
+		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfigVersionImpl.cmake",
+		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfig.cmake",
+		"C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake",
+		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsDependencies.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets-debug.cmake",
 		"C:/Qt/6.9.0/msvc2022_64/lib/cmake/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets-relwithdebinfo.cmake",
@@ -417,6 +417,12 @@
 			"D:/RoboticsSoftware/include/DiagnosticsPanel.hpp",
 			"MU",
 			"6YEA5652QU/moc_DiagnosticsPanel.cpp",
+			null
+		],
+		[
+			"D:/RoboticsSoftware/include/IntersectionSystem.hpp",
+			"MU",
+			"6YEA5652QU/moc_IntersectionSystem.cpp",
 			null
 		],
 		[
@@ -477,8 +483,8 @@
 	],
 	"MOC_INCLUDES" : 
 	[
-		"D:/RoboticsSoftware/external",
 		"D:/RoboticsSoftware/include",
+		"D:/RoboticsSoftware/external",
 		"D:/RoboticsSoftware/ads/src",
 		"C:/Users/kaedi/vcpkg/installed/x64-windows/include",
 		"C:/Users/kaedi/vcpkg/installed/x64-windows/include",
@@ -487,8 +493,8 @@
 		"C:/Qt/6.9.0/msvc2022_64/mkspecs/win32-msvc",
 		"C:/Qt/6.9.0/msvc2022_64/include/QtGui",
 		"C:/Qt/6.9.0/msvc2022_64/include/QtWidgets",
-		"C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets",
 		"C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL",
+		"C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets",
 		"C:/Users/kaedi/vcpkg/installed/x64-windows/include/urdfdom",
 		"C:/Users/kaedi/vcpkg/installed/x64-windows/include/urdfdom_headers"
 	],
@@ -520,6 +526,7 @@
 		[ "D:/RoboticsSoftware/src/Camera.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/DiagnosticsPanel.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Grid.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/IntersectionSystem.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/MainWindow.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Mesh.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/PropertiesPanel.cpp", "MU", null ],

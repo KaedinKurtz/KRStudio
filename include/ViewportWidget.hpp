@@ -2,30 +2,34 @@
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions_3_3_Core>
-#include <QTimer>
 #include <QPoint>
 #include <memory>
-#include <QOpenGLContext> // <-- Include for QOpenGLContext
+#include "entt/entity/fwd.hpp"
+#include <glm/glm.hpp>
 
-#include "entt/entt.hpp"
-
+// Forward declarations
 class Scene;
-class Camera;
 class Shader;
 class Mesh;
+class Camera;
+class QTimer;
+class QMouseEvent;
+class QWheelEvent;
+class QKeyEvent;
+
 
 class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_3_3_Core
 {
     Q_OBJECT
 
 public:
-    explicit ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget* parent = nullptr);
+    ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget* parent = nullptr);
     ~ViewportWidget();
 
     Camera& getCamera();
-    const Camera& getCamera() const;
 
 protected:
+    // Overrides from QOpenGLWidget
     void initializeGL() override;
     void paintGL() override;
     void resizeGL(int w, int h) override;
@@ -34,25 +38,22 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
 
-private slots:
-    // --- FIX: Slot to clean up OpenGL resources tied to a specific context ---
-    void cleanup();
-
 private:
-    void checkGLError(const char* location);
-
     Scene* m_scene;
     entt::entity m_cameraEntity;
 
-    // --- FIX: Pointer to the current OpenGL context ---
-    // This allows us to disconnect the cleanup signal in the destructor.
-    QOpenGLContext* m_glContext = nullptr;
-
+    // OpenGL Resources for main rendering
     std::unique_ptr<Shader> m_gridShader;
-    std::unique_ptr<Mesh>   m_gridMesh;
+    std::unique_ptr<Mesh> m_gridMesh;
     std::unique_ptr<Shader> m_phongShader;
-    std::unique_ptr<Mesh>   m_cubeMesh;
+    std::unique_ptr<Mesh> m_cubeMesh;
 
-    QTimer m_animationTimer;
+    // --- INTEGRATED: OpenGL resources for intersection outline rendering ---
+    std::unique_ptr<Shader> m_outlineShader; // The shader program for drawing simple colored lines.
+    unsigned int m_outlineVAO;               // The Vertex Array Object for the outline geometry.
+    unsigned int m_outlineVBO;               // The Vertex Buffer Object for the outline geometry.
+
+    // Other members
+    QTimer* m_animationTimer;
     QPoint m_lastMousePos;
 };
