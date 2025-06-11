@@ -31,12 +31,10 @@ MainWindow::MainWindow(QWidget* parent)
     // --- 1. Create the Scene ---
     m_scene = std::make_unique<Scene>();
     auto& registry = m_scene->getRegistry();
-
-    // Set the global SceneProperties in the context
     registry.ctx().emplace<SceneProperties>();
 
-
     // --- 2. Create Entities in the Scene ---
+    // (Grid creation is unchanged)
     auto gridEntity = registry.create();
     registry.emplace<TagComponent>(gridEntity, "Primary Grid");
     registry.emplace<TransformComponent>(gridEntity);
@@ -47,6 +45,7 @@ MainWindow::MainWindow(QWidget* parent)
     gridComp.levels.emplace_back(1.0f, glm::vec3(0.7f, 0.5f, 0.2f), 200.0f, 7.0f);
     gridComp.levels.emplace_back(10.0f, glm::vec3(0.2f, 0.7f, 0.9f), 200.0f, 20.0f);
 
+    // (Camera creation is unchanged)
     auto cameraEntity1 = registry.create();
     auto& camComp1 = registry.emplace<CameraComponent>(cameraEntity1);
     camComp1.camera.setToKnownGoodView();
@@ -55,10 +54,13 @@ MainWindow::MainWindow(QWidget* parent)
     auto& camComp2 = registry.emplace<CameraComponent>(cameraEntity2);
     camComp2.camera.forceRecalculateView(glm::vec3(10.0f, 5.0f, 10.0f), glm::vec3(0.0f), 0.0f);
 
+    // --- Create the Cube Entity with Full Component Data ---
     auto cubeEntity = registry.create();
     registry.emplace<TagComponent>(cubeEntity, "Robot Base");
     registry.emplace<TransformComponent>(cubeEntity);
-    registry.emplace<RenderableMeshComponent>(cubeEntity);
+    registry.emplace<RenderableMeshComponent>(cubeEntity); // The simple tag
+    registry.emplace<IntersectionComponent>(cubeEntity);   // The empty container for results
+
 
 
     // --- 3. Setup the UI Layout ---

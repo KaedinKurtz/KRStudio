@@ -1,47 +1,68 @@
+
+// =================================================================
+//                      Mesh.cpp
+// =================================================================
 #include "Mesh.hpp"
 #include <QDebug>
 
-void Mesh::setupMeshBuffers(const std::vector<float>& vertices) {
-    if (!m_gl) { qCritical() << "Mesh::setupMeshBuffers - m_gl is null!"; return; }
+// Constructor for simple meshes (Grid)
+Mesh::Mesh(QOpenGLFunctions_3_3_Core* gl, const std::vector<float>& vertices)
+    : m_gl(gl), m_VAO(0), m_VBO(0), m_EBO(0), m_vertexCount(0), m_indexCount(0), m_hasIndices(false)
+{
+    if (!m_gl || vertices.empty()) return;
+    m_vertexCount = vertices.size() / 3;
+
     m_gl->glGenVertexArrays(1, &m_VAO);
     m_gl->glGenBuffers(1, &m_VBO);
+
     m_gl->glBindVertexArray(m_VAO);
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
     m_gl->glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+
+    // Attribute 0: Vertex Positions
     m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     m_gl->glEnableVertexAttribArray(0);
     m_gl->glBindVertexArray(0);
 }
 
-Mesh::Mesh(QOpenGLFunctions_3_3_Core* gl, const std::vector<float>& vertices)
-    : m_gl(gl), m_VAO(0), m_VBO(0), m_EBO(0),
-    m_vertexCount(0), m_indexCount(0), m_hasIndices(false) {
-    if (!m_gl) { qCritical() << "Mesh (non-indexed) constructor: m_gl is null!"; return; }
-    if (vertices.empty() || vertices.size() % 3 != 0) {
-        qWarning() << "Mesh (non-indexed) created with invalid vertex data."; return;
-    }
-    setupMeshBuffers(vertices);
-    m_vertexCount = vertices.size() / 3;
-    qDebug() << "Mesh (non-indexed) Constructor: VAO ID:" << m_VAO << ", Vertex count:" << m_vertexCount;
-}
+// Implementation of the new 4-argument constructor for indexed meshes
+Mesh::Mesh(QOpenGLFunctions_3_3_Core* gl, const std::vector<float>& vertices, const std::vector<unsigned int>& indices, bool hasNormals)
+    : m_gl(gl), m_VAO(0), m_VBO(0), m_EBO(0), m_vertexCount(0), m_indexCount(0), m_hasIndices(true)
+{
+    if (!m_gl || vertices.empty() || indices.empty()) return;
 
-Mesh::Mesh(QOpenGLFunctions_3_3_Core* gl, const std::vector<float>& vertices, const std::vector<unsigned int>& indices)
-    : m_gl(gl), m_VAO(0), m_VBO(0), m_EBO(0),
-    m_vertexCount(0), m_indexCount(0), m_hasIndices(true) {
-    if (!m_gl) { qCritical() << "Mesh (indexed) constructor: m_gl is null!"; return; }
-    if (vertices.empty()) { qWarning() << "Mesh (indexed) created with empty vertex data."; return; }
-    if (indices.empty()) { qWarning() << "Mesh (indexed) created with empty index data."; m_hasIndices = false; return; }
-
-    setupMeshBuffers(vertices);
     m_indexCount = indices.size();
-    m_vertexCount = vertices.size() / 3; // Still useful for info
+    // The number of floats per vertex depends on whether normals are present.
+    m_vertexCount = vertices.size() / (hasNormals ? 6 : 3);
 
+    m_gl->glGenVertexArrays(1, &m_VAO);
+    m_gl->glGenBuffers(1, &m_VBO);
     m_gl->glGenBuffers(1, &m_EBO);
-    m_gl->glBindVertexArray(m_VAO); // EBO setup needs VAO to be bound
+
+    m_gl->glBindVertexArray(m_VAO);
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
+    m_gl->glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
     m_gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
     m_gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+
+    if (hasNormals) {
+        // Interleaved layout: [Pos.x, Pos.y, Pos.z, Norm.x, Norm.y, Norm.z]
+        GLsizei stride = 6 * sizeof(float);
+        // Attribute 0: Vertex Positions
+        m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+        m_gl->glEnableVertexAttribArray(0);
+        // Attribute 1: Normal Vectors
+        m_gl->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+        m_gl->glEnableVertexAttribArray(1);
+    }
+    else {
+        // Layout with only positions
+        GLsizei stride = 3 * sizeof(float);
+        m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+        m_gl->glEnableVertexAttribArray(0);
+    }
+
     m_gl->glBindVertexArray(0);
-    qDebug() << "Mesh (indexed) Constructor: VAO ID:" << m_VAO << ", EBO ID:" << m_EBO << ", Index count:" << m_indexCount;
 }
 
 Mesh::~Mesh() {
@@ -54,11 +75,11 @@ Mesh::~Mesh() {
 void Mesh::draw() {
     if (m_VAO == 0 || !m_gl) return;
     m_gl->glBindVertexArray(m_VAO);
-    if (m_hasIndices && m_EBO != 0 && m_indexCount > 0) {
-        m_gl->glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_indexCount), GL_UNSIGNED_INT, (void*)0);
+    if (m_hasIndices) {
+        m_gl->glDrawElements(GL_TRIANGLES, m_indexCount, GL_UNSIGNED_INT, 0);
     }
-    else if (!m_hasIndices && m_vertexCount > 0) {
-        m_gl->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(m_vertexCount));
+    else {
+        m_gl->glDrawArrays(GL_TRIANGLES, 0, m_vertexCount);
     }
     m_gl->glBindVertexArray(0);
 }

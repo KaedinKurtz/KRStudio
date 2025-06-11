@@ -1,4 +1,4 @@
-#define GLM_ENABLE_EXPERIMENTAL
+
 #define _USE_MATH_DEFINES // For M_PI
 #include <cmath> 
 
