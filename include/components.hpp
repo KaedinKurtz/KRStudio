@@ -23,10 +23,13 @@ struct TransformComponent
     glm::quat rotation = { 1.0f, 0.0f, 0.0f, 0.0f };
     glm::vec3 scale = { 1.0f, 1.0f, 1.0f };
 
+    TransformComponent(const glm::vec3& t = glm::vec3(0.0f), const glm::quat& r = glm::quat(1.0f, 0.0f, 0.0f, 0.0f))
+        : translation(t), rotation(r) {
+    }
+
     glm::mat4 getTransform() const {
-        return glm::translate(glm::mat4(1.0f), translation) *
-            glm::mat4_cast(rotation) *
-            glm::scale(glm::mat4(1.0f), scale);
+        glm::mat4 rot = glm::mat4_cast(rotation);
+        return glm::translate(glm::mat4(1.0f), translation) * rot * glm::scale(glm::mat4(1.0f), scale);
     }
 };
 
@@ -64,7 +67,7 @@ struct GridComponent
     glm::vec3 origin = { 1.0f, 0.2f, 0.2f };
 
     glm::vec3 eulerOrient = { 1.0f, 0.2f, 0.2f };
-	glm::vec4 quaternionOrient = { 1.0f, 0.2f, 0.2f, 0.3f };
+    glm::vec4 quaternionOrient = { 1.0f, 0.2f, 0.2f, 0.3f };
 
     float axisLineWidthPixels = 1.4f;
 };
@@ -126,9 +129,18 @@ struct JointComponent
     JointComponent(const JointDescription& desc) : description(desc) {}
 };
 
+struct LinkComponent {
+    LinkDescription description;
+
+    LinkComponent(const LinkDescription& desc = LinkDescription()) : description(desc) {}
+};
+
+// NEW COMPONENT
 struct ParentComponent {
     entt::entity parent = entt::null;
+    ParentComponent(entt::entity p = entt::null) : parent(p) {}
+};
 
-    ParentComponent() = default;
-    ParentComponent(entt::entity p) : parent(p) {}
+struct RobotRootComponent {
+    std::string name;
 };

@@ -64,11 +64,11 @@ MainWindow::MainWindow(QWidget* parent)
     camComp2.camera.forceRecalculateView(glm::vec3(10.0f, 5.0f, 10.0f), glm::vec3(0.0f), 0.0f);
 
     // --- Create the Cube Entity with Full Component Data ---
-    auto cubeEntity = registry.create();
-    registry.emplace<TagComponent>(cubeEntity, "Robot Base");
-    registry.emplace<TransformComponent>(cubeEntity);
-    registry.emplace<RenderableMeshComponent>(cubeEntity); // The simple tag
-    registry.emplace<IntersectionComponent>(cubeEntity);   // The empty container for results
+    //auto cubeEntity = registry.create();
+    //registry.emplace<TagComponent>(cubeEntity, "Robot Base");
+   // registry.emplace<TransformComponent>(cubeEntity);
+   // registry.emplace<RenderableMeshComponent>(cubeEntity); // The simple tag
+  //  registry.emplace<IntersectionComponent>(cubeEntity);   // The empty container for results
 
 
 

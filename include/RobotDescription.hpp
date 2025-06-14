@@ -7,6 +7,12 @@
 #include <cstdint> // For specific integer types
 #include <glm/glm.hpp>
 
+struct Vec3 {
+    float x = 0.0f; // Initialize to 0
+    float y = 0.0f; // Initialize to 0
+    float z = 0.0f; // Initialize to 0
+};
+
 struct MaterialDescription {
     // The base color of the material (RGBA). This is also called the Albedo.
     glm::vec4 albedo_color = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f); // A sensible default grey.
@@ -50,7 +56,7 @@ struct LinkDescription {
 
     // --- Physics & Collision Properties ---
     float mass = 1.0f; // The mass of the link in kilograms.
-    glm::mat3 inertia = 0.0f; // The moment of inertia. Consider making this a glm::mat3 for full 3D inertia tensor.
+    glm::mat3 inertia = glm::mat3(0.0f); // The moment of inertia. Consider making this a glm::mat3 for full 3D inertia tensor.
     glm::vec3 center_of_mass_offset = glm::vec3(0.0f); // Offset of the center of mass from the link's origin.
     std::string collision_mesh_filepath; // Path to a (usually simpler) mesh used for physics calculations.
     float friction = 0.5f; // The friction coefficient of the link's surface.
@@ -125,20 +131,20 @@ struct JointLimits {
 // Describes the physical properties of the motor itself.
 struct MotorProperties {
     std::string model_name = "DefaultMotor"; // The model name, e.g., "Copley APV-09050".
-    MotorType type = MotorType::NONE;      // The underlying technology of the motor (BLDC, Stepper, etc.).
+    MotorType type = MotorType::NONE;       // The underlying technology of the motor (BLDC, Stepper, etc.).
     CommutationType commutation = CommutationType::NONE; // The control strategy required by the motor.
-    uint32_t pole_pairs = 7;               // For BLDC/PMSM, the number of magnetic pole pairs. Crucial for electrical calculations.
-    uint32_t phases = 3;                   // The number of electrical phases.
-    double steps_per_revolution = 200.0;   // For stepper motors, the number of full steps per revolution.
+    uint32_t pole_pairs = 7;                // For BLDC/PMSM, the number of magnetic pole pairs. Crucial for electrical calculations.
+    uint32_t phases = 3;                    // The number of electrical phases.
+    double steps_per_revolution = 200.0;    // For stepper motors, the number of full steps per revolution.
 
     // Electrical Parameters
-    double torque_constant_Kt = 0.0;       // In Nm/A (Newton-meters per Amp). Relates current to torque.
-    double back_emf_constant_Ke = 0.0;     // In V/(rad/s) (Volts per radian per second). Relates speed to voltage.
-    double terminal_resistance = 0.0;      // In Ohms. The electrical resistance of the motor windings.
-    double terminal_inductance = 0.0;      // In Henrys. The electrical inductance of the motor windings.
-    double max_continuous_current = 1.0;   // The maximum current the motor can handle continuously (Amps).
-    double peak_current = 1.0;             // The maximum current the motor can handle for short bursts (Amps).
-    double max_voltage = 48.0;             // The nominal maximum operating voltage (Volts).
+    double torque_constant_Kt = 0.0;        // In Nm/A (Newton-meters per Amp). Relates current to torque.
+    double back_emf_constant_Ke = 0.0;      // In V/(rad/s) (Volts per radian per second). Relates speed to voltage.
+    double terminal_resistance = 0.0;       // In Ohms. The electrical resistance of the motor windings.
+    double terminal_inductance = 0.0;       // In Henrys. The electrical inductance of the motor windings.
+    double max_continuous_current = 1.0;    // The maximum current the motor can handle continuously (Amps).
+    double peak_current = 1.0;              // The maximum current the motor can handle for short bursts (Amps).
+    double max_voltage = 48.0;              // The nominal maximum operating voltage (Volts).
 };
 
 // Contains all parameters for a standard PID (Proportional-Integral-Derivative) controller.
@@ -162,9 +168,9 @@ enum class EncoderType {
 struct EncoderSensor {
     std::string model_name = "DefaultEncoder";
     EncoderType type = EncoderType::INCREMENTAL; // The type of encoder.
-    double counts_per_revolution = 4096.0;     // The number of distinct "ticks" or counts per full rotation of the encoder.
-    double gear_ratio_to_joint = 1.0;          // The gear ratio between this sensor and the final joint output. (e.g., > 1.0 if the sensor is on the high-speed motor shaft before a gearbox).
-    double zero_offset = 0.0;                  // A calibration offset to align the encoder's zero with the joint's zero.
+    double counts_per_revolution = 4096.0;      // The number of distinct "ticks" or counts per full rotation of the encoder.
+    double gear_ratio_to_joint = 1.0;           // The gear ratio between this sensor and the final joint output. (e.g., > 1.0 if the sensor is on the high-speed motor shaft before a gearbox).
+    double zero_offset = 0.0;                   // A calibration offset to align the encoder's zero with the joint's zero.
 };
 
 struct PotentiometerSensor {
@@ -188,10 +194,10 @@ using SensorVariant = std::variant<EncoderSensor, PotentiometerSensor, HallEffec
 
 // Describes how the software communicates with the physical hardware controller.
 struct HardwareInterface {
-    uint32_t controller_id = 0;                  // The unique ID of the hardware controller on the bus (e.g., CAN Node ID).
+    uint32_t controller_id = 0;                     // The unique ID of the hardware controller on the bus (e.g., CAN Node ID).
     CommunicationProtocol protocol = CommunicationProtocol::NONE; // The communication protocol being used.
-    std::string command_topic_name;              // The name of the topic/channel to send commands on (e.g., "joint1/set_position").
-    std::string feedback_topic_name;             // The name of the topic/channel to receive feedback on (e.g., "joint1/current_position").
+    std::string command_topic_name;                 // The name of the topic/channel to send commands on (e.g., "joint1/set_position").
+    std::string feedback_topic_name;                // The name of the topic/channel to receive feedback on (e.g., "joint1/current_position").
 };
 
 
@@ -201,37 +207,37 @@ struct HardwareInterface {
 //================================================================================
 struct JointDescription {
     // --- Core Kinematic Properties ---
-    std::string name;                                   // The human-readable name of the joint, e.g., "elbow_joint".
-    uint64_t persistent_id;                             // A unique, permanent ID for this joint.
-    JointType type = JointType::REVOLUTE;               // The type of motion this joint allows.
-    std::string parent_link_name;                       // The name of the parent link this joint connects to.
-    std::string child_link_name;                        // The name of the child link this joint moves.
-    glm::vec3 origin_xyz = glm::vec3(0.0f);             // The position of the joint relative to the parent link's origin.
-    glm::vec3 origin_rpy = glm::vec3(0.0f);             // The orientation of the joint relative to the parent link's origin (roll, pitch, yaw).
-    glm::vec3 axis = glm::vec3(0.0f, 0.0f, 1.0f);       // The axis of rotation or translation, in the joint's own coordinate frame.
+    std::string name;                                     // The human-readable name of the joint, e.g., "elbow_joint".
+    uint64_t persistent_id;                               // A unique, permanent ID for this joint.
+    JointType type = JointType::REVOLUTE;                 // The type of motion this joint allows.
+    std::string parent_link_name;                         // The name of the parent link this joint connects to.
+    std::string child_link_name;                          // The name of the child link this joint moves.
+    glm::vec3 origin_xyz = glm::vec3(0.0f);               // The position of the joint relative to the parent link's origin.
+    glm::vec3 origin_rpy = glm::vec3(0.0f);               // The orientation of the joint relative to the parent link's origin (roll, pitch, yaw).
+    glm::vec3 axis = glm::vec3(0.0f, 0.0f, 1.0f);         // The axis of rotation or translation, in the joint's own coordinate frame.
 
     // --- Mechanical & Transmission Properties ---
-    JointLimits limits;                                 // A struct containing the physical motion limits of the joint.
-    double gear_reduction = 1.0;                        // The gear ratio (e.g., 100.0 means a 100:1 gearbox). 1.0 for direct drive.
-    double transmission_efficiency = 1.0;               // The efficiency of the gearbox/transmission (0.0 to 1.0).
-    double static_friction = 0.0;                       // The friction that must be overcome to start moving (Stribeck friction).
-    double dynamic_friction = 0.0;                      // The friction that resists motion while moving (Coulomb and viscous friction).
+    JointLimits limits;                                   // A struct containing the physical motion limits of the joint.
+    double gear_reduction = 1.0;                          // The gear ratio (e.g., 100.0 means a 100:1 gearbox). 1.0 for direct drive.
+    double transmission_efficiency = 1.0;                 // The efficiency of the gearbox/transmission (0.0 to 1.0).
+    double static_friction = 0.0;                         // The friction that must be overcome to start moving (Stribeck friction).
+    double dynamic_friction = 0.0;                        // The friction that resists motion while moving (Coulomb and viscous friction).
 
     // --- Actuator & Electrical Properties ---
-    MotorProperties motor;                              // A struct containing the detailed physical properties of the electric motor.
+    MotorProperties motor;                                // A struct containing the detailed physical properties of the electric motor.
 
     // --- Control System Properties ---
     ControlMode default_control_mode = ControlMode::POSITION; // The control mode the joint boots into.
-    PIDParameters position_pid;                         // PID parameters for when the joint is in position control mode.
-    PIDParameters velocity_pid;                         // PID parameters for when the joint is in velocity control mode.
-    PIDParameters torque_pid;                           // PID parameters for when the joint is in torque/current control mode.
+    PIDParameters position_pid;                           // PID parameters for when the joint is in position control mode.
+    PIDParameters velocity_pid;                           // PID parameters for when the joint is in velocity control mode.
+    PIDParameters torque_pid;                             // PID parameters for when the joint is in torque/current control mode.
 
     // --- Sensor & Feedback Properties ---
     // A joint can have multiple sensors (e.g., a low-res pot for absolute position and a high-res incremental encoder for velocity).
-    std::vector<SensorVariant> sensors;                 // A list of all sensors attached to this joint.
+    std::vector<SensorVariant> sensors;                   // A list of all sensors attached to this joint.
 
     // --- Hardware Interface Properties ---
-    HardwareInterface interface;                        // A struct describing how to communicate with the physical joint controller.
+    HardwareInterface interface;                          // A struct describing how to communicate with the physical joint controller.
 };
 
 struct RobotDescription {
@@ -239,3 +245,4 @@ struct RobotDescription {
     std::vector<LinkDescription> links;
     std::vector<JointDescription> joints;
 };
+
