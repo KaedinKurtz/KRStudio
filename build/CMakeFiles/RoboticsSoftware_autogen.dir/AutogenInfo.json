@@ -414,6 +414,12 @@
 	"HEADERS" : 
 	[
 		[
+			"D:/RoboticsSoftware/external/pugixml/pugixml.hpp",
+			"MU",
+			"QHT42GEYHR/moc_pugixml.cpp",
+			null
+		],
+		[
 			"D:/RoboticsSoftware/include/DiagnosticsPanel.hpp",
 			"MU",
 			"6YEA5652QU/moc_DiagnosticsPanel.cpp",
@@ -426,9 +432,39 @@
 			null
 		],
 		[
+			"D:/RoboticsSoftware/include/JointPropertiesWidget.hpp",
+			"MU",
+			"6YEA5652QU/moc_JointPropertiesWidget.cpp",
+			null
+		],
+		[
+			"D:/RoboticsSoftware/include/KRobotParser.hpp",
+			"MU",
+			"6YEA5652QU/moc_KRobotParser.cpp",
+			null
+		],
+		[
+			"D:/RoboticsSoftware/include/KRobotWriter.hpp",
+			"MU",
+			"6YEA5652QU/moc_KRobotWriter.cpp",
+			null
+		],
+		[
+			"D:/RoboticsSoftware/include/LinkPropertiesWidget.hpp",
+			"MU",
+			"6YEA5652QU/moc_LinkPropertiesWidget.cpp",
+			null
+		],
+		[
 			"D:/RoboticsSoftware/include/MainWindow.hpp",
 			"MU",
 			"6YEA5652QU/moc_MainWindow.cpp",
+			null
+		],
+		[
+			"D:/RoboticsSoftware/include/PreviewViewport.hpp",
+			"MU",
+			"6YEA5652QU/moc_PreviewViewport.cpp",
 			null
 		],
 		[
@@ -438,9 +474,39 @@
 			null
 		],
 		[
+			"D:/RoboticsSoftware/include/RobotEnrichmentDialog.hpp",
+			"MU",
+			"6YEA5652QU/moc_RobotEnrichmentDialog.cpp",
+			null
+		],
+		[
+			"D:/RoboticsSoftware/include/SDFParser.hpp",
+			"MU",
+			"6YEA5652QU/moc_SDFParser.cpp",
+			null
+		],
+		[
+			"D:/RoboticsSoftware/include/SceneBuilder.hpp",
+			"MU",
+			"6YEA5652QU/moc_SceneBuilder.cpp",
+			null
+		],
+		[
 			"D:/RoboticsSoftware/include/StaticToolbar.hpp",
 			"MU",
 			"6YEA5652QU/moc_StaticToolbar.cpp",
+			null
+		],
+		[
+			"D:/RoboticsSoftware/include/URDFImporterDialog.hpp",
+			"MU",
+			"6YEA5652QU/moc_URDFImporterDialog.cpp",
+			null
+		],
+		[
+			"D:/RoboticsSoftware/include/URDFParser.hpp",
+			"MU",
+			"6YEA5652QU/moc_URDFParser.cpp",
 			null
 		],
 		[
@@ -487,6 +553,7 @@
 		"D:/RoboticsSoftware/external",
 		"D:/RoboticsSoftware/ads/src",
 		"C:/Users/kaedi/vcpkg/installed/x64-windows/include",
+		"D:/RoboticsSoftware/external/pugixml",
 		"C:/Users/kaedi/vcpkg/installed/x64-windows/include",
 		"C:/Qt/6.9.0/msvc2022_64/include/QtCore",
 		"C:/Qt/6.9.0/msvc2022_64/include",
@@ -523,17 +590,28 @@
 	"SETTINGS_FILE" : "D:/RoboticsSoftware/build/CMakeFiles/RoboticsSoftware_autogen.dir/AutogenUsed.txt",
 	"SOURCES" : 
 	[
+		[ "D:/RoboticsSoftware/external/pugixml/pugixml.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Camera.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/DiagnosticsPanel.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Grid.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/IntersectionSystem.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/JointPropertiesWidget.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/KRobotParser.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/KRobotWriter.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/LinkPropertiesWidget.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/MainWindow.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Mesh.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/PreviewViewport.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/PropertiesPanel.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Robot.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/RobotEnrichmentDialog.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/SDFParser.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Scene.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/SceneBuilder.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Shader.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/StaticToolbar.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/URDFImporterDialog.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/URDFParser.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/ViewportWidget.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/gridPropertiesWidget.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/main.cpp", "MU", null ]

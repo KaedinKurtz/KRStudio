@@ -67,9 +67,31 @@ qt_add_executable(RoboticsSoftware
     include/PropertiesPanel.hpp
     include/gridPropertiesWidget.hpp
     include/IntersectionSystem.hpp
+    include/URDFParser.hpp
+    include/URDFImporterDialog.hpp
+    include/KRobotParser.hpp
+    include/KRobotWriter.hpp
+    include/SDFParser.hpp
+    include/SceneBuilder.hpp
+    include/PreviewViewport.hpp
+    include/RobotEnrichmentDialog.hpp
+    include/LinkPropertiesWidget.hpp
+    src/LinkPropertiesWidget.cpp
+    include/JointPropertiesWidget.hpp
+    include/SceneBuilder.hpp
+    src/SceneBuilder.cpp
+    src/JointPropertiesWidget.cpp
+    src/PreviewViewport.cpp
+    src/RobotEnrichmentDialog.cpp
     src/static_toolbar.ui
     resources.qrc
     src/IntersectionSystem.cpp
+    src/URDFParser.cpp
+    src/URDFImporterDialog.cpp
+    src/KRobotWriter.cpp
+    src/KRobotParser.cpp
+    src/SDFParser.cpp
+    external/pugixml/pugixml.cpp
 )
 
 # --- Target-Specific Properties ---
@@ -80,6 +102,7 @@ target_include_directories(RoboticsSoftware PRIVATE
     "external"
     "${ADS_INCLUDE_DIR}"
     ${urdfdom_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml 
 )
 
 # Note: We are not using target_link_directories() for ADS anymore.

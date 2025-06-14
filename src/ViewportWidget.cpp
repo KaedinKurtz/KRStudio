@@ -128,6 +128,9 @@ void ViewportWidget::initializeGL()
 
 void ViewportWidget::paintGL()
 {
+    qDebug() << "[MainViewport" << this->objectName() << "] Painting scene with" << m_scene->getRegistry().view<entt::entity>().size() << "total entities.";
+
+
     IntersectionSystem::update(m_scene);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

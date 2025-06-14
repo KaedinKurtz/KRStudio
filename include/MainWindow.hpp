@@ -39,5 +39,9 @@ private:
     // We no longer need pointers to the individual viewports here,
     // as the dock manager handles their lifecycle. We will create them
     // as local variables in the constructor.
+
+private slots:
+    void onLoadRobotClicked();
+
 };
 

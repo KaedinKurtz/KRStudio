@@ -21,6 +21,9 @@ public:
     ~Mesh();
     void draw();
 
+    static const std::vector<float>& getLitCubeVertices();
+    static const std::vector<unsigned int>& getLitCubeIndices();
+
 private:
     QOpenGLFunctions_3_3_Core* m_gl;
     unsigned int m_VAO, m_VBO, m_EBO;

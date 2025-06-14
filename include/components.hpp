@@ -7,6 +7,7 @@
 #include "Grid.hpp"
 #include "Camera.hpp"
 #include "IntersectionSystem.hpp"
+#include "RobotDescription.hpp" 
 
 struct SceneProperties
 {
@@ -96,4 +97,38 @@ struct CameraComponent
 
 struct IntersectionComponent {
     IntersectionSystem::IntersectionResult result;
+};
+
+struct MaterialComponent
+{
+    MaterialDescription description;
+
+    MaterialComponent() = default;
+    MaterialComponent(const MaterialComponent&) = default;
+    MaterialComponent(const MaterialDescription& desc) : description(desc) {}
+};
+
+struct JointComponent
+{
+    // It contains the rich description data...
+    JointDescription description;
+
+    // ...and also holds the entity IDs for the links it connects.
+    entt::entity parentLink = entt::null;
+    entt::entity childLink = entt::null;
+
+    // Current state of the joint
+    double currentPosition = 0.0;
+    double currentVelocity = 0.0;
+
+    JointComponent() = default;
+    JointComponent(const JointComponent&) = default;
+    JointComponent(const JointDescription& desc) : description(desc) {}
+};
+
+struct ParentComponent {
+    entt::entity parent = entt::null;
+
+    ParentComponent() = default;
+    ParentComponent(entt::entity p) : parent(p) {}
 };

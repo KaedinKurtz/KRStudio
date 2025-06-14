@@ -5,6 +5,57 @@
 #include "Mesh.hpp"
 #include <QDebug>
 
+const std::vector<float> S_LIT_CUBE_VERTICES = {
+    // positions           // normals
+    -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+     0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+     0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+    -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+
+    -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+     0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+     0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+    -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+
+    -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+    -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+    -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+    -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+
+     0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+     0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+     0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+
+    -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+    -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+
+    -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+    -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f
+};
+
+const std::vector<unsigned int> S_LIT_CUBE_INDICES = {
+     0,  1,  2,  2,  3,  0, // Back
+     4,  5,  6,  6,  7,  4, // Front
+     8,  9, 10, 10, 11,  8, // Left
+    12, 13, 14, 14, 15, 12, // Right
+    16, 17, 18, 18, 19, 16, // Bottom
+    20, 21, 22, 22, 23, 20  // Top
+};
+
+const std::vector<float>& Mesh::getLitCubeVertices()
+{
+    return S_LIT_CUBE_VERTICES;
+}
+
+const std::vector<unsigned int>& Mesh::getLitCubeIndices()
+{
+    return S_LIT_CUBE_INDICES;
+}
 // Constructor for simple meshes (Grid)
 Mesh::Mesh(QOpenGLFunctions_3_3_Core* gl, const std::vector<float>& vertices)
     : m_gl(gl), m_VAO(0), m_VBO(0), m_EBO(0), m_vertexCount(0), m_indexCount(0), m_hasIndices(false)
