@@ -14,8 +14,17 @@
 #include "ViewportWidget.hpp"
 #include "components.hpp" 
 #include "Camera.hpp"
+#include "KRobotParser.hpp"
+#include "KRobotWriter.hpp"
+#include "URDFParser.hpp"
+#include "URDFImporterDialog.hpp"
+#include "SDFParser.hpp"
+#include "RobotEnrichmentDialog.hpp"
+#include "SceneBuilder.hpp"
 
 #include <QVBoxLayout>
+#include <QFileDialog>
+#include <QMessageBox>
 #include <QWidget>
 #include <QMenuBar>
 #include <QStatusBar>
@@ -126,6 +135,8 @@ MainWindow::MainWindow(QWidget* parent)
         }
         });
 
+    connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
+
 
     // --- 7. Final Window Setup ---
     if (menuBar()) {
@@ -140,4 +151,84 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
+}
+
+void MainWindow::onLoadRobotClicked()
+{
+    // --- Step 1: Create a unified file dialog filter ---
+    // This filter string allows the user to see all supported files at once,
+    // or filter by a specific type. The format is "Description(*.ext1 *.ext2);;".
+    const char* fileFilter =
+        "All Supported Robot Files (*.krobot *.urdf *.sdf);;"
+        "KStudio Robot (*.krobot);;"
+        "URDF Robot (*.urdf);;"
+        "SDF Robot (*.sdf);;"
+        "All Files (*)";
+
+    // --- Step 2: Open the dialog and get the selected file path ---
+    QString filePath = QFileDialog::getOpenFileName(this, "Load Robot Model", "", fileFilter); // Opens the file dialog with our filter.
+    if (filePath.isEmpty()) { // Checks if the user clicked "Cancel".
+        return; // after a line, explain what it does
+    }
+
+    // --- Step 3: The Dispatcher - Call the correct parser based on file extension ---
+    RobotDescription description; // This will hold the data from whichever parser succeeds.
+    bool requiresEnrichment = false; // A flag to track if we need to open the Importer Dialog.
+
+    try {
+        if (filePath.endsWith(".krobot", Qt::CaseInsensitive)) {
+            description = KRobotParser::parse(filePath.toStdString()); // Use the KRobot parser.
+            requiresEnrichment = false; // .krobot files are complete, no enrichment needed.
+
+        }
+        else if (filePath.endsWith(".urdf", Qt::CaseInsensitive)) {
+            description = URDFParser::parse(filePath.toStdString()); // Use the URDF parser.
+            requiresEnrichment = true; // URDF is a partial format, requires user enrichment.
+
+        }
+        else if (filePath.endsWith(".sdf", Qt::CaseInsensitive)) {
+            description = SDFParser::parse(filePath.toStdString()); // Use the SDF parser.
+            requiresEnrichment = true; // SDF is also partial, requires user enrichment.
+
+        }
+        else {
+            QMessageBox::warning(this, "Unsupported File", "The selected file type is not supported."); // Warn the user if the extension is unknown.
+            return; // Stop the process.
+        }
+    }
+    catch (const std::exception& e) {
+        QMessageBox::critical(this, "Parse Error", e.what()); // Catches any errors thrown by the parsers.
+        return; // Stop the process.
+    }
+
+    // --- Step 4: The Workflow Fork - Decide what to do with the parsed data ---
+    if (requiresEnrichment) {
+        RobotEnrichmentDialog dialog(description, this);
+        if (dialog.exec() == QDialog::Accepted) {
+            const RobotDescription& finalDescription = dialog.getFinalDescription();
+            QString krobotSavePath = QFileDialog::getSaveFileName(this, "Save Enriched KRobot File", "", "KRobot Files (*.krobot)");
+            if (krobotSavePath.isEmpty()) return;
+
+            if (KRobotWriter::save(finalDescription, krobotSavePath.toStdString())) {
+                statusBar()->showMessage(QString("Successfully imported and enriched '%1'").arg(QFileInfo(filePath).fileName()));
+
+                qDebug() << "[MainWindow] Spawning robot into MAIN scene.";
+                // --- THIS IS THE FIX ---
+                // This call now adds the new robot entities to our main scene,
+                // which already contains the grid and cameras.
+                SceneBuilder::spawnRobot(*m_scene, finalDescription);
+            }
+            else {
+                QMessageBox::critical(this, "File Save Error", "Could not save the new .krobot file.");
+            }
+        }
+    }
+    else { // This handles loading a .krobot file directly
+        statusBar()->showMessage(QString("Successfully loaded robot '%1'").arg(QString::fromStdString(description.name)));
+
+        qDebug() << "[MainWindow] Spawning robot into MAIN scene.";
+        // --- THIS IS THE FIX ---
+        // Spawn the robot from the .krobot file directly into the MAIN scene.
+        SceneBuilder::spawnRobot(*m_scene, description);
+    }
 }

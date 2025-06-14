@@ -15,6 +15,9 @@ public:
     explicit StaticToolbar(QWidget* parent = nullptr);
     ~StaticToolbar();
 
+signals:
+    void loadRobotClicked();
+
 private:
     Ui::toolbarContainer* ui; // Pointer to the generated UI class
 };

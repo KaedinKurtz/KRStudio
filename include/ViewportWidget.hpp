@@ -48,6 +48,8 @@ private:
     std::unique_ptr<Shader> m_phongShader;
     std::unique_ptr<Mesh> m_cubeMesh;
 
+    std::map<std::string, std::unique_ptr<Mesh>> m_meshCache;
+
     // --- INTEGRATED: OpenGL resources for intersection outline rendering ---
     std::unique_ptr<Shader> m_outlineShader; // The shader program for drawing simple colored lines.
     unsigned int m_outlineVAO;               // The Vertex Array Object for the outline geometry.
