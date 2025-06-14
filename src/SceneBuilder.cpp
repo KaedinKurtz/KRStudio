@@ -1,50 +1,62 @@
 #include "SceneBuilder.hpp"
 #include "RobotDescription.hpp"
 #include "Scene.hpp"
-#include "components.hpp"
+#include "components.hpp" // We need this to add components to entities
 
 #include <QDebug>
 #include <unordered_map>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 void SceneBuilder::spawnRobot(Scene& scene, const RobotDescription& description)
 {
     qInfo() << "Spawning robot:" << QString::fromStdString(description.name);
-    auto& registry = scene.getRegistry();
+
+    auto& registry = scene.getRegistry(); // Get a reference to the ECS registry.
+
+    // This map is crucial. It will let us look up the entity ID of a link by its name.
+    // We need this to correctly connect the joints to the correct parent and child link entities.
     std::unordered_map<std::string, entt::entity> linkNameToEntityMap;
 
-    // --- First Pass: Create Link Entities ---
-    for (const auto& linkDesc : description.links) {
-        auto linkEntity = registry.create();
-        linkNameToEntityMap[linkDesc.name] = linkEntity;
-        registry.emplace<TagComponent>(linkEntity, linkDesc.name);
+    // --- First Pass: Create Entities for all Links ---
+    // We create all the links first so that when we create the joints, we can be
+    // sure that the parent and child link entities already exist.
+    for (const auto& linkDesc : description.links)
+    {
+        auto linkEntity = registry.create(); // Create a new, empty entity in the scene.
+        linkNameToEntityMap[linkDesc.name] = linkEntity; // Store the new entity ID in our map, keyed by its name.
+
+        registry.emplace<TagComponent>(linkEntity, linkDesc.name); // Add a name tag to the entity.
+
+        // --- Create and Emplace TransformComponent ---
+        // Convert the RPY (Roll, Pitch, Yaw) Euler angles to a quaternion for robust rotation.
         glm::quat rotation = glm::quat(glm::vec3(linkDesc.visual_origin_rpy.x, linkDesc.visual_origin_rpy.y, linkDesc.visual_origin_rpy.z));
+        // We create the TransformComponent and initialize it with the position and new rotation.
         registry.emplace<TransformComponent>(linkEntity, linkDesc.visual_origin_xyz, rotation);
-        registry.emplace<RenderableMeshComponent>(linkEntity);
-        // We will add MaterialComponent in the next step
+
+        // --- Emplace Other Components ---
+        registry.emplace<RenderableMeshComponent>(linkEntity); // Add a tag to mark this entity for rendering.
+        // We will create and add a MaterialComponent in a future step.
     }
 
-    // --- Second Pass: Create Joint Entities and Build the Hierarchy ---
-    for (const auto& jointDesc : description.joints) {
-        if (linkNameToEntityMap.count(jointDesc.parent_link_name) && linkNameToEntityMap.count(jointDesc.child_link_name)) {
-            entt::entity parentEntity = linkNameToEntityMap.at(jointDesc.parent_link_name);
-            entt::entity childEntity = linkNameToEntityMap.at(jointDesc.child_link_name);
+    // --- Second Pass: Create Entities for all Joints ---
+    // Now we create the joints and connect them to the links we just made.
+    for (const auto& jointDesc : description.joints)
+    {
+        auto jointEntity = registry.create(); // Create an entity for the joint itself.
+        registry.emplace<TagComponent>(jointEntity, jointDesc.name); // Give the joint a name.
 
-            // --- THIS IS THE KEY ---
-            // The child link entity now has a component that explicitly states who its parent is.
-            registry.emplace<ParentComponent>(childEntity, parentEntity);
+        // TODO: Create the JointComponent. This component holds all the rich data from the description.
+        // auto& jointComponent = registry.emplace<JointComponent>(jointEntity, jointDesc);
 
-            // The joint's transform is relative to the PARENT link.
-            auto jointEntity = registry.create();
-            registry.emplace<TagComponent>(jointEntity, jointDesc.name);
-            auto& jointComponent = registry.emplace<JointComponent>(jointEntity, jointDesc);
-            jointComponent.parentLink = parentEntity;
-            jointComponent.childLink = childEntity;
-
-            // Add a transform to the joint as well, defining its position relative to the parent link.
-            glm::quat jointRotation = glm::quat(glm::vec3(jointDesc.origin_rpy.x, jointDesc.origin_rpy.y, jointDesc.origin_rpy.z));
-            registry.emplace<TransformComponent>(jointEntity, jointDesc.origin_xyz, jointRotation);
-            registry.emplace<ParentComponent>(jointEntity, parentEntity);
-        }
+        // TODO: Find and Link Parent/Child Entities
+        // if (linkNameToEntityMap.count(jointDesc.parent_link_name)) {
+        //     jointComponent.parentLink = linkNameToEntityMap.at(jointDesc.parent_link_name);
+        // }
+        // if (linkNameToEntityMap.count(jointDesc.child_link_name)) {
+        //     jointComponent.childLink = linkNameToEntityMap.at(jointDesc.child_link_name);
+        // }
     }
+
+    qInfo() << "Finished spawning" << description.links.size() << "links and" << description.joints.size() << "joints.";
 }
