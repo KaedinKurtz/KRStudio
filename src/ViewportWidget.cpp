@@ -85,7 +85,7 @@ void ViewportWidget::initializeGL()
 
     try {
         m_outlineShader = std::make_unique<Shader>(this, "shaders/outline_vert.glsl", "shaders/outline_frag.glsl");
-        RenderingSystem::initialize(this);
+        RenderingSystem::initialize();
     }
     catch (const std::exception& e) {
         qCritical() << "[MainViewport] CRITICAL: Failed to initialize resources:" << e.what();

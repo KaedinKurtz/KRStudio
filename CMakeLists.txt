@@ -45,8 +45,7 @@ find_library(
 
 
 # --- Define the Executable Target ---
-qt_add_executable(RoboticsSoftware
-    MANUAL_FINALIZATION
+set(SOURCE_FILES
     src/main.cpp
     src/Camera.cpp
     src/Shader.cpp
@@ -61,6 +60,23 @@ qt_add_executable(RoboticsSoftware
     src/Scene.cpp
     src/PropertiesPanel.cpp
     src/gridPropertiesWidget.cpp
+    src/LinkPropertiesWidget.cpp
+    src/SceneBuilder.cpp
+    src/JointPropertiesWidget.cpp
+    src/PreviewViewport.cpp
+    src/RobotEnrichmentDialog.cpp
+    src/IntersectionSystem.cpp
+    src/URDFParser.cpp
+    src/URDFImporterDialog.cpp
+    src/KRobotWriter.cpp
+    src/KRobotParser.cpp
+    src/SDFParser.cpp
+    src/static_toolbar.ui
+    resources.qrc
+    external/pugixml/pugixml.cpp
+)
+
+set(HEADER_FILES
     include/MainWindow.hpp
     include/ViewportWidget.hpp
     include/DiagnosticsPanel.hpp
@@ -78,22 +94,13 @@ qt_add_executable(RoboticsSoftware
     include/PreviewViewport.hpp
     include/RobotEnrichmentDialog.hpp
     include/LinkPropertiesWidget.hpp
-    src/LinkPropertiesWidget.cpp
     include/JointPropertiesWidget.hpp
-    include/SceneBuilder.hpp
-    src/SceneBuilder.cpp
-    src/JointPropertiesWidget.cpp
-    src/PreviewViewport.cpp
-    src/RobotEnrichmentDialog.cpp
-    src/static_toolbar.ui
-    resources.qrc
-    src/IntersectionSystem.cpp
-    src/URDFParser.cpp
-    src/URDFImporterDialog.cpp
-    src/KRobotWriter.cpp
-    src/KRobotParser.cpp
-    src/SDFParser.cpp
-    external/pugixml/pugixml.cpp
+)
+
+qt_add_executable(RoboticsSoftware
+    MANUAL_FINALIZATION
+    ${SOURCE_FILES}
+    ${HEADER_FILES}
 )
 
 # --- Target-Specific Properties ---
