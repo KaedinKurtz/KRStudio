@@ -62,9 +62,14 @@ ViewportWidget::~ViewportWidget()
 {
     if (isValid()) {
         makeCurrent();
-        RenderingSystem::shutdown(m_scene);
+        // Destroy our own OpenGL resources while the function table is still
+        // valid.  RenderingSystem::shutdown() resets its QOpenGLFunctions
+        // object, which would otherwise invalidate these pointers before the
+        // Shader and buffer deletions occur.
+        m_outlineShader.reset();
         if (m_outlineVAO != 0) glDeleteVertexArrays(1, &m_outlineVAO);
         if (m_outlineVBO != 0) glDeleteBuffers(1, &m_outlineVBO);
+        RenderingSystem::shutdown(m_scene);
     }
 }
 
