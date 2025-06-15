@@ -61,25 +61,33 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
 
     Q_ASSERT(m_scene != nullptr);
     setFocusPolicy(Qt::StrongFocus);
+
+    connect(this, &QOpenGLWidget::aboutToBeDestroyed,
+            this, &ViewportWidget::cleanupGL);
 }
 
-ViewportWidget::~ViewportWidget()
+ViewportWidget::~ViewportWidget() = default;
+
+void ViewportWidget::cleanupGL()
 {
-    if (isValid()) {
-        makeCurrent();
-        // Destroy our own OpenGL resources while the function table is still
-        // valid.  RenderingSystem::shutdown() resets its QOpenGLFunctions
-        // object, which would otherwise invalidate these pointers before the
-        // Shader and buffer deletions occur.
-        m_outlineShader.reset();
-        if (m_debugLogger) {
-            m_debugLogger->stopLogging();
-            m_debugLogger.reset();
-        }
-        if (m_outlineVAO != 0) glDeleteVertexArrays(1, &m_outlineVAO);
-        if (m_outlineVBO != 0) glDeleteBuffers(1, &m_outlineVBO);
-        RenderingSystem::shutdown(m_scene);
+    if (!isValid())
+        return;
+    makeCurrent();
+    m_outlineShader.reset();
+    if (m_debugLogger) {
+        m_debugLogger->stopLogging();
+        m_debugLogger.reset();
     }
+    if (m_outlineVAO != 0) {
+        glDeleteVertexArrays(1, &m_outlineVAO);
+        m_outlineVAO = 0;
+    }
+    if (m_outlineVBO != 0) {
+        glDeleteBuffers(1, &m_outlineVBO);
+        m_outlineVBO = 0;
+    }
+    RenderingSystem::shutdown(m_scene);
+    doneCurrent();
 }
 
 Camera& ViewportWidget::getCamera()
