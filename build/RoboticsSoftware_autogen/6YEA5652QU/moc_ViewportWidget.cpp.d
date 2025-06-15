@@ -312,6 +312,8 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_ViewportWidget
   D:/RoboticsSoftware/external/entt/config/config.h \
   D:/RoboticsSoftware/external/entt/config/macro.h \
   D:/RoboticsSoftware/external/entt/config/version.h \
+  D:/RoboticsSoftware/external/entt/core/bit.hpp \
   D:/RoboticsSoftware/external/entt/core/fwd.hpp \
   D:/RoboticsSoftware/external/entt/core/type_traits.hpp \
+  D:/RoboticsSoftware/external/entt/entity/entity.hpp \
   D:/RoboticsSoftware/external/entt/entity/fwd.hpp

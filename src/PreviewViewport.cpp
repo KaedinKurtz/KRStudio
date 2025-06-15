@@ -101,7 +101,7 @@ void PreviewViewport::updateRobot(const RobotDescription& description)
                 glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
                 glEnableVertexAttribArray(1);
                 glBindVertexArray(0);
-                m_meshCache[link.mesh_filepath] = cached;
+                m_meshCache.emplace(link.mesh_filepath, std::move(cached));
             }
             catch (const std::exception& e) {
                 qWarning() << "[PreviewViewport] FAILED to load mesh:" << e.what();
@@ -145,7 +145,7 @@ void PreviewViewport::initializeGL()
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
         glEnableVertexAttribArray(1);
         glBindVertexArray(0);
-        m_meshCache["placeholder"] = placeholder;
+        m_meshCache.emplace("placeholder", std::move(placeholder));
     }
     catch (const std::exception& e) {
         qCritical() << "[PreviewViewport] CRITICAL ERROR: failed to initialize resources:" << e.what();

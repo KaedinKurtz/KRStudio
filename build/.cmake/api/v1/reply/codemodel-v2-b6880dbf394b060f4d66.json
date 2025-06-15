@@ -1,0 +1,78 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-d0094a50bb2071803777.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "RoboticsSoftware",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "RoboticsSoftware::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-RoboticsSoftware-Debug-de7565936218f2c28242.json",
+					"name" : "RoboticsSoftware",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "RoboticsSoftware_autogen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-RoboticsSoftware_autogen-Debug-676d02cbfa07cd5a4483.json",
+					"name" : "RoboticsSoftware_autogen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "RoboticsSoftware_autogen_timestamp_deps::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-RoboticsSoftware_autogen_timestamp_deps-Debug-c0d12c63c744ea5b580c.json",
+					"name" : "RoboticsSoftware_autogen_timestamp_deps",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "D:/RoboticsSoftware/build",
+		"source" : "D:/RoboticsSoftware"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 8
+	}
+}
