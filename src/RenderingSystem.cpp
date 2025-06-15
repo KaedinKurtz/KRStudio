@@ -3,6 +3,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <QDebug>
 #include <QOpenGLContext>
+#include <QOpenGLVersionFunctionsFactory>
 
 namespace RenderingSystem
 {
@@ -40,7 +41,7 @@ namespace RenderingSystem
             qWarning() << "[RenderingSystem] initialize called without current context";
             return;
         }
-        g_gl.reset(QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_3_Core>());
+        g_gl.reset(QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_3_Core>(QOpenGLContext::currentContext()));
         if (!g_gl)
         {
             qWarning() << "[RenderingSystem] failed to obtain OpenGL functions";
