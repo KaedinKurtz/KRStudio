@@ -54,7 +54,17 @@ PreviewViewport::PreviewViewport(QWidget* parent)
     m_animationTimer = new QTimer(this);
 }
 
-PreviewViewport::~PreviewViewport() = default;
+PreviewViewport::~PreviewViewport()
+{
+    if (isValid()) {
+        makeCurrent();
+        for (auto& [key, cached] : m_meshCache) {
+            if (cached.VAO) glDeleteVertexArrays(1, &cached.VAO);
+            if (cached.VBO) glDeleteBuffers(1, &cached.VBO);
+            if (cached.EBO) glDeleteBuffers(1, &cached.EBO);
+        }
+    }
+}
 
 void PreviewViewport::updateRobot(const RobotDescription& description)
 {
@@ -74,7 +84,24 @@ void PreviewViewport::updateRobot(const RobotDescription& description)
         if (!link.mesh_filepath.empty() && m_meshCache.find(link.mesh_filepath) == m_meshCache.end()) {
             qDebug() << "[PreviewViewport] Caching new mesh for:" << QString::fromStdString(link.mesh_filepath);
             try {
-                m_meshCache[link.mesh_filepath] = std::make_unique<Mesh>(this, Mesh::getLitCubeVertices(), Mesh::getLitCubeIndices(), true);
+                CachedMesh cached;
+                cached.mesh = std::make_unique<Mesh>(Mesh::getLitCubeVertices(), Mesh::getLitCubeIndices());
+                glGenVertexArrays(1, &cached.VAO);
+                glGenBuffers(1, &cached.VBO);
+                glGenBuffers(1, &cached.EBO);
+                glBindVertexArray(cached.VAO);
+                glBindBuffer(GL_ARRAY_BUFFER, cached.VBO);
+                const auto& verts = cached.mesh->vertices();
+                glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_STATIC_DRAW);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cached.EBO);
+                const auto& inds = cached.mesh->indices();
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, inds.size() * sizeof(unsigned int), inds.data(), GL_STATIC_DRAW);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+                glEnableVertexAttribArray(1);
+                glBindVertexArray(0);
+                m_meshCache[link.mesh_filepath] = cached;
             }
             catch (const std::exception& e) {
                 qWarning() << "[PreviewViewport] FAILED to load mesh:" << e.what();
@@ -101,7 +128,24 @@ void PreviewViewport::initializeGL()
 
     try {
         m_phongShader = std::make_unique<Shader>(this, "shaders/vertex_shader.glsl", "shaders/fragment_shader.glsl");
-        m_meshCache["placeholder"] = std::make_unique<Mesh>(this, Mesh::getLitCubeVertices(), Mesh::getLitCubeIndices(), true);
+        CachedMesh placeholder;
+        placeholder.mesh = std::make_unique<Mesh>(Mesh::getLitCubeVertices(), Mesh::getLitCubeIndices());
+        glGenVertexArrays(1, &placeholder.VAO);
+        glGenBuffers(1, &placeholder.VBO);
+        glGenBuffers(1, &placeholder.EBO);
+        glBindVertexArray(placeholder.VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, placeholder.VBO);
+        const auto& pverts = placeholder.mesh->vertices();
+        glBufferData(GL_ARRAY_BUFFER, pverts.size() * sizeof(float), pverts.data(), GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, placeholder.EBO);
+        const auto& pinds = placeholder.mesh->indices();
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, pinds.size() * sizeof(unsigned int), pinds.data(), GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+        glBindVertexArray(0);
+        m_meshCache["placeholder"] = placeholder;
     }
     catch (const std::exception& e) {
         qCritical() << "[PreviewViewport] CRITICAL ERROR: failed to initialize resources:" << e.what();
@@ -193,16 +237,24 @@ void PreviewViewport::paintGL()
         if (it != m_robotDesc->links.end()) {
             if (!it->mesh_filepath.empty() && m_meshCache.count(it->mesh_filepath)) {
                 qDebug() << "    [PreviewViewport] Found mesh in cache:" << QString::fromStdString(it->mesh_filepath) << ". Drawing.";
-                m_meshCache.at(it->mesh_filepath)->draw();
-            }
-            else {
+                const auto& cached = m_meshCache.at(it->mesh_filepath);
+                glBindVertexArray(cached.VAO);
+                glDrawElements(GL_TRIANGLES, static_cast<int>(cached.mesh->indices().size()), GL_UNSIGNED_INT, 0);
+                glBindVertexArray(0);
+            } else {
                 qDebug() << "    [PreviewViewport] Mesh not found or specified. Drawing placeholder.";
-                m_meshCache.at("placeholder")->draw();
+                const auto& cached = m_meshCache.at("placeholder");
+                glBindVertexArray(cached.VAO);
+                glDrawElements(GL_TRIANGLES, static_cast<int>(cached.mesh->indices().size()), GL_UNSIGNED_INT, 0);
+                glBindVertexArray(0);
             }
         }
         else {
             qDebug() << "    [PreviewViewport] Tag" << QString::fromStdString(tag.tag) << "is not a link. Drawing placeholder.";
-            m_meshCache.at("placeholder")->draw();
+            const auto& cached = m_meshCache.at("placeholder");
+            glBindVertexArray(cached.VAO);
+            glDrawElements(GL_TRIANGLES, static_cast<int>(cached.mesh->indices().size()), GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
         }
     }
     qDebug() << "--- [PreviewViewport] paintGL End ---\n";
