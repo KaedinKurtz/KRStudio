@@ -89,12 +89,14 @@ void ViewportWidget::cleanupGL()
     qDebug() << "[ViewportWidget] cleanupGL called. isValid=" << isValid()
              << "cleanedUp=" << m_cleanedUp;
 
+
     if (m_cleanedUp || !context() || !context()->isValid())
         return;
 
     m_cleanedUp = true;
 
     qDebug() << "[ViewportWidget] Making context current for cleanup.";
+
 
     if (!context()->makeCurrent(context()->surface())) {
         qWarning() << "[ViewportWidget] Failed to make context current for cleanup";
@@ -114,6 +116,7 @@ void ViewportWidget::cleanupGL()
         m_outlineVBO = 0;
     }
     RenderingSystem::shutdown(m_scene);
+
     context()->doneCurrent();
     qDebug() << "[ViewportWidget] cleanupGL completed.";
 }
