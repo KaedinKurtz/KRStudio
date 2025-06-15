@@ -8,6 +8,7 @@ namespace RenderingSystem
 {
     namespace
     {
+
         std::unique_ptr<QOpenGLFunctions_3_3_Core> g_gl;
         std::unique_ptr<Shader> g_gridShader;
         std::unique_ptr<Shader> g_phongShader;
@@ -31,6 +32,7 @@ namespace RenderingSystem
         }
     }
 
+
     void initialize()
     {
         if (!QOpenGLContext::currentContext())
@@ -45,6 +47,7 @@ namespace RenderingSystem
             return;
         }
         g_gl->initializeOpenGLFunctions();
+      
         const float halfSize = 1000.0f;
         const std::vector<float> grid_vertices = {
             -halfSize, 0.0f, -halfSize,
@@ -107,7 +110,6 @@ namespace RenderingSystem
     {
         if (!g_gl)
             return;
-
         auto& registry = scene->getRegistry();
         auto view = registry.view<RenderableMeshComponent>(entt::exclude<RenderResourceComponent>);
         for (auto entity : view)
