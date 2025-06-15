@@ -5,10 +5,9 @@
 #include <glm/glm.hpp>
 
 // --- FIX ---
-// Use the official EnTT forward-declaration header instead of a manual one
-// to prevent redefinition errors when this file is included alongside other
-// EnTT headers.
-#include "entt/entity/fwd.hpp"
+// Use the full EnTT entity header so that entt::entity and entt::null are
+// defined wherever this file is included.
+#include <entt/entity/entity.hpp>
 
 namespace IntersectionSystem
 {

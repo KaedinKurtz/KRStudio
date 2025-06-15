@@ -4,7 +4,7 @@
 #include <QOpenGLFunctions_3_3_Core>
 #include <QPoint>
 #include <memory>
-#include "entt/entity/fwd.hpp"
+#include <entt/entity/entity.hpp>
 #include <glm/glm.hpp>
 
 // Forward declarations
