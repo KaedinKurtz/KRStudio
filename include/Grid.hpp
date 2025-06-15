@@ -60,9 +60,14 @@ private:
 
     std::unique_ptr<Shader> m_gridShader;
     std::unique_ptr<Mesh>   m_gridMesh;
+    unsigned int m_gridVAO = 0;
+    unsigned int m_gridVBO = 0;
 
     std::unique_ptr<Shader> m_sphereShader;
     std::unique_ptr<Mesh>   m_sphereMesh;
+    unsigned int m_sphereVAO = 0;
+    unsigned int m_sphereVBO = 0;
+    unsigned int m_sphereEBO = 0;
 
     glm::mat4 m_transform;
     std::vector<GridLevel> m_levels;
