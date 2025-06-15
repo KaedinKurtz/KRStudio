@@ -15,6 +15,7 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QKeyEvent>
+#include <QCloseEvent>
 #include <QDebug>
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
@@ -65,24 +66,7 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
 
 }
 
-ViewportWidget::~ViewportWidget()
-{
-    qDebug() << "[ViewportWidget] Destructor invoked. context=" << context()
-             << "isValid=" << isValid() << "cleanedUp=" << m_cleanedUp;
-
-    if (QOpenGLContext* ctx = context()) {
-        if (m_ctxDestroyConnection && ctx->isValid()) {
-            qDebug() << "[ViewportWidget] Disconnecting aboutToBeDestroyed signal.";
-            QObject::disconnect(m_ctxDestroyConnection);
-            m_ctxDestroyConnection = {};
-        }
-    } else {
-        qDebug() << "[ViewportWidget] No context available in destructor.";
-    }
-
-    cleanupGL();
-    qDebug() << "[ViewportWidget] Destructor finished.";
-}
+ViewportWidget::~ViewportWidget() = default;
 
 void ViewportWidget::cleanupGL()
 {
@@ -131,13 +115,7 @@ void ViewportWidget::initializeGL()
 {
     initializeOpenGLFunctions();
 
-    // Ensure resources are released before the context goes away
-    if (QOpenGLContext* ctx = context()) {
-        qDebug() << "[ViewportWidget] Connecting aboutToBeDestroyed signal.";
-        m_ctxDestroyConnection = connect(ctx, &QOpenGLContext::aboutToBeDestroyed,
-                                         this, &ViewportWidget::cleanupGL,
-                                         Qt::DirectConnection);
-    } else {
+    if (!context()) {
         qDebug() << "[ViewportWidget] initializeGL - no context available.";
     }
 
@@ -239,4 +217,10 @@ void ViewportWidget::keyPressEvent(QKeyEvent* event)
         getCamera().setToKnownGoodView();
     }
     QOpenGLWidget::keyPressEvent(event);
+}
+
+void ViewportWidget::closeEvent(QCloseEvent* event)
+{
+    cleanupGL();
+    QOpenGLWidget::closeEvent(event);
 }

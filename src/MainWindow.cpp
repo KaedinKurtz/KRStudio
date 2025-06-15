@@ -87,17 +87,17 @@ MainWindow::MainWindow(QWidget* parent)
     this->setCentralWidget(m_centralContainer);
 
     // --- 4. Setup Viewports ---
-    ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), cameraEntity1, this);
-    viewport1->setMinimumSize(400, 300);
+    m_viewport1 = new ViewportWidget(m_scene.get(), cameraEntity1, this);
+    m_viewport1->setMinimumSize(400, 300);
     ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Perspective)");
-    viewportDock1->setWidget(viewport1);
+    viewportDock1->setWidget(m_viewport1);
     viewportDock1->setFeature(ads::CDockWidget::DockWidgetClosable, false);
     m_dockManager->addDockWidget(ads::CenterDockWidgetArea, viewportDock1);
 
-    ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), cameraEntity2, this);
-    viewport2->setMinimumSize(400, 300);
+    m_viewport2 = new ViewportWidget(m_scene.get(), cameraEntity2, this);
+    m_viewport2->setMinimumSize(400, 300);
     ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Top Down)");
-    viewportDock2->setWidget(viewport2);
+    viewportDock2->setWidget(m_viewport2);
     viewportDock2->setFeature(ads::CDockWidget::DockWidgetClosable, false);
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, viewportDock2);
 
@@ -115,25 +115,25 @@ MainWindow::MainWindow(QWidget* parent)
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock);
 
     // --- 6. Setup Signal/Slot connections ---
-    connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [viewport1](bool isFloating) {
+    connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [this](bool isFloating) {
         Q_UNUSED(isFloating);
-        if (viewport1) {
-            QTimer::singleShot(0, viewport1, [=]() {
-                viewport1->getCamera().setToKnownGoodView();
-                viewport1->update();
-                });
+        if (m_viewport1) {
+            QTimer::singleShot(0, m_viewport1, [=]() {
+                m_viewport1->getCamera().setToKnownGoodView();
+                m_viewport1->update();
+            });
         }
-        });
+    });
 
-    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, [viewport2](bool isFloating) {
+    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, [this](bool isFloating) {
         Q_UNUSED(isFloating);
-        if (viewport2) {
-            QTimer::singleShot(0, viewport2, [=]() {
-                viewport2->getCamera().setToKnownGoodView();
-                viewport2->update();
-                });
+        if (m_viewport2) {
+            QTimer::singleShot(0, m_viewport2, [=]() {
+                m_viewport2->getCamera().setToKnownGoodView();
+                m_viewport2->update();
+            });
         }
-        });
+    });
 
     connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
 
@@ -151,6 +151,8 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
+    delete m_viewport1;
+    delete m_viewport2;
 }
 
 void MainWindow::onLoadRobotClicked()

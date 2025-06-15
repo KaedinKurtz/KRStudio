@@ -18,6 +18,7 @@ class QTimer;
 class QMouseEvent;
 class QWheelEvent;
 class QKeyEvent;
+class QCloseEvent;
 
 
 class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_3_3_Core
@@ -26,7 +27,7 @@ class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_3_3_Core
 
 public:
     ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget* parent = nullptr);
-    ~ViewportWidget();
+    ~ViewportWidget() override;
 
     Camera& getCamera();
 
@@ -42,6 +43,7 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     Scene* m_scene;
@@ -62,7 +64,4 @@ private:
 
     // Guard to ensure cleanupGL() is only executed once
     bool m_cleanedUp = false;
-
-    // Connection handle for context destruction
-    QMetaObject::Connection m_ctxDestroyConnection;
 };

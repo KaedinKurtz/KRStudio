@@ -36,9 +36,10 @@ private:
     // The MainWindow now owns the single, shared scene.
     std::unique_ptr<Scene> m_scene;
 
-    // We no longer need pointers to the individual viewports here,
-    // as the dock manager handles their lifecycle. We will create them
-    // as local variables in the constructor.
+    // We keep explicit pointers to the viewports so we can control
+    // their destruction order relative to the OpenGL context.
+    ViewportWidget* m_viewport1 = nullptr;
+    ViewportWidget* m_viewport2 = nullptr;
 
 private slots:
     void onLoadRobotClicked();
