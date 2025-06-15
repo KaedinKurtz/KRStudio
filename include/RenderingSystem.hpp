@@ -1,21 +1,18 @@
 #pragma once
 
-#include "Scene.hpp"
-#include "Shader.hpp"
-#include "Mesh.hpp"
-#include "components.hpp"
-#include <QOpenGLFunctions_3_3_Core>
 #include <glm/glm.hpp>
 
-namespace RenderingSystem
-{
-    // Acquire OpenGL functions from the current context
-    void initialize();
+// Forward declarations
+class Scene;
 
-    void shutdown(Scene* scene);
-    void uploadMeshes(Scene* scene);
-    void render(Scene* scene,
-                const glm::mat4& viewMatrix,
-                const glm::mat4& projectionMatrix,
-                const glm::vec3& cameraPos);
-}
+class RenderingSystem {
+public:
+    // No changes to the public interface
+    static void initialize();
+    static void shutdown(Scene* scene);
+    static void render(Scene* scene, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& camPosition);
+
+private:
+    // This flag will prevent multiple shutdowns
+    static bool s_isInitialized;
+};

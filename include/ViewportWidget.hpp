@@ -31,7 +31,7 @@ public:
 
     Camera& getCamera();
 
-private slots:
+private:
     void cleanupGL();
 
 protected:
@@ -48,20 +48,17 @@ protected:
 private:
     Scene* m_scene;
     entt::entity m_cameraEntity;
-    QOpenGLDebugLogger* m_debugLogger = nullptr;
+    // Emits detailed OpenGL debug output when a debug context is available
+    std::unique_ptr<QOpenGLDebugLogger> m_debugLogger; // Use this one, it's correct
 
     // --- INTEGRATED: OpenGL resources for intersection outline rendering ---
-    std::unique_ptr<Shader> m_outlineShader; // The shader program for drawing simple colored lines.
-    unsigned int m_outlineVAO;               // The Vertex Array Object for the outline geometry.
-    unsigned int m_outlineVBO;               // The Vertex Buffer Object for the outline geometry.
+    std::unique_ptr<Shader> m_outlineShader;
+    unsigned int m_outlineVAO = 0; // Initialize to 0
+    unsigned int m_outlineVBO = 0; // Initialize to 0
 
     // Other members
     QTimer* m_animationTimer = nullptr;
     QPoint m_lastMousePos;
-
-    // Emits detailed OpenGL debug output when a debug context is available
-    std::unique_ptr<QOpenGLDebugLogger> m_debugLogger;  // <-- use unique_ptr, not raw pointer
-
 
     // Guard to ensure cleanupGL() is only executed once
     bool m_cleanedUp = false;

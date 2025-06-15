@@ -1,175 +1,180 @@
 #include "RenderingSystem.hpp"
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <QDebug>
+#include "Scene.hpp"
+#include "components.hpp"      // RenderableMeshComponent, RenderResourceComponent, TransformComponent
+#include "Shader.hpp"
+
 #include <QOpenGLContext>
+#include <QOpenGLFunctions_3_3_Core>
 #include <QOpenGLVersionFunctionsFactory>
+#include <QDebug>
+#include <memory>
 
-namespace RenderingSystem
+namespace {
+    // Our global Phong shader
+    std::unique_ptr<Shader> s_phongShader;
+}
+
+bool RenderingSystem::s_isInitialized = false;
+
+void RenderingSystem::initialize() {
+    if (s_isInitialized) {
+        return;
+    }
+
+    qDebug() << "[RenderingSystem] Initializing...";
+    auto* ctx = QOpenGLContext::currentContext();
+    if (!ctx) {
+        qWarning() << "[RenderingSystem] No current GL context!";
+        return;
+    }
+
+    // Get the GL function pointers
+    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_3_Core>(ctx);
+    if (!gl) {
+        qWarning() << "[RenderingSystem] Unable to get GL functions!";
+        return;
+    }
+
+    // Enable depth testing
+    gl->glEnable(GL_DEPTH_TEST);
+
+    // Load the Phong shader, passing 'gl' (not 'ctx')
+    try {
+        s_phongShader = std::make_unique<Shader>(
+            gl,
+            "shaders/vertex_shader.glsl",
+            "shaders/fragment_shader.glsl"
+        );
+    }
+    catch (const std::exception& e) {
+        qWarning() << "[RenderingSystem] Shader load failed:" << e.what();
+        return;
+    }
+
+    s_isInitialized = true;
+}
+
+void RenderingSystem::shutdown(Scene* scene) {
+    if (!s_isInitialized) {
+        return;
+    }
+
+    qDebug() << "[RenderingSystem] Shutting down...";
+    auto* ctx = QOpenGLContext::currentContext();
+    if (ctx && scene) {
+        auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_3_Core>(ctx);
+        if (gl) {
+            // Delete all VAO/VBO/EBO for existing RenderResourceComponent
+            auto& registry = scene->getRegistry();
+            auto view = registry.view<RenderResourceComponent>();
+            for (auto entity : view) {
+                auto& rc = view.get<RenderResourceComponent>(entity);
+                if (rc.VAO) gl->glDeleteVertexArrays(1, &rc.VAO);
+                if (rc.VBO) gl->glDeleteBuffers(1, &rc.VBO);
+                if (rc.EBO) gl->glDeleteBuffers(1, &rc.EBO);
+                rc.VAO = rc.VBO = rc.EBO = 0;
+            }
+        }
+        else {
+            qWarning() << "[RenderingSystem] No GL functions for shutdown.";
+        }
+    }
+    else {
+        qWarning() << "[RenderingSystem] Shutdown called with null scene or GL context.";
+    }
+
+    // Destroy the shader
+    s_phongShader.reset();
+    s_isInitialized = false;
+}
+
+void RenderingSystem::render(Scene* scene,
+    const glm::mat4& view,
+    const glm::mat4& projection,
+    const glm::vec3& camPosition)
 {
-    namespace
-    {
-
-        std::unique_ptr<QOpenGLFunctions_3_3_Core> g_gl;
-        std::unique_ptr<Shader> g_gridShader;
-        std::unique_ptr<Shader> g_phongShader;
-        std::unique_ptr<Mesh>   g_gridMesh;
-        std::unique_ptr<Mesh>   g_cubeMesh;
-
-        unsigned int g_gridVAO = 0, g_gridVBO = 0;
-        unsigned int g_cubeVAO = 0, g_cubeVBO = 0, g_cubeEBO = 0;
-
-        glm::mat4 computeWorldTransform(entt::entity entity, entt::registry& registry)
-        {
-            auto& transform = registry.get<TransformComponent>(entity);
-            glm::mat4 local = transform.getTransform();
-            if (registry.all_of<ParentComponent>(entity))
-            {
-                auto parent = registry.get<ParentComponent>(entity).parent;
-                if (registry.valid(parent))
-                    return computeWorldTransform(parent, registry) * local;
-            }
-            return local;
-        }
+    if (!s_isInitialized || !scene || !s_phongShader) {
+        return;
     }
 
-
-    void initialize()
-    {
-        // Ensure any previously created resources are released while the
-        // previous OpenGL function pointer table is still valid.  This avoids
-        // dangling pointers in Shader destructors when reinitializing.
-        shutdown(nullptr);
-
-        if (!QOpenGLContext::currentContext())
-        {
-            qWarning() << "[RenderingSystem] initialize called without current context";
-            return;
-        }
-        g_gl.reset(QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_3_Core>(QOpenGLContext::currentContext()));
-        if (!g_gl)
-        {
-            qWarning() << "[RenderingSystem] failed to obtain OpenGL functions";
-            return;
-        }
-        g_gl->initializeOpenGLFunctions();
-      
-        const float halfSize = 1000.0f;
-        const std::vector<float> grid_vertices = {
-            -halfSize, 0.0f, -halfSize,
-             halfSize, 0.0f, -halfSize,
-             halfSize, 0.0f,  halfSize,
-             halfSize, 0.0f,  halfSize,
-            -halfSize, 0.0f,  halfSize,
-            -halfSize, 0.0f, -halfSize };
-
-        g_gridShader = std::make_unique<Shader>(g_gl.get(), "shaders/grid_vert.glsl", "shaders/grid_frag.glsl");
-        g_phongShader = std::make_unique<Shader>(g_gl.get(), "shaders/vertex_shader.glsl", "shaders/fragment_shader.glsl");
-
-        g_gridMesh = std::make_unique<Mesh>(grid_vertices);
-        g_cubeMesh = std::make_unique<Mesh>(Mesh::getLitCubeVertices(), Mesh::getLitCubeIndices());
-
-        g_gl->glGenVertexArrays(1, &g_gridVAO);
-        g_gl->glGenBuffers(1, &g_gridVBO);
-        g_gl->glBindVertexArray(g_gridVAO);
-        g_gl->glBindBuffer(GL_ARRAY_BUFFER, g_gridVBO);
-        g_gl->glBufferData(GL_ARRAY_BUFFER, grid_vertices.size() * sizeof(float), grid_vertices.data(), GL_STATIC_DRAW);
-        g_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-        g_gl->glEnableVertexAttribArray(0);
-        g_gl->glBindVertexArray(0);
-
-        g_gl->glGenVertexArrays(1, &g_cubeVAO);
-        g_gl->glGenBuffers(1, &g_cubeVBO);
-        g_gl->glGenBuffers(1, &g_cubeEBO);
-        g_gl->glBindVertexArray(g_cubeVAO);
-        g_gl->glBindBuffer(GL_ARRAY_BUFFER, g_cubeVBO);
-        const auto& cubeVerts = g_cubeMesh->vertices();
-        g_gl->glBufferData(GL_ARRAY_BUFFER, cubeVerts.size() * sizeof(float), cubeVerts.data(), GL_STATIC_DRAW);
-        g_gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_cubeEBO);
-        const auto& cubeInd = g_cubeMesh->indices();
-        g_gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, cubeInd.size() * sizeof(unsigned int), cubeInd.data(), GL_STATIC_DRAW);
-        g_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-        g_gl->glEnableVertexAttribArray(0);
-        g_gl->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-        g_gl->glEnableVertexAttribArray(1);
-        g_gl->glBindVertexArray(0);
+    auto* ctx = QOpenGLContext::currentContext();
+    if (!ctx) {
+        return;
     }
 
-    void shutdown(Scene* scene)
-    {
-        (void)scene;
-        if (!g_gl)
-            return;
-        if (g_gridVAO) g_gl->glDeleteVertexArrays(1, &g_gridVAO);
-        if (g_gridVBO) g_gl->glDeleteBuffers(1, &g_gridVBO);
-        if (g_cubeVAO) g_gl->glDeleteVertexArrays(1, &g_cubeVAO);
-        if (g_cubeVBO) g_gl->glDeleteBuffers(1, &g_cubeVBO);
-        if (g_cubeEBO) g_gl->glDeleteBuffers(1, &g_cubeEBO);
-        g_gridShader.reset();
-        g_phongShader.reset();
-        g_gridMesh.reset();
-        g_cubeMesh.reset();
-        g_gl.reset();
+    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_3_Core>(ctx);
+    if (!gl) {
+        return;
     }
 
-    void uploadMeshes(Scene* scene)
-    {
-        if (!g_gl)
-            return;
-        auto& registry = scene->getRegistry();
-        auto view = registry.view<RenderableMeshComponent>(entt::exclude<RenderResourceComponent>);
-        for (auto entity : view)
-        {
-            registry.emplace<RenderResourceComponent>(entity);
+    auto& registry = scene->getRegistry();
+
+    // 1) Set up shader uniforms
+    s_phongShader->use();
+    s_phongShader->setMat4("view", view);
+    s_phongShader->setMat4("projection", projection);
+    s_phongShader->setVec3("lightPos", camPosition);
+    s_phongShader->setVec3("viewPos", camPosition);
+    s_phongShader->setVec3("lightColor", glm::vec3(1.0f));
+
+    // 2) Draw each renderable mesh
+    auto viewEntities = registry.view<
+        const RenderableMeshComponent,
+        RenderResourceComponent,
+        const TransformComponent
+    >();
+
+    for (auto entity : viewEntities) {
+        auto const& mesh = viewEntities.get<const RenderableMeshComponent>(entity);
+        auto& res = viewEntities.get<RenderResourceComponent>(entity);
+        auto const& xf = viewEntities.get<const TransformComponent>(entity);
+
+        // Lazy-create GL resources
+        if (res.VAO == 0) {
+            gl->glGenVertexArrays(1, &res.VAO);
+            gl->glGenBuffers(1, &res.VBO);
+            gl->glGenBuffers(1, &res.EBO);
+
+            gl->glBindVertexArray(res.VAO);
+
+            gl->glBindBuffer(GL_ARRAY_BUFFER, res.VBO);
+            gl->glBufferData(
+                GL_ARRAY_BUFFER,
+                static_cast<GLsizeiptr>(mesh.vertices.size() * sizeof(glm::vec3)),
+                mesh.vertices.data(),
+                GL_STATIC_DRAW
+            );
+
+            gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, res.EBO);
+            gl->glBufferData(
+                GL_ELEMENT_ARRAY_BUFFER,
+                static_cast<GLsizeiptr>(mesh.indices.size() * sizeof(unsigned int)),
+                mesh.indices.data(),
+                GL_STATIC_DRAW
+            );
+
+            gl->glEnableVertexAttribArray(0);
+            gl->glVertexAttribPointer(
+                0, 3, GL_FLOAT, GL_FALSE,
+                sizeof(glm::vec3),
+                nullptr
+            );
+
+            gl->glBindVertexArray(0);
         }
-    }
 
-    void render(Scene* scene,
-                const glm::mat4& viewMatrix,
-                const glm::mat4& projectionMatrix,
-                const glm::vec3& cameraPos)
-    {
-        if (!g_gl)
-            return;
+        // 3) Set per-object uniforms
+        s_phongShader->setMat4("model", xf.getTransform());
+        s_phongShader->setVec3("objectColor", mesh.color);
 
-        auto& registry = scene->getRegistry();
-
-        if (g_gridShader)
-        {
-            g_gridShader->use();
-            g_gridShader->setMat4("u_viewMatrix", viewMatrix);
-            g_gridShader->setMat4("u_projectionMatrix", projectionMatrix);
-            g_gridShader->setVec3("u_cameraPos", cameraPos);
-            auto gridView = registry.view<const GridComponent, TransformComponent>();
-            for (auto entity : gridView)
-            {
-                auto& transform = gridView.get<TransformComponent>(entity);
-                g_gridShader->setMat4("u_gridModelMatrix", transform.getTransform());
-                g_gl->glBindVertexArray(g_gridVAO);
-                g_gl->glDrawArrays(GL_TRIANGLES, 0, static_cast<int>(g_gridMesh->vertices().size() / 3));
-                g_gl->glBindVertexArray(0);
-            }
-        }
-
-        if (g_phongShader)
-        {
-            g_phongShader->use();
-            g_phongShader->setMat4("view", viewMatrix);
-            g_phongShader->setMat4("projection", projectionMatrix);
-            g_phongShader->setVec3("lightPos", cameraPos);
-            g_phongShader->setVec3("viewPos", cameraPos);
-            g_phongShader->setVec3("objectColor", glm::vec3(0.8f));
-            g_phongShader->setVec3("lightColor", glm::vec3(1.0f));
-
-            auto meshView = registry.view<const RenderableMeshComponent, TransformComponent>();
-            for (auto entity : meshView)
-            {
-                glm::mat4 worldTransform = computeWorldTransform(entity, registry);
-                g_phongShader->setMat4("model", worldTransform);
-                g_gl->glBindVertexArray(g_cubeVAO);
-                g_gl->glDrawElements(GL_TRIANGLES, static_cast<int>(g_cubeMesh->indices().size()), GL_UNSIGNED_INT, 0);
-                g_gl->glBindVertexArray(0);
-            }
-        }
+        // 4) Draw
+        gl->glBindVertexArray(res.VAO);
+        gl->glDrawElements(
+            GL_TRIANGLES,
+            static_cast<GLsizei>(mesh.indices.size()),
+            GL_UNSIGNED_INT,
+            nullptr
+        );
+        gl->glBindVertexArray(0);
     }
 }
