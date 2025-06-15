@@ -58,4 +58,7 @@ private:
 
     // Emits detailed OpenGL debug output when a debug context is available
     std::unique_ptr<QOpenGLDebugLogger> m_debugLogger;
+
+    // Guard to ensure cleanupGL() is only executed once
+    bool m_cleanedUp = false;
 };
