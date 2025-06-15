@@ -98,7 +98,8 @@ void ViewportWidget::cleanupGL()
     qDebug() << "[ViewportWidget] Making context current for cleanup.";
 
 
-    if (!context()->makeCurrent(context()->surface())) {
+    makeCurrent();
+    if (!context() || !context()->isValid()) {
         qWarning() << "[ViewportWidget] Failed to make context current for cleanup";
         return;
     }
