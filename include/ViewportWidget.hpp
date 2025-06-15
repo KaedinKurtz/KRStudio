@@ -32,6 +32,9 @@ private slots:
 
     Camera& getCamera();
 
+private slots:
+    void cleanupGL();
+
 protected:
     // Overrides from QOpenGLWidget
     void initializeGL() override;
