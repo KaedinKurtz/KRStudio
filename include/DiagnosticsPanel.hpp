@@ -7,15 +7,12 @@
 // Forward declarations
 class QLabel;
 class QVBoxLayout;
-class Robot;
-
 class DiagnosticsPanel : public QDockWidget
 {
     Q_OBJECT
 
 public:
     explicit DiagnosticsPanel(QWidget* parent = nullptr);
-    void updateData(const Robot& robot);
 
 private:
     QWidget* m_mainWidget;

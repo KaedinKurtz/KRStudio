@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Robot.hpp"
 
 struct GLFWwindow;
 
@@ -18,13 +17,9 @@ public:
 
     // --- New Modular UI Rendering Functions ---
     void renderMainMenuBar();
-    void renderDiagnostics(Robot& robot);
     // We can add more here later, like renderSceneHierarchy() or renderTimeline()
 
 private:
     void setupDockspace(); // Helper to create the main docking layout
 
-    // Helper to convert enums to text
-    const char* stateToString(Robot::State state);
-    const char* modeToString(Robot::OperatingMode mode);
 };

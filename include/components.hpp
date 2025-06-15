@@ -4,10 +4,19 @@
 #include <glm/gtc/quaternion.hpp>
 #include <string>
 #include <vector>
-#include "Grid.hpp"
 #include "Camera.hpp"
 #include "IntersectionSystem.hpp"
-#include "RobotDescription.hpp" 
+#include "RobotDescription.hpp"
+
+struct GridLevel {
+    float spacing;
+    glm::vec3 color;
+    float fadeInCameraDistanceEnd;
+    float fadeInCameraDistanceStart;
+
+    GridLevel(float s, glm::vec3 c, float fadeInEnd, float fadeInStart)
+        : spacing(s), color(c), fadeInCameraDistanceEnd(fadeInEnd), fadeInCameraDistanceStart(fadeInStart) {}
+};
 
 struct SceneProperties
 {

@@ -1,5 +1,4 @@
 #include "UIManager.hpp"
-#include "Robot.hpp"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -62,18 +61,6 @@ void UIManager::renderMainMenuBar() {
     }
 }
 
-void UIManager::renderDiagnostics(Robot& robot) {
-    ImGui::Begin("Diagnostics & Controls"); // This is now a dockable window
-
-    // All the content from the previous renderRobotDiagnostics function goes here
-    if (ImGui::CollapsingHeader("Identification", ImGuiTreeNodeFlags_DefaultOpen)) { /* ... content ... */ }
-    if (ImGui::CollapsingHeader("Operational Status", ImGuiTreeNodeFlags_DefaultOpen)) { /* ... content ... */ }
-    if (ImGui::CollapsingHeader("Kinematics")) { /* ... content ... */ }
-    if (ImGui::CollapsingHeader("Diagnostics")) { /* ... content ... */ }
-    if (ImGui::CollapsingHeader("System Control & Errors", ImGuiTreeNodeFlags_DefaultOpen)) { /* ... content ... */ }
-
-    ImGui::End();
-}
 
 
 void UIManager::setupDockspace() {
@@ -94,27 +81,4 @@ void UIManager::setupDockspace() {
     ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 
     ImGui::End();
-}
-
-// --- Helper Implementations ---
-const char* UIManager::stateToString(Robot::State state) {
-    switch (state) {
-    case Robot::State::IDLE: return "IDLE";
-    case Robot::State::MOVING: return "MOVING";
-    case Robot::State::WORKING: return "WORKING";
-    case Robot::State::ERROR: return "ERROR";
-    case Robot::State::BOOTING: return "BOOTING";
-    case Robot::State::SHUTDOWN: return "SHUTDOWN";
-    case Robot::State::ESTOPPED: return "EMERGENCY STOPPED";
-    default: return "UNKNOWN";
-    }
-}
-
-const char* UIManager::modeToString(Robot::OperatingMode mode) {
-    switch (mode) {
-    case Robot::OperatingMode::MANUAL: return "MANUAL";
-    case Robot::OperatingMode::AUTONOMOUS: return "AUTONOMOUS";
-    case Robot::OperatingMode::TEACH: return "TEACH";
-    default: return "UNKNOWN";
-    }
 }

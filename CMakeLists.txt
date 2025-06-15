@@ -51,12 +51,10 @@ qt_add_executable(RoboticsSoftware
     src/Camera.cpp
     src/Shader.cpp
     src/Mesh.cpp
-    src/Robot.cpp
     src/MainWindow.cpp
     src/ViewportWidget.cpp
     src/DiagnosticsPanel.cpp
     src/StaticToolbar.cpp
-    src/Grid.cpp
     src/Scene.cpp
     src/PropertiesPanel.cpp
     src/gridPropertiesWidget.cpp
