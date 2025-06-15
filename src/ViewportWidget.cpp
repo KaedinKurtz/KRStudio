@@ -9,6 +9,8 @@
 #include "DebugHelpers.hpp" // <-- INCLUDE THE NEW HEADER
 
 #include <QOpenGLContext>
+#include <QOpenGLDebugLogger>
+#include <QSurfaceFormat>
 #include <QTimer>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -54,6 +56,11 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
     m_outlineVAO(0),
     m_outlineVBO(0)
 {
+    // Request a debug context so we can attach QOpenGLDebugLogger later
+    QSurfaceFormat fmt = format();
+    fmt.setOption(QSurfaceFormat::DebugContext);
+    setFormat(fmt);
+
     Q_ASSERT(m_scene != nullptr);
     setFocusPolicy(Qt::StrongFocus);
 }
@@ -62,9 +69,18 @@ ViewportWidget::~ViewportWidget()
 {
     if (isValid()) {
         makeCurrent();
-        RenderingSystem::shutdown(m_scene);
+        // Destroy our own OpenGL resources while the function table is still
+        // valid.  RenderingSystem::shutdown() resets its QOpenGLFunctions
+        // object, which would otherwise invalidate these pointers before the
+        // Shader and buffer deletions occur.
+        m_outlineShader.reset();
+        if (m_debugLogger) {
+            m_debugLogger->stopLogging();
+            m_debugLogger.reset();
+        }
         if (m_outlineVAO != 0) glDeleteVertexArrays(1, &m_outlineVAO);
         if (m_outlineVBO != 0) glDeleteBuffers(1, &m_outlineVBO);
+        RenderingSystem::shutdown(m_scene);
     }
 }
 
@@ -76,6 +92,18 @@ Camera& ViewportWidget::getCamera()
 void ViewportWidget::initializeGL()
 {
     initializeOpenGLFunctions();
+
+    // Setup a debug logger if the context supports it
+    if (context()->hasExtension(QByteArrayLiteral("GL_KHR_debug"))) {
+        m_debugLogger = std::make_unique<QOpenGLDebugLogger>(this);
+        if (m_debugLogger->initialize()) {
+            connect(m_debugLogger.get(), &QOpenGLDebugLogger::messageLogged,
+                    this, [](const QOpenGLDebugMessage &msg){ qDebug() << msg; });
+            m_debugLogger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
+        }
+    } else {
+        qWarning() << "[ViewportWidget] OpenGL debug logging not available";
+    }
 
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glEnable(GL_DEPTH_TEST);
