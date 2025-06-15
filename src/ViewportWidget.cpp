@@ -6,7 +6,7 @@
 #include "Camera.hpp"
 #include "IntersectionSystem.hpp"
 #include "RenderingSystem.hpp"
-#include "DebugHelpers.hpp" // <-- INCLUDE THE NEW HEADER
+#include "DebugHelpers.hpp"
 
 #include <QOpenGLContext>
 #include <QOpenGLDebugLogger>
@@ -21,8 +21,6 @@
 #include <QMatrix4x4>
 #include <utility> // For std::move
 #include <iomanip>
-
-// All helper functions are now removed from here and are in DebugHelpers.hpp
 
 // Recursive helper function for Forward Kinematics
 glm::mat4 calculateMainWorldTransform(entt::entity entity, entt::registry& registry, int depth = 0)
