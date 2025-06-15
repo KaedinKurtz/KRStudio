@@ -4,7 +4,7 @@
 #include "Mesh.hpp"
 #include "Camera.hpp"
 #include "components.hpp"
-#include "DebugHelpers.hpp" // <-- INCLUDE THE NEW HEADER
+#include "DebugHelpers.hpp"
 
 #include <QTimer>
 #include <glm/gtc/type_ptr.hpp>
@@ -14,8 +14,6 @@
 #include <cmath>
 #include <stdexcept>
 #include <iomanip>
-
-// All helper functions are now removed from here and are in DebugHelpers.hpp
 
 // Recursive helper function for Forward Kinematics
 glm::mat4 calculatePreviewWorldTransform(entt::entity entity, entt::registry& registry, int depth = 0)
@@ -72,8 +70,9 @@ void PreviewViewport::updateRobot(const RobotDescription& description)
     makeCurrent();
     m_robotDesc = std::make_unique<RobotDescription>(description);
 
-    // **FIXED**: Use registry.storage<entt::entity>().size() which is the correct way.
-    qDebug() << "[PreviewViewport] Clearing" << m_scene->getRegistry().storage<entt::entity>().size() << "old entities from the scene.";
+    qDebug() << "[PreviewViewport] Clearing"
+             << m_scene->getRegistry().storage<entt::entity>().size()
+             << "old entities from the scene.";
     m_scene->getRegistry().clear();
 
     m_cameraEntity = m_scene->getRegistry().create();
