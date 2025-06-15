@@ -67,8 +67,10 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
 
 ViewportWidget::~ViewportWidget()
 {
-    if (m_ctxDestroyConnection)
-        QObject::disconnect(m_ctxDestroyConnection);
+    if (QOpenGLContext* ctx = context()) {
+        if (m_ctxDestroyConnection)
+            QObject::disconnect(m_ctxDestroyConnection);
+    }
     cleanupGL();
 }
 
