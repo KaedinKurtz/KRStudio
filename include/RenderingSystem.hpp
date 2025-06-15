@@ -9,7 +9,9 @@
 
 namespace RenderingSystem
 {
-    void initialize(QOpenGLFunctions_3_3_Core* gl);
+    // Acquire OpenGL functions from the current context
+    void initialize();
+
     void shutdown(Scene* scene);
     void uploadMeshes(Scene* scene);
     void render(Scene* scene,
