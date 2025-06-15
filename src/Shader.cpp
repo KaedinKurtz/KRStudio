@@ -63,7 +63,8 @@ Shader::Shader(QOpenGLFunctions_3_3_Core* gl, const char* vertexPath, const char
 }
 
 Shader::~Shader() {
-    if (ID != 0 && m_gl) m_gl->glDeleteProgram(ID);
+    if (ID != 0 && m_gl && QOpenGLContext::currentContext())
+        m_gl->glDeleteProgram(ID);
 }
 
 void Shader::use() {
