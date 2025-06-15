@@ -70,40 +70,27 @@ ViewportWidget::~ViewportWidget() = default;
 
 void ViewportWidget::cleanupGL()
 {
-    qDebug() << "[ViewportWidget] cleanupGL called. isValid=" << isValid()
-             << "cleanedUp=" << m_cleanedUp;
-
-
-    if (m_cleanedUp || !context() || !context()->isValid())
+    if (m_cleanedUp)
         return;
-
     m_cleanedUp = true;
 
-    qDebug() << "[ViewportWidget] Making context current for cleanup.";
-
-
-    makeCurrent();
-    if (!context() || !context()->isValid()) {
-        qWarning() << "[ViewportWidget] Failed to make context current for cleanup";
-        return;
-    }
-    m_outlineShader.reset();
-    if (m_debugLogger) {
+    // 1) Stop the debug logger (if you want to be double-sure):
+    if (m_debugLogger && m_debugLogger->isLogging()) {
         m_debugLogger->stopLogging();
-        m_debugLogger.reset();
     }
-    if (m_outlineVAO != 0) {
-        glDeleteVertexArrays(1, &m_outlineVAO);
-        m_outlineVAO = 0;
-    }
-    if (m_outlineVBO != 0) {
+
+    // 2) Tear down any widget-local buffers
+    if (m_outlineVBO) {
         glDeleteBuffers(1, &m_outlineVBO);
         m_outlineVBO = 0;
     }
-    RenderingSystem::shutdown(m_scene);
+    if (m_outlineVAO) {
+        glDeleteVertexArrays(1, &m_outlineVAO);
+        m_outlineVAO = 0;
+    }
 
-    context()->doneCurrent();
-    qDebug() << "[ViewportWidget] cleanupGL completed.";
+    // 3) Shut down your global RenderingSystem
+    RenderingSystem::shutdown(m_scene);
 }
 
 Camera& ViewportWidget::getCamera()
@@ -113,49 +100,85 @@ Camera& ViewportWidget::getCamera()
 
 void ViewportWidget::initializeGL()
 {
+    // 1) Initialize core functions
     initializeOpenGLFunctions();
 
     if (!context()) {
-        qDebug() << "[ViewportWidget] initializeGL - no context available.";
+        qWarning() << "[ViewportWidget] initializeGL() called without a current context!";
+        return;
     }
 
-    // Setup a debug logger if the context supports it
-    if (context()->hasExtension(QByteArrayLiteral("GL_KHR_debug"))) {
-        m_debugLogger = std::make_unique<QOpenGLDebugLogger>(this);
-        if (m_debugLogger->initialize()) {
-            connect(m_debugLogger.get(), &QOpenGLDebugLogger::messageLogged,
-                    this, [](const QOpenGLDebugMessage &msg){ qDebug() << msg; });
-            m_debugLogger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
-        }
-    } else {
-        qWarning() << "[ViewportWidget] OpenGL debug logging not available";
+    // 2) Set up debug logger (if supported)
+    m_debugLogger = std::make_unique<QOpenGLDebugLogger>(this);
+    if (m_debugLogger->initialize()) {
+        // a) Stop logging before the context is destroyed
+        connect(context(), &QOpenGLContext::aboutToBeDestroyed,
+            m_debugLogger.get(), &QOpenGLDebugLogger::stopLogging,
+            Qt::DirectConnection);
+
+        // b) Also perform our GL cleanup while the context is still alive
+        connect(context(), &QOpenGLContext::aboutToBeDestroyed,
+            this, [this]() {
+                makeCurrent();
+                cleanupGL();
+                doneCurrent();
+            },
+            Qt::DirectConnection);
+
+        // c) Print debug messages
+        connect(m_debugLogger.get(), &QOpenGLDebugLogger::messageLogged,
+            this, [](const QOpenGLDebugMessage& msg) {
+                qDebug() << "[GL Debug]" << msg;
+            });
+
+        m_debugLogger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
+    }
+    else {
+        qWarning() << "[ViewportWidget] OpenGL debug logger unavailable.";
     }
 
+    // 3) Standard GL state
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    // 4) Load your outline shader and initialize the global rendering system
     try {
-        m_outlineShader = std::make_unique<Shader>(this, "shaders/outline_vert.glsl", "shaders/outline_frag.glsl");
+        m_outlineShader = std::make_unique<Shader>(
+            this,
+            "shaders/outline_vert.glsl",
+            "shaders/outline_frag.glsl"
+        );
         RenderingSystem::initialize();
     }
     catch (const std::exception& e) {
-        qCritical() << "[MainViewport] CRITICAL: Failed to initialize resources:" << e.what();
+        qCritical() << "[ViewportWidget] CRITICAL: Failed to initialize shaders or RenderingSystem:"
+            << e.what();
     }
 
+    // 5) Create VAO/VBO for your outline pass
     glGenVertexArrays(1, &m_outlineVAO);
     glGenBuffers(1, &m_outlineVBO);
     glBindVertexArray(m_outlineVAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_outlineVBO);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glVertexAttribPointer(
+        0,                      // attribute 0
+        3,                      // vec3
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(glm::vec3),
+        (void*)0
+    );
     glBindVertexArray(0);
 
+    // 6) Kick off your animation timer
     connect(m_animationTimer, &QTimer::timeout, this, QOverload<>::of(&ViewportWidget::update));
     m_animationTimer->start(16);
 }
+
 
 void ViewportWidget::paintGL()
 {
@@ -221,6 +244,19 @@ void ViewportWidget::keyPressEvent(QKeyEvent* event)
 
 void ViewportWidget::closeEvent(QCloseEvent* event)
 {
-    cleanupGL();
+    // If someone closes the widget directly, we still want a safe cleanup:
+    if (context()) {
+        makeCurrent();
+        try {
+            cleanupGL();
+        }
+        catch (const std::exception& ex) {
+            qWarning() << "[ViewportWidget] exception during cleanupGL():" << ex.what();
+        }
+        catch (...) {
+            qWarning() << "[ViewportWidget] unknown error during cleanupGL()";
+        }
+        doneCurrent();
+    }
     QOpenGLWidget::closeEvent(event);
 }
