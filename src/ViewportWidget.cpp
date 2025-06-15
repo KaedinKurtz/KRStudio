@@ -67,17 +67,33 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
 
 ViewportWidget::~ViewportWidget()
 {
-    if (QOpenGLContext* ctx = context())
-        disconnect(ctx, &QOpenGLContext::aboutToBeDestroyed,
-                   this, &ViewportWidget::cleanupGL);
+    qDebug() << "[ViewportWidget] Destructor invoked. context=" << context()
+             << "isValid=" << isValid() << "cleanedUp=" << m_cleanedUp;
+
+    if (QOpenGLContext* ctx = context()) {
+        if (m_ctxDestroyConnection) {
+            qDebug() << "[ViewportWidget] Disconnecting aboutToBeDestroyed signal.";
+            QObject::disconnect(m_ctxDestroyConnection);
+        }
+    } else {
+        qDebug() << "[ViewportWidget] No context available in destructor.";
+    }
+
     cleanupGL();
+    qDebug() << "[ViewportWidget] Destructor finished.";
 }
 
 void ViewportWidget::cleanupGL()
 {
+    qDebug() << "[ViewportWidget] cleanupGL called. isValid=" << isValid()
+             << "cleanedUp=" << m_cleanedUp;
+
     if (m_cleanedUp || !isValid())
         return;
+
     m_cleanedUp = true;
+
+    qDebug() << "[ViewportWidget] Making context current for cleanup.";
     makeCurrent();
     m_outlineShader.reset();
     if (m_debugLogger) {
@@ -94,6 +110,7 @@ void ViewportWidget::cleanupGL()
     }
     RenderingSystem::shutdown(m_scene);
     doneCurrent();
+    qDebug() << "[ViewportWidget] cleanupGL completed.";
 }
 
 Camera& ViewportWidget::getCamera()
@@ -107,8 +124,12 @@ void ViewportWidget::initializeGL()
 
     // Ensure resources are released before the context goes away
     if (QOpenGLContext* ctx = context()) {
-        connect(ctx, &QOpenGLContext::aboutToBeDestroyed,
-                this, &ViewportWidget::cleanupGL, Qt::DirectConnection);
+        qDebug() << "[ViewportWidget] Connecting aboutToBeDestroyed signal.";
+        m_ctxDestroyConnection = connect(ctx, &QOpenGLContext::aboutToBeDestroyed,
+                                         this, &ViewportWidget::cleanupGL,
+                                         Qt::DirectConnection);
+    } else {
+        qDebug() << "[ViewportWidget] initializeGL - no context available.";
     }
 
     // Setup a debug logger if the context supports it
