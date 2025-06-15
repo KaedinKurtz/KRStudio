@@ -1,4 +1,5 @@
 D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_ViewportWidget.cpp: D:/RoboticsSoftware/include/ViewportWidget.hpp \
+  C:/Qt/6.9.0/msvc2022_64/include/QtCore/QMetaObject \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/QPoint \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20functional.h \
@@ -158,9 +159,11 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_ViewportWidget
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtransform.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h \
+  C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLDebugLogger \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLFunctions_3_3_Core \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionFunctions \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionProfile \
+  C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopengldebug.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglfunctions_3_3_core.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionfunctions.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionprofile.h \

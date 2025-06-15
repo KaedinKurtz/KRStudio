@@ -37,6 +37,7 @@ RoboticsSoftware_autogen/timestamp: \
 	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/WindowsPaths.cmake \
 	C:/Qt/6.9.0/msvc2022_64/include/QtCore/QDebug \
 	C:/Qt/6.9.0/msvc2022_64/include/QtCore/QList \
+	C:/Qt/6.9.0/msvc2022_64/include/QtCore/QMetaObject \
 	C:/Qt/6.9.0/msvc2022_64/include/QtCore/QObject \
 	C:/Qt/6.9.0/msvc2022_64/include/QtCore/QPoint \
 	C:/Qt/6.9.0/msvc2022_64/include/QtCore/QPointer \
@@ -228,9 +229,11 @@ RoboticsSoftware_autogen/timestamp: \
 	C:/Qt/6.9.0/msvc2022_64/include/QtGui/qvectornd.h \
 	C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h \
 	C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h \
+	C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLDebugLogger \
 	C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLFunctions_3_3_Core \
 	C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionFunctions \
 	C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionProfile \
+	C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopengldebug.h \
 	C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglfunctions_3_3_core.h \
 	C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionfunctions.h \
 	C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionprofile.h \
@@ -830,6 +833,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/include/MainWindow.hpp \
 	D:/RoboticsSoftware/include/PreviewViewport.hpp \
 	D:/RoboticsSoftware/include/PropertiesPanel.hpp \
+	D:/RoboticsSoftware/include/RenderingSystem.hpp \
 	D:/RoboticsSoftware/include/RobotDescription.hpp \
 	D:/RoboticsSoftware/include/RobotEnrichmentDialog.hpp \
 	D:/RoboticsSoftware/include/SDFParser.hpp \
@@ -852,6 +856,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/src/Mesh.cpp \
 	D:/RoboticsSoftware/src/PreviewViewport.cpp \
 	D:/RoboticsSoftware/src/PropertiesPanel.cpp \
+	D:/RoboticsSoftware/src/RenderingSystem.cpp \
 	D:/RoboticsSoftware/src/Robot.cpp \
 	D:/RoboticsSoftware/src/RobotEnrichmentDialog.cpp \
 	D:/RoboticsSoftware/src/SDFParser.cpp \

@@ -474,6 +474,12 @@
 			null
 		],
 		[
+			"D:/RoboticsSoftware/include/RenderingSystem.hpp",
+			"MU",
+			"6YEA5652QU/moc_RenderingSystem.cpp",
+			null
+		],
+		[
 			"D:/RoboticsSoftware/include/RobotEnrichmentDialog.hpp",
 			"MU",
 			"6YEA5652QU/moc_RobotEnrichmentDialog.cpp",
@@ -603,6 +609,7 @@
 		[ "D:/RoboticsSoftware/src/Mesh.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/PreviewViewport.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/PropertiesPanel.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/RenderingSystem.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Robot.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/RobotEnrichmentDialog.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/SDFParser.cpp", "MU", null ],
