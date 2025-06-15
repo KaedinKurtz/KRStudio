@@ -64,7 +64,10 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
 
 }
 
-ViewportWidget::~ViewportWidget() = default;
+ViewportWidget::~ViewportWidget()
+{
+    cleanupGL();
+}
 
 void ViewportWidget::cleanupGL()
 {
@@ -100,7 +103,7 @@ void ViewportWidget::initializeGL()
     // Ensure resources are released before the context goes away
     if (QOpenGLContext* ctx = context()) {
         connect(ctx, &QOpenGLContext::aboutToBeDestroyed,
-                this, &ViewportWidget::cleanupGL);
+                this, &ViewportWidget::cleanupGL, Qt::DirectConnection);
     }
 
     // Setup a debug logger if the context supports it
