@@ -5,6 +5,7 @@
 #include "Mesh.hpp"
 #include "Camera.hpp"
 #include "IntersectionSystem.hpp"
+#include "RenderingSystem.hpp"
 #include "DebugHelpers.hpp" // <-- INCLUDE THE NEW HEADER
 
 #include <QOpenGLContext>
@@ -61,11 +62,7 @@ ViewportWidget::~ViewportWidget()
 {
     if (isValid()) {
         makeCurrent();
-        if (m_gridVAO) glDeleteVertexArrays(1, &m_gridVAO);
-        if (m_gridVBO) glDeleteBuffers(1, &m_gridVBO);
-        if (m_cubeVAO) glDeleteVertexArrays(1, &m_cubeVAO);
-        if (m_cubeVBO) glDeleteBuffers(1, &m_cubeVBO);
-        if (m_cubeEBO) glDeleteBuffers(1, &m_cubeEBO);
+        RenderingSystem::shutdown(m_scene);
         if (m_outlineVAO != 0) glDeleteVertexArrays(1, &m_outlineVAO);
         if (m_outlineVBO != 0) glDeleteBuffers(1, &m_outlineVBO);
     }
@@ -86,41 +83,9 @@ void ViewportWidget::initializeGL()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    const float halfSize = 1000.0f;
-    const std::vector<float> grid_vertices = { -halfSize, 0.0f, -halfSize,  halfSize, 0.0f, -halfSize,  halfSize, 0.0f,  halfSize, halfSize, 0.0f,  halfSize, -halfSize, 0.0f,  halfSize, -halfSize, 0.0f, -halfSize };
-
     try {
-        m_gridShader = std::make_unique<Shader>(this, "shaders/grid_vert.glsl", "shaders/grid_frag.glsl");
-        m_phongShader = std::make_unique<Shader>(this, "shaders/vertex_shader.glsl", "shaders/fragment_shader.glsl");
         m_outlineShader = std::make_unique<Shader>(this, "shaders/outline_vert.glsl", "shaders/outline_frag.glsl");
-
-        m_gridMesh = std::make_unique<Mesh>(grid_vertices);
-        m_cubeMesh = std::make_unique<Mesh>(Mesh::getLitCubeVertices(), Mesh::getLitCubeIndices());
-
-        glGenVertexArrays(1, &m_gridVAO);
-        glGenBuffers(1, &m_gridVBO);
-        glBindVertexArray(m_gridVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, m_gridVBO);
-        glBufferData(GL_ARRAY_BUFFER, grid_vertices.size() * sizeof(float), grid_vertices.data(), GL_STATIC_DRAW);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(0);
-        glBindVertexArray(0);
-
-        glGenVertexArrays(1, &m_cubeVAO);
-        glGenBuffers(1, &m_cubeVBO);
-        glGenBuffers(1, &m_cubeEBO);
-        glBindVertexArray(m_cubeVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, m_cubeVBO);
-        const auto& cubeVerts = m_cubeMesh->vertices();
-        glBufferData(GL_ARRAY_BUFFER, cubeVerts.size() * sizeof(float), cubeVerts.data(), GL_STATIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_cubeEBO);
-        const auto& cubeInd = m_cubeMesh->indices();
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, cubeInd.size() * sizeof(unsigned int), cubeInd.data(), GL_STATIC_DRAW);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(1);
-        glBindVertexArray(0);
+        RenderingSystem::initialize();
     }
     catch (const std::exception& e) {
         qCritical() << "[MainViewport] CRITICAL: Failed to initialize resources:" << e.what();
@@ -150,59 +115,7 @@ void ViewportWidget::paintGL()
     const glm::mat4 viewMatrix = camera.getViewMatrix();
     const glm::mat4 projectionMatrix = camera.getProjectionMatrix(aspectRatio);
 
-    // --- Draw Grid ---
-    if (m_gridShader && m_gridMesh) {
-        auto gridView = registry.view<const GridComponent>();
-        int gridCount = 0;
-        for (auto entity : gridView) { (void)entity; gridCount++; }
-        qDebug() << "[MainViewport] Found" << gridCount << "grid entities.";
-
-        m_gridShader->use();
-        m_gridShader->setMat4("u_viewMatrix", viewMatrix);
-        m_gridShader->setMat4("u_projectionMatrix", projectionMatrix);
-        m_gridShader->setVec3("u_cameraPos", camera.getPosition());
-        gridView.each([this, &camera, &registry](const auto entity, const auto& grid) {
-            if (!grid.masterVisible) return;
-            auto& transform = registry.get<TransformComponent>(entity);
-            m_gridShader->setMat4("u_gridModelMatrix", transform.getTransform());
-            // ... (rest of uniform setting is correct) ...
-            glBindVertexArray(m_gridVAO);
-            glDrawArrays(GL_TRIANGLES, 0, static_cast<int>(m_gridMesh->vertices().size() / 3));
-            glBindVertexArray(0);
-            qDebug() << "[MainViewport] Drew grid entity" << entity;
-            });
-    }
-
-    // --- Draw Renderable Meshes (Robot, etc.) ---
-    if (m_phongShader && m_cubeMesh) {
-        m_phongShader->use();
-        m_phongShader->setMat4("view", viewMatrix);
-        m_phongShader->setMat4("projection", projectionMatrix);
-        m_phongShader->setVec3("lightPos", camera.getPosition());
-        m_phongShader->setVec3("viewPos", camera.getPosition());
-        m_phongShader->setVec3("objectColor", glm::vec3(0.8f, 0.8f, 0.8f));
-        m_phongShader->setVec3("lightColor", glm::vec3(1.0f, 1.0f, 1.0f));
-
-        auto meshView = registry.view<const RenderableMeshComponent>();
-        int meshCount = 0;
-        for (auto entity : meshView) { (void)entity; meshCount++; }
-        qDebug() << "[MainViewport] Found" << meshCount << "renderable mesh entities to draw.";
-
-        for (auto entity : meshView) {
-            auto* tagPtr = registry.try_get<TagComponent>(entity);
-            QString tag = tagPtr ? QString::fromStdString(tagPtr->tag) : "NO_TAG";
-            qDebug() << "  [MainViewport] --- Processing entity" << entity << "tagged as" << tag << "---";
-
-            glm::mat4 worldTransform = calculateMainWorldTransform(entity, registry);
-            // **FIX**: Corrected function name from printMainMatrix to printMatrix
-            printMatrix(worldTransform, "    [MainViewport] Final World Transform for " + tag + ":");
-            m_phongShader->setMat4("model", worldTransform);
-
-            glBindVertexArray(m_cubeVAO);
-            glDrawElements(GL_TRIANGLES, static_cast<int>(m_cubeMesh->indices().size()), GL_UNSIGNED_INT, 0);
-            glBindVertexArray(0);
-        }
-    }
+    RenderingSystem::render(m_scene, viewMatrix, projectionMatrix, camera.getPosition());
 
     // --- Draw Intersection Outlines ---
     if (m_outlineShader && m_outlineVAO != 0) {
