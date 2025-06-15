@@ -45,7 +45,13 @@ private:
 
     // Rendering
     std::unique_ptr<Shader> m_phongShader;
-    std::map<std::string, std::unique_ptr<Mesh>> m_meshCache;
+    struct CachedMesh {
+        std::unique_ptr<Mesh> mesh;
+        unsigned int VAO = 0;
+        unsigned int VBO = 0;
+        unsigned int EBO = 0;
+    };
+    std::map<std::string, CachedMesh> m_meshCache;
 
     // Animation
     QTimer* m_animationTimer;

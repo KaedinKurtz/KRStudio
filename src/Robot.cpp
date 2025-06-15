@@ -84,17 +84,8 @@ void Robot::update(double deltaTime) {
  * @param link_mesh The mesh to use for drawing each link.
  */
 void Robot::draw(Shader& shader, Mesh& link_mesh) const {
-    if (!rootLink) return;
-
-    glm::mat4 identity = glm::mat4(1.0f);
-
-    // Draw the base link (root) at the origin with a default color.
-    shader.setVec4("objectColor", glm::vec4(0.6f, 0.6f, 0.6f, 1.0f));
-    shader.setMat4("model", identity);
-    link_mesh.draw();
-
-    // Start the recursive drawing process from the root link.
-    drawRecursive(rootLink, shader, link_mesh, identity);
+    (void)shader;
+    (void)link_mesh;
 }
 
 /**
@@ -105,6 +96,9 @@ void Robot::draw(Shader& shader, Mesh& link_mesh) const {
  * @param parentTransform The transformation matrix of the parent link.
  */
 void Robot::drawRecursive(const std::shared_ptr<Link>& link, Shader& shader, Mesh& mesh, const glm::mat4& parentTransform) const {
+    (void)shader;
+    (void)mesh;
+    (void)parentTransform;
     if (!link) return;
 
     // Iterate through all children of the current link.
@@ -129,11 +123,7 @@ void Robot::drawRecursive(const std::shared_ptr<Link>& link, Shader& shader, Mes
         else {
             color = glm::vec4(1.0f, 0.5f, 0.2f, 1.0f); // Orange
         }
-        shader.setVec4("objectColor", color);
-
-        // Set the model matrix uniform and draw the mesh for this link.
-        shader.setMat4("model", current_transform);
-        mesh.draw();
+        (void)color;
 
         // Recurse to draw the children of this link, passing down the new transform.
         drawRecursive(child_link, shader, mesh, current_transform);

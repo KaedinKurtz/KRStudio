@@ -71,6 +71,13 @@ Grid::Grid(QOpenGLFunctions_3_3_Core* glFunctions)
 
 Grid::~Grid() {
     qDebug() << "Grid destructor called.";
+    if (m_gl) {
+        if (m_gridVAO) m_gl->glDeleteVertexArrays(1, &m_gridVAO);
+        if (m_gridVBO) m_gl->glDeleteBuffers(1, &m_gridVBO);
+        if (m_sphereVAO) m_gl->glDeleteVertexArrays(1, &m_sphereVAO);
+        if (m_sphereVBO) m_gl->glDeleteBuffers(1, &m_sphereVBO);
+        if (m_sphereEBO) m_gl->glDeleteBuffers(1, &m_sphereEBO);
+    }
 }
 
 void Grid::createDefaultQuadMesh() {
@@ -85,7 +92,17 @@ void Grid::createDefaultQuadMesh() {
         -halfSize, 0.0f, -halfSize
     };
     try {
-        m_gridMesh = std::make_unique<Mesh>(m_gl, quad_vertices);
+        m_gridMesh = std::make_unique<Mesh>(quad_vertices);
+        if (m_gl) {
+            m_gl->glGenVertexArrays(1, &m_gridVAO);
+            m_gl->glGenBuffers(1, &m_gridVBO);
+            m_gl->glBindVertexArray(m_gridVAO);
+            m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_gridVBO);
+            m_gl->glBufferData(GL_ARRAY_BUFFER, quad_vertices.size() * sizeof(float), quad_vertices.data(), GL_STATIC_DRAW);
+            m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+            m_gl->glEnableVertexAttribArray(0);
+            m_gl->glBindVertexArray(0);
+        }
     }
     catch (const std::exception& e) {
         qWarning() << "Grid: Exception during quad mesh creation: " << e.what();
@@ -127,7 +144,20 @@ void Grid::createSphereMesh(float radius, int sectorCount, int stackCount) {
         }
     }
     try {
-        m_sphereMesh = std::make_unique<Mesh>(m_gl, vertices, indices);
+        m_sphereMesh = std::make_unique<Mesh>(vertices, indices);
+        if (m_gl) {
+            m_gl->glGenVertexArrays(1, &m_sphereVAO);
+            m_gl->glGenBuffers(1, &m_sphereVBO);
+            m_gl->glGenBuffers(1, &m_sphereEBO);
+            m_gl->glBindVertexArray(m_sphereVAO);
+            m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_sphereVBO);
+            m_gl->glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+            m_gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_sphereEBO);
+            m_gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+            m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+            m_gl->glEnableVertexAttribArray(0);
+            m_gl->glBindVertexArray(0);
+        }
     }
     catch (const std::exception& e) {
         qWarning() << "Grid: Exception during sphere mesh creation: " << e.what();
@@ -135,16 +165,20 @@ void Grid::createSphereMesh(float radius, int sectorCount, int stackCount) {
 }
 
 void Grid::draw(const Camera& camera, float aspectRatio) {
-    if (m_gridShader && m_gridShader->ID != 0 && m_gridMesh && !m_levels.empty()) {
+    if (m_gridShader && m_gridShader->ID != 0 && m_gridMesh && m_gridVAO != 0 && !m_levels.empty()) {
         m_gridShader->use();
-        updateGridShaderUniforms(camera, aspectRatio); // Pass aspectRatio
-        m_gridMesh->draw();
+        updateGridShaderUniforms(camera, aspectRatio);
+        m_gl->glBindVertexArray(m_gridVAO);
+        m_gl->glDrawArrays(GL_TRIANGLES, 0, static_cast<int>(m_gridMesh->vertices().size() / 3));
+        m_gl->glBindVertexArray(0);
     }
 
-    if (m_showOriginSphere && m_sphereShader && m_sphereShader->ID != 0 && m_sphereMesh) {
+    if (m_showOriginSphere && m_sphereShader && m_sphereShader->ID != 0 && m_sphereMesh && m_sphereVAO != 0) {
         m_sphereShader->use();
         updateSphereShaderUniforms(camera, aspectRatio);
-        m_sphereMesh->draw();
+        m_gl->glBindVertexArray(m_sphereVAO);
+        m_gl->glDrawElements(GL_TRIANGLES, static_cast<int>(m_sphereMesh->indices().size()), GL_UNSIGNED_INT, 0);
+        m_gl->glBindVertexArray(0);
     }
 }
 
