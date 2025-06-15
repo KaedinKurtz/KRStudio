@@ -3,6 +3,7 @@
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions_3_3_Core>
 #include <QOpenGLDebugLogger>
+#include <QMetaObject>
 #include <QPoint>
 #include <memory>
 #include <entt/entity/entity.hpp>
@@ -61,4 +62,7 @@ private:
 
     // Guard to ensure cleanupGL() is only executed once
     bool m_cleanedUp = false;
+
+    // Connection handle for context destruction
+    QMetaObject::Connection m_ctxDestroyConnection;
 };
