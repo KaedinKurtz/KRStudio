@@ -57,6 +57,7 @@ qt_add_executable(RoboticsSoftware
     src/DiagnosticsPanel.cpp
     src/StaticToolbar.cpp
     src/Grid.cpp
+    src/RenderingSystem.cpp
     src/Scene.cpp
     src/PropertiesPanel.cpp
     src/gridPropertiesWidget.cpp
@@ -67,6 +68,7 @@ qt_add_executable(RoboticsSoftware
     include/PropertiesPanel.hpp
     include/gridPropertiesWidget.hpp
     include/IntersectionSystem.hpp
+    include/RenderingSystem.hpp
     include/URDFParser.hpp
     include/URDFImporterDialog.hpp
     include/KRobotParser.hpp
