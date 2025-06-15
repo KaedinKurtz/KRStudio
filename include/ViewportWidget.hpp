@@ -42,25 +42,6 @@ private:
     Scene* m_scene;
     entt::entity m_cameraEntity;
 
-    // OpenGL Resources for main rendering
-    std::unique_ptr<Shader> m_gridShader;
-    std::unique_ptr<Mesh> m_gridMesh;
-    unsigned int m_gridVAO = 0;
-    unsigned int m_gridVBO = 0;
-
-    std::unique_ptr<Shader> m_phongShader;
-    std::unique_ptr<Mesh> m_cubeMesh;
-    unsigned int m_cubeVAO = 0;
-    unsigned int m_cubeVBO = 0;
-    unsigned int m_cubeEBO = 0;
-
-    struct CachedMesh {
-        std::unique_ptr<Mesh> mesh;
-        unsigned int VAO = 0;
-        unsigned int VBO = 0;
-        unsigned int EBO = 0;
-    };
-    std::map<std::string, CachedMesh> m_meshCache;
 
     // --- INTEGRATED: OpenGL resources for intersection outline rendering ---
     std::unique_ptr<Shader> m_outlineShader; // The shader program for drawing simple colored lines.
