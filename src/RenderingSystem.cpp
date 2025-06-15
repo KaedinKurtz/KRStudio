@@ -36,6 +36,11 @@ namespace RenderingSystem
 
     void initialize()
     {
+        // Ensure any previously created resources are released while the
+        // previous OpenGL function pointer table is still valid.  This avoids
+        // dangling pointers in Shader destructors when reinitializing.
+        shutdown(nullptr);
+
         if (!QOpenGLContext::currentContext())
         {
             qWarning() << "[RenderingSystem] initialize called without current context";
