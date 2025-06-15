@@ -4,10 +4,12 @@
 #include <QDebug>
 #include <QOpenGLContext>
 
+
 namespace RenderingSystem
 {
     namespace
     {
+
         std::unique_ptr<QOpenGLFunctions_3_3_Core> g_gl;
         std::unique_ptr<Shader> g_gridShader;
         std::unique_ptr<Shader> g_phongShader;
@@ -33,6 +35,7 @@ namespace RenderingSystem
 
     void initialize(QOpenGLFunctions_3_3_Core* gl)
     {
+
         if (!gl)
         {
             qWarning() << "[RenderingSystem] initialize called with nullptr";
@@ -50,6 +53,7 @@ namespace RenderingSystem
             return;
         }
         g_gl->initializeOpenGLFunctions();
+
         const float halfSize = 1000.0f;
         const std::vector<float> grid_vertices = {
             -halfSize, 0.0f, -halfSize,
@@ -61,9 +65,10 @@ namespace RenderingSystem
 
         g_gridShader = std::make_unique<Shader>(g_gl.get(), "shaders/grid_vert.glsl", "shaders/grid_frag.glsl");
         g_phongShader = std::make_unique<Shader>(g_gl.get(), "shaders/vertex_shader.glsl", "shaders/fragment_shader.glsl");
-
+      
         g_gridMesh = std::make_unique<Mesh>(grid_vertices);
         g_cubeMesh = std::make_unique<Mesh>(Mesh::getLitCubeVertices(), Mesh::getLitCubeIndices());
+
 
         g_gl->glGenVertexArrays(1, &g_gridVAO);
         g_gl->glGenBuffers(1, &g_gridVBO);
@@ -89,13 +94,16 @@ namespace RenderingSystem
         g_gl->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
         g_gl->glEnableVertexAttribArray(1);
         g_gl->glBindVertexArray(0);
+
     }
 
     void shutdown(Scene* scene)
     {
         (void)scene;
+
         if (!g_gl)
             return;
+
         if (g_gridVAO) g_gl->glDeleteVertexArrays(1, &g_gridVAO);
         if (g_gridVBO) g_gl->glDeleteBuffers(1, &g_gridVBO);
         if (g_cubeVAO) g_gl->glDeleteVertexArrays(1, &g_cubeVAO);
@@ -106,12 +114,14 @@ namespace RenderingSystem
         g_gridMesh.reset();
         g_cubeMesh.reset();
         g_gl.reset();
+
     }
 
     void uploadMeshes(Scene* scene)
     {
         if (!g_gl)
             return;
+
 
         auto& registry = scene->getRegistry();
         auto view = registry.view<RenderableMeshComponent>(entt::exclude<RenderResourceComponent>);
