@@ -60,9 +60,8 @@ void Camera::processMouseMovement(double xoffset, double yoffset, bool isPanning
         float panSpeedFactor = m_Distance * 0.002f;
 
         m_FocalPoint -= right * static_cast<float>(xoffset) * panSpeedFactor;
-        // OLD: m_FocalPoint += localUp * static_cast<float>(yoffset) * panSpeedFactor;
-        // NEW: Invert yoffset for panning
-        m_FocalPoint -= localUp * static_cast<float>(yoffset) * panSpeedFactor; // <--- Notice the minus sign
+        // Invert yoffset for panning
+        m_FocalPoint -= localUp * static_cast<float>(yoffset) * panSpeedFactor;
     }
     else { // Orbiting
         float sensitivity = 0.002f; // THIS IS THE SENSITIVITY FOR ORBITING
