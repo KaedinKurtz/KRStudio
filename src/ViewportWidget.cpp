@@ -6,9 +6,11 @@
 #include "Camera.hpp"
 #include "IntersectionSystem.hpp"
 #include "RenderingSystem.hpp"
-#include "DebugHelpers.hpp" // <-- INCLUDE THE NEW HEADER
+#include "DebugHelpers.hpp"
 
 #include <QOpenGLContext>
+#include <QOpenGLDebugLogger>
+#include <QSurfaceFormat>
 #include <QTimer>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -19,8 +21,6 @@
 #include <QMatrix4x4>
 #include <utility> // For std::move
 #include <iomanip>
-
-// All helper functions are now removed from here and are in DebugHelpers.hpp
 
 // Recursive helper function for Forward Kinematics
 glm::mat4 calculateMainWorldTransform(entt::entity entity, entt::registry& registry, int depth = 0)
@@ -54,18 +54,38 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
     m_outlineVAO(0),
     m_outlineVBO(0)
 {
+    // Request a debug context so we can attach QOpenGLDebugLogger later
+    QSurfaceFormat fmt = format();
+    fmt.setOption(QSurfaceFormat::DebugContext);
+    setFormat(fmt);
+
     Q_ASSERT(m_scene != nullptr);
     setFocusPolicy(Qt::StrongFocus);
+
 }
 
-ViewportWidget::~ViewportWidget()
+ViewportWidget::~ViewportWidget() = default;
+
+void ViewportWidget::cleanupGL()
 {
-    if (isValid()) {
-        makeCurrent();
-        RenderingSystem::shutdown(m_scene);
-        if (m_outlineVAO != 0) glDeleteVertexArrays(1, &m_outlineVAO);
-        if (m_outlineVBO != 0) glDeleteBuffers(1, &m_outlineVBO);
+    if (!isValid())
+        return;
+    makeCurrent();
+    m_outlineShader.reset();
+    if (m_debugLogger) {
+        m_debugLogger->stopLogging();
+        m_debugLogger.reset();
     }
+    if (m_outlineVAO != 0) {
+        glDeleteVertexArrays(1, &m_outlineVAO);
+        m_outlineVAO = 0;
+    }
+    if (m_outlineVBO != 0) {
+        glDeleteBuffers(1, &m_outlineVBO);
+        m_outlineVBO = 0;
+    }
+    RenderingSystem::shutdown(m_scene);
+    doneCurrent();
 }
 
 Camera& ViewportWidget::getCamera()
@@ -76,6 +96,24 @@ Camera& ViewportWidget::getCamera()
 void ViewportWidget::initializeGL()
 {
     initializeOpenGLFunctions();
+
+    // Ensure resources are released before the context goes away
+    if (QOpenGLContext* ctx = context()) {
+        connect(ctx, &QOpenGLContext::aboutToBeDestroyed,
+                this, &ViewportWidget::cleanupGL);
+    }
+
+    // Setup a debug logger if the context supports it
+    if (context()->hasExtension(QByteArrayLiteral("GL_KHR_debug"))) {
+        m_debugLogger = std::make_unique<QOpenGLDebugLogger>(this);
+        if (m_debugLogger->initialize()) {
+            connect(m_debugLogger.get(), &QOpenGLDebugLogger::messageLogged,
+                    this, [](const QOpenGLDebugMessage &msg){ qDebug() << msg; });
+            m_debugLogger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
+        }
+    } else {
+        qWarning() << "[ViewportWidget] OpenGL debug logging not available";
+    }
 
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glEnable(GL_DEPTH_TEST);
