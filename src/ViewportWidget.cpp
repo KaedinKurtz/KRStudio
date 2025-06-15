@@ -71,9 +71,10 @@ ViewportWidget::~ViewportWidget()
              << "isValid=" << isValid() << "cleanedUp=" << m_cleanedUp;
 
     if (QOpenGLContext* ctx = context()) {
-        if (m_ctxDestroyConnection) {
+        if (m_ctxDestroyConnection && ctx->isValid()) {
             qDebug() << "[ViewportWidget] Disconnecting aboutToBeDestroyed signal.";
             QObject::disconnect(m_ctxDestroyConnection);
+            m_ctxDestroyConnection = {};
         }
     } else {
         qDebug() << "[ViewportWidget] No context available in destructor.";
@@ -88,13 +89,19 @@ void ViewportWidget::cleanupGL()
     qDebug() << "[ViewportWidget] cleanupGL called. isValid=" << isValid()
              << "cleanedUp=" << m_cleanedUp;
 
-    if (m_cleanedUp || !isValid())
+
+    if (m_cleanedUp || !context() || !context()->isValid())
         return;
 
     m_cleanedUp = true;
 
     qDebug() << "[ViewportWidget] Making context current for cleanup.";
-    makeCurrent();
+
+
+    if (!context()->makeCurrent(context()->surface())) {
+        qWarning() << "[ViewportWidget] Failed to make context current for cleanup";
+        return;
+    }
     m_outlineShader.reset();
     if (m_debugLogger) {
         m_debugLogger->stopLogging();
@@ -109,7 +116,8 @@ void ViewportWidget::cleanupGL()
         m_outlineVBO = 0;
     }
     RenderingSystem::shutdown(m_scene);
-    doneCurrent();
+
+    context()->doneCurrent();
     qDebug() << "[ViewportWidget] cleanupGL completed.";
 }
 
