@@ -27,9 +27,6 @@ public:
     ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget* parent = nullptr);
     ~ViewportWidget();
 
-private slots:
-    void cleanupGL();
-
     Camera& getCamera();
 
 private slots:
