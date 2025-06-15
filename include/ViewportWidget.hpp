@@ -2,6 +2,7 @@
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions_3_3_Core>
+#include <QOpenGLDebugLogger>
 #include <QPoint>
 #include <memory>
 #include <entt/entity/entity.hpp>
@@ -25,6 +26,9 @@ class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_3_3_Core
 public:
     ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget* parent = nullptr);
     ~ViewportWidget();
+
+private slots:
+    void cleanupGL();
 
     Camera& getCamera();
 
@@ -51,4 +55,7 @@ private:
     // Other members
     QTimer* m_animationTimer;
     QPoint m_lastMousePos;
+
+    // Emits detailed OpenGL debug output when a debug context is available
+    std::unique_ptr<QOpenGLDebugLogger> m_debugLogger;
 };
