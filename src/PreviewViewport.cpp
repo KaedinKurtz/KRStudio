@@ -1,5 +1,6 @@
 #include "PreviewViewport.hpp"
 #include "SceneBuilder.hpp"
+#include "Scene.hpp"
 #include "Shader.hpp"
 #include "Mesh.hpp"
 #include "Camera.hpp"
@@ -70,10 +71,8 @@ void PreviewViewport::updateRobot(const RobotDescription& description)
     makeCurrent();
     m_robotDesc = std::make_unique<RobotDescription>(description);
 
-    qDebug() << "[PreviewViewport] Clearing"
-             << m_scene->getRegistry().storage<entt::entity>().size()
-             << "old entities from the scene.";
-    m_scene->getRegistry().clear();
+    qDebug() << "[PreviewViewport] Resetting preview scene";
+    m_scene = std::make_unique<Scene>();
 
     m_cameraEntity = m_scene->getRegistry().create();
     m_scene->getRegistry().emplace<CameraComponent>(m_cameraEntity).camera.forceRecalculateView(glm::vec3(1.5f, 1.5f, 2.0f), glm::vec3(0.0f, 0.5f, 0.0f), 0.0f);
