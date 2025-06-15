@@ -52,7 +52,8 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
     m_cameraEntity(cameraEntity),
     m_animationTimer(new QTimer(this)),
     m_outlineVAO(0),
-    m_outlineVBO(0)
+    m_outlineVBO(0),
+    m_cleanedUp(false)
 {
     // Request a debug context so we can attach QOpenGLDebugLogger later
     QSurfaceFormat fmt = format();
@@ -66,13 +67,17 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
 
 ViewportWidget::~ViewportWidget()
 {
+    if (QOpenGLContext* ctx = context())
+        disconnect(ctx, &QOpenGLContext::aboutToBeDestroyed,
+                   this, &ViewportWidget::cleanupGL);
     cleanupGL();
 }
 
 void ViewportWidget::cleanupGL()
 {
-    if (!isValid())
+    if (m_cleanedUp || !isValid())
         return;
+    m_cleanedUp = true;
     makeCurrent();
     m_outlineShader.reset();
     if (m_debugLogger) {
