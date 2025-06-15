@@ -61,6 +61,7 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
 
     Q_ASSERT(m_scene != nullptr);
     setFocusPolicy(Qt::StrongFocus);
+
 }
 
 ViewportWidget::~ViewportWidget() = default;
@@ -101,6 +102,7 @@ void ViewportWidget::initializeGL()
         connect(ctx, &QOpenGLContext::aboutToBeDestroyed,
                 this, &ViewportWidget::cleanupGL);
     }
+
     // Setup a debug logger if the context supports it
     if (context()->hasExtension(QByteArrayLiteral("GL_KHR_debug"))) {
         m_debugLogger = std::make_unique<QOpenGLDebugLogger>(this);
