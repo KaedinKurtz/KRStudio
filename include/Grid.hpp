@@ -7,21 +7,11 @@
 #include <memory>
 #include <string>
 #include <algorithm>
+#include "GridLevel.hpp"
 
 class Shader;
 class Mesh;
 class Camera;
-
-struct GridLevel {
-    float spacing;
-    glm::vec3 color;
-    float fadeInCameraDistanceEnd;
-    float fadeInCameraDistanceStart;
-
-    GridLevel(float s, glm::vec3 c, float fadeInEnd, float fadeInStart)
-        : spacing(s), color(c), fadeInCameraDistanceEnd(fadeInEnd), fadeInCameraDistanceStart(fadeInStart) {
-    }
-};
 
 class Grid {
 public:
