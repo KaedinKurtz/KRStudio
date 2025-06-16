@@ -70,7 +70,7 @@ Grid::Grid(QOpenGLFunctions_3_3_Core* glFunctions)
 }
 
 Grid::~Grid() {
-    qDebug() << "Grid destructor called.";
+    //qDebug() << "Grid destructor called.";
     if (m_gl) {
         if (m_gridVAO) m_gl->glDeleteVertexArrays(1, &m_gridVAO);
         if (m_gridVBO) m_gl->glDeleteBuffers(1, &m_gridVBO);

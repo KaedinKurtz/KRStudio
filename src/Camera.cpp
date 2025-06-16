@@ -96,7 +96,7 @@ void Camera::processMouseScroll(double yoffset) {
 void Camera::toggleProjection() {
     // ... your implementation ...
     m_IsPerspective = !m_IsPerspective;
-    qDebug() << "Camera projection switched to:" << (m_IsPerspective ? "Perspective" : "Orthographic");
+    //qDebug() << "Camera projection switched to:" << (m_IsPerspective ? "Perspective" : "Orthographic");
     logState("After projection toggle");
 }
 
@@ -163,7 +163,7 @@ void Camera::forceRecalculateView(glm::vec3 newPosition, glm::vec3 newTarget, fl
 
 void Camera::setToKnownGoodView() {
     // ... your implementation ...
-    qDebug() << "Camera::setToKnownGoodView - Setting to a predefined stable view.";
+    //qDebug() << "Camera::setToKnownGoodView - Setting to a predefined stable view.";
     m_FocalPoint = glm::vec3(0.0f, 0.5f, 0.0f);
     m_IsPerspective = true;
     m_Distance = 7.0f;

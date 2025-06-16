@@ -1291,10 +1291,10 @@
 				},
 				{
 					"name" : "HELPSTRING",
-					"value" : "The CMake toolchain file"
+					"value" : "No help, variable specified on the command line."
 				}
 			],
-			"type" : "FILEPATH",
+			"type" : "STRING",
 			"value" : "C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake"
 		},
 		{

@@ -20,7 +20,7 @@ entt::entity SceneBuilder::createCamera(entt::registry& registry, const glm::vec
 void SceneBuilder::spawnRobot(Scene& scene, const RobotDescription& description)
 {
     // --- DIAGNOSTIC LOGGING ---
-    qDebug() << "!!!!!!!! SceneBuilder::spawnRobot has been called! Now clearing previous robot... !!!!!!!!!";
+    //qDebug() << "!!!!!!!! SceneBuilder::spawnRobot has been called! Now clearing previous robot... !!!!!!!!!";
 
     auto& registry = scene.getRegistry();
 

@@ -5,10 +5,10 @@ Scene::Scene()
 {
     // The constructor can be empty for now.
     // We will create entities in ViewportWidget::initializeGL.
-    qDebug() << ">>>>>> Scene constructed at:" << this;
+    //qDebug() << ">>>>>> Scene constructed at:" << this;
 }
 
 Scene::~Scene()
 {
-    qDebug() << "[LIFETIME] Scene Destructor ~Scene() called. The registry is now gone.";
+    //qDebug() << "[LIFETIME] Scene Destructor ~Scene() called. The registry is now gone.";
 }

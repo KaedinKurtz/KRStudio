@@ -130,22 +130,22 @@ MainWindow::MainWindow(QWidget* parent)
 // FIX: Added the missing destructor definition.
 MainWindow::~MainWindow()
 {
-    qDebug() << "=====================================================";
-    qDebug() << "[LIFETIME] MainWindow Destructor ~MainWindow() STARTING.";
+    //qDebug() << "=====================================================";
+    //qDebug() << "[LIFETIME] MainWindow Destructor ~MainWindow() STARTING.";
 
     // STEP 1: Explicitly tell all viewports to clean up their GPU resources.
     // This happens FIRST, while the Scene and OpenGL context are still fully valid.
-    qDebug() << "[LIFETIME] MainWindow: Commanding all viewports to shut down...";
+    //qDebug() << "[LIFETIME] MainWindow: Commanding all viewports to shut down...";
     for (ViewportWidget* viewport : m_viewports) {
         if (viewport) {
             viewport->shutdown();
         }
     }
-    qDebug() << "[LIFETIME] MainWindow: All viewports have been shut down.";
+    //qDebug() << "[LIFETIME] MainWindow: All viewports have been shut down.";
 
     // STEP 2: The unique_ptr for m_scene is automatically destroyed here,
     // which is now safe because no one is using it anymore.
-    qDebug() << "[LIFETIME] MainWindow: About to destroy Scene...";
+    //qDebug() << "[LIFETIME] MainWindow: About to destroy Scene...";
 }
 
 // FIX: Added the missing slot implementation.

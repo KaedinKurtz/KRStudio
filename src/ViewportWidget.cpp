@@ -26,8 +26,8 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
     m_cameraEntity(cameraEntity)
 {
     // --- DIAGNOSTIC LOGGING ---
-    qDebug() << "[ViewportWidget] Received Scene pointer:" << m_scene; // Logs the memory address of the scene.
-    qDebug() << "[ViewportWidget] Received Camera entity handle:" << static_cast<uint32_t>(m_cameraEntity); // Logs the ID of the camera this viewport will use.
+    //qDebug() << "[ViewportWidget] Received Scene pointer:" << m_scene; // Logs the memory address of the scene.
+    //qDebug() << "[ViewportWidget] Received Camera entity handle:" << static_cast<uint32_t>(m_cameraEntity); // Logs the ID of the camera this viewport will use.
 
     QSurfaceFormat format; // Sets up the format for the OpenGL context.
     format.setOption(QSurfaceFormat::DebugContext); // Enables debugging capabilities for OpenGL.
@@ -42,7 +42,7 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
 // before attempting any GPU resource cleanup.
 ViewportWidget::~ViewportWidget()
 {
-    qDebug() << "[LIFETIME] ViewportWidget Destructor ~ViewportWidget() called. Cleanup should already be complete.";
+    //qDebug() << "[LIFETIME] ViewportWidget Destructor ~ViewportWidget() called. Cleanup should already be complete.";
 }
 
 
@@ -56,7 +56,7 @@ void ViewportWidget::initializeGL()
     m_debugLogger = std::make_unique<QOpenGLDebugLogger>(this);
     if (m_debugLogger->initialize()) {
         connect(m_debugLogger.get(), &QOpenGLDebugLogger::messageLogged, this, [](const QOpenGLDebugMessage& debugMessage) {
-            qDebug() << debugMessage;
+            //qDebug() << debugMessage;
             });
         m_debugLogger->startLogging();
     }
@@ -152,8 +152,8 @@ void ViewportWidget::wheelEvent(QWheelEvent* event) {
 
 void ViewportWidget::shutdown()
 {
-    qDebug() << "------------------------------------------------------";
-    qDebug() << "[LIFETIME] ViewportWidget::shutdown() called for widget:" << this;
+    //qDebug() << "------------------------------------------------------";
+    //qDebug() << "[LIFETIME] ViewportWidget::shutdown() called for widget:" << this;
 
     makeCurrent(); // Ensure the OpenGL context is active for this widget.
 
@@ -169,5 +169,5 @@ void ViewportWidget::shutdown()
     }
 
     doneCurrent(); // Release the context.
-    qDebug() << "[LIFETIME] ViewportWidget::shutdown() FINISHED for widget:" << this;
+    //qDebug() << "[LIFETIME] ViewportWidget::shutdown() FINISHED for widget:" << this;
 }

@@ -362,7 +362,7 @@ struct MainWindowPrivate
 		}
 
 		auto Result = w->loadFile(FileName);
-		qDebug() << "loadFile result: " << Result;
+		//qDebug() << "loadFile result: " << Result;
 		ads::CDockWidget* DockWidget = DockManager->createDockWidget(QString("Image Viewer %1").arg(ImageViewerCount++));
 		DockWidget->setIcon(svgIcon(":/adsdemo/images/photo.svg"));
 		DockWidget->setWidget(w,ads:: CDockWidget::ForceNoScrollArea);
@@ -825,7 +825,7 @@ void CMainWindow::closeEvent(QCloseEvent* event)
 //============================================================================
 void CMainWindow::on_actionSaveState_triggered(bool)
 {
-	qDebug() << "MainWindow::on_actionSaveState_triggered";
+	//qDebug() << "MainWindow::on_actionSaveState_triggered";
 	d->saveState();
 }
 
@@ -833,7 +833,7 @@ void CMainWindow::on_actionSaveState_triggered(bool)
 //============================================================================
 void CMainWindow::on_actionRestoreState_triggered(bool)
 {
-	qDebug() << "MainWindow::on_actionRestoreState_triggered";
+	//qDebug() << "MainWindow::on_actionRestoreState_triggered";
 	d->restoreState();
 }
 
@@ -867,7 +867,7 @@ void CMainWindow::onViewToggled(bool Open)
 		return;
 	}
 
-	//qDebug() << DockWidget->objectName() << " viewToggled(" << Open << ")";
+	////qDebug() << DockWidget->objectName() << " viewToggled(" << Open << ")";
 }
 
 
@@ -881,7 +881,7 @@ void CMainWindow::onViewVisibilityChanged(bool Visible)
         return;
     }
 
-    //qDebug() << DockWidget->objectName() << " visibilityChanged(" << Visible << ")";
+    ////qDebug() << DockWidget->objectName() << " visibilityChanged(" << Visible << ")";
 }
 
 
@@ -1018,7 +1018,7 @@ void CMainWindow::applyVsStyle()
 void CMainWindow::createImageViewer()
 {
 	QAction* a = qobject_cast<QAction*>(sender());
-	qDebug() << "createImageViewer " << a->text();
+	//qDebug() << "createImageViewer " << a->text();
 
 	auto DockWidget = d->createImageViewer();
 	DockWidget->setFeature(ads::CDockWidget::DockWidgetDeleteOnClose, true);
