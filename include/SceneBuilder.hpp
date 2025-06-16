@@ -13,4 +13,6 @@ public:
     // Takes a scene and a robot description, and creates all the necessary
     // entities and components in the scene's registry.
     static void spawnRobot(Scene& scene, const RobotDescription& description);
+
+    static entt::entity createCamera(entt::registry& registry, const glm::vec3& position);
 };

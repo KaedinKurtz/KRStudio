@@ -13,6 +13,7 @@ PropertiesPanel::PropertiesPanel(Scene* scene, QWidget* parent) :
     ui->setupUi(this);
     m_gridLayout = ui->gridLayout;
 
+    // This is your original, correct signal/slot connection.
     m_scene->getRegistry().on_construct<GridComponent>().connect<&PropertiesPanel::onGridAdded>(this);
     m_scene->getRegistry().on_destroy<GridComponent>().connect<&PropertiesPanel::onGridRemoved>(this);
 
@@ -23,6 +24,7 @@ PropertiesPanel::PropertiesPanel(Scene* scene, QWidget* parent) :
         registry.emplace<GridComponent>(newGrid);
         });
 
+    // This loop correctly handles grids that already exist when the panel is created.
     auto initialGridsView = m_scene->getRegistry().view<GridComponent>();
     for (auto entity : initialGridsView)
     {
@@ -54,20 +56,23 @@ void PropertiesPanel::ensureGridIsInitialized(entt::entity gridEntity)
 
     auto& gridComp = registry.get<GridComponent>(gridEntity);
     if (gridComp.levels.empty()) {
-        gridComp.levels.push_back({ 0.001f, {0.5f, 0.5f, 0.5f}, 0.0f, 0.5f });
-        gridComp.levels.push_back({ 0.01f, {0.5f, 0.5f, 0.5f}, 0.5f, 2.0f });
-        gridComp.levels.push_back({ 0.1f, {0.5f, 0.5f, 0.5f}, 2.0f, 10.0f });
-        gridComp.levels.push_back({ 1.0f, {0.5f, 0.5f, 0.5f}, 10.0f, 50.0f });
-        gridComp.levels.push_back({ 10.0f, {0.5f, 0.5f, 0.5f}, 50.0f, 200.0f });
+        // FINAL FIX: Use parentheses () for the glm::vec3 constructor, not curly braces {}.
+        gridComp.levels.emplace_back(0.001f, glm::vec3(0.5f, 0.5f, 0.5f), 0.0f, 0.5f);
+        gridComp.levels.emplace_back(0.01f, glm::vec3(0.5f, 0.5f, 0.5f), 0.5f, 2.0f);
+        gridComp.levels.emplace_back(0.1f, glm::vec3(0.5f, 0.5f, 0.5f), 2.0f, 10.0f);
+        gridComp.levels.emplace_back(1.0f, glm::vec3(0.5f, 0.5f, 0.5f), 10.0f, 50.0f);
+        gridComp.levels.emplace_back(10.0f, glm::vec3(0.5f, 0.5f, 0.5f), 50.0f, 200.0f);
     }
 }
 
+// This function correctly calls the two helper methods.
 void PropertiesPanel::onGridAdded(entt::registry& registry, entt::entity entity)
 {
     ensureGridIsInitialized(entity);
     addGridEditor(entity);
 }
 
+// This function remains unchanged.
 void PropertiesPanel::addGridEditor(entt::entity entity)
 {
     if (!m_scene->getRegistry().valid(entity)) return;
