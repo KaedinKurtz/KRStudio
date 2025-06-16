@@ -21,14 +21,14 @@ namespace DebugHelpers
 {
     // Helper to print a glm::mat4 clearly to the console for debugging.
     inline void printMatrix(const glm::mat4& mat, const QString& label) {
-        qDebug().noquote() << label;
+        //qDebug().noquote() << label;
         for (int i = 0; i < 4; ++i) {
             QString row = QString("  | %1 %2 %3 %4 |")
                 .arg(mat[i][0], 8, 'f', 2)
                 .arg(mat[i][1], 8, 'f', 2)
                 .arg(mat[i][2], 8, 'f', 2)
                 .arg(mat[i][3], 8, 'f', 2);
-            qDebug().noquote() << row;
+            //qDebug().noquote() << row;
         }
     }
 

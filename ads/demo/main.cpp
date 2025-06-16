@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 	a.setWindowIcon(QIcon(":/adsdemo/images/ads_icon2.svg"));
 
 	qInstallMessageHandler(myMessageOutput);
-	qDebug() << "Message handler test";
+	//qDebug() << "Message handler test";
 
 	CMainWindow mw;
 	mw.show();

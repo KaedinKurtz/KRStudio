@@ -58,7 +58,7 @@ QT_FORWARD_DECLARE_CLASS(QAbstractButton)
 
 // Define ADS_DEBUG_PRINT to enable a lot of debug output
 #ifdef ADS_DEBUG_PRINT
-#define ADS_PRINT(s) qDebug() << s
+#define ADS_PRINT(s) //qDebug() << s
 #else
 #define ADS_PRINT(s)
 #endif
