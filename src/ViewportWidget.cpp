@@ -25,29 +25,37 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
     m_scene(scene),
     m_cameraEntity(cameraEntity)
 {
-    // --- DIAGNOSTIC LOGGING ---
-    //qDebug() << "[ViewportWidget] Received Scene pointer:" << m_scene; // Logs the memory address of the scene.
-    //qDebug() << "[ViewportWidget] Received Camera entity handle:" << static_cast<uint32_t>(m_cameraEntity); // Logs the ID of the camera this viewport will use.
-
-    QSurfaceFormat format; // Sets up the format for the OpenGL context.
-    format.setOption(QSurfaceFormat::DebugContext); // Enables debugging capabilities for OpenGL.
-    setFormat(format); // Applies the format to this widget.
-    setFocusPolicy(Qt::StrongFocus); // Makes sure the widget can receive keyboard focus.
-    auto* timer = new QTimer(this); // Creates a timer for continuous rendering.
-    connect(timer, &QTimer::timeout, this, QOverload<>::of(&ViewportWidget::update)); // Connects the timer to the update slot.
-    timer->start(16); // Starts the timer to aim for ~60 FPS.
+    QSurfaceFormat format;
+    format.setOption(QSurfaceFormat::DebugContext);
+    setFormat(format);
+    setFocusPolicy(Qt::StrongFocus);
+    auto* timer = new QTimer(this);
+    connect(timer, &QTimer::timeout, this, QOverload<>::of(&ViewportWidget::update));
+    timer->start(16);
 }
 
-// FINAL FIX: The destructor now correctly makes the OpenGL context current
-// before attempting any GPU resource cleanup.
 ViewportWidget::~ViewportWidget()
 {
+    // All cleanup is now handled by the explicit shutdown() call from MainWindow.
     //qDebug() << "[LIFETIME] ViewportWidget Destructor ~ViewportWidget() called. Cleanup should already be complete.";
 }
 
+void ViewportWidget::shutdown()
+{
+    makeCurrent();
 
-// NOTE: The cleanupGL() function is no longer needed, as its logic has been
-// moved to the destructor, which is the correct place for it.
+    if (m_renderingSystem) {
+        m_renderingSystem->shutdown(m_scene->getRegistry());
+    }
+
+    if (m_outlineVAO != 0) {
+        glDeleteVertexArrays(1, &m_outlineVAO);
+        glDeleteBuffers(1, &m_outlineVBO);
+    }
+
+    doneCurrent();
+}
+
 
 void ViewportWidget::initializeGL()
 {
@@ -65,12 +73,15 @@ void ViewportWidget::initializeGL()
     }
     m_renderingSystem = std::make_unique<RenderingSystem>(this);
     m_renderingSystem->initialize();
+
     try {
-        m_outlineShader = std::make_unique<Shader>(this, ":/shaders/outline.vert", ":/shaders/outline.frag");
+        m_outlineShader = std::make_unique<Shader>(this, "D:/RoboticsSoftware/shaders/outline_vert.glsl", "D:/RoboticsSoftware/shaders/outline_frag.glsl");
+        // CLEANUP: Removed the success message to reduce console spam.
     }
     catch (const std::runtime_error& e) {
-        qWarning() << "Failed to initialize outline shader:" << e.what();
+        qWarning() << "[ViewportWidget] FAILED to initialize outline shader:" << e.what();
     }
+
     glGenVertexArrays(1, &m_outlineVAO);
     glGenBuffers(1, &m_outlineVBO);
     glBindVertexArray(m_outlineVAO);
@@ -142,32 +153,10 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* event) {
     bool orbit = (event->buttons() & Qt::LeftButton) && !(event->modifiers() & Qt::ShiftModifier);
     if (pan || orbit) getCamera().processMouseMovement(dx, -dy, pan);
     m_lastMousePos = event->pos();
-    update(); // Redraw after mouse movement
+    update();
 }
 
 void ViewportWidget::wheelEvent(QWheelEvent* event) {
     getCamera().processMouseScroll(event->angleDelta().y() / 120.0f);
-    update(); // Redraw after mouse wheel scroll
-}
-
-void ViewportWidget::shutdown()
-{
-    //qDebug() << "------------------------------------------------------";
-    //qDebug() << "[LIFETIME] ViewportWidget::shutdown() called for widget:" << this;
-
-    makeCurrent(); // Ensure the OpenGL context is active for this widget.
-
-    // Safely shut down the rendering system.
-    if (m_renderingSystem) {
-        m_renderingSystem->shutdown(m_scene->getRegistry());
-    }
-
-    // Clean up other OpenGL resources.
-    if (m_outlineVAO != 0) {
-        glDeleteVertexArrays(1, &m_outlineVAO);
-        glDeleteBuffers(1, &m_outlineVBO);
-    }
-
-    doneCurrent(); // Release the context.
-    //qDebug() << "[LIFETIME] ViewportWidget::shutdown() FINISHED for widget:" << this;
+    update();
 }

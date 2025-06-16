@@ -23,6 +23,7 @@
 			"include",
 			"_find_package",
 			"find_package",
+			"target_compile_options",
 			"target_compile_definitions",
 			"target_include_directories"
 		],
@@ -47,7 +48,7 @@
 			{
 				"command" : 4,
 				"file" : 2,
-				"line" : 100,
+				"line" : 102,
 				"parent" : 0
 			},
 			{
@@ -77,7 +78,7 @@
 			{
 				"command" : 5,
 				"file" : 2,
-				"line" : 120,
+				"line" : 122,
 				"parent" : 0
 			},
 			{
@@ -89,7 +90,7 @@
 			{
 				"command" : 9,
 				"file" : 2,
-				"line" : 13,
+				"line" : 15,
 				"parent" : 0
 			},
 			{
@@ -169,7 +170,7 @@
 			{
 				"command" : 9,
 				"file" : 2,
-				"line" : 16,
+				"line" : 18,
 				"parent" : 0
 			},
 			{
@@ -201,13 +202,19 @@
 			{
 				"command" : 10,
 				"file" : 2,
-				"line" : 107,
+				"line" : 177,
 				"parent" : 0
 			},
 			{
 				"command" : 11,
 				"file" : 2,
 				"line" : 109,
+				"parent" : 0
+			},
+			{
+				"command" : 12,
+				"file" : 2,
+				"line" : 111,
 				"parent" : 0
 			}
 		]
@@ -219,6 +226,14 @@
 			[
 				{
 					"fragment" : "/DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -std:c++17 -MDd"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "/GS"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "/RTC1"
 				},
 				{
 					"backtrace" : 7,
@@ -236,7 +251,7 @@
 			"defines" : 
 			[
 				{
-					"backtrace" : 29,
+					"backtrace" : 30,
 					"define" : "GLM_ENABLE_EXPERIMENTAL"
 				},
 				{
@@ -291,27 +306,27 @@
 					"path" : "D:/RoboticsSoftware/build/RoboticsSoftware_autogen/include"
 				},
 				{
-					"backtrace" : 30,
+					"backtrace" : 31,
 					"path" : "D:/RoboticsSoftware/include"
 				},
 				{
-					"backtrace" : 30,
+					"backtrace" : 31,
 					"path" : "D:/RoboticsSoftware/external"
 				},
 				{
-					"backtrace" : 30,
+					"backtrace" : 31,
 					"path" : "D:/RoboticsSoftware/ads/src"
 				},
 				{
-					"backtrace" : 30,
+					"backtrace" : 31,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers/../../include"
 				},
 				{
-					"backtrace" : 30,
+					"backtrace" : 31,
 					"path" : "D:/RoboticsSoftware/external/pugixml"
 				},
 				{
-					"backtrace" : 30,
+					"backtrace" : 31,
 					"isSystem" : true,
 					"path" : "C:/Users/kaedi/vcpkg/installed/x64-windows/include"
 				},
@@ -408,11 +423,11 @@
 	"dependencies" : 
 	[
 		{
-			"backtrace" : 0,
-			"id" : "RoboticsSoftware_autogen::@6890427a1f51a3e7e1df"
+			"id" : "RoboticsSoftware_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
 		},
 		{
-			"id" : "RoboticsSoftware_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
+			"backtrace" : 0,
+			"id" : "RoboticsSoftware_autogen::@6890427a1f51a3e7e1df"
 		}
 	],
 	"id" : "RoboticsSoftware::@6890427a1f51a3e7e1df",

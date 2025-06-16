@@ -9,6 +9,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
+
+
 # --- Find Required Packages ---
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
 find_package(OpenGL REQUIRED)
@@ -170,6 +172,10 @@ add_custom_command(TARGET RoboticsSoftware POST_BUILD
     COMMENT "Running windeployqt to deploy Qt dependencies..."
 )
 
+if (MSVC)
+    # stack-cookie (/GS) is already on by default for MSVC, but keep it explicit
+    target_compile_options(RoboticsSoftware PRIVATE /GS /RTC1)
+endif()
 
 # Finalize the Qt setup
 qt_finalize_executable(RoboticsSoftware)
