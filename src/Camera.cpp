@@ -96,19 +96,19 @@ void Camera::processMouseScroll(double yoffset) {
 void Camera::toggleProjection() {
     // ... your implementation ...
     m_IsPerspective = !m_IsPerspective;
-    //qDebug() << "Camera projection switched to:" << (m_IsPerspective ? "Perspective" : "Orthographic");
+    ////qDebug() << "Camera projection switched to:" << (m_IsPerspective ? "Perspective" : "Orthographic");
     logState("After projection toggle");
 }
 
 void Camera::logState(const std::string& contextMessage) const {
     // ... your implementation ...
-    qDebug().nospace() << "Camera State" << (contextMessage.empty() ? "" : " (" + QString::fromStdString(contextMessage) + ")") << ":"
-        << "\n  Position: (" << m_Position.x << ", " << m_Position.y << ", " << m_Position.z << ")"
-        << "\n  FocalPoint: (" << m_FocalPoint.x << ", " << m_FocalPoint.y << ", " << m_FocalPoint.z << ")"
-        << "\n  Up: (" << m_Up.x << ", " << m_Up.y << ", " << m_Up.z << ")"
-        << "\n  Distance: " << m_Distance
-        << "\n  Yaw (deg): " << glm::degrees(m_Yaw) << ", Pitch (deg): " << glm::degrees(m_Pitch)
-        << "\n  IsPerspective: " << m_IsPerspective;
+    //qDebug().nospace() << "Camera State" << (contextMessage.empty() ? "" : " (" + QString::fromStdString(contextMessage) + ")") << ":"
+     //   << "\n  Position: (" << m_Position.x << ", " << m_Position.y << ", " << m_Position.z << ")"
+    //    << "\n  FocalPoint: (" << m_FocalPoint.x << ", " << m_FocalPoint.y << ", " << m_FocalPoint.z << ")"
+      //  << "\n  Up: (" << m_Up.x << ", " << m_Up.y << ", " << m_Up.z << ")"
+     //   << "\n  Distance: " << m_Distance
+      //  << "\n  Yaw (deg): " << glm::degrees(m_Yaw) << ", Pitch (deg): " << glm::degrees(m_Pitch)
+     //   << "\n  IsPerspective: " << m_IsPerspective;
 }
 
 void Camera::resetView(float aspectRatio, const glm::vec3& target, float objectVisibleSize) {
@@ -163,7 +163,7 @@ void Camera::forceRecalculateView(glm::vec3 newPosition, glm::vec3 newTarget, fl
 
 void Camera::setToKnownGoodView() {
     // ... your implementation ...
-    //qDebug() << "Camera::setToKnownGoodView - Setting to a predefined stable view.";
+    ////qDebug() << "Camera::setToKnownGoodView - Setting to a predefined stable view.";
     m_FocalPoint = glm::vec3(0.0f, 0.5f, 0.0f);
     m_IsPerspective = true;
     m_Distance = 7.0f;

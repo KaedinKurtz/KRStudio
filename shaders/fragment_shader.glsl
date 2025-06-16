@@ -19,7 +19,7 @@ uniform vec3 viewPos; // Camera's position
 void main()
 {
     // Ambient lighting component
-    float ambientStrength = 0.1;
+    float ambientStrength = 0.3;
     vec3 ambient = ambientStrength * lightColor;
   	
     // Diffuse lighting component

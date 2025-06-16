@@ -5,6 +5,10 @@
 #include <string>
 #include <vector>
 #include <entt/entt.hpp>
+#include <QtGui/qopengl.h> 
+#include <glm/vec3.hpp>
+#include <glm/vec2.hpp>
+
 
 #include "GridLevel.hpp"
 #include "Camera.hpp"
@@ -31,6 +35,23 @@ struct TransformComponent
     }
 };
 
+struct Vertex
+{
+    glm::vec3 position{};
+    glm::vec3 normal{};
+    glm::vec2 uv{ 0.0f };
+
+    // ------------- constructors -------------
+    Vertex() = default;   // needed by std::vector
+
+    // 2-or-3-argument constructor (third has a default!)
+    Vertex(const glm::vec3& p,
+        const glm::vec3& n,
+        const glm::vec2& t = glm::vec2(0.0f))
+        : position(p), normal(n), uv(t) {
+    }
+};
+
 struct TagComponent
 {
     std::string tag;
@@ -45,18 +66,16 @@ struct CameraComponent
 
 // --- RENDER-RELATED COMPONENTS ---
 
-struct RenderableMeshComponent
-{
-    glm::vec4 color = { 0.8f, 0.8f, 0.8f, 1.0f };
-    std::vector<glm::vec3> vertices;
-    std::vector<unsigned int> indices;
+struct RenderableMeshComponent {
+    glm::vec4 colour{ 0.8f,0.8f,0.8f,1.0f };
+    std::vector<Vertex> vertices;
+    std::vector<unsigned> indices;
 };
 
-struct RenderResourceComponent
-{
-    unsigned int VAO = 0;
-    unsigned int VBO = 0;
-    unsigned int EBO = 0;
+struct RenderResourceComponent {
+    GLuint VAO{ 0 };
+    GLuint VBO{ 0 };
+    GLuint EBO{ 0 };
 };
 
 // --- ROBOTICS-SPECIFIC COMPONENTS ---

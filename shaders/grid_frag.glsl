@@ -50,35 +50,43 @@ float getLevelVisibilityFactor(float currentCamDist, float levelFadeInEnd, float
 // This is the original, high-quality anti-aliasing line function, now corrected
 // to use the u_distanceToGrid uniform.
 float getLineStrength(
-    float planeCoord,
-    float spacing,
-    float worldUnitsPerPixelForAxis,
-    float desiredCorePixelWidth,
-    float levelVisibilityFactor,
-    float camDistToGridForAACutoff
-) {
-    float distToLineCenter = abs(fract(planeCoord / spacing + 0.5) - 0.5) * spacing;
-    worldUnitsPerPixelForAxis = max(worldUnitsPerPixelForAxis, 0.00001f);
-    float coreHalfWidth_world = worldUnitsPerPixelForAxis * desiredCorePixelWidth * 0.5f;
+        float planeCoord,
+        float spacing,
+        float worldUnitsPerPixelForAxis,
+        float desiredCorePixelWidth,
+        float levelVisibilityFactor,
+        float camDistToGridForAACutoff)
+{
+    // ------------------------------------------------------------------
+    // 1. distance from fragment to nearest grid line – **in pixels**
+    // ------------------------------------------------------------------
+    float distToLineCenter_world = abs(fract(planeCoord / spacing + 0.5) - 0.5) * spacing;
+    float distToLineCenter_px    = distToLineCenter_world / worldUnitsPerPixelForAxis;
 
-    float final_aa_fade_factor = pow(levelVisibilityFactor, 2.5);
+    // ------------------------------------------------------------------
+    // 2. core / AA widths – also **in pixels**
+    // ------------------------------------------------------------------
+    float coreHalf_px  = desiredCorePixelWidth * 0.5;
+    float aaExt_px     = mix(MIN_AA_EXTENSION_PIXELS,
+                             DEFAULT_AA_EXTENSION_PIXELS,
+                             pow(levelVisibilityFactor, 2.5));
 
+    // 3 · fade AA away when spacing tiny & camera very close  (unchanged)
     if (spacing < 0.5) {
-        float aa_distance_activation = smoothstep(7.0, 6.0, camDistToGridForAACutoff);
-        final_aa_fade_factor *= aa_distance_activation;
+        float aaCut = smoothstep(7.0, 6.0, camDistToGridForAACutoff);
+        aaExt_px *= aaCut;
     }
 
-    float current_aaExtension_pixels = mix(MIN_AA_EXTENSION_PIXELS, DEFAULT_AA_EXTENSION_PIXELS, final_aa_fade_factor);
-    float aaExtension_world = worldUnitsPerPixelForAxis * current_aaExtension_pixels;
+    // 4 · edge positions **in pixels**, then convert back to world units once
+    float solidEdge_px = coreHalf_px;
+    float outerEdge_px = coreHalf_px + aaExt_px;
 
-    float solidEdge   = coreHalfWidth_world;
-    float outerAaEdge = coreHalfWidth_world + aaExtension_world;
+    // convert to world units only for the final smoothstep
+    float solidEdge_wc =  solidEdge_px * worldUnitsPerPixelForAxis;
+    float outerEdge_wc = outerEdge_px * worldUnitsPerPixelForAxis;
+    distToLineCenter_world = distToLineCenter_px * worldUnitsPerPixelForAxis;
 
-    outerAaEdge = min(outerAaEdge, spacing * 0.49f);
-    solidEdge   = min(solidEdge, outerAaEdge - (worldUnitsPerPixelForAxis * 0.05f));
-    solidEdge   = max(0.0, solidEdge);
-
-    return 1.0 - smoothstep(solidEdge, outerAaEdge, distToLineCenter);
+    return 1.0 - smoothstep(solidEdge_wc, outerEdge_wc, distToLineCenter_world);
 }
 
 float getAxisStrength(float planeCoord, float worldUnitsPerPixel, float pixelWidth) {

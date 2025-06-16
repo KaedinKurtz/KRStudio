@@ -60,10 +60,16 @@ namespace IntersectionSystem
         float y = 1.0f - (2.0f * mouseY) / viewport.height();
         float z = 1.0f;
         glm::vec3 ray_nds = glm::vec3(x, y, z);
-        glm::vec4 ray_clip = glm::vec4(ray_nds.x, ray_nds.y, -1.0, 1.0);
-        glm::vec4 ray_eye = glm::inverse(camera.getProjectionMatrix(viewport.width() / (float)viewport.height())) * ray_clip;
-        ray_eye = glm::vec4(ray_eye.x, ray_eye.y, -1.0, 0.0);
-        glm::vec3 ray_wor = glm::vec3(glm::inverse(camera.getViewMatrix()) * ray_eye);
+        glm::vec4 ray_clip(ray_nds.x, ray_nds.y, -1.0f, 1.0f);
+
+        glm::vec4 ray_eye =
+            glm::inverse(camera.getProjectionMatrix(viewport.width() /
+                static_cast<float>(viewport.height())))
+            * ray_clip;
+        ray_eye = glm::vec4(ray_eye.x, ray_eye.y, -1.0f, 0.0f);
+
+        glm::vec3 ray_wor = glm::normalize(
+            glm::vec3(glm::inverse(camera.getViewMatrix()) * ray_eye));
         ray_wor = glm::normalize(ray_wor);
 
         // 2. Find the closest intersected object
@@ -78,9 +84,13 @@ namespace IntersectionSystem
 
             for (size_t i = 0; i < mesh.indices.size(); i += 3)
             {
-                glm::vec3 v0 = glm::vec3(modelMatrix * glm::vec4(mesh.vertices[mesh.indices[i]], 1.0f));
-                glm::vec3 v1 = glm::vec3(modelMatrix * glm::vec4(mesh.vertices[mesh.indices[i + 1]], 1.0f));
-                glm::vec3 v2 = glm::vec3(modelMatrix * glm::vec4(mesh.vertices[mesh.indices[i + 2]], 1.0f));
+                const glm::vec3& p0 = mesh.vertices[mesh.indices[i]].position;   // or .Position
+                const glm::vec3& p1 = mesh.vertices[mesh.indices[i + 1]].position;
+                const glm::vec3& p2 = mesh.vertices[mesh.indices[i + 2]].position;
+
+                glm::vec3 v0 = glm::vec3(modelMatrix * glm::vec4(p0, 1.0f));
+                glm::vec3 v1 = glm::vec3(modelMatrix * glm::vec4(p1, 1.0f));
+                glm::vec3 v2 = glm::vec3(modelMatrix * glm::vec4(p2, 1.0f));
 
                 float distance;
                 if (rayTriangleIntersect(camera.getPosition(), ray_wor, v0, v1, v2, distance))

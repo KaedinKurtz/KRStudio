@@ -15,7 +15,7 @@ namespace IntersectionSystem
         bool isIntersecting = false;
         entt::entity intersectingGrid = entt::null;
         std::vector<glm::vec3> worldOutlinePoints3D;
-        // ... other result data ...
+
     };
 
     // REFACTOR: The component now lives in the same header as the system that uses it.

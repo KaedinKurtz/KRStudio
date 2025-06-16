@@ -20,7 +20,7 @@ entt::entity SceneBuilder::createCamera(entt::registry& registry, const glm::vec
 void SceneBuilder::spawnRobot(Scene& scene, const RobotDescription& description)
 {
     // --- DIAGNOSTIC LOGGING ---
-    //qDebug() << "!!!!!!!! SceneBuilder::spawnRobot has been called! Now clearing previous robot... !!!!!!!!!";
+    ////qDebug() << "!!!!!!!! SceneBuilder::spawnRobot has been called! Now clearing previous robot... !!!!!!!!!";
 
     auto& registry = scene.getRegistry();
 
@@ -46,11 +46,20 @@ void SceneBuilder::spawnRobot(Scene& scene, const RobotDescription& description)
         if (!linkDesc.mesh_filepath.empty())
         {
             auto& meshComp = registry.emplace<RenderableMeshComponent>(linkEntity);
-            const std::vector<float>& rawVertices = Mesh::getLitCubeVertices();
+
+            const std::vector<float>& raw = Mesh::getLitCubeVertices();
+            constexpr std::size_t stride = 6;
+
             meshComp.vertices.clear();
-            for (size_t i = 0; i < rawVertices.size(); i += 3) {
-                meshComp.vertices.emplace_back(rawVertices[i], rawVertices[i + 1], rawVertices[i + 2]);
+            meshComp.vertices.reserve(raw.size() / stride);
+
+            for (std::size_t i = 0; i < raw.size(); i += stride)
+            {
+                glm::vec3 pos{ raw[i],   raw[i + 1], raw[i + 2] };
+                glm::vec3 normal{ raw[i + 3], raw[i + 4], raw[i + 5] };
+                meshComp.vertices.emplace_back(pos, normal);
             }
+
             meshComp.indices = Mesh::getLitCubeIndices();
         }
     }
