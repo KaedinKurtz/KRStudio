@@ -1501,8 +1501,6 @@ D:/RoboticsSoftware/include/PreviewViewport.hpp
  mdp:D:/RoboticsSoftware/include/RobotDescription.hpp
 D:/RoboticsSoftware/include/ViewportWidget.hpp
  mmc:Q_OBJECT
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/QMetaObject
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/QPoint
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20functional.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20iterator.h
@@ -1661,11 +1659,9 @@ D:/RoboticsSoftware/include/ViewportWidget.hpp
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtransform.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLDebugLogger
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLFunctions_3_3_Core
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionFunctions
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionProfile
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopengldebug.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglfunctions_3_3_core.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionfunctions.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionprofile.h
@@ -1681,147 +1677,20 @@ D:/RoboticsSoftware/include/ViewportWidget.hpp
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsexports.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/common.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/_fixes.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/_vectorize.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/compute_common.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/compute_vector_relational.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_common.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_exponential.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_geometric.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_integer.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_matrix.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_packing.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_trigonometric.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_vector_relational.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/qualifier.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/setup.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_half.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_half.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x2.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x3.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x4.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x2.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x3.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x4.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x2.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x3.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x4.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec1.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec1.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec2.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec3.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec4.inl
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/exponential.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x2_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x3_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x4_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x2_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x3_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x4_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x2_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x3_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x4_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x2_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x3_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x4_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x2_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x3_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x4_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x2_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x3_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x4_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/scalar_int_sized.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/scalar_uint_sized.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool2_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool3_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool4_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double2_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double3_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double4_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float2_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float3_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float4_precision.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int2_sized.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int3_sized.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int4_sized.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint2_sized.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint3_sized.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint4_sized.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/fwd.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/geometric.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/glm.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/integer.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat2x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat2x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat2x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat3x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat3x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat3x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat4x2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat4x3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat4x4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/matrix.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/packing.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/simd/platform.h
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/trigonometric.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vec2.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vec3.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vec4.hpp
- mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vector_relational.hpp
  mdp:D:/RoboticsSoftware/external/entt/config/config.h
  mdp:D:/RoboticsSoftware/external/entt/config/macro.h
  mdp:D:/RoboticsSoftware/external/entt/config/version.h
- mdp:D:/RoboticsSoftware/external/entt/core/bit.hpp
+ mdp:D:/RoboticsSoftware/external/entt/container/fwd.hpp
  mdp:D:/RoboticsSoftware/external/entt/core/fwd.hpp
  mdp:D:/RoboticsSoftware/external/entt/core/type_traits.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/entity.hpp
  mdp:D:/RoboticsSoftware/external/entt/entity/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/graph/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/poly/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/process/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/resource/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/signal/fwd.hpp
  mdp:D:/RoboticsSoftware/include/ViewportWidget.hpp
 D:/RoboticsSoftware/include/PropertiesPanel.hpp
  mmc:Q_OBJECT

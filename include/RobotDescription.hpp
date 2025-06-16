@@ -244,5 +244,7 @@ struct RobotDescription {
     std::string name;
     std::vector<LinkDescription> links;
     std::vector<JointDescription> joints;
+
+    bool needsEnrichment = false;
 };
 

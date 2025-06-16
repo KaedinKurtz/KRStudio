@@ -39,6 +39,7 @@ private:
     // We no longer need pointers to the individual viewports here,
     // as the dock manager handles their lifecycle. We will create them
     // as local variables in the constructor.
+    std::vector<ViewportWidget*> m_viewports;
 
 private slots:
     void onLoadRobotClicked();

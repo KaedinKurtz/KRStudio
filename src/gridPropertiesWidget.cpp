@@ -3,7 +3,6 @@
 #include "Scene.hpp"
 #include "components.hpp"
 
-// Required Qt Headers
 #include <QColorDialog>
 #include <QSignalBlocker>
 #include <QCheckBox>
@@ -11,10 +10,10 @@
 #include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QToolButton>
-#include <QOverload>
 #include <QFrame>
 #include <QLabel>
 #include <QGroupBox>
+#include <QOverload>
 
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -51,7 +50,6 @@ gridPropertiesWidget::gridPropertiesWidget(Scene* scene, entt::entity entity, QW
     ui->lineThicknessBox->setSingleStep(0.01);
     ui->lineThicknessBox->setDecimals(2);
 
-    // FIX: Clear combo box before adding items to prevent duplicates
     ui->visualizationCombo->clear();
     ui->visualizationCombo->addItems({ "Lines", "Dots" });
     ui->gridSnapToggleButton->setCheckable(true);
@@ -74,26 +72,15 @@ void gridPropertiesWidget::initializeUI()
     auto& tag = m_scene->getRegistry().get<TagComponent>(m_entity);
 
     ui->gridNameInput->setText(QString::fromStdString(tag.tag));
-
-    // Set initial values for all controls
     ui->masterVisibilityCheck->setChecked(grid.masterVisible);
     ui->lineThicknessBox->setValue(grid.baseLineWidthPixels);
     ui->visualizationCombo->setCurrentIndex(grid.isDotted ? 1 : 0);
     ui->gridSnapToggleButton->setChecked(grid.snappingEnabled);
-
-    // This will set the rest of the UI (units, labels, per-level vis/color frames)
     onUnitSystemChanged();
 }
 
 void gridPropertiesWidget::setupConnections()
 {
-    if (!m_scene->getRegistry().valid(m_entity)) return;
-
-    auto& grid = m_scene->getRegistry().get<GridComponent>(m_entity);
-    auto& transform = m_scene->getRegistry().get<TransformComponent>(m_entity);
-
-    // --- Connect ALL UI Elements ---
-
     connect(ui->deleteButton, &QToolButton::clicked, this, [this]() {
         if (m_scene->getRegistry().valid(m_entity)) {
             m_scene->getRegistry().destroy(m_entity);
@@ -102,84 +89,98 @@ void gridPropertiesWidget::setupConnections()
 
     connect(ui->gridNameInput, &QLineEdit::textChanged, this, [this](const QString& text) {
         if (m_scene->getRegistry().valid(m_entity)) {
-            // Get the TagComponent and update its 'tag' member.
             m_scene->getRegistry().get<TagComponent>(m_entity).tag = text.toStdString();
         }
         });
 
     connect(ui->unitInputBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &gridPropertiesWidget::onUnitSystemChanged);
 
-    connect(ui->lineThicknessBox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [&grid](double value) {
-        grid.baseLineWidthPixels = static_cast<float>(value);
+    connect(ui->lineThicknessBox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double value) {
+        if (m_scene->getRegistry().valid(m_entity)) {
+            m_scene->getRegistry().get<GridComponent>(m_entity).baseLineWidthPixels = static_cast<float>(value);
+        }
         });
 
-    connect(ui->visualizationCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [&grid](int index) {
-        grid.isDotted = (index == 1);
+    connect(ui->visualizationCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if (m_scene->getRegistry().valid(m_entity)) {
+            m_scene->getRegistry().get<GridComponent>(m_entity).isDotted = (index == 1);
+        }
         });
 
-    connect(ui->gridSnapToggleButton, &QToolButton::toggled, this, [&grid](bool checked) {
-        grid.snappingEnabled = checked;
+    connect(ui->gridSnapToggleButton, &QToolButton::toggled, this, [this](bool checked) {
+        if (m_scene->getRegistry().valid(m_entity)) {
+            m_scene->getRegistry().get<GridComponent>(m_entity).snappingEnabled = checked;
+        }
         });
 
-    connect(ui->masterVisibilityCheck, &QCheckBox::toggled, this, [&grid](bool checked) {
-        grid.masterVisible = checked;
+    connect(ui->masterVisibilityCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        if (m_scene->getRegistry().valid(m_entity)) {
+            m_scene->getRegistry().get<GridComponent>(m_entity).masterVisible = checked;
+        }
         });
 
-    // --- Axis Colors ---
-    auto connect_axis_color = [&](QToolButton* button, QFrame* frame, glm::vec3& color_vec) {
-        connect(button, &QToolButton::clicked, this, [this, frame, &color_vec]() {
+    auto connect_axis_color = [&](QToolButton* button, QFrame* frame, bool is_x_axis) {
+        connect(button, &QToolButton::clicked, this, [this, frame, is_x_axis]() {
+            if (!m_scene->getRegistry().valid(m_entity)) return;
+            auto& grid = m_scene->getRegistry().get<GridComponent>(m_entity);
+            glm::vec3& color_vec = is_x_axis ? grid.xAxisColor : grid.zAxisColor;
+
             QColor initialColor(color_vec.r * 255, color_vec.g * 255, color_vec.b * 255);
             QColor newColor = QColorDialog::getColor(initialColor, this, "Select Axis Color");
             if (newColor.isValid()) {
                 color_vec = { newColor.redF(), newColor.greenF(), newColor.blueF() };
-                if (frame) frame->setStyleSheet(QString("background-color: %1;").arg(newColor.name()));
+                frame->setStyleSheet(QString("background-color: %1;").arg(newColor.name()));
             }
             });
         };
-    connect_axis_color(ui->xAxisColorButton, ui->xAxisColorFrame, grid.xAxisColor);
-    connect_axis_color(ui->zAxisColorButton, ui->zAxisColorFrame, grid.zAxisColor);
+    connect_axis_color(ui->xAxisColorButton, ui->xAxisColorFrame, true);
+    connect_axis_color(ui->zAxisColorButton, ui->zAxisColorFrame, false);
 
-
-    // --- Per-Level Visibility and Color ---
     QCheckBox* level_vis_checks[] = { ui->visibilityCheck1, ui->visibilityCheck2, ui->visibilityCheck3, ui->visibilityCheck4, ui->visibilityCheck5 };
     QToolButton* level_color_buttons[] = { ui->colorInput1, ui->colorInput2, ui->colorInput3, ui->colorInput4, ui->colorInput5 };
     QFrame* level_color_frames[] = { ui->level1ColorFrame, ui->level2ColorFrame, ui->level3ColorFrame, ui->level4ColorFrame, ui->level5ColorFrame };
 
     for (int i = 0; i < 5; ++i) {
         if (level_vis_checks[i]) {
-            connect(level_vis_checks[i], &QCheckBox::toggled, this, [&grid, i](bool checked) {
-                grid.levelVisible[i] = checked;
+            connect(level_vis_checks[i], &QCheckBox::toggled, this, [this, i](bool checked) {
+                if (m_scene->getRegistry().valid(m_entity)) {
+                    m_scene->getRegistry().get<GridComponent>(m_entity).levelVisible[i] = checked;
+                }
                 });
         }
-        if (level_color_buttons[i] && level_color_frames[i] && i < grid.levels.size()) {
-            connect(level_color_buttons[i], &QToolButton::clicked, this, [this, frame = level_color_frames[i], &color_ref = grid.levels[i].color]() {
-                QColor initialColor(color_ref.r * 255, color_ref.g * 255, color_ref.b * 255);
-                QColor newColor = QColorDialog::getColor(initialColor, this, "Select Level Color");
-                if (newColor.isValid()) {
-                    color_ref = { newColor.redF(), newColor.greenF(), newColor.blueF() };
-                    frame->setStyleSheet(QString("background-color: %1;").arg(newColor.name()));
+        if (level_color_buttons[i] && level_color_frames[i]) {
+            connect(level_color_buttons[i], &QToolButton::clicked, this, [this, frame = level_color_frames[i], i]() {
+                if (!m_scene->getRegistry().valid(m_entity)) return;
+                auto& grid = m_scene->getRegistry().get<GridComponent>(m_entity);
+                if (static_cast<size_t>(i) < grid.levels.size()) {
+                    glm::vec3& color_ref = grid.levels[i].color;
+                    QColor initialColor(color_ref.r * 255, color_ref.g * 255, color_ref.b * 255);
+                    QColor newColor = QColorDialog::getColor(initialColor, this, "Select Level Color");
+                    if (newColor.isValid()) {
+                        color_ref = { newColor.redF(), newColor.greenF(), newColor.blueF() };
+                        frame->setStyleSheet(QString("background-color: %1;").arg(newColor.name()));
+                    }
                 }
                 });
         }
     }
 
-    // --- Transform Connections ---
-    auto connect_origin = [&](QDoubleSpinBox* spinbox, float& component_ref) {
-        connect(spinbox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [&](double value) {
+    auto connect_origin = [&](QDoubleSpinBox* spinbox, int component_index) {
+        connect(spinbox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this, component_index](double value) {
             if (m_updating) return;
             if (!m_scene->getRegistry().valid(m_entity)) return;
-            auto& current_grid = m_scene->getRegistry().get<GridComponent>(m_entity);
-            if (current_grid.isMetric) {
-                component_ref = value;
-            }
-            else {
-                component_ref = value * 0.0254;
-            }
+            auto& transform = m_scene->getRegistry().get<TransformComponent>(m_entity);
+            auto& grid = m_scene->getRegistry().get<GridComponent>(m_entity);
+            float final_value = grid.isMetric ? value : value * 0.0254f;
+
+            if (component_index == 0) transform.translation.x = final_value;
+            else if (component_index == 1) transform.translation.y = final_value;
+            else if (component_index == 2) transform.translation.z = final_value;
             });
         };
-    connect_origin(ui->originInputX, transform.translation.x);
-    connect_origin(ui->originInputY, transform.translation.y);
-    connect_origin(ui->originInputZ, transform.translation.z);
+    connect_origin(ui->originInputX, 0);
+    connect_origin(ui->originInputY, 1);
+    connect_origin(ui->originInputZ, 2);
 
     connect(ui->angleInputEulerX, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &gridPropertiesWidget::onEulerChanged);
     connect(ui->angleInputEulerY, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &gridPropertiesWidget::onEulerChanged);
@@ -209,7 +210,7 @@ void gridPropertiesWidget::onUnitSystemChanged()
     if (grid.isMetric) {
         for (int i = 0; i < 5; ++i) {
             if (unit_labels[i]) unit_labels[i]->setText(metric_labels[i]);
-            if (i < grid.levels.size()) grid.levels[i].spacing = metric_spacing[i];
+            if (static_cast<size_t>(i) < grid.levels.size()) grid.levels[i].spacing = metric_spacing[i];
         }
         ui->originInputX->setValue(transform.translation.x);
         ui->originInputY->setValue(transform.translation.y);
@@ -218,21 +219,20 @@ void gridPropertiesWidget::onUnitSystemChanged()
     else {
         for (int i = 0; i < 5; ++i) {
             if (unit_labels[i]) unit_labels[i]->setText(imperial_labels[i]);
-            if (i < grid.levels.size()) grid.levels[i].spacing = imperial_spacing[i];
+            if (static_cast<size_t>(i) < grid.levels.size()) grid.levels[i].spacing = imperial_spacing[i];
         }
         ui->originInputX->setValue(transform.translation.x / 0.0254);
         ui->originInputY->setValue(transform.translation.y / 0.0254);
         ui->originInputZ->setValue(transform.translation.z / 0.0254);
     }
 
-    // Set initial state of checkboxes and color frames
     QCheckBox* level_vis_checks[] = { ui->visibilityCheck1, ui->visibilityCheck2, ui->visibilityCheck3, ui->visibilityCheck4, ui->visibilityCheck5 };
     QFrame* level_color_frames[] = { ui->level1ColorFrame, ui->level2ColorFrame, ui->level3ColorFrame, ui->level4ColorFrame, ui->level5ColorFrame };
     for (int i = 0; i < 5; ++i) {
         if (level_vis_checks[i]) {
             level_vis_checks[i]->setChecked(grid.levelVisible[i]);
         }
-        if (level_color_frames[i] && i < grid.levels.size()) {
+        if (level_color_frames[i] && static_cast<size_t>(i) < grid.levels.size()) {
             QColor initialColor(grid.levels[i].color.r * 255, grid.levels[i].color.g * 255, grid.levels[i].color.b * 255);
             level_color_frames[i]->setStyleSheet(QString("background-color: %1;").arg(initialColor.name()));
         }
@@ -245,15 +245,6 @@ void gridPropertiesWidget::onUnitSystemChanged()
 
     updateOrientationInputs(transform.rotation);
     m_updating = false;
-}
-
-void gridPropertiesWidget::pickColor(glm::vec3& colorToUpdate)
-{
-    QColor initialColor(colorToUpdate.r * 255, colorToUpdate.g * 255, colorToUpdate.b * 255);
-    QColor newColor = QColorDialog::getColor(initialColor, this, "Select Color");
-    if (newColor.isValid()) {
-        colorToUpdate = { newColor.redF(), newColor.greenF(), newColor.blueF() };
-    }
 }
 
 void gridPropertiesWidget::updateOrientationInputs(const glm::quat& rotation)

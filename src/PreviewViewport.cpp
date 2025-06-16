@@ -5,7 +5,7 @@
 #include "Mesh.hpp"
 #include "Camera.hpp"
 #include "components.hpp"
-#include "DebugHelpers.hpp"
+#include "DebugHelpers.hpp" // REFACTOR: Added the missing include
 
 #include <QTimer>
 #include <glm/gtc/type_ptr.hpp>
@@ -19,30 +19,15 @@
 // Recursive helper function for Forward Kinematics
 glm::mat4 calculatePreviewWorldTransform(entt::entity entity, entt::registry& registry, int depth = 0)
 {
-    QString indent = QString(depth * 4, ' ');
-    auto& tag = registry.get<TagComponent>(entity);
-    qDebug().noquote() << indent << "[FK] Calculating for" << entity << "tagged as" << QString::fromStdString(tag.tag);
-
     auto& transformComp = registry.get<TransformComponent>(entity);
     glm::mat4 localTransform = transformComp.getTransform();
 
-    glm::mat4 finalTransform = localTransform;
-
-    if (registry.all_of<ParentComponent>(entity)) {
-        auto& parentComp = registry.get<ParentComponent>(entity);
-        if (registry.valid(parentComp.parent)) {
-            qDebug().noquote() << indent << "  -> Found parent" << parentComp.parent << ". Recursing...";
-            glm::mat4 parentWorldTransform = calculatePreviewWorldTransform(parentComp.parent, registry, depth + 1);
-            finalTransform = parentWorldTransform * localTransform;
-        }
-        else {
-            qDebug().noquote() << indent << "  -> Has ParentComponent but parent entity is INVALID.";
+    if (auto* parentComp = registry.try_get<ParentComponent>(entity)) {
+        if (registry.valid(parentComp->parent)) {
+            return calculatePreviewWorldTransform(parentComp->parent, registry, depth + 1) * localTransform;
         }
     }
-    else {
-        qDebug().noquote() << indent << "  -> No parent. This is a root entity in the hierarchy.";
-    }
-    return finalTransform;
+    return localTransform;
 }
 
 
@@ -67,20 +52,17 @@ PreviewViewport::~PreviewViewport()
 
 void PreviewViewport::updateRobot(const RobotDescription& description)
 {
-    qDebug() << "\n\n--- [PreviewViewport] Received new RobotDescription. Updating now. ---";
     makeCurrent();
     m_robotDesc = std::make_unique<RobotDescription>(description);
 
-    qDebug() << "[PreviewViewport] Resetting preview scene";
     m_scene = std::make_unique<Scene>();
+    auto& registry = m_scene->getRegistry();
 
-    m_cameraEntity = m_scene->getRegistry().create();
-    m_scene->getRegistry().emplace<CameraComponent>(m_cameraEntity).camera.forceRecalculateView(glm::vec3(1.5f, 1.5f, 2.0f), glm::vec3(0.0f, 0.5f, 0.0f), 0.0f);
-    qDebug() << "[PreviewViewport] Created new preview camera entity:" << m_cameraEntity;
+    m_cameraEntity = registry.create();
+    registry.emplace<CameraComponent>(m_cameraEntity).camera.forceRecalculateView(glm::vec3(1.5f, 1.5f, 2.0f), glm::vec3(0.0f, 0.5f, 0.0f), 0.0f);
 
     for (const auto& link : m_robotDesc->links) {
         if (!link.mesh_filepath.empty() && m_meshCache.find(link.mesh_filepath) == m_meshCache.end()) {
-            qDebug() << "[PreviewViewport] Caching new mesh for:" << QString::fromStdString(link.mesh_filepath);
             try {
                 CachedMesh cached;
                 cached.mesh = std::make_unique<Mesh>(Mesh::getLitCubeVertices(), Mesh::getLitCubeIndices());
@@ -109,7 +91,6 @@ void PreviewViewport::updateRobot(const RobotDescription& description)
 
     SceneBuilder::spawnRobot(*m_scene, *m_robotDesc);
     update();
-    qDebug() << "--- [PreviewViewport] Update complete. Triggering repaint. ---";
 }
 
 void PreviewViewport::setAnimationSpeed(int sliderValue)
@@ -189,12 +170,10 @@ void PreviewViewport::paintGL()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (!m_scene || !m_phongShader || m_meshCache.empty() || !m_robotDesc) {
-        qWarning() << "[PreviewViewport] paintGL aborted: Resources not ready.";
         return;
     }
     auto& registry = m_scene->getRegistry();
     if (!registry.valid(m_cameraEntity)) {
-        qWarning() << "[PreviewViewport] paintGL aborted: Camera entity is invalid.";
         return;
     }
     auto& camera = registry.get<CameraComponent>(m_cameraEntity).camera;
@@ -207,8 +186,6 @@ void PreviewViewport::paintGL()
     const glm::mat4 viewMatrix = camera.getViewMatrix();
     const glm::mat4 projectionMatrix = camera.getProjectionMatrix(aspectRatio);
 
-    qDebug() << "\n--- [PreviewViewport] paintGL Start ---";
-
     m_phongShader->use();
     m_phongShader->setMat4("view", viewMatrix);
     m_phongShader->setMat4("projection", projectionMatrix);
@@ -217,16 +194,13 @@ void PreviewViewport::paintGL()
     m_phongShader->setVec3("lightColor", glm::vec3(1.0f, 1.0f, 1.0f));
 
     auto renderableView = registry.view<const TagComponent, const RenderableMeshComponent>();
-    int renderableCount = 0;
-    for (auto entity : renderableView) { (void)entity; renderableCount++; }
-    qDebug() << "[PreviewViewport] Found" << renderableCount << "renderable entities to draw.";
 
     for (auto entity : renderableView) {
         const auto& tag = renderableView.get<const TagComponent>(entity);
-        qDebug() << "  [PreviewViewport] --- Processing entity" << entity << "tagged as" << QString::fromStdString(tag.tag) << "---";
-
         glm::mat4 worldTransform = calculatePreviewWorldTransform(entity, registry);
-        printMatrix(worldTransform, "    [PreviewViewport] Final World Transform for" + QString::fromStdString(tag.tag) + ":");
+
+        // REFACTOR: Corrected call to printMatrix, using its namespace.
+        DebugHelpers::printMatrix(worldTransform, "    [PreviewViewport] Final World Transform for" + QString::fromStdString(tag.tag) + ":");
         m_phongShader->setMat4("model", worldTransform);
 
         auto it = std::find_if(m_robotDesc->links.begin(), m_robotDesc->links.end(),
@@ -234,13 +208,12 @@ void PreviewViewport::paintGL()
 
         if (it != m_robotDesc->links.end()) {
             if (!it->mesh_filepath.empty() && m_meshCache.count(it->mesh_filepath)) {
-                qDebug() << "    [PreviewViewport] Found mesh in cache:" << QString::fromStdString(it->mesh_filepath) << ". Drawing.";
                 const auto& cached = m_meshCache.at(it->mesh_filepath);
                 glBindVertexArray(cached.VAO);
                 glDrawElements(GL_TRIANGLES, static_cast<int>(cached.mesh->indices().size()), GL_UNSIGNED_INT, 0);
                 glBindVertexArray(0);
-            } else {
-                qDebug() << "    [PreviewViewport] Mesh not found or specified. Drawing placeholder.";
+            }
+            else {
                 const auto& cached = m_meshCache.at("placeholder");
                 glBindVertexArray(cached.VAO);
                 glDrawElements(GL_TRIANGLES, static_cast<int>(cached.mesh->indices().size()), GL_UNSIGNED_INT, 0);
@@ -248,14 +221,12 @@ void PreviewViewport::paintGL()
             }
         }
         else {
-            qDebug() << "    [PreviewViewport] Tag" << QString::fromStdString(tag.tag) << "is not a link. Drawing placeholder.";
             const auto& cached = m_meshCache.at("placeholder");
             glBindVertexArray(cached.VAO);
             glDrawElements(GL_TRIANGLES, static_cast<int>(cached.mesh->indices().size()), GL_UNSIGNED_INT, 0);
             glBindVertexArray(0);
         }
     }
-    qDebug() << "--- [PreviewViewport] paintGL End ---\n";
 }
 
 void PreviewViewport::resizeGL(int w, int h)

@@ -1,6 +1,4 @@
 D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_ViewportWidget.cpp: D:/RoboticsSoftware/include/ViewportWidget.hpp \
-  C:/Qt/6.9.0/msvc2022_64/include/QtCore/QMetaObject \
-  C:/Qt/6.9.0/msvc2022_64/include/QtCore/QPoint \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20functional.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20iterator.h \
@@ -159,11 +157,9 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_ViewportWidget
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtransform.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h \
-  C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLDebugLogger \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLFunctions_3_3_Core \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionFunctions \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionProfile \
-  C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopengldebug.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglfunctions_3_3_core.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionfunctions.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionprofile.h \
@@ -179,144 +175,17 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_ViewportWidget
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsexports.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/common.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/_fixes.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/_vectorize.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/compute_common.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/compute_vector_relational.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_common.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_exponential.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_geometric.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_integer.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_matrix.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_packing.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_trigonometric.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/func_vector_relational.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/qualifier.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/setup.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_half.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_half.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x2.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x3.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat2x4.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x2.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x3.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat3x4.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x2.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x3.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_mat4x4.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec1.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec1.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec2.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec3.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/detail/type_vec4.inl \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/exponential.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x2_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x3_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double2x4_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x2_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x3_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double3x4_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x2_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x3_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_double4x4_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x2_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x3_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float2x4_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x2_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x3_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float3x4_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x2_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x3_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/matrix_float4x4_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/scalar_int_sized.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/scalar_uint_sized.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool2_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool3_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_bool4_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double2_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double3_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_double4_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float2_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float3_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_float4_precision.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int2_sized.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int3_sized.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_int4_sized.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint2_sized.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint3_sized.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/ext/vector_uint4_sized.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/fwd.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/geometric.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/glm.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/integer.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat2x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat2x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat2x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat3x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat3x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat3x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat4x2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat4x3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/mat4x4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/matrix.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/packing.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/simd/platform.h \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/trigonometric.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vec2.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vec3.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vec4.hpp \
-  C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vector_relational.hpp \
   D:/RoboticsSoftware/external/entt/config/config.h \
   D:/RoboticsSoftware/external/entt/config/macro.h \
   D:/RoboticsSoftware/external/entt/config/version.h \
-  D:/RoboticsSoftware/external/entt/core/bit.hpp \
+  D:/RoboticsSoftware/external/entt/container/fwd.hpp \
   D:/RoboticsSoftware/external/entt/core/fwd.hpp \
   D:/RoboticsSoftware/external/entt/core/type_traits.hpp \
-  D:/RoboticsSoftware/external/entt/entity/entity.hpp \
-  D:/RoboticsSoftware/external/entt/entity/fwd.hpp
+  D:/RoboticsSoftware/external/entt/entity/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/graph/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/meta/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/poly/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/process/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/resource/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/signal/fwd.hpp
