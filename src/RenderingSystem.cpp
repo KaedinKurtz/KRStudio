@@ -10,6 +10,92 @@
 #include <string>
 #include <glm/gtc/type_ptr.hpp>
 
+//---------- HELPER FUNCTIONS ------------------
+
+static std::vector<glm::vec3> evaluateCatmullRomCPU(const std::vector<glm::vec3>& controlPoints, int segmentsPerCurve)
+{
+    std::vector<glm::vec3> lineVertices;
+    // A Catmull-Rom segment requires 4 points, so we need at least that many to draw anything.
+    if (controlPoints.size() < 4) {
+        return lineVertices;
+    }
+
+    // Reserve space for efficiency
+    lineVertices.reserve(static_cast<size_t>(controlPoints.size() - 3) * segmentsPerCurve);
+
+    // Iterate through each segment of the spline
+    for (size_t i = 0; i < controlPoints.size() - 3; ++i) {
+        const glm::vec3& p0 = controlPoints[i];
+        const glm::vec3& p1 = controlPoints[i + 1];
+        const glm::vec3& p2 = controlPoints[i + 2];
+        const glm::vec3& p3 = controlPoints[i + 3];
+
+        // Generate the points for this segment
+        for (int j = 0; j < segmentsPerCurve; ++j) {
+            float t = static_cast<float>(j) / (segmentsPerCurve - 1);
+            float t2 = t * t;
+            float t3 = t2 * t;
+
+            // The Catmull-Rom equation
+            glm::vec3 point = 0.5f * (
+                (2.0f * p1) +
+                (-p0 + p2) * t +
+                (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 +
+                (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3
+                );
+            lineVertices.push_back(point);
+        }
+    }
+    return lineVertices;
+}
+
+static std::vector<glm::vec3> evaluateLinearCPU(const std::vector<glm::vec3>& controlPoints) {
+    return controlPoints;
+}
+
+static std::vector<glm::vec3> evaluateBezierCPU(const std::vector<glm::vec3>& controlPoints, int numSegments) {
+    std::vector<glm::vec3> lineVertices;
+    if (controlPoints.empty()) {
+        return lineVertices;
+    }
+    lineVertices.reserve(numSegments);
+
+    auto binomialCoeff = [](int n, int k) {
+        long long res = 1;
+        if (k > n - k) k = n - k;
+        for (int i = 0; i < k; ++i) {
+            res = res * (n - i);
+            res = res / (i + 1);
+        }
+        return (float)res;
+        };
+
+    int n = static_cast<int>(controlPoints.size()) - 1;
+    for (int i = 0; i < numSegments; ++i) {
+        float t = static_cast<float>(i) / (numSegments - 1);
+        glm::vec3 point(0.0f);
+        for (int j = 0; j <= n; ++j) {
+            float bernstein = binomialCoeff(n, j) * pow(t, j) * pow(1 - t, n - j);
+            point += controlPoints[j] * bernstein;
+        }
+        lineVertices.push_back(point);
+    }
+    return lineVertices;
+}
+
+static std::vector<glm::vec3> evaluateParametricCPU(const std::function<glm::vec3(float)>& func, int numSegments) {
+    std::vector<glm::vec3> lineVertices;
+    if (!func) {
+        return lineVertices;
+    }
+    lineVertices.reserve(numSegments);
+    for (int i = 0; i < numSegments; ++i) {
+        float t = static_cast<float>(i) / (numSegments - 1);
+        lineVertices.push_back(func(t));
+    }
+    return lineVertices;
+}
+
 RenderingSystem::RenderingSystem(QOpenGLFunctions_4_1_Core* gl)
     : m_gl(gl),
     m_phongShader(nullptr),
@@ -71,6 +157,36 @@ void RenderingSystem::initialize() {
             << e.what();
     }
 
+    try {
+        // This is our new, simple shader for drawing lines
+        m_lineShader = std::make_unique<Shader>(m_gl, "D:/RoboticsSoftware/shaders/line_vert.glsl", "D:/RoboticsSoftware/shaders/line_frag.glsl");
+    }
+    catch (const std::runtime_error& e) {
+        qCritical() << "[RenderingSystem] FATAL: Failed to initialize Line shader:" << e.what();
+    }
+
+    try {
+        m_glowShader = std::make_unique<Shader>(m_gl,
+            std::vector<std::string>{
+            "D:/RoboticsSoftware/shaders/glow_line_vert.glsl",
+                "D:/RoboticsSoftware/shaders/glow_line_geom.glsl",
+                "D:/RoboticsSoftware/shaders/glow_line_frag.glsl"
+        }
+        );
+    }
+    catch (const std::runtime_error& e) {
+        qCritical() << "[RenderingSystem] FATAL: Failed to initialize Glow shader:" << e.what();
+    }
+
+    // Setup for the new line renderer
+    m_gl->glGenVertexArrays(1, &m_lineVAO);
+    m_gl->glGenBuffers(1, &m_lineVBO);
+    m_gl->glBindVertexArray(m_lineVAO);
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_lineVBO);
+    m_gl->glEnableVertexAttribArray(0);
+    m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    m_gl->glBindVertexArray(0);
+
     float gridPlaneVertices[] = {
         -2000.0f, 0.0f, -2000.0f,  2000.0f, 0.0f, -2000.0f,  2000.0f, 0.0f,  2000.0f,
         -2000.0f, 0.0f, -2000.0f,  2000.0f, 0.0f,  2000.0f, -2000.0f, 0.0f,  2000.0f
@@ -99,6 +215,7 @@ void RenderingSystem::initialize() {
 
     m_gl->glGenVertexArrays(1, &m_tmpVAO);
     m_gl->glGenBuffers(1, &m_tmpVBO);
+    m_gl->glGenBuffers(1, &m_splineCpSSBO);
     m_gl->glBindVertexArray(m_tmpVAO);
     m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_tmpVBO);
     // no data yet – the real upload happens every frame
@@ -122,7 +239,11 @@ void RenderingSystem::shutdown() {
         m_gl->glDeleteVertexArrays(1, &m_tmpVAO);
         m_gl->glDeleteBuffers(1, &m_tmpVBO);
     }
+    if (m_splineCpSSBO) {
+        m_gl->glDeleteBuffers(1, &m_splineCpSSBO);
+    }
 }
+
 
 void RenderingSystem::renderGrid(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& camPos)
 {
@@ -336,55 +457,60 @@ void RenderingSystem::drawIntersections(const std::vector<std::vector<glm::vec3>
 void RenderingSystem::renderSplines(entt::registry& r,
     const glm::mat4& view,
     const glm::mat4& proj,
-    const glm::vec3& eye)
+    const glm::vec3& eye,
+    int viewportWidth,
+    int viewportHeight)
 {
-    if (!m_splineShader) return;          // shader failed to load – bail
+    if (!m_glowShader) return;
 
-    /* ---------- program-wide uniforms ---------------------------------- */
-    m_splineShader->use();
-    m_splineShader->setMat4("u_view", view);
-    m_splineShader->setMat4("u_proj", proj);
-    m_splineShader->setVec3("u_eye", eye);
+    m_glowShader->use();
+    m_glowShader->setMat4("u_view", view);
+    m_glowShader->setMat4("u_proj", proj);
+    m_glowShader->setVec2("u_viewport_size", glm::vec2(viewportWidth, viewportHeight));
 
-    m_gl->glLineWidth(3.0f);                       // fat line
-    m_gl->glPatchParameteri(GL_PATCH_VERTICES, 1);      // one vertex per patch
+    m_gl->glBindVertexArray(m_lineVAO);
 
-for (auto e : r.view<SplineComponent>())
-{
-    const SplineComponent& sp = r.get<SplineComponent>(e);
+    // THE FIX for DEPTH TESTING:
+    // We will TEST against the depth buffer, but we will NOT WRITE to it.
+    // This lets splines be hidden by solid objects, but prevents transparent
+    // splines from incorrectly occluding each other.
+    m_gl->glEnable(GL_DEPTH_TEST);
+    m_gl->glDepthMask(GL_FALSE);
 
-    /* colour ----------------------------------------------------------------*/
-    m_splineShader->setVec4("u_colour", sp.colour);
-
-    /* ------------ Catmull–Rom ---------------------------------------------*/
-    if (sp.type == SplineType::CatmullRom)
+    for (auto e : r.view<SplineComponent>())
     {
-        const auto& pts = sp.catmullRom;          // ▼  NO “.pts”
+        const SplineComponent& sp = r.get<SplineComponent>(e);
+        std::vector<glm::vec3> lineStripPoints;
 
-        if (pts.size() < 4)                       // ▼  guard
-            continue;
+        // (The switch statement for generating vertices is unchanged)
+        switch (sp.type) {
+        case SplineType::Linear: lineStripPoints = evaluateLinearCPU(sp.controlPoints); break;
+        case SplineType::CatmullRom: lineStripPoints = evaluateCatmullRomCPU(sp.controlPoints, 64); break;
+        case SplineType::Bezier: lineStripPoints = evaluateBezierCPU(sp.controlPoints, 64); break;
+        case SplineType::Parametric: lineStripPoints = evaluateParametricCPU(sp.parametric.func, 128); break;
+        }
 
-        /* upload the control-points once per frame --------------------------- */
-        m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_tmpVBO);
-        m_gl->glBufferData(GL_ARRAY_BUFFER,                // ▼  four params
-            static_cast<GLsizeiptr>(pts.size() * sizeof(glm::vec3)),
-            pts.data(),
-            GL_DYNAMIC_DRAW);
+        if (lineStripPoints.size() < 2) continue;
 
-        m_gl->glBindVertexArray(m_tmpVAO);
-        m_gl->glDrawArrays(GL_PATCHES, 0,                  // ▼  three params
-            static_cast<GLsizei>(pts.size()));
+        std::vector<glm::vec3> lineSegments;
+        lineSegments.reserve((lineStripPoints.size() - 1) * 2);
+        for (size_t i = 0; i < lineStripPoints.size() - 1; ++i) {
+            lineSegments.push_back(lineStripPoints[i]);
+            lineSegments.push_back(lineStripPoints[i + 1]);
+        }
+
+        // Set the two new color uniforms from the component
+        m_glowShader->setVec4("u_glowColour", sp.glowColour);
+        m_glowShader->setVec4("u_coreColour", sp.coreColour);
+        m_glowShader->setFloat("u_thickness", sp.thickness);
+
+        m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_lineVBO);
+        m_gl->glBufferData(GL_ARRAY_BUFFER, lineSegments.size() * sizeof(glm::vec3), lineSegments.data(), GL_DYNAMIC_DRAW);
+        m_gl->glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lineSegments.size()));
     }
-    /* ------------ Parametric ----------------------------------------------*/
-    else            /* SplineType::Parametric */
-    {
-        constexpr int segs = 64;             // samples per curve
-        m_splineShader->setInt("u_paramSegs", segs);
-        m_gl->glBindVertexArray(0);          // we do all math in the shader
-        m_gl->glDrawArrays(GL_PATCHES, 0, segs);
-    }
-}
 
-m_gl->glBindVertexArray(0);
-m_gl->glUseProgram(0);
+    // Restore OpenGL state
+    m_gl->glDepthMask(GL_TRUE); // IMPORTANT: Re-enable depth writing
+    m_gl->glBindVertexArray(0);
+    m_gl->glUseProgram(0);
 }

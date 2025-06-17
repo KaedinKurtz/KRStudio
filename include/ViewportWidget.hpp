@@ -15,6 +15,11 @@ class QKeyEvent;
 class QCloseEvent;
 class QPoint;
 
+class QOpenGLDebugLogger; // Forward declaration
+class QOpenGLDebugMessage; // Forward declaration
+class RenderingSystem;
+class Scene;
+
 class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_4_1_Core
 {
     Q_OBJECT
@@ -38,7 +43,12 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* ev) override;
 	const float frameDt = 1.0f / 60.0f; // Fixed frame rate for simplicity
 
+public slots:
+    // Add this slot
+    void handleLoggedMessage(const QOpenGLDebugMessage& debugMessage);
+
 private:
+
     Scene* m_scene;
     entt::entity m_cameraEntity;
     std::unique_ptr<RenderingSystem> m_renderingSystem;
@@ -47,4 +57,7 @@ private:
     unsigned int m_outlineVAO = 0;
     unsigned int m_outlineVBO = 0;
     QPoint m_lastMousePos;
+
+    static int s_instanceCounter;
+    int m_instanceId;
 };

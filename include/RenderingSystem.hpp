@@ -21,7 +21,12 @@ public:
     // Public render functions for a controlled drawing order from ViewportWidget
     void renderMeshes(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& camPosition);
     void renderGrid(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& camPos);
-    void renderSplines(entt::registry& r, const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye);
+    void renderSplines(entt::registry& r,
+        const glm::mat4& view,
+        const glm::mat4& proj,
+        const glm::vec3& eye,
+        int viewportWidth,
+        int viewportHeight);
     void drawIntersections(const std::vector<std::vector<glm::vec3>>& allOutlines, const glm::mat4& view, const glm::mat4& proj);
     void setCurrentCamera(entt::entity e) { m_currentCamera = e; }
     void updateCameraTransforms(entt::registry& r);
@@ -51,4 +56,11 @@ private:
     GLuint m_intersectionVBO;
 
     GLuint m_tmpVAO{ 0 }, m_tmpVBO{ 0 };
+    GLuint m_splineCpSSBO;
+
+    std::unique_ptr<Shader> m_lineShader;
+    GLuint m_lineVAO = 0;
+    GLuint m_lineVBO = 0;
+
+    std::unique_ptr<Shader> m_glowShader;
 };

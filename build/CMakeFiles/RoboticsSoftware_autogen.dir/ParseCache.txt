@@ -163,9 +163,9 @@ D:/RoboticsSoftware/include/DiagnosticsPanel.hpp
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h
  mdp:D:/RoboticsSoftware/include/DiagnosticsPanel.hpp
+D:/RoboticsSoftware/include/IntersectionSystem.hpp
 D:/RoboticsSoftware/include/KRobotParser.hpp
 D:/RoboticsSoftware/include/KRobotWriter.hpp
-D:/RoboticsSoftware/include/IntersectionSystem.hpp
 D:/RoboticsSoftware/include/JointPropertiesWidget.hpp
  mmc:Q_OBJECT
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h
@@ -886,7 +886,6 @@ D:/RoboticsSoftware/include/LedTweakDialog.hpp
  mdp:D:/RoboticsSoftware/include/LedTweakDialog.hpp
  mdp:D:/RoboticsSoftware/include/RobotDescription.hpp
  mdp:D:/RoboticsSoftware/include/components.hpp
-D:/RoboticsSoftware/src/PreviewViewport.cpp
 D:/RoboticsSoftware/include/LinkPropertiesWidget.hpp
  mmc:Q_OBJECT
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/QPointer
@@ -1183,167 +1182,7 @@ D:/RoboticsSoftware/include/LinkPropertiesWidget.hpp
  mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vector_relational.hpp
  mdp:D:/RoboticsSoftware/include/LinkPropertiesWidget.hpp
  mdp:D:/RoboticsSoftware/include/RobotDescription.hpp
-D:/RoboticsSoftware/src/DiagnosticsPanel.cpp
-D:/RoboticsSoftware/include/StaticToolbar.hpp
- mmc:Q_OBJECT
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20functional.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20iterator.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20memory.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20type_traits.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20utility.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q23utility.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qalgorithms.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qanystringview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydata.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydataops.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydatapointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qassert.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qatomic.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qatomic_cxx11.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbasicatomic.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbindingstorage.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearray.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearrayalgorithms.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearraylist.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearrayview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qchar.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompare.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompare_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcomparehelpers.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompilerdetection.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qconfig.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qconstructormacros.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainerfwd.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainerinfo.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainertools_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontiguouscache.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdarwinhelpers.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdatastream.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdebug.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qendian.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qexceptionhandling.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qflags.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfloat16.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qforeach.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfunctionaltools_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfunctionpointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qgenericatomic.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qglobal.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qglobalstatic.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qhash.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qhashfunctions.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiodevicebase.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiterable.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiterator.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlatin1stringview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qline.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlist.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlogging.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmalloc.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmap.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmargins.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmath.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmetacontainer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmetatype.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qminmax.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnamespace.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnumeric.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobjectdefs.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobjectdefs_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qoverload.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qpair.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qpoint.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qprocessordetection.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qrect.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qrefcount.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qscopedpointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qscopeguard.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qset.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qshareddata.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qshareddata_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsharedpointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsharedpointer_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsize.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qspan.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstdlibdetection.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstring.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringalgorithms.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringbuilder.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringconverter.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringconverter_base.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringfwd.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringlist.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringliteral.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringmatcher.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringtokenizer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qswap.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsysinfo.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsystemdetection.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtaggedpointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtclasshelpermacros.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtconfiginclude.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtconfigmacros.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcore-config.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcoreexports.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcoreglobal.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtdeprecationdefinitions.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtdeprecationmarkers.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtenvironmentvariables.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtextstream.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtformat_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtmetamacros.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtnoop.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtpreprocessorsupport.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtresource.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qttranslation.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qttypetraits.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtversion.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtversionchecks.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtypeinfo.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtypes.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qutf8stringview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qvariant.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qvarlengtharray.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qversiontagging.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qxptype_traits.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qyieldcpu.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qaction.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbitmap.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbrush.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qcolor.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qcursor.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfont.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontinfo.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontmetrics.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontvariableaxis.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qicon.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qimage.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qkeysequence.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpaintdevice.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpalette.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpixelformat.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpixmap.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpolygon.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qregion.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgb.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgba64.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtgui-config.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiexports.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiglobal.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtransform.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QWidget
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qsizepolicy.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgets-config.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsexports.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h
- mdp:D:/RoboticsSoftware/include/StaticToolbar.hpp
+D:/RoboticsSoftware/src/PreviewViewport.cpp
 D:/RoboticsSoftware/include/MainWindow.hpp
  mmc:Q_OBJECT
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/QList
@@ -1538,7 +1377,7 @@ D:/RoboticsSoftware/include/MainWindow.hpp
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h
  mdp:D:/RoboticsSoftware/include/MainWindow.hpp
-D:/RoboticsSoftware/include/ViewportWidget.hpp
+D:/RoboticsSoftware/include/StaticToolbar.hpp
  mmc:Q_OBJECT
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20functional.h
@@ -1602,7 +1441,6 @@ D:/RoboticsSoftware/include/ViewportWidget.hpp
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmetatype.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qminmax.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnamespace.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnativeinterface.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnumeric.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject_impl.h
@@ -1666,7 +1504,6 @@ D:/RoboticsSoftware/include/ViewportWidget.hpp
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qversiontagging.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qxptype_traits.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qyieldcpu.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/QSurfaceFormat
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qaction.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbitmap.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbrush.h
@@ -1679,10 +1516,6 @@ D:/RoboticsSoftware/include/ViewportWidget.hpp
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qicon.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qimage.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qkeysequence.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qopengl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qopenglcontext.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qopenglcontext_platform.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qopenglext.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpaintdevice.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpalette.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpixelformat.h
@@ -1691,46 +1524,21 @@ D:/RoboticsSoftware/include/ViewportWidget.hpp
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qregion.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgb.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgba64.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qsurfaceformat.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtgui-config.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiexports.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiglobal.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtransform.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLFunctions_4_1_Core
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionFunctions
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionProfile
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglfunctions_4_1_core.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionfunctions.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionprofile.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qtopenglexports.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qtopenglglobal.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets/QOpenGLWidget
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets/qopenglwidget.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets/qtopenglwidgetsexports.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets/qtopenglwidgetsglobal.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QWidget
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qsizepolicy.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgets-config.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsexports.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h
- mdp:D:/RoboticsSoftware/external/entt/config/config.h
- mdp:D:/RoboticsSoftware/external/entt/config/macro.h
- mdp:D:/RoboticsSoftware/external/entt/config/version.h
- mdp:D:/RoboticsSoftware/external/entt/container/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/type_traits.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/graph/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/poly/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/process/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/resource/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/signal/fwd.hpp
- mdp:D:/RoboticsSoftware/include/ViewportWidget.hpp
+ mdp:D:/RoboticsSoftware/include/StaticToolbar.hpp
+D:/RoboticsSoftware/src/DiagnosticsPanel.cpp
+D:/RoboticsSoftware/include/MeshUtils.hpp
 D:/RoboticsSoftware/include/PreviewViewport.hpp
  mmc:Q_OBJECT
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h
@@ -2118,7 +1926,439 @@ D:/RoboticsSoftware/include/PreviewViewport.hpp
  mdp:D:/RoboticsSoftware/external/entt/signal/sigh.hpp
  mdp:D:/RoboticsSoftware/include/PreviewViewport.hpp
  mdp:D:/RoboticsSoftware/include/RobotDescription.hpp
-D:/RoboticsSoftware/include/MeshUtils.hpp
+D:/RoboticsSoftware/include/ViewportWidget.hpp
+ mmc:Q_OBJECT
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20functional.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20iterator.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20memory.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20type_traits.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20utility.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q23utility.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qalgorithms.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qanystringview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydata.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydataops.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydatapointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qassert.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qatomic.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qatomic_cxx11.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbasicatomic.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbindingstorage.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearray.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearrayalgorithms.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearraylist.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearrayview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qchar.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompare.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompare_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcomparehelpers.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompilerdetection.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qconfig.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qconstructormacros.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainerfwd.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainerinfo.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainertools_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontiguouscache.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdarwinhelpers.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdatastream.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdebug.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qendian.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qexceptionhandling.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qflags.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfloat16.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qforeach.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfunctionaltools_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfunctionpointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qgenericatomic.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qglobalstatic.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qhash.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qhashfunctions.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiodevicebase.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiterable.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiterator.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlatin1stringview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qline.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlist.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlogging.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmalloc.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmap.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmargins.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmath.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmetacontainer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmetatype.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qminmax.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnamespace.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnativeinterface.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnumeric.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobjectdefs.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobjectdefs_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qoverload.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qpair.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qpoint.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qprocessordetection.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qrect.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qrefcount.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qscopedpointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qscopeguard.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qset.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qshareddata.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qshareddata_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsharedpointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsharedpointer_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsize.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qspan.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstdlibdetection.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstring.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringalgorithms.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringbuilder.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringconverter.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringconverter_base.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringfwd.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringlist.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringliteral.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringmatcher.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringtokenizer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qswap.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsysinfo.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsystemdetection.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtaggedpointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtclasshelpermacros.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtconfiginclude.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtconfigmacros.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcore-config.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcoreexports.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcoreglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtdeprecationdefinitions.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtdeprecationmarkers.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtenvironmentvariables.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtextstream.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtformat_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtmetamacros.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtnoop.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtpreprocessorsupport.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtresource.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qttranslation.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qttypetraits.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtversion.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtversionchecks.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtypeinfo.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtypes.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qutf8stringview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qvariant.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qvarlengtharray.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qversiontagging.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qxptype_traits.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qyieldcpu.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/QSurfaceFormat
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qaction.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbitmap.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbrush.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qcolor.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qcursor.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfont.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontinfo.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontmetrics.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontvariableaxis.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qicon.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qimage.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qkeysequence.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qopengl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qopenglcontext.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qopenglcontext_platform.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qopenglext.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpaintdevice.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpalette.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpixelformat.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpixmap.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpolygon.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qregion.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgb.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgba64.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qsurfaceformat.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtgui-config.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiexports.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtransform.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLFunctions_4_1_Core
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionFunctions
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionProfile
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglfunctions_4_1_core.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionfunctions.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionprofile.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qtopenglexports.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qtopenglglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets/QOpenGLWidget
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets/qopenglwidget.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets/qtopenglwidgetsexports.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets/qtopenglwidgetsglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QWidget
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qsizepolicy.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgets-config.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsexports.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h
+ mdp:D:/RoboticsSoftware/external/entt/config/config.h
+ mdp:D:/RoboticsSoftware/external/entt/config/macro.h
+ mdp:D:/RoboticsSoftware/external/entt/config/version.h
+ mdp:D:/RoboticsSoftware/external/entt/container/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/type_traits.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/graph/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/poly/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/process/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/resource/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/signal/fwd.hpp
+ mdp:D:/RoboticsSoftware/include/ViewportWidget.hpp
+D:/RoboticsSoftware/include/PropertiesPanel.hpp
+ mmc:Q_OBJECT
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20functional.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20iterator.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20memory.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20type_traits.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20utility.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q23utility.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qalgorithms.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qanystringview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydata.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydataops.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydatapointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qassert.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qatomic.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qatomic_cxx11.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbasicatomic.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbindingstorage.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearray.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearrayalgorithms.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearraylist.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearrayview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qchar.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompare.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompare_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcomparehelpers.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompilerdetection.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qconfig.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qconstructormacros.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainerfwd.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainerinfo.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainertools_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontiguouscache.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdarwinhelpers.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdatastream.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdebug.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qendian.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qexceptionhandling.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qflags.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfloat16.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qforeach.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfunctionaltools_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfunctionpointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qgenericatomic.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qglobalstatic.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qhash.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qhashfunctions.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiodevicebase.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiterable.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiterator.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlatin1stringview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qline.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlist.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlogging.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmalloc.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmap.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmargins.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmath.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmetacontainer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmetatype.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qminmax.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnamespace.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnumeric.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobjectdefs.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobjectdefs_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qoverload.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qpair.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qpoint.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qprocessordetection.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qrect.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qrefcount.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qscopedpointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qscopeguard.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qset.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qshareddata.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qshareddata_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsharedpointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsharedpointer_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsize.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qspan.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstdlibdetection.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstring.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringalgorithms.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringbuilder.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringconverter.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringconverter_base.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringfwd.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringlist.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringliteral.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringmatcher.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringtokenizer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qswap.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsysinfo.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsystemdetection.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtaggedpointer.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtclasshelpermacros.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtconfiginclude.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtconfigmacros.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcore-config.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcoreexports.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcoreglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtdeprecationdefinitions.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtdeprecationmarkers.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtenvironmentvariables.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtextstream.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtformat_impl.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtmetamacros.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtnoop.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtpreprocessorsupport.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtresource.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qttranslation.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qttypetraits.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtversion.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtversionchecks.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtypeinfo.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtypes.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qutf8stringview.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qvariant.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qvarlengtharray.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qversiontagging.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qxptype_traits.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qyieldcpu.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qaction.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbitmap.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbrush.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qcolor.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qcursor.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfont.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontinfo.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontmetrics.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontvariableaxis.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qicon.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qimage.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qkeysequence.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpaintdevice.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpalette.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpixelformat.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpixmap.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpolygon.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qregion.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgb.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgba64.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtgui-config.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiexports.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtransform.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QGridLayout
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QVBoxLayout
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QWidget
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qboxlayout.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qgridlayout.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qlayout.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qlayoutitem.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qsizepolicy.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgets-config.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsexports.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h
+ mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h
+ mdp:D:/RoboticsSoftware/external/entt/config/config.h
+ mdp:D:/RoboticsSoftware/external/entt/config/macro.h
+ mdp:D:/RoboticsSoftware/external/entt/config/version.h
+ mdp:D:/RoboticsSoftware/external/entt/container/dense_map.hpp
+ mdp:D:/RoboticsSoftware/external/entt/container/dense_set.hpp
+ mdp:D:/RoboticsSoftware/external/entt/container/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/container/table.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/algorithm.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/any.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/attribute.h
+ mdp:D:/RoboticsSoftware/external/entt/core/bit.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/compressed_pair.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/enum.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/family.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/hashed_string.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/ident.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/iterator.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/memory.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/monostate.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/ranges.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/tuple.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/type_info.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/type_traits.hpp
+ mdp:D:/RoboticsSoftware/external/entt/core/utility.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/component.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/entity.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/group.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/handle.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/helper.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/mixin.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/organizer.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/ranges.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/registry.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/runtime_view.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/snapshot.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/sparse_set.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/storage.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entity/view.hpp
+ mdp:D:/RoboticsSoftware/external/entt/entt.hpp
+ mdp:D:/RoboticsSoftware/external/entt/graph/adjacency_matrix.hpp
+ mdp:D:/RoboticsSoftware/external/entt/graph/dot.hpp
+ mdp:D:/RoboticsSoftware/external/entt/graph/flow.hpp
+ mdp:D:/RoboticsSoftware/external/entt/graph/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/locator/locator.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/adl_pointer.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/container.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/context.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/factory.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/meta.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/node.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/pointer.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/policy.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/range.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/resolve.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/template.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/type_traits.hpp
+ mdp:D:/RoboticsSoftware/external/entt/meta/utility.hpp
+ mdp:D:/RoboticsSoftware/external/entt/poly/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/poly/poly.hpp
+ mdp:D:/RoboticsSoftware/external/entt/process/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/process/process.hpp
+ mdp:D:/RoboticsSoftware/external/entt/process/scheduler.hpp
+ mdp:D:/RoboticsSoftware/external/entt/resource/cache.hpp
+ mdp:D:/RoboticsSoftware/external/entt/resource/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/resource/loader.hpp
+ mdp:D:/RoboticsSoftware/external/entt/resource/resource.hpp
+ mdp:D:/RoboticsSoftware/external/entt/signal/delegate.hpp
+ mdp:D:/RoboticsSoftware/external/entt/signal/dispatcher.hpp
+ mdp:D:/RoboticsSoftware/external/entt/signal/emitter.hpp
+ mdp:D:/RoboticsSoftware/external/entt/signal/fwd.hpp
+ mdp:D:/RoboticsSoftware/external/entt/signal/sigh.hpp
+ mdp:D:/RoboticsSoftware/include/PropertiesPanel.hpp
 D:/RoboticsSoftware/include/gridPropertiesWidget.hpp
  mmc:Q_OBJECT
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/QDebug
@@ -2564,246 +2804,6 @@ D:/RoboticsSoftware/include/gridPropertiesWidget.hpp
  mdp:D:/RoboticsSoftware/external/entt/signal/fwd.hpp
  mdp:D:/RoboticsSoftware/external/entt/signal/sigh.hpp
  mdp:D:/RoboticsSoftware/include/gridPropertiesWidget.hpp
-D:/RoboticsSoftware/include/PropertiesPanel.hpp
- mmc:Q_OBJECT
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20functional.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20iterator.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20memory.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20type_traits.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q20utility.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q23utility.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qalgorithms.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qanystringview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydata.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydataops.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qarraydatapointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qassert.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qatomic.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qatomic_cxx11.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbasicatomic.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbindingstorage.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearray.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearrayalgorithms.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearraylist.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qbytearrayview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qchar.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompare.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompare_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcomparehelpers.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcompilerdetection.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qconfig.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qconstructormacros.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainerfwd.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainerinfo.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontainertools_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qcontiguouscache.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdarwinhelpers.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdatastream.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qdebug.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qendian.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qexceptionhandling.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qflags.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfloat16.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qforeach.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfunctionaltools_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qfunctionpointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qgenericatomic.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qglobal.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qglobalstatic.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qhash.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qhashfunctions.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiodevicebase.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiterable.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qiterator.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlatin1stringview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qline.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlist.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qlogging.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmalloc.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmap.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmargins.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmath.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmetacontainer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qmetatype.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qminmax.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnamespace.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qnumeric.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobject_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobjectdefs.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qobjectdefs_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qoverload.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qpair.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qpoint.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qprocessordetection.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qrect.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qrefcount.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qscopedpointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qscopeguard.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qset.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qshareddata.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qshareddata_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsharedpointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsharedpointer_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsize.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qspan.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstdlibdetection.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstring.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringalgorithms.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringbuilder.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringconverter.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringconverter_base.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringfwd.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringlist.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringliteral.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringmatcher.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringtokenizer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qstringview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qswap.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsysinfo.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qsystemdetection.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtaggedpointer.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtclasshelpermacros.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtconfiginclude.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtconfigmacros.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcore-config.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcoreexports.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtcoreglobal.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtdeprecationdefinitions.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtdeprecationmarkers.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtenvironmentvariables.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtextstream.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtformat_impl.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtmetamacros.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtnoop.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtpreprocessorsupport.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtresource.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qttranslation.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qttypetraits.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtversion.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtversionchecks.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtypeinfo.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qtypes.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qutf8stringview.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qvariant.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qvarlengtharray.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qversiontagging.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qxptype_traits.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/qyieldcpu.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qaction.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbitmap.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qbrush.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qcolor.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qcursor.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfont.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontinfo.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontmetrics.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qfontvariableaxis.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qicon.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qimage.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qkeysequence.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpaintdevice.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpalette.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpixelformat.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpixmap.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qpolygon.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qregion.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgb.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qrgba64.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtgui-config.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiexports.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtguiglobal.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtransform.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QGridLayout
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QVBoxLayout
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/QWidget
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qboxlayout.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qgridlayout.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qlayout.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qlayoutitem.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qsizepolicy.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgets-config.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsexports.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qtwidgetsglobal.h
- mdp:C:/Qt/6.9.0/msvc2022_64/include/QtWidgets/qwidget.h
- mdp:D:/RoboticsSoftware/external/entt/config/config.h
- mdp:D:/RoboticsSoftware/external/entt/config/macro.h
- mdp:D:/RoboticsSoftware/external/entt/config/version.h
- mdp:D:/RoboticsSoftware/external/entt/container/dense_map.hpp
- mdp:D:/RoboticsSoftware/external/entt/container/dense_set.hpp
- mdp:D:/RoboticsSoftware/external/entt/container/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/container/table.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/algorithm.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/any.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/attribute.h
- mdp:D:/RoboticsSoftware/external/entt/core/bit.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/compressed_pair.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/enum.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/family.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/hashed_string.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/ident.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/iterator.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/memory.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/monostate.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/ranges.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/tuple.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/type_info.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/type_traits.hpp
- mdp:D:/RoboticsSoftware/external/entt/core/utility.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/component.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/entity.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/group.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/handle.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/helper.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/mixin.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/organizer.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/ranges.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/registry.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/runtime_view.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/snapshot.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/sparse_set.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/storage.hpp
- mdp:D:/RoboticsSoftware/external/entt/entity/view.hpp
- mdp:D:/RoboticsSoftware/external/entt/entt.hpp
- mdp:D:/RoboticsSoftware/external/entt/graph/adjacency_matrix.hpp
- mdp:D:/RoboticsSoftware/external/entt/graph/dot.hpp
- mdp:D:/RoboticsSoftware/external/entt/graph/flow.hpp
- mdp:D:/RoboticsSoftware/external/entt/graph/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/locator/locator.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/adl_pointer.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/container.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/context.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/factory.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/meta.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/node.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/pointer.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/policy.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/range.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/resolve.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/template.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/type_traits.hpp
- mdp:D:/RoboticsSoftware/external/entt/meta/utility.hpp
- mdp:D:/RoboticsSoftware/external/entt/poly/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/poly/poly.hpp
- mdp:D:/RoboticsSoftware/external/entt/process/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/process/process.hpp
- mdp:D:/RoboticsSoftware/external/entt/process/scheduler.hpp
- mdp:D:/RoboticsSoftware/external/entt/resource/cache.hpp
- mdp:D:/RoboticsSoftware/external/entt/resource/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/resource/loader.hpp
- mdp:D:/RoboticsSoftware/external/entt/resource/resource.hpp
- mdp:D:/RoboticsSoftware/external/entt/signal/delegate.hpp
- mdp:D:/RoboticsSoftware/external/entt/signal/dispatcher.hpp
- mdp:D:/RoboticsSoftware/external/entt/signal/emitter.hpp
- mdp:D:/RoboticsSoftware/external/entt/signal/fwd.hpp
- mdp:D:/RoboticsSoftware/external/entt/signal/sigh.hpp
- mdp:D:/RoboticsSoftware/include/PropertiesPanel.hpp
 D:/RoboticsSoftware/include/RenderingSystem.hpp
 D:/RoboticsSoftware/include/RobotEnrichmentDialog.hpp
  mmc:Q_OBJECT
@@ -3101,10 +3101,10 @@ D:/RoboticsSoftware/include/RobotEnrichmentDialog.hpp
  mdp:D:/RoboticsSoftware/include/RobotDescription.hpp
  mdp:D:/RoboticsSoftware/include/RobotEnrichmentDialog.hpp
 D:/RoboticsSoftware/include/SDFParser.hpp
-D:/RoboticsSoftware/src/KRobotWriter.cpp
-D:/RoboticsSoftware/src/KRobotParser.cpp
-D:/RoboticsSoftware/src/IntersectionSystem.cpp
 D:/RoboticsSoftware/include/SceneBuilder.hpp
+D:/RoboticsSoftware/src/IntersectionSystem.cpp
+D:/RoboticsSoftware/src/KRobotParser.cpp
+D:/RoboticsSoftware/src/KRobotWriter.cpp
 D:/RoboticsSoftware/include/URDFImporterDialog.hpp
  mmc:Q_OBJECT
  mdp:C:/Qt/6.9.0/msvc2022_64/include/QtCore/q17memory.h
@@ -3400,20 +3400,20 @@ D:/RoboticsSoftware/include/URDFImporterDialog.hpp
  mdp:C:/Users/kaedi/vcpkg/installed/x64-windows/include/glm/vector_relational.hpp
  mdp:D:/RoboticsSoftware/include/RobotDescription.hpp
  mdp:D:/RoboticsSoftware/include/URDFImporterDialog.hpp
-D:/RoboticsSoftware/src/RenderingSystem.cpp
-D:/RoboticsSoftware/src/MainWindow.cpp
 D:/RoboticsSoftware/include/URDFParser.hpp
+D:/RoboticsSoftware/src/MainWindow.cpp
+D:/RoboticsSoftware/src/RenderingSystem.cpp
 D:/RoboticsSoftware/external/pugixml/pugixml.cpp
 D:/RoboticsSoftware/src/Camera.cpp
 D:/RoboticsSoftware/src/Grid.cpp
-D:/RoboticsSoftware/src/Shader.cpp
-D:/RoboticsSoftware/src/Mesh.cpp
 D:/RoboticsSoftware/src/JointPropertiesWidget.cpp
+D:/RoboticsSoftware/src/Mesh.cpp
+D:/RoboticsSoftware/src/Shader.cpp
+D:/RoboticsSoftware/src/LinkPropertiesWidget.cpp
 D:/RoboticsSoftware/src/gridPropertiesWidget.cpp
  uic:ui_gridPropertiesWidget.h
-D:/RoboticsSoftware/src/LinkPropertiesWidget.cpp
-D:/RoboticsSoftware/src/SDFParser.cpp
 D:/RoboticsSoftware/src/Robot.cpp
+D:/RoboticsSoftware/src/SDFParser.cpp
 D:/RoboticsSoftware/src/RobotEnrichmentDialog.cpp
 D:/RoboticsSoftware/src/Scene.cpp
 D:/RoboticsSoftware/src/SceneBuilder.cpp
