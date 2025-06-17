@@ -1,20 +1,53 @@
-#include "SceneBuilder.hpp"
+﻿#include "SceneBuilder.hpp"
 #include "components.hpp"
 #include "Camera.hpp"
 #include "Mesh.hpp"
+#include "MeshUtils.hpp"
+#include "Primitivebuilders.hpp"
 #include <QDebug>
 
-entt::entity SceneBuilder::createCamera(entt::registry& registry, const glm::vec3& position)
+entt::entity SceneBuilder::createCamera(entt::registry& registry,
+    const glm::vec3& position,
+    const glm::vec3& colour)
 {
-    auto entity = registry.create();
-    registry.emplace<CameraComponent>(entity);
-    auto& transform = registry.emplace<TransformComponent>(entity);
-    transform.translation = position;
+    // 1 ── CAMERA ENTITY ----------------------------------------------------
+    entt::entity camE = registry.create();
 
-    auto& camera = registry.get<CameraComponent>(entity).camera;
-    camera.forceRecalculateView(position, glm::vec3(0.0f, 0.0f, 0.0f), 0.0f);
+    registry.emplace<CameraComponent>(camE);
+    auto& camXf = registry.emplace<TransformComponent>(camE);
+    camXf.translation = position;
 
-    return entity;
+    // 2 ── MINI CAMERA MESH (gizmo) ----------------------------------------
+    entt::entity gizE = registry.create();
+    registry.emplace<ParentComponent>(gizE, camE);          // child-of cam
+    registry.emplace<CameraGizmoTag>(gizE);
+
+    auto& gxf = registry.emplace<TransformComponent>(gizE);
+    gxf.translation.z = -0.35f;                             // sit in front
+    gxf.scale = glm::vec3(0.12f);                   // shrink
+    gxf.rotation =                                      // fix STL axes
+        glm::angleAxis(glm::radians(90.0f), glm::vec3(0, 1, 0)) *
+        glm::angleAxis(glm::radians(-90.0f), glm::vec3(1, 0, 0));
+
+    auto& gmesh = registry.emplace<RenderableMeshComponent>(gizE);
+    loadStlIntoRenderable(
+        "D:/RoboticsSoftware/external/miniViewportCamera.stl", gmesh);
+    gmesh.colour = glm::vec4(colour, 1.0f);
+
+    // 3 ── BLINKING “REC” LED ---------------------------------------------
+    entt::entity ledE = registry.create();
+    registry.emplace<ParentComponent>(ledE, gizE);          // child-of gizmo
+    registry.emplace<RecordLedTag>(ledE);                   // marker
+
+    auto& lxf = registry.emplace<TransformComponent>(ledE);
+    lxf.translation = { 0.1f, -0.115f, 0.275f };              // tweak location
+    lxf.scale = glm::vec3(0.1f);
+
+    auto& lmesh = registry.emplace<RenderableMeshComponent>(ledE);
+    buildIcoSphere(lmesh.vertices, lmesh.indices);           // or buildIcoSphere
+    lmesh.colour = glm::vec4(1, 0, 0, 1);                   // starts bright red
+
+    return camE;
 }
 
 void SceneBuilder::spawnRobot(Scene& scene, const RobotDescription& description)

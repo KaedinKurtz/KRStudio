@@ -5,10 +5,11 @@
 #include <string>
 #include <vector>
 #include <entt/entt.hpp>
+#include <QtGui/QOpenGLContext>
 #include <QtGui/qopengl.h> 
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
-
+#include <unordered_map>
 
 #include "GridLevel.hpp"
 #include "Camera.hpp"
@@ -17,6 +18,8 @@
 // --- CORE COMPONENTS ---
 
 struct SelectedComponent {};
+struct CameraGizmoTag {};
+struct RecordLedTag {};
 
 struct BoundingBoxComponent {
     glm::vec3 min = { -0.5f, -0.5f, -0.5f };
@@ -35,16 +38,18 @@ struct TransformComponent
     }
 };
 
+struct WorldTransformComponent {
+    glm::mat4 matrix{ 1.0f };
+};
+
 struct Vertex
 {
     glm::vec3 position{};
     glm::vec3 normal{};
     glm::vec2 uv{ 0.0f };
 
-    // ------------- constructors -------------
-    Vertex() = default;   // needed by std::vector
+    Vertex() = default;
 
-    // 2-or-3-argument constructor (third has a default!)
     Vertex(const glm::vec3& p,
         const glm::vec3& n,
         const glm::vec2& t = glm::vec2(0.0f))
@@ -72,10 +77,17 @@ struct RenderableMeshComponent {
     std::vector<unsigned> indices;
 };
 
-struct RenderResourceComponent {
-    GLuint VAO{ 0 };
-    GLuint VBO{ 0 };
-    GLuint EBO{ 0 };
+struct RenderResourceComponent
+{
+    struct Buffers         // one trio of GL objects *per context*
+    {
+        GLuint VAO = 0;
+        GLuint VBO = 0;
+        GLuint EBO = 0;
+    };
+
+    // key = context pointer, value = the trio above
+    std::unordered_map<QOpenGLContext*, Buffers> perContext;
 };
 
 // --- ROBOTICS-SPECIFIC COMPONENTS ---
@@ -115,7 +127,8 @@ struct SceneProperties
     float fogEndDistance = 75.0f;
 };
 
-// REFACTOR: This struct now contains all of its original members.
+
+
 struct GridComponent
 {
     bool masterVisible = true;

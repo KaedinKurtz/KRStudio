@@ -13,6 +13,7 @@
 #include "SDFParser.hpp"
 #include "RobotEnrichmentDialog.hpp"
 #include "Mesh.hpp" // Required for the test cube's mesh data.
+#include "IntersectionSystem.hpp" 
 
 #include <QVBoxLayout>
 #include <QFileDialog>
@@ -34,7 +35,6 @@ MainWindow::MainWindow(QWidget* parent)
     auto& registry = m_scene->getRegistry();
 
     // --- Set up scene-wide properties like fog ---
-    // REVERTED: Fog values restored to their original state for good visibility.
     auto& sceneProps = registry.ctx().emplace<SceneProperties>();
     sceneProps.fogEnabled = true;
     sceneProps.fogColor = glm::vec3(0.1f, 0.1f, 0.15f);
@@ -47,7 +47,6 @@ MainWindow::MainWindow(QWidget* parent)
         registry.emplace<TagComponent>(gridEntity, "Primary Grid");
         registry.emplace<TransformComponent>(gridEntity);
         auto& gridComp = registry.emplace<GridComponent>(gridEntity);
-        // REVERTED: Grid levels restored to their original, more visible settings.
         gridComp.levels.emplace_back(0.001f, glm::vec3(1.0f, 0.56f, 1.0f), 0.0f, 2.0f);
         gridComp.levels.emplace_back(0.01f, glm::vec3(0.66f, 0.66f, 0.5f), 0.0f, 5.0f);
         gridComp.levels.emplace_back(0.1f, glm::vec3(0.35f, 0.35f, 0.35f), 0.0f, 25.0f);
@@ -62,10 +61,12 @@ MainWindow::MainWindow(QWidget* parent)
         registry.emplace<TransformComponent>(cubeEntity).translation = glm::vec3(0.0f, 0.5f, 0.0f);
         registry.emplace<BoundingBoxComponent>(cubeEntity);
 
+        // NOTE: The IntersectionComponent has been removed and is no longer needed here.
+
         auto& mesh = registry.emplace<RenderableMeshComponent>(cubeEntity);
 
         const std::vector<float>& raw = Mesh::getLitCubeVertices();
-        constexpr std::size_t stride = 6;                       // xyz + normal
+        constexpr std::size_t stride = 6;
 
         mesh.vertices.reserve(raw.size() / stride);
 
@@ -73,7 +74,7 @@ MainWindow::MainWindow(QWidget* parent)
         {
             glm::vec3 pos{ raw[i],     raw[i + 1], raw[i + 2] };
             glm::vec3 normal{ raw[i + 3],   raw[i + 4], raw[i + 5] };
-            mesh.vertices.emplace_back(pos, normal);           // UV defaults to (0,0)
+            mesh.vertices.emplace_back(pos, normal);
         }
 
         mesh.indices = Mesh::getLitCubeIndices();
@@ -81,9 +82,10 @@ MainWindow::MainWindow(QWidget* parent)
 
 
     // --- Create initial cameras for the viewports ---
-    auto cameraEntity1 = SceneBuilder::createCamera(registry, { 0.0f, 2.0f, 5.0f });
-    auto cameraEntity2 = SceneBuilder::createCamera(registry, { 10.0f, 5.0f, 10.0f });
-
+    auto cameraEntity1 = SceneBuilder::createCamera(registry,
+        { 0, 2, 5 }, { 1,0.3f,0 });
+    auto cameraEntity2 = SceneBuilder::createCamera(registry,
+        { 10, 5,10 }, { 0,0.6f,1 });
 
     // --- 3. Setup the Core UI Layout ---
     m_centralContainer = new QWidget(this);
