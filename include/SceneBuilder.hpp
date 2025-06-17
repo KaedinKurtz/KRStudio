@@ -14,5 +14,7 @@ public:
     // entities and components in the scene's registry.
     static void spawnRobot(Scene& scene, const RobotDescription& description);
 
-    static entt::entity createCamera(entt::registry& registry, const glm::vec3& position);
+    static entt::entity createCamera(entt::registry&,
+        const glm::vec3& position,
+        const glm::vec3& colour = { 1,1,0 });
 };

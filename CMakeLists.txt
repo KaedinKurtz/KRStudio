@@ -45,6 +45,8 @@ find_library(
     HINTS "D:/RoboticsSoftware/ads/build/Your-Release-Build-Folder/x64/lib"
 )
 
+find_package(assimp CONFIG REQUIRED)
+
 
 # --- Define the Executable Target ---
 set(SOURCE_FILES
@@ -97,6 +99,8 @@ set(HEADER_FILES
     include/RobotEnrichmentDialog.hpp
     include/LinkPropertiesWidget.hpp
     include/JointPropertiesWidget.hpp
+    include/MeshUtils.hpp
+    include/LedTweakDialog.hpp
 )
 
 qt_add_executable(RoboticsSoftware
@@ -127,6 +131,7 @@ target_link_libraries(RoboticsSoftware PRIVATE
     Qt6::OpenGLWidgets
     OpenGL::GL
     glm::glm
+    assimp::assimp   
     ${urdfdom_LIBRARIES}
     # Link the correct library using a generator expression
     $<$<CONFIG:Debug>:${ADS_LIBRARY_DEBUG}>
