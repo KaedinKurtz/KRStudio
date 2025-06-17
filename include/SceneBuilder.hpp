@@ -20,11 +20,27 @@ public:
         const glm::vec3& position,
         const glm::vec3& colour = { 1,1,0 });
 
-    static entt::entity makeCR(entt::registry&,
-        const std::vector<glm::vec3>&,
-        const glm::vec4& colour = { 1,1,1,1 });
+    static entt::entity makeCR(entt::registry& r,
+        const std::vector<glm::vec3>& cps,
+        const glm::vec4& coreColour,      // Changed parameter name
+        const glm::vec4& glowColour,
+        float glowThickness);
 
-    static entt::entity makeParam(entt::registry&,
-        std::function<glm::vec3(float)>,
-        const glm::vec4& colour = { 1,1,1,1 });
+    static entt::entity makeParam(entt::registry& r,
+        std::function<glm::vec3(float)> f,
+        const glm::vec4& coreColour,      // Changed parameter name
+        const glm::vec4& glowColour,
+        float glowThickness);
+
+    static entt::entity makeLinear(entt::registry& r,
+        const std::vector<glm::vec3>& cps,
+        const glm::vec4& coreColour,      // Changed parameter name
+        const glm::vec4& glowColour,
+        float glowThickness);
+
+    static entt::entity makeBezier(entt::registry& r,
+        const std::vector<glm::vec3>& cps,
+        const glm::vec4& coreColour,      // Changed parameter name
+        const glm::vec4& glowColour,
+        float glowThickness);
 };

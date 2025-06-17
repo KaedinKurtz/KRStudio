@@ -120,23 +120,29 @@ void SceneBuilder::spawnRobot(Scene& scene, const RobotDescription& description)
 
 entt::entity SceneBuilder::makeCR(entt::registry& r,
     const std::vector<glm::vec3>& cps,
-    const glm::vec4& colour)
+    const glm::vec4& coreColour,      // Changed parameter name
+    const glm::vec4& glowColour,
+    float glowThickness)
 {
     auto e = r.create();
     r.emplace<TransformComponent>(e);
 
     SplineComponent sp;
     sp.type = SplineType::CatmullRom;
-    sp.catmullRom = cps;          // NEW field name
-    sp.colour = colour;
-
+    // Use the new consolidated 'controlPoints' vector
+    sp.controlPoints = cps;
+    sp.coreColour = coreColour;       // Set the new member
+    sp.glowColour = glowColour;
+    sp.thickness = glowThickness;
     r.emplace<SplineComponent>(e, std::move(sp));
     return e;
 }
 
 entt::entity SceneBuilder::makeParam(entt::registry& r,
     std::function<glm::vec3(float)> f,
-    const glm::vec4& colour)
+    const glm::vec4& coreColour,      // Changed parameter name
+    const glm::vec4& glowColour, 
+    float glowThickness)
 {
     entt::entity e = r.create();
     r.emplace<TransformComponent>(e);
@@ -144,8 +150,47 @@ entt::entity SceneBuilder::makeParam(entt::registry& r,
     SplineComponent sp;
     sp.type = SplineType::Parametric;
     sp.parametric.func = std::move(f);
-    sp.colour = colour;
+    sp.coreColour = coreColour;       // Set the new member
+    sp.glowColour = glowColour;
+    sp.thickness = glowThickness;
+    r.emplace<SplineComponent>(e, std::move(sp));
+    return e;
+}
 
+entt::entity SceneBuilder::makeLinear(entt::registry& r,
+    const std::vector<glm::vec3>& cps,
+    const glm::vec4& coreColour,      // Changed parameter name
+    const glm::vec4& glowColour,
+    float glowThickness)
+{
+    auto e = r.create();
+    r.emplace<TransformComponent>(e);
+
+    SplineComponent sp;
+    sp.type = SplineType::Linear;
+    sp.controlPoints = cps; // Use the new consolidated vector
+    sp.coreColour = coreColour;       // Set the new member
+    sp.glowColour = glowColour;
+    sp.thickness = glowThickness;
+    r.emplace<SplineComponent>(e, std::move(sp));
+    return e;
+}
+
+entt::entity SceneBuilder::makeBezier(entt::registry& r,
+    const std::vector<glm::vec3>& cps,
+    const glm::vec4& coreColour,      // Changed parameter name
+    const glm::vec4& glowColour,
+    float glowThickness)
+{
+    auto e = r.create();
+    r.emplace<TransformComponent>(e);
+
+    SplineComponent sp;
+    sp.type = SplineType::Bezier;
+    sp.controlPoints = cps; // Use the new consolidated vector
+    sp.coreColour = coreColour;       // Set the new member
+    sp.glowColour = glowColour;
+    sp.thickness = glowThickness;
     r.emplace<SplineComponent>(e, std::move(sp));
     return e;
 }

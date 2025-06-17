@@ -135,6 +135,7 @@ void Shader::setFloat(const std::string& name, float value) const { if (m_gl) m_
 void Shader::setMat4(const std::string& name, const glm::mat4& mat) const { if (m_gl) m_gl->glUniformMatrix4fv(m_gl->glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, &mat[0][0]); }
 void Shader::setVec3(const std::string& name, const glm::vec3& value) const { if (m_gl) m_gl->glUniform3fv(m_gl->glGetUniformLocation(ID, name.c_str()), 1, &value[0]); }
 void Shader::setVec4(const std::string& name, const glm::vec4& value) const { if (m_gl) m_gl->glUniform4fv(m_gl->glGetUniformLocation(ID, name.c_str()), 1, &value[0]); }
+void Shader::setVec2(const std::string& name, const glm::vec2& value) const { if (m_gl) m_gl->glUniform2fv(m_gl->glGetUniformLocation(ID, name.c_str()), 1, &value[0]); }
 
 // This function is now memory-safe. It dynamically allocates a buffer
 // of the correct size for the error log, preventing any buffer overflows.

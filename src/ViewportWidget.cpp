@@ -11,6 +11,7 @@
 #include <QDebug>
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
+#include <QMessageBox>
 
 #include "ViewportWidget.hpp"
 #include "RenderingSystem.hpp"
@@ -22,7 +23,7 @@
 #include "DebugHelpers.hpp"
 #include "LedTweakDialog.hpp"
 
- 
+int ViewportWidget::s_instanceCounter = 0;
 
 static void propagateTransforms(entt::registry& r)
 {
@@ -57,6 +58,9 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
     m_outlineVAO(0),
     m_outlineVBO(0)
 {
+    m_instanceId = s_instanceCounter++; // Assign unique ID
+    qDebug() << "Constructing ViewportWidget instance:" << m_instanceId;
+
     QSurfaceFormat format;
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
@@ -75,29 +79,52 @@ ViewportWidget::~ViewportWidget() {}
 
 void ViewportWidget::initializeGL()
 {
-    initializeOpenGLFunctions();   // generic 2.0 wrapper – keeps the
-    // debug logger and friends happy
+    // --- Add this block to log the actual GL version ---
+    qDebug() << "--- Verifying OpenGL Context ---";
+    QSurfaceFormat format = this->format();
+    qDebug() << "Requested GL Version:" << format.majorVersion() << "." << format.minorVersion();
+    qDebug() << "Requested GL Profile:" << (format.profile() == QSurfaceFormat::CoreProfile ? "Core" : "Compatibility/None");
 
-/* -- obtain the 4.1 core wrapper for **this** context -------------- */
+    // Initialize the base functions to be able to call glGetString
+    initializeOpenGLFunctions();
+
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    QSurfaceFormat actualFormat = ctx->format();
+    qDebug() << "Actual GL Version:" << actualFormat.majorVersion() << "." << actualFormat.minorVersion();
+    qDebug() << "Actual GL Profile:" << (actualFormat.profile() == QSurfaceFormat::CoreProfile ? "Core" : "Compatibility/None");
+    qDebug() << "Vendor:" << (const char*)glGetString(GL_VENDOR);
+    qDebug() << "Renderer:" << (const char*)glGetString(GL_RENDERER);
+    qDebug() << "Version String:" << (const char*)glGetString(GL_VERSION);
+    qDebug() << "--------------------------------";
+    // --- End of verification block ---
 
-    // Qt-6 way:
-    auto* funcs = QOpenGLVersionFunctionsFactory::get<
-        QOpenGLFunctions_4_1_Core>(ctx);
 
-#if QT_VERSION < QT_VERSION_CHECK(6,0,0)
-    // Qt-5 way (kept for completeness)
-    // auto* funcs = ctx->versionFunctions<QOpenGLFunctions_4_1_Core>();
-#endif
-
-    if (!funcs)
-        qFatal("OpenGL 4.1 core functions are not available on this GPU/driver.");
-
+    // Get the 4.1 core function wrapper for this specific context.
+    auto* funcs = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_1_Core>(ctx);
+    if (!funcs) {
+        qFatal("FATAL: OpenGL 4.1 core functions are not available on this system. Please update your graphics drivers.");
+    }
     funcs->initializeOpenGLFunctions();
 
-    /* ---- pass the interface to the renderer -------------------------- */
+    // Initialize the debug logger
+    m_debugLogger = std::make_unique<QOpenGLDebugLogger>(this);
+    if (m_debugLogger->initialize()) {
+        qDebug() << ">>> OpenGL Debug Logger Initialized Successfully <<<";
+        connect(m_debugLogger.get(), &QOpenGLDebugLogger::messageLogged, this,
+            [](const QOpenGLDebugMessage& debugMessage) {
+                qWarning() << "[OpenGL Debug]" << debugMessage.message();
+            });
+        m_debugLogger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
+    }
+    else {
+        qWarning() << ">>> FAILED to initialize OpenGL Debug Logger <<<";
+    }
+
+    // Pass the 4.1 interface to the rendering system.
     m_renderingSystem = std::make_unique<RenderingSystem>(funcs);
     m_renderingSystem->initialize();
+
+    qDebug() << ">>> ViewportWidget::initializeGL() finished. <<<";
 }
 
 void ViewportWidget::shutdown()
@@ -113,6 +140,8 @@ void ViewportWidget::shutdown()
 
 void ViewportWidget::paintGL()
 {
+    qDebug() << "--- paintGL() called for instance:" << m_instanceId << "---";
+
     if (!m_scene || !m_renderingSystem) return;
 
     auto& registry = m_scene->getRegistry();
@@ -133,8 +162,7 @@ void ViewportWidget::paintGL()
     m_renderingSystem->updateCameraTransforms(registry);
     ::propagateTransforms(registry);
     m_renderingSystem->renderMeshes(registry, viewMatrix, projMatrix, camera.getPosition());
-    m_renderingSystem->renderGrid(registry, viewMatrix, projMatrix, camera.getPosition());
-    m_renderingSystem->renderSplines(registry, viewMatrix, projMatrix, camera.getPosition());
+    m_renderingSystem->renderGrid(registry, viewMatrix, projMatrix, camera.getPosition()); m_renderingSystem->renderSplines(registry, viewMatrix, projMatrix, camera.getPosition(), width(), height());
 
     static float timer = 0.f;
     timer += frameDt;                        // ~1/60
@@ -164,6 +192,12 @@ void ViewportWidget::paintGL()
             }
         }
     }
+}
+
+void ViewportWidget::handleLoggedMessage(const QOpenGLDebugMessage& debugMessage)
+{
+    // Print any message from the OpenGL driver to the console
+    qWarning() << "[OpenGL Debug]" << debugMessage.source() << debugMessage.type() << debugMessage.id() << debugMessage.severity() << debugMessage.message();
 }
 
 Camera& ViewportWidget::getCamera()

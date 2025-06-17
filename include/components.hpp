@@ -128,17 +128,26 @@ struct SceneProperties
 };
 
 /* ── spline data --------------------------------------------------------- */
-enum class SplineType { CatmullRom, Parametric };
+enum class SplineType { Linear, CatmullRom, Bezier, Parametric };
 
-using CatmullRomData = std::vector<glm::vec3>;
+// This struct remains for the parametric function case
 struct ParametricData { std::function<glm::vec3(float)> func; };
 
+// A more unified component for all spline types
 struct SplineComponent
 {
-    SplineType      type = SplineType::CatmullRom;
-    CatmullRomData  catmullRom;        // valid if type==CatmullRom
-    ParametricData  parametric;        // valid if type==Parametric
-    glm::vec4       colour = { 1,1,1,1 };
+    SplineType type = SplineType::Linear;
+
+    // A single vector for all control-point based splines (Linear, Catmull-Rom, Bezier)
+    std::vector<glm::vec3> controlPoints;
+
+    // A separate data holder for parametric splines
+    ParametricData parametric;
+
+    glm::vec4 glowColour{ 1.0f, 1.0f, 1.0f, 1.0f };
+    glm::vec4 coreColour{ 1.0f, 1.0f, 1.0f, 1.0f };
+
+    float thickness = 8.0f;
 };
 
 struct GridComponent
