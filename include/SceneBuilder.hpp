@@ -1,6 +1,8 @@
 // In SceneBuilder.hpp
 #include "RobotDescription.hpp"
 #include "Scene.hpp" // Needs to know about the scene
+#include <vector>          
+#include <functional>
 
 struct RobotDescription;
 class Scene;
@@ -17,4 +19,12 @@ public:
     static entt::entity createCamera(entt::registry&,
         const glm::vec3& position,
         const glm::vec3& colour = { 1,1,0 });
+
+    static entt::entity makeCR(entt::registry&,
+        const std::vector<glm::vec3>&,
+        const glm::vec4& colour = { 1,1,1,1 });
+
+    static entt::entity makeParam(entt::registry&,
+        std::function<glm::vec3(float)>,
+        const glm::vec4& colour = { 1,1,1,1 });
 };

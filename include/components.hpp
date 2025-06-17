@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -127,7 +127,19 @@ struct SceneProperties
     float fogEndDistance = 75.0f;
 };
 
+/* ── spline data --------------------------------------------------------- */
+enum class SplineType { CatmullRom, Parametric };
 
+using CatmullRomData = std::vector<glm::vec3>;
+struct ParametricData { std::function<glm::vec3(float)> func; };
+
+struct SplineComponent
+{
+    SplineType      type = SplineType::CatmullRom;
+    CatmullRomData  catmullRom;        // valid if type==CatmullRom
+    ParametricData  parametric;        // valid if type==Parametric
+    glm::vec4       colour = { 1,1,1,1 };
+};
 
 struct GridComponent
 {

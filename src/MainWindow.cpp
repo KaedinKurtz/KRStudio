@@ -1,4 +1,4 @@
-#include "MainWindow.hpp"
+﻿#include "MainWindow.hpp"
 #include "StaticToolbar.hpp"
 #include "PropertiesPanel.hpp"
 #include "Scene.hpp"
@@ -80,6 +80,23 @@ MainWindow::MainWindow(QWidget* parent)
         mesh.indices = Mesh::getLitCubeIndices();
     }
 
+    {
+        using SB = SceneBuilder;
+        auto& reg = m_scene->getRegistry();
+
+
+        // Catmull–Rom (big swoop)
+        SB::makeCR(reg,
+            { {-2,0,-1}, {-2,0, 1}, { 2,0, 1}, { 2,0,-1} },
+            { 0.9f,0.3f,0.3f,1 });
+
+        // blue 3-turn helix, 6 m tall
+        SB::makeParam(reg,
+            [](float t) { return glm::vec3(2 * std::cos(6.28f * t),
+                6 * t,
+                2 * std::sin(6.28f * t)); },
+            { 0.2f,0.6f,1.0f,1 });
+    }
 
     // --- Create initial cameras for the viewports ---
     auto cameraEntity1 = SceneBuilder::createCamera(registry,

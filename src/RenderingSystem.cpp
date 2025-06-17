@@ -4,12 +4,13 @@
 #include "Shader.hpp"
 #include "Camera.hpp"
 
-#include <QOpenGLFunctions_3_3_Core>
+#include <QOpenGLFunctions_4_1_Core>
 #include <QDebug>
 #include <stdexcept>
 #include <string>
+#include <glm/gtc/type_ptr.hpp>
 
-RenderingSystem::RenderingSystem(QOpenGLFunctions_3_3_Core* gl)
+RenderingSystem::RenderingSystem(QOpenGLFunctions_4_1_Core* gl)
     : m_gl(gl),
     m_phongShader(nullptr),
     m_gridShader(nullptr),
@@ -20,7 +21,7 @@ RenderingSystem::RenderingSystem(QOpenGLFunctions_3_3_Core* gl)
     m_intersectionVBO(0)
 {
     if (!m_gl) {
-        qWarning() << "[RenderingSystem] Error: QOpenGLFunctions_3_3_Core pointer is null!";
+        qWarning() << "[RenderingSystem] Error: QOpenGLFunctions_4_1_Core pointer is null!";
     }
 }
 
@@ -57,6 +58,19 @@ void RenderingSystem::initialize() {
         qCritical() << "[RenderingSystem] FATAL: Failed to initialize Outline shader. Error:" << e.what();
     }
 
+    try {
+        m_splineShader = Shader::buildTessellatedShader(
+            m_gl,
+            "D:/RoboticsSoftware/shaders/spline_vert.glsl",
+            "D:/RoboticsSoftware/shaders/spline_tesc.glsl",
+            "D:/RoboticsSoftware/shaders/spline_tese.glsl",
+            "D:/RoboticsSoftware/shaders/spline_frag.glsl");
+    }
+    catch (const std::runtime_error& e) {
+        qCritical() << "[RenderingSystem] FATAL: spline shader load failed:"
+            << e.what();
+    }
+
     float gridPlaneVertices[] = {
         -2000.0f, 0.0f, -2000.0f,  2000.0f, 0.0f, -2000.0f,  2000.0f, 0.0f,  2000.0f,
         -2000.0f, 0.0f, -2000.0f,  2000.0f, 0.0f,  2000.0f, -2000.0f, 0.0f,  2000.0f
@@ -82,6 +96,16 @@ void RenderingSystem::initialize() {
     m_gl->glEnableVertexAttribArray(0);
     m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     m_gl->glBindVertexArray(0);
+
+    m_gl->glGenVertexArrays(1, &m_tmpVAO);
+    m_gl->glGenBuffers(1, &m_tmpVBO);
+    m_gl->glBindVertexArray(m_tmpVAO);
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_tmpVBO);
+    // no data yet – the real upload happens every frame
+    m_gl->glEnableVertexAttribArray(0);
+    m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        sizeof(glm::vec3), (void*)0);
+    m_gl->glBindVertexArray(0);
 }
 
 void RenderingSystem::shutdown() {
@@ -93,6 +117,10 @@ void RenderingSystem::shutdown() {
     if (m_intersectionVAO != 0) {
         m_gl->glDeleteVertexArrays(1, &m_intersectionVAO);
         m_gl->glDeleteBuffers(1, &m_intersectionVBO);
+    }
+    if (m_tmpVAO) {
+        m_gl->glDeleteVertexArrays(1, &m_tmpVAO);
+        m_gl->glDeleteBuffers(1, &m_tmpVBO);
     }
 }
 
@@ -303,4 +331,60 @@ void RenderingSystem::drawIntersections(const std::vector<std::vector<glm::vec3>
 
     m_gl->glBindVertexArray(0);
     m_gl->glEnable(GL_DEPTH_TEST);
+}
+
+void RenderingSystem::renderSplines(entt::registry& r,
+    const glm::mat4& view,
+    const glm::mat4& proj,
+    const glm::vec3& eye)
+{
+    if (!m_splineShader) return;          // shader failed to load – bail
+
+    /* ---------- program-wide uniforms ---------------------------------- */
+    m_splineShader->use();
+    m_splineShader->setMat4("u_view", view);
+    m_splineShader->setMat4("u_proj", proj);
+    m_splineShader->setVec3("u_eye", eye);
+
+    m_gl->glLineWidth(3.0f);                       // fat line
+    m_gl->glPatchParameteri(GL_PATCH_VERTICES, 1);      // one vertex per patch
+
+for (auto e : r.view<SplineComponent>())
+{
+    const SplineComponent& sp = r.get<SplineComponent>(e);
+
+    /* colour ----------------------------------------------------------------*/
+    m_splineShader->setVec4("u_colour", sp.colour);
+
+    /* ------------ Catmull–Rom ---------------------------------------------*/
+    if (sp.type == SplineType::CatmullRom)
+    {
+        const auto& pts = sp.catmullRom;          // ▼  NO “.pts”
+
+        if (pts.size() < 4)                       // ▼  guard
+            continue;
+
+        /* upload the control-points once per frame --------------------------- */
+        m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_tmpVBO);
+        m_gl->glBufferData(GL_ARRAY_BUFFER,                // ▼  four params
+            static_cast<GLsizeiptr>(pts.size() * sizeof(glm::vec3)),
+            pts.data(),
+            GL_DYNAMIC_DRAW);
+
+        m_gl->glBindVertexArray(m_tmpVAO);
+        m_gl->glDrawArrays(GL_PATCHES, 0,                  // ▼  three params
+            static_cast<GLsizei>(pts.size()));
+    }
+    /* ------------ Parametric ----------------------------------------------*/
+    else            /* SplineType::Parametric */
+    {
+        constexpr int segs = 64;             // samples per curve
+        m_splineShader->setInt("u_paramSegs", segs);
+        m_gl->glBindVertexArray(0);          // we do all math in the shader
+        m_gl->glDrawArrays(GL_PATCHES, 0, segs);
+    }
+}
+
+m_gl->glBindVertexArray(0);
+m_gl->glUseProgram(0);
 }
