@@ -117,3 +117,35 @@ void SceneBuilder::spawnRobot(Scene& scene, const RobotDescription& description)
         }
     }
 }
+
+entt::entity SceneBuilder::makeCR(entt::registry& r,
+    const std::vector<glm::vec3>& cps,
+    const glm::vec4& colour)
+{
+    auto e = r.create();
+    r.emplace<TransformComponent>(e);
+
+    SplineComponent sp;
+    sp.type = SplineType::CatmullRom;
+    sp.catmullRom = cps;          // NEW field name
+    sp.colour = colour;
+
+    r.emplace<SplineComponent>(e, std::move(sp));
+    return e;
+}
+
+entt::entity SceneBuilder::makeParam(entt::registry& r,
+    std::function<glm::vec3(float)> f,
+    const glm::vec4& colour)
+{
+    entt::entity e = r.create();
+    r.emplace<TransformComponent>(e);
+
+    SplineComponent sp;
+    sp.type = SplineType::Parametric;
+    sp.parametric.func = std::move(f);
+    sp.colour = colour;
+
+    r.emplace<SplineComponent>(e, std::move(sp));
+    return e;
+}

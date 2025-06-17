@@ -1,6 +1,6 @@
 #pragma once
 #include <QOpenGLWidget>
-#include <QOpenGLFunctions_3_3_Core>
+#include <QOpenGLFunctions_4_1_Core>
 #include <memory>
 #include <entt/fwd.hpp>
 
@@ -15,7 +15,7 @@ class QKeyEvent;
 class QCloseEvent;
 class QPoint;
 
-class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_3_3_Core
+class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_4_1_Core
 {
     Q_OBJECT
 public:

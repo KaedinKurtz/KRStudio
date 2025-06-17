@@ -1,15 +1,6 @@
-#include "ViewportWidget.hpp"
-#include "RenderingSystem.hpp"
-#include "Scene.hpp"
-#include "Camera.hpp"
-#include "Shader.hpp"
-#include "components.hpp"
-#include "IntersectionSystem.hpp"
-#include "DebugHelpers.hpp"
-#include "LedTweakDialog.hpp"
-
-
 #include <QOpenGLContext>
+#include <QOpenGLFunctions_4_1_Core>
+#include <QOpenGLVersionFunctionsFactory>
 #include <QOpenGLDebugLogger>
 #include <QSurfaceFormat>
 #include <QTimer>
@@ -20,6 +11,18 @@
 #include <QDebug>
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
+
+#include "ViewportWidget.hpp"
+#include "RenderingSystem.hpp"
+#include "Scene.hpp"
+#include "Camera.hpp"
+#include "Shader.hpp"
+#include "components.hpp"
+#include "IntersectionSystem.hpp"
+#include "DebugHelpers.hpp"
+#include "LedTweakDialog.hpp"
+
+ 
 
 static void propagateTransforms(entt::registry& r)
 {
@@ -57,7 +60,7 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
     QSurfaceFormat format;
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
-    format.setVersion(3, 3);
+    format.setVersion(4, 1);
     format.setProfile(QSurfaceFormat::CoreProfile);
     format.setOption(QSurfaceFormat::DebugContext);
     setFormat(format);
@@ -72,13 +75,29 @@ ViewportWidget::~ViewportWidget() {}
 
 void ViewportWidget::initializeGL()
 {
-    initializeOpenGLFunctions();
-    m_renderingSystem = std::make_unique<RenderingSystem>(this);
-    m_renderingSystem->initialize();
+    initializeOpenGLFunctions();   // generic 2.0 wrapper – keeps the
+    // debug logger and friends happy
 
-    m_outlineShader = std::make_unique<Shader>(this, "D:/RoboticsSoftware/shaders/outline_vert.glsl", "D:/RoboticsSoftware/shaders/outline_frag.glsl");
-    glGenVertexArrays(1, &m_outlineVAO);
-    glGenBuffers(1, &m_outlineVBO);
+/* -- obtain the 4.1 core wrapper for **this** context -------------- */
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+
+    // Qt-6 way:
+    auto* funcs = QOpenGLVersionFunctionsFactory::get<
+        QOpenGLFunctions_4_1_Core>(ctx);
+
+#if QT_VERSION < QT_VERSION_CHECK(6,0,0)
+    // Qt-5 way (kept for completeness)
+    // auto* funcs = ctx->versionFunctions<QOpenGLFunctions_4_1_Core>();
+#endif
+
+    if (!funcs)
+        qFatal("OpenGL 4.1 core functions are not available on this GPU/driver.");
+
+    funcs->initializeOpenGLFunctions();
+
+    /* ---- pass the interface to the renderer -------------------------- */
+    m_renderingSystem = std::make_unique<RenderingSystem>(funcs);
+    m_renderingSystem->initialize();
 }
 
 void ViewportWidget::shutdown()
@@ -115,6 +134,7 @@ void ViewportWidget::paintGL()
     ::propagateTransforms(registry);
     m_renderingSystem->renderMeshes(registry, viewMatrix, projMatrix, camera.getPosition());
     m_renderingSystem->renderGrid(registry, viewMatrix, projMatrix, camera.getPosition());
+    m_renderingSystem->renderSplines(registry, viewMatrix, projMatrix, camera.getPosition());
 
     static float timer = 0.f;
     timer += frameDt;                        // ~1/60

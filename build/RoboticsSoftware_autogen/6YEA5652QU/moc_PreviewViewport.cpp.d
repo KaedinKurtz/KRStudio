@@ -157,10 +157,10 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/6YEA5652QU/moc_PreviewViewpor
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qtransform.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtGui/qwindowdefs_win.h \
-  C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLFunctions_3_3_Core \
+  C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLFunctions_4_1_Core \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionFunctions \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/QOpenGLVersionProfile \
-  C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglfunctions_3_3_core.h \
+  C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglfunctions_4_1_core.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionfunctions.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qopenglversionprofile.h \
   C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL/qtopenglexports.h \

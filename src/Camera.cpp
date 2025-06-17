@@ -221,7 +221,7 @@ void Camera::freeLook(float dxPix, float dyPix)
 
 void Camera::flyMove(Camera_Movement dir, float dt)
 {
-    float v = 4.0f * dt;             // constant speed (tweak or expose)
+    float v = 1.0f * dt;             // constant speed (tweak or expose)
     glm::vec3 fwd = glm::normalize(m_FocalPoint - m_Position);
 
     if (dir == FORWARD)  m_Position += fwd * v;
