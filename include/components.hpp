@@ -20,6 +20,98 @@
 struct SelectedComponent {};
 struct CameraGizmoTag {};
 struct RecordLedTag {};
+struct PulsingSplineTag {};
+
+// --- FIELD-SPECIFIC COMPONENTS ---
+
+struct FieldSourceTag {};
+
+struct PotentialSourceComponent {
+    float strength = 10.0f;
+};
+
+struct VectorSourceComponent {
+    glm::vec3 direction = { 1.0f, 0.5f, 0.0f };
+    float strength = 1.0f;
+};
+
+struct ColorStop {
+    float position = 0.0f; // Position in the gradient (0.0 to 1.0)
+    glm::vec4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
+};
+
+enum class FieldVisMode { Vector, Potential, Flow };
+
+struct ParticleState {
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> velocities;
+    std::vector<glm::vec4> colors;
+    std::vector<float> ages;
+    std::vector<float> lifetimes;
+    int particleCount = 2000; // The number of particles to simulate
+};
+
+struct FieldVisualizerComponent {
+    // --- General Properties ---
+    FieldVisMode mode = FieldVisMode::Vector;
+    bool isEnabled = true;
+
+    // --- Bounding Volume ---
+    // The size, position, and orientation of the visualization volume
+    // are controlled by this component AND the entity's TransformComponent.
+    glm::vec3 bounds = { 10.0f, 10.0f, 10.0f };
+
+    // --- Voxel Grid ---
+    // The number of samples to take along each axis of the bounding volume.
+    // This directly controls the density of the vectors/indicators.
+    glm::ivec3 density = { 10, 10, 10 };
+
+    // --- Data Mapping & Appearance ---
+    // Used to map a field's magnitude to a color.
+    std::vector<ColorStop> colorGradient;
+    float minMagnitude = 0.0f;
+    float maxMagnitude = 1.0f;
+
+    // A global scale factor for the length of the visualized vectors.
+    float vectorScale = 1.0f;
+
+    // --- Data Sources ---
+    // An optional list of specific entities that act as sources for this field.
+    // If this vector is empty, the visualizer will consider ALL field sources in the scene.
+    std::vector<entt::entity> sourceEntities;
+
+	// The state of the particles used for visualization.
+    ParticleState particles;
+};
+
+struct PointEffectorComponent {
+    float strength = 1.0f; // Positive for repulsion, negative for attraction
+    float radius = 10.0f;  // How far the influence extends
+    // How the strength decreases with distance (e.g., linear, inverse-square)
+    enum class FalloffType { None, Linear, InverseSquare };
+    FalloffType falloff = FalloffType::Linear;
+};
+
+struct SplineEffectorComponent {
+    float strength = -1.0f; // Negative for attraction
+    float radius = 5.0f;   // How far from the spline the influence is felt
+    // Define the direction of the force
+    enum class ForceDirection { Perpendicular, Tangent };
+    ForceDirection direction = ForceDirection::Perpendicular; // Pulls towards the nearest point
+};
+
+struct MeshEffectorComponent {
+    float strength = 10.0f; // Positive for repulsion
+    float distance = 2.0f; // How far out from the surface the repulsion is felt
+    // Direction is almost always the surface normal (outward)
+};
+
+struct DirectionalEffectorComponent {
+    glm::vec3 direction = { 0.0f, -1.0f, 0.0f };
+    float strength = 1.0f;
+};
+
+// --- ...-SPECIFIC COMPONENTS ---
 
 struct BoundingBoxComponent {
     glm::vec3 min = { -0.5f, -0.5f, -0.5f };

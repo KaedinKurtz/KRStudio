@@ -178,6 +178,29 @@ void RenderingSystem::initialize() {
         qCritical() << "[RenderingSystem] FATAL: Failed to initialize Glow shader:" << e.what();
     }
 
+    try {
+        m_capShader = std::make_unique<Shader>(m_gl,
+            std::vector<std::string>{
+            "D:/RoboticsSoftware/shaders/cap_vert.glsl",
+                "D:/RoboticsSoftware/shaders/cap_geom.glsl",
+                "D:/RoboticsSoftware/shaders/cap_frag.glsl"
+        }
+        );
+    }
+    catch (const std::runtime_error& e) {
+        qCritical() << "[RenderingSystem] FATAL: Failed to initialize Cap shader:" << e.what();
+    }
+
+    // Setup for the new cap renderer
+    m_gl->glGenVertexArrays(1, &m_capVAO);
+    m_gl->glGenBuffers(1, &m_capVBO);
+    m_gl->glBindVertexArray(m_capVAO);
+    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_capVBO);
+    // The VAO for points is identical to the line VAO
+    m_gl->glEnableVertexAttribArray(0);
+    m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    m_gl->glBindVertexArray(0);
+
     // Setup for the new line renderer
     m_gl->glGenVertexArrays(1, &m_lineVAO);
     m_gl->glGenBuffers(1, &m_lineVBO);
@@ -241,6 +264,10 @@ void RenderingSystem::shutdown() {
     }
     if (m_splineCpSSBO) {
         m_gl->glDeleteBuffers(1, &m_splineCpSSBO);
+    }
+    if (m_capVAO != 0) {
+        m_gl->glDeleteVertexArrays(1, &m_capVAO);
+        m_gl->glDeleteBuffers(1, &m_capVBO);
     }
 }
 
@@ -461,28 +488,20 @@ void RenderingSystem::renderSplines(entt::registry& r,
     int viewportWidth,
     int viewportHeight)
 {
-    if (!m_glowShader) return;
+    if (!m_glowShader || !m_capShader) return;
 
-    m_glowShader->use();
-    m_glowShader->setMat4("u_view", view);
-    m_glowShader->setMat4("u_proj", proj);
-    m_glowShader->setVec2("u_viewport_size", glm::vec2(viewportWidth, viewportHeight));
-
-    m_gl->glBindVertexArray(m_lineVAO);
-
-    // THE FIX for DEPTH TESTING:
-    // We will TEST against the depth buffer, but we will NOT WRITE to it.
-    // This lets splines be hidden by solid objects, but prevents transparent
-    // splines from incorrectly occluding each other.
+    // Common GL state for all splines
     m_gl->glEnable(GL_DEPTH_TEST);
     m_gl->glDepthMask(GL_FALSE);
+    m_gl->glEnable(GL_BLEND);
+    m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     for (auto e : r.view<SplineComponent>())
     {
         const SplineComponent& sp = r.get<SplineComponent>(e);
         std::vector<glm::vec3> lineStripPoints;
 
-        // (The switch statement for generating vertices is unchanged)
+        // --- 1. Generate Vertex Data (Unchanged) ---
         switch (sp.type) {
         case SplineType::Linear: lineStripPoints = evaluateLinearCPU(sp.controlPoints); break;
         case SplineType::CatmullRom: lineStripPoints = evaluateCatmullRomCPU(sp.controlPoints, 64); break;
@@ -492,6 +511,15 @@ void RenderingSystem::renderSplines(entt::registry& r,
 
         if (lineStripPoints.size() < 2) continue;
 
+        // --- 2. Draw the Line Segments (Unchanged) ---
+        m_glowShader->use();
+        m_glowShader->setMat4("u_view", view);
+        m_glowShader->setMat4("u_proj", proj);
+        m_glowShader->setFloat("u_thickness", sp.thickness);
+        m_glowShader->setVec2("u_viewport_size", glm::vec2(viewportWidth, viewportHeight));
+        m_glowShader->setVec4("u_glowColour", sp.glowColour);
+        m_glowShader->setVec4("u_coreColour", sp.coreColour);
+
         std::vector<glm::vec3> lineSegments;
         lineSegments.reserve((lineStripPoints.size() - 1) * 2);
         for (size_t i = 0; i < lineStripPoints.size() - 1; ++i) {
@@ -499,18 +527,86 @@ void RenderingSystem::renderSplines(entt::registry& r,
             lineSegments.push_back(lineStripPoints[i + 1]);
         }
 
-        // Set the two new color uniforms from the component
-        m_glowShader->setVec4("u_glowColour", sp.glowColour);
-        m_glowShader->setVec4("u_coreColour", sp.coreColour);
-        m_glowShader->setFloat("u_thickness", sp.thickness);
-
+        m_gl->glBindVertexArray(m_lineVAO);
         m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_lineVBO);
         m_gl->glBufferData(GL_ARRAY_BUFFER, lineSegments.size() * sizeof(glm::vec3), lineSegments.data(), GL_DYNAMIC_DRAW);
         m_gl->glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lineSegments.size()));
+
+        // --- 3. Draw the Caps (with new conditional logic) ---
+        m_capShader->use();
+        m_capShader->setMat4("u_view", view);
+        m_capShader->setMat4("u_proj", proj);
+        m_capShader->setVec2("u_viewport_size", glm::vec2(viewportWidth, viewportHeight));
+        m_capShader->setFloat("u_thickness", sp.thickness);
+        m_capShader->setVec4("u_glowColour", sp.glowColour);
+        m_capShader->setVec4("u_coreColour", sp.coreColour);
+
+        // --- NEW LOGIC: Decide which points get a cap ---
+        std::vector<glm::vec3> capPoints;
+        if (sp.type == SplineType::Linear)
+        {
+            // For a Linear spline, every control point is a "corner"
+            // that needs a cap to look smooth.
+            capPoints = sp.controlPoints;
+        }
+        else
+        {
+            // For smooth, curved splines, we only need caps at the
+            // absolute beginning and end of the entire line.
+            capPoints = { lineStripPoints.front(), lineStripPoints.back() };
+        }
+        // --- END NEW LOGIC ---
+
+        if (!capPoints.empty())
+        {
+            m_gl->glBindVertexArray(m_capVAO);
+            m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_capVBO);
+            m_gl->glBufferData(GL_ARRAY_BUFFER, capPoints.size() * sizeof(glm::vec3), capPoints.data(), GL_DYNAMIC_DRAW);
+            m_gl->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(capPoints.size()));
+        }
     }
 
-    // Restore OpenGL state
-    m_gl->glDepthMask(GL_TRUE); // IMPORTANT: Re-enable depth writing
+    // --- Cleanup OpenGL State (Unchanged) ---
+    m_gl->glDepthMask(GL_TRUE);
     m_gl->glBindVertexArray(0);
     m_gl->glUseProgram(0);
+}
+
+void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection)
+{
+    // Get all entities that have a visualizer component and a transform
+    auto view = registry.view<const FieldVisualizerComponent, const TransformComponent>();
+
+    for (auto entity : view)
+    {
+        const auto& visualizer = view.get<const FieldVisualizerComponent>(entity);
+        const auto& transform = view.get<const TransformComponent>(entity);
+
+        if (!visualizer.isEnabled) {
+            continue;
+        }
+
+        // --- Instance Data Generation ---
+        // 1. Create a std::vector to hold per-instance data (matrices, colors, etc.).
+        // 2. Loop through the volume based on the visualizer's `bounds` and `density`.
+        //    for (int x = 0; x < visualizer.density.x; ++x) {
+        //        for (int y = 0; y < visualizer.density.y; ++y) {
+        //            for (int z = 0; z < visualizer.density.z; ++z) {
+        //
+        // 3. For each point in the volume, sample the field using the FieldSolver:
+        //    `glm::vec3 fieldValue = m_fieldSolver.getVectorAt(registry, point, visualizer.sourceEntities);`
+        //
+        // 4. Based on the `fieldValue` and the `visualizer.mode`, create the transformation
+        //    matrix and color for this instance (this one arrow or potential line).
+        //
+        // 5. Add this instance data to your vector.
+        //            }
+        //        }
+        //    }
+        //
+        // --- Drawing ---
+        // 6. Upload the entire vector of instance data to the GPU (to an instance VBO).
+        // 7. Issue a single instanced draw call (glDrawElementsInstanced) to render all
+        //    the arrows/indicators at once.
+    }
 }

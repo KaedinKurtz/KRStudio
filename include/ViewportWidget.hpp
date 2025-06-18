@@ -41,6 +41,7 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* ev) override;
     void mouseDoubleClickEvent(QMouseEvent* ev) override;
+
 	const float frameDt = 1.0f / 60.0f; // Fixed frame rate for simplicity
 
 public slots:
@@ -60,4 +61,6 @@ private:
 
     static int s_instanceCounter;
     int m_instanceId;
+
+    static void updateAnimations(entt::registry& registry, float frameDt);
 };
