@@ -22,6 +22,7 @@
 #include "IntersectionSystem.hpp"
 #include "DebugHelpers.hpp"
 #include "LedTweakDialog.hpp"
+#include "FieldSolver.hpp"
 
 int ViewportWidget::s_instanceCounter = 0;
 
@@ -161,8 +162,10 @@ void ViewportWidget::paintGL()
     m_renderingSystem->setCurrentCamera(m_cameraEntity);
     m_renderingSystem->updateCameraTransforms(registry);
     ::propagateTransforms(registry);
+    ViewportWidget::updateAnimations(registry, frameDt);
     m_renderingSystem->renderMeshes(registry, viewMatrix, projMatrix, camera.getPosition());
-    m_renderingSystem->renderGrid(registry, viewMatrix, projMatrix, camera.getPosition()); m_renderingSystem->renderSplines(registry, viewMatrix, projMatrix, camera.getPosition(), width(), height());
+    m_renderingSystem->renderGrid(registry, viewMatrix, projMatrix, camera.getPosition()); 
+    m_renderingSystem->renderSplines(registry, viewMatrix, projMatrix, camera.getPosition(), width(), height());
 
     static float timer = 0.f;
     timer += frameDt;                        // ~1/60
@@ -191,6 +194,36 @@ void ViewportWidget::paintGL()
                 }
             }
         }
+    }
+}
+
+void ViewportWidget::updateAnimations(entt::registry& registry, float frameDt)
+{
+    // A persistent timer, just like in your example
+    static float timer = 0.f;
+    timer += frameDt;
+
+    // --- Pulsing Spline Logic ---
+    float pulseSpeed = 3.0f; // Controls how fast the pulse is. Higher is faster.
+
+    // A sine wave oscillates smoothly between -1.0 and 1.0.
+    // We map it to a 0.0 to 1.0 range to use as a brightness multiplier.
+    float brightness = (sin(timer * pulseSpeed) + 1.0f) / 2.0f;
+
+    // To prevent the glow from disappearing completely, we'll set a minimum brightness.
+    float minBrightness = 0.1f;
+    float finalBrightness = minBrightness + (1.0f - minBrightness) * brightness;
+
+    // Find all entities that have BOTH a PulsingSplineTag and a SplineComponent
+    auto view = registry.view<PulsingSplineTag, SplineComponent>();
+    for (auto entity : view)
+    {
+        // Get the spline component for this entity
+        auto& spline = view.get<SplineComponent>(entity);
+
+        // Modulate the alpha of the glowColour to make it pulse.
+        // We set the base alpha to 1.0 and multiply by our pulsing brightness.
+        spline.glowColour.a = 1.0f * finalBrightness;
     }
 }
 
@@ -303,6 +336,52 @@ void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* ev)
         getCamera().focusOn(*hit,                    // new target
             glm::length(getCamera().getPosition() - *hit));
         update();
+    }
+}
+
+static void updateParticleFlow(entt::registry& registry, FieldSolver& fieldSolver, float frameDt)
+{
+    auto view = registry.view<FieldVisualizerComponent>();
+    for (auto entity : view)
+    {
+        auto& visualizer = view.get<FieldVisualizerComponent>(entity);
+        if (!visualizer.isEnabled || visualizer.mode != FieldVisMode::Flow) {
+            continue;
+        }
+
+        auto& particles = visualizer.particles;
+        // (Initialize particle positions/ages/lifetimes if they are empty)
+
+        // Loop through every particle
+        for (int i = 0; i < particles.particleCount; ++i)
+        {
+            particles.ages[i] += frameDt;
+
+            // If a particle is "dead", respawn it
+            if (particles.ages[i] >= particles.lifetimes[i]) {
+                // Reset its age and give it a new random position and lifetime
+                particles.ages[i] = 0.0f;
+                // particles.positions[i] = random_point_in_bounds(visualizer.bounds);
+                // particles.lifetimes[i] = random_lifetime();
+            }
+
+            // --- Advection Step ---
+            // Move the particle along the field vector
+            glm::vec3 fieldVec = fieldSolver.getVectorAt(registry, particles.positions[i], visualizer.sourceEntities);
+            particles.velocities[i] = fieldVec;
+            particles.positions[i] += fieldVec * frameDt * visualizer.vectorScale;
+
+
+            // --- Update Visuals ---
+            // Map turbulence (which you'd get from the solver) to color
+            // float turbulence = fieldSolver.getTurbulenceAt(registry, particles.positions[i]);
+            // particles.colors[i] = map_turbulence_to_color(turbulence);
+
+            // To fade in and out, calculate alpha based on age vs lifetime
+            float life_t = particles.ages[i] / particles.lifetimes[i]; // 0.0 to 1.0
+            float fade = sin(life_t * 3.14159f); // A sine curve makes a smooth fade in/out
+            particles.colors[i].a = fade;
+        }
     }
 }
 

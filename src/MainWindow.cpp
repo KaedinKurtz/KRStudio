@@ -85,26 +85,29 @@ MainWindow::MainWindow(QWidget* parent)
         auto& reg = m_scene->getRegistry();
 
         // Catmull–Rom (big red swoop) - This one should already be there
-        SB::makeCR(reg,
+        auto CREntity = SB::makeCR(reg,
             { {-2,0,-1}, {-2,0, 1}, { 2,0, 1}, { 2,0,-1} },
-            { 0.9f,0.9f,0.9f,1 }, { 0.9f,0.3f,0.3f,1 }, 8.0f);
+            { 0.9f,0.9f,0.9f,1 }, { 0.9f,0.3f,0.3f,1 }, 18.0f);
+        reg.emplace<PulsingSplineTag>(CREntity);
 
         // Parametric (blue helix) - This one should already be there
-        SB::makeParam(reg,
+        auto ParamEntity = SB::makeParam(reg,
             [](float t) { return glm::vec3(2 * std::cos(6.28f * 3 * t), 6 * t, 2 * std::sin(6.28f * 3 * t)); },
-            { 0.9f,0.9f,0.9f,1 }, { 0.2f,0.6f,1.0f,1 }, 8.0f);
-
+            { 0.9f,0.9f,0.9f,1 }, { 0.2f,0.6f,1.0f,1 }, 12.0f);
+        reg.emplace<PulsingSplineTag>(ParamEntity);
         // --- Add these new examples ---
 
         // Linear (sharp green line)
-        SB::makeLinear(reg,
+        auto LinearEntity = SB::makeLinear(reg,
             { {-5, 0.1, -5}, {-5, 2, -5}, {0, 2, -5}, {0, 0.1, -5} },
-            { 0.9f,0.9f,0.9f,1 }, { 0.1f, 1.0f, 0.2f, 1 }, 8.0f);
+            { 0.9f,0.9f,0.9f,1 }, { 0.1f, 1.0f, 0.2f, 1 }, 18.0f);
+        reg.emplace<PulsingSplineTag>(LinearEntity);
 
         // Bezier (smooth yellow curve)
-        SB::makeBezier(reg,
+        auto bezierEntity = SB::makeBezier(reg,
             { {5, 0.1, -5}, {5, 4, -5}, {2, 4, -5}, {2, 0.1, -5} },
-            { 0.9f,0.9f,0.9f,1 }, { 1.0f, 0.9f, 0.2f, 1 }, 8.0f);
+            { 0.9f,0.9f,0.9f,1 }, { 1.0f, 0.9f, 0.2f, 1 }, 18.0f);
+        reg.emplace<PulsingSplineTag>(bezierEntity);
     }
 
     // --- Create initial cameras for the viewports ---

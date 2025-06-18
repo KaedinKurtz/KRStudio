@@ -860,6 +860,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/resources.qrc \
 	D:/RoboticsSoftware/src/Camera.cpp \
 	D:/RoboticsSoftware/src/DiagnosticsPanel.cpp \
+	D:/RoboticsSoftware/src/FieldSolver.cpp \
 	D:/RoboticsSoftware/src/Grid.cpp \
 	D:/RoboticsSoftware/src/IntersectionSystem.cpp \
 	D:/RoboticsSoftware/src/JointPropertiesWidget.cpp \

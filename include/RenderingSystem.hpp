@@ -34,6 +34,9 @@ public:
     static bool isDescendantOf(entt::registry&,
         entt::entity,
         entt::entity);
+
+    void renderFieldVisualizers(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection);
+
 private:
     // This private function is no longer needed with the new robust z-fighting solution
     // float depthOffsetOnePx(const glm::mat4& proj, float camDepth) const;
@@ -63,4 +66,8 @@ private:
     GLuint m_lineVBO = 0;
 
     std::unique_ptr<Shader> m_glowShader;
+
+    std::unique_ptr<Shader> m_capShader;
+    GLuint m_capVAO = 0;
+    GLuint m_capVBO = 0;
 };

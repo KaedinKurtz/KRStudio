@@ -3404,6 +3404,7 @@ D:/RoboticsSoftware/include/URDFParser.hpp
 D:/RoboticsSoftware/src/MainWindow.cpp
 D:/RoboticsSoftware/src/RenderingSystem.cpp
 D:/RoboticsSoftware/external/pugixml/pugixml.cpp
+D:/RoboticsSoftware/src/FieldSolver.cpp
 D:/RoboticsSoftware/src/Camera.cpp
 D:/RoboticsSoftware/src/Grid.cpp
 D:/RoboticsSoftware/src/JointPropertiesWidget.cpp

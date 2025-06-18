@@ -617,6 +617,7 @@
 		[ "D:/RoboticsSoftware/external/pugixml/pugixml.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Camera.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/DiagnosticsPanel.cpp", "MU", null ],
+		[ "D:/RoboticsSoftware/src/FieldSolver.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/Grid.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/IntersectionSystem.cpp", "MU", null ],
 		[ "D:/RoboticsSoftware/src/JointPropertiesWidget.cpp", "MU", null ],
