@@ -45,6 +45,7 @@ int main(int argc, char* argv[])
     format.setSamples(4); // Request a Core Profile context
     format.setOption(QSurfaceFormat::StereoBuffers, true);
     format.setOption(QSurfaceFormat::DebugContext);
+    format.setColorSpace(QSurfaceFormat::sRGBColorSpace);
     QSurfaceFormat::setDefaultFormat(format);
     // ----------------------------------------------------------------
 
