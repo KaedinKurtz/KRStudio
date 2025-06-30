@@ -61,8 +61,14 @@ private:
     unsigned int m_outlineVBO = 0;
     QPoint m_lastMousePos;
 
-    static int s_instanceCounter;
-    int m_instanceId;
+    int m_instanceId; // Add this
+    static int s_instanceCounter; // Add this
 
     static void updateAnimations(entt::registry& registry, float frameDt);
+
+    bool m_hasSignaledReady = false;
+
+signals: // <<< ADD THIS SECTION
+    void viewportReady();
+    void renderingSystemInitialized();
 };

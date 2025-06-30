@@ -8,7 +8,7 @@
 
 #include <memory>
 #include <vector>
-
+#include "Camera.hpp"
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
 
@@ -44,15 +44,16 @@ public:
     void resize(int width, int height);       // call from resizeGL()
     void ensureSize(int w, int h);
     
+    void resetGLState();
+
+    void checkAndLogGlError(const char* label);
+
     /* ------------------------------------------------------------ */
     /*  Per-frame pipeline                                          */
     /* ------------------------------------------------------------ */
     void beginFrame(entt::registry& registry);
-    void renderScene(entt::registry& registry,
-        const glm::mat4& view,
-        const glm::mat4& projection,
-        const glm::vec3& camPos,
-        const std::vector<std::vector<glm::vec3>>& intersectionOutlines);
+    void renderSceneToFBOs(entt::registry& registry, const Camera& primaryCamera); // Renders the scene ONCE to our off-screen textures
+    void compositeToScreen(const Camera& viewportCamera, int viewportWidth, int viewportHeight); // Composites the result for a specific viewport
     void endFrame();
 
     /* ------------------------------------------------------------ */
@@ -104,7 +105,9 @@ private:
         const glm::mat4& view,
         const glm::mat4& proj);
 
-    
+    glm::mat4 m_sceneViewMatrix;
+    glm::mat4 m_sceneProjectionMatrix;
+    glm::vec3 m_sceneCameraPos;
     /* ==============================
      *  Data members
      * ============================== */
