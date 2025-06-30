@@ -24,11 +24,13 @@ class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_4_1_Core
 {
     Q_OBJECT
 public:
-    ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget* parent = nullptr);
+    ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, entt::entity cameraEntity, QWidget* parent = nullptr);
     ~ViewportWidget() override;
     Camera& getCamera();
 
     void shutdown();
+
+    void setRenderingSystem(RenderingSystem* system);
 
 protected:
     void initializeGL() override;
@@ -52,7 +54,7 @@ private:
 
     Scene* m_scene;
     entt::entity m_cameraEntity;
-    std::unique_ptr<RenderingSystem> m_renderingSystem;
+    RenderingSystem* m_renderingSystem;
     std::unique_ptr<QOpenGLDebugLogger> m_debugLogger;
     std::unique_ptr<Shader> m_outlineShader;
     unsigned int m_outlineVAO = 0;

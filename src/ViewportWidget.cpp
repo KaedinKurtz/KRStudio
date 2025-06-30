@@ -1,4 +1,4 @@
-#include <QOpenGLContext>
+﻿#include <QOpenGLContext>
 #include <QOpenGLFunctions_4_1_Core>
 #include <QOpenGLVersionFunctionsFactory>
 #include <QOpenGLDebugLogger>
@@ -50,11 +50,11 @@ static void propagateTransforms(entt::registry& r)
         dfs(e, glm::mat4(1.0f));
 }
 
-ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget* parent)
+ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, entt::entity cameraEntity, QWidget* parent)
     : QOpenGLWidget(parent),
     m_scene(scene),
     m_cameraEntity(cameraEntity),
-    m_renderingSystem(nullptr),
+    m_renderingSystem(renderingSystem),
     m_outlineShader(nullptr),
     m_outlineVAO(0),
     m_outlineVBO(0)
@@ -76,56 +76,34 @@ ViewportWidget::ViewportWidget(Scene* scene, entt::entity cameraEntity, QWidget*
     timer->start(16);
 }
 
+void ViewportWidget::setRenderingSystem(RenderingSystem* system)
+{
+    m_renderingSystem = system;
+}
+
 ViewportWidget::~ViewportWidget() {}
 
 void ViewportWidget::initializeGL()
 {
-    // --- Add this block to log the actual GL version ---
-    qDebug() << "--- Verifying OpenGL Context ---";
-    QSurfaceFormat format = this->format();
-    qDebug() << "Requested GL Version:" << format.majorVersion() << "." << format.minorVersion();
-    qDebug() << "Requested GL Profile:" << (format.profile() == QSurfaceFormat::CoreProfile ? "Core" : "Compatibility/None");
+    initializeOpenGLFunctions();                       // hook up *this* v-table
 
-    // Initialize the base functions to be able to call glGetString
-    initializeOpenGLFunctions();
-
-    QOpenGLContext* ctx = QOpenGLContext::currentContext();
-    QSurfaceFormat actualFormat = ctx->format();
-    qDebug() << "Actual GL Version:" << actualFormat.majorVersion() << "." << actualFormat.minorVersion();
-    qDebug() << "Actual GL Profile:" << (actualFormat.profile() == QSurfaceFormat::CoreProfile ? "Core" : "Compatibility/None");
-    qDebug() << "Vendor:" << (const char*)glGetString(GL_VENDOR);
-    qDebug() << "Renderer:" << (const char*)glGetString(GL_RENDERER);
-    qDebug() << "Version String:" << (const char*)glGetString(GL_VERSION);
-    qDebug() << "--------------------------------";
-    // --- End of verification block ---
-
-
-    // Get the 4.1 core function wrapper for this specific context.
-    auto* funcs = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_1_Core>(ctx);
-    if (!funcs) {
-        qFatal("FATAL: OpenGL 4.1 core functions are not available on this system. Please update your graphics drivers.");
-    }
-    funcs->initializeOpenGLFunctions();
-
-    // Initialize the debug logger
+    // -------- optional: OpenGL debug logger ---------------
     m_debugLogger = std::make_unique<QOpenGLDebugLogger>(this);
-    if (m_debugLogger->initialize()) {
-        qDebug() << ">>> OpenGL Debug Logger Initialized Successfully <<<";
-        connect(m_debugLogger.get(), &QOpenGLDebugLogger::messageLogged, this,
-            [](const QOpenGLDebugMessage& debugMessage) {
-                qWarning() << "[OpenGL Debug]" << debugMessage.message();
-            });
+    if (m_debugLogger->initialize())
+    {
+        connect(m_debugLogger.get(), &QOpenGLDebugLogger::messageLogged,
+            this, [](const QOpenGLDebugMessage& msg)
+            { qWarning() << "[OpenGL Debug]" << msg.message(); });
         m_debugLogger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
     }
-    else {
-        qWarning() << ">>> FAILED to initialize OpenGL Debug Logger <<<";
+
+    // -------- hand renderer our function table ------------
+    if (m_renderingSystem && !m_renderingSystem->isInitialized())
+    {
+        m_renderingSystem->setOpenGLFunctions(this);         // *this* is a QOF_4_1_Core
+        m_renderingSystem->initialize(width(), height());    // first (and only) init
     }
 
-    // Pass the 4.1 interface to the rendering system.
-    m_renderingSystem = std::make_unique<RenderingSystem>(funcs);
-    m_renderingSystem->initialize();
-
-    qDebug() << ">>> ViewportWidget::initializeGL() finished. <<<";
 }
 
 void ViewportWidget::shutdown()
@@ -141,57 +119,51 @@ void ViewportWidget::shutdown()
 
 void ViewportWidget::paintGL()
 {
-    qDebug() << "--- paintGL() called for instance:" << m_instanceId << "---";
+    if (!m_scene || !m_renderingSystem)   // safety
+        return;
 
-    if (!m_scene || !m_renderingSystem) return;
+    /* --------- framebuffer-pixel size of *this* dock ------------ */
+    const int fbW = std::lround(width() * devicePixelRatioF());
+    const int fbH = std::lround(height() * devicePixelRatioF());
 
+    /* --------- make sure shared FBO chain is large enough -------- */
+    m_renderingSystem->resize(fbW, fbH);          // no work when size unchanged
+
+    /* --------- camera transforms --------------------------------- */
     auto& registry = m_scene->getRegistry();
-    auto& camera = getCamera();
-    float aspect = height() > 0 ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0f;
-    glm::mat4 viewMatrix = camera.getViewMatrix();
-    glm::mat4 projMatrix = camera.getProjectionMatrix(aspect);
-    
+    auto& cam = getCamera();
 
-    // 1. Run Calculation
-    auto calculatedOutlines = IntersectionSystem::update(m_scene);
-
-    // 2. Clear Frame
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    // 3. Render Scene
     m_renderingSystem->setCurrentCamera(m_cameraEntity);
     m_renderingSystem->updateCameraTransforms(registry);
-    ::propagateTransforms(registry);
-    ViewportWidget::updateAnimations(registry, frameDt);
-    m_renderingSystem->renderMeshes(registry, viewMatrix, projMatrix, camera.getPosition());
-    m_renderingSystem->renderGrid(registry, viewMatrix, projMatrix, camera.getPosition()); 
-    m_renderingSystem->renderSplines(registry, viewMatrix, projMatrix, camera.getPosition(), width(), height());
 
-    static float timer = 0.f;
-    timer += frameDt;                        // ~1/60
-    bool on = std::fmod(timer, 1.f) < 0.5f;  // 2 Hz blink
+    const float aspect = (fbH > 0) ? static_cast<float>(fbW) / fbH : 1.0f;
 
-    for (auto e : registry.view<RecordLedTag, RenderableMeshComponent>()) {
-        auto& m = registry.get<RenderableMeshComponent>(e);
-        m.colour = on ? glm::vec4(1, 0.15f, 0.15f, 1)
-            : glm::vec4(0.2f, 0, 0, 1);
-    }
+    glm::mat4 V = cam.getViewMatrix();
+    glm::mat4 P = cam.getProjectionMatrix(aspect);
+    glm::vec3 eyePos = cam.getPosition();
 
-    // 4. Draw Outline
-    m_renderingSystem->drawIntersections(calculatedOutlines, viewMatrix, projMatrix);
+    auto outlines = IntersectionSystem::update(m_scene);
 
-    // 5. Draw Selection Overlay
+    /* --------- viewport BEFORE composite pass -------------------- */
+    glViewport(0, 0, fbW, fbH);
+
+    /* --------- render once into the shared system ---------------- */
+    m_renderingSystem->beginFrame(registry);
+    m_renderingSystem->renderScene(registry, V, P, eyePos, outlines);
+    m_renderingSystem->endFrame();                  // draws composite quad
+
+    /* ---------  optional debug overlay --------------------------- */
     if (m_outlineShader)
     {
-        auto selectedView = registry.view<SelectedComponent>();
-        if (!selectedView.empty())
+        auto sel = registry.view<SelectedComponent>();
+        for (auto e : sel)
         {
-            for (auto entity : selectedView)
+            if (auto* box = registry.try_get<BoundingBoxComponent>(e))
             {
-                if (auto* box = registry.try_get<BoundingBoxComponent>(entity))
-                {
-                    DebugHelpers::drawAABBOutline(*this, *m_outlineShader, *box, m_outlineVAO, m_outlineVBO, viewMatrix, projMatrix);
-                }
+                DebugHelpers::drawAABBOutline(*this, *m_outlineShader,
+                    *box,
+                    m_outlineVAO, m_outlineVBO,
+                    V, P);
             }
         }
     }
@@ -249,7 +221,13 @@ Camera& ViewportWidget::getCamera()
     return cameraComp->camera;
 }
 
-void ViewportWidget::resizeGL(int w, int h) { glViewport(0, 0, w, h); }
+void ViewportWidget::resizeGL(int w, int h)
+{
+    if (!m_renderingSystem) return;
+    const int ww = std::lround(w * devicePixelRatioF());
+    const int hh = std::lround(h * devicePixelRatioF());
+    m_renderingSystem->resize(ww, hh);                // single shared FBO
+}
 
 void ViewportWidget::mousePressEvent(QMouseEvent* ev)
 {

@@ -37,6 +37,13 @@ public:
 	void setVec4(const std::string& name, const glm::vec4& value) const;
 	void setVec2(const std::string& name, const glm::vec2& value) const;
 
+    static std::unique_ptr<Shader> buildGeometryShader(
+        QOpenGLFunctions_4_1_Core* gl,
+        const std::string& vertexPath,
+        const std::string& geometryPath,
+        const std::string& fragmentPath
+    );
+
 protected:
     Shader() = default;
 

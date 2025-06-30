@@ -177,6 +177,14 @@ bool Shader::checkCompileErrors(unsigned int shader, std::string type)
     return true;
 }
 
+std::unique_ptr<Shader> Shader::buildGeometryShader(QOpenGLFunctions_4_1_Core* gl, const std::string& vertexPath, const std::string& geometryPath, const std::string& fragmentPath)
+{
+    // This is a simplified constructor path for shaders with a geometry stage.
+    // It's created as a static function for convenience.
+    std::vector<std::string> paths = { vertexPath, geometryPath, fragmentPath };
+    return std::make_unique<Shader>(gl, paths);
+}
+
 std::unique_ptr<Shader> Shader::buildTessellatedShader(
     QOpenGLFunctions_4_1_Core* gl,
     const char* vsPath,

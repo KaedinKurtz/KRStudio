@@ -4,9 +4,10 @@
 #include <glm/gtc/quaternion.hpp>
 #include <string>
 #include <vector>
+#include <functional> // Required for std::function in ParametricData
 #include <entt/entt.hpp>
-#include <QtGui/QOpenGLContext>
-#include <QtGui/qopengl.h> 
+#include <QOpenGLContext>
+#include <qopengl.h>
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
 #include <unordered_map>
@@ -22,9 +23,34 @@ struct CameraGizmoTag {};
 struct RecordLedTag {};
 struct PulsingSplineTag {};
 
+// --- Material & Texture Components ---
+
+// Represents a single texture map (e.g., diffuse, normal, metallic).
+struct Texture {
+    GLuint id = 0;      // The OpenGL texture ID.
+    std::string path;   // The file path it was loaded from.
+};
+
+// A component that defines the surface properties of a mesh.
+// This replaces simple color properties for more advanced rendering.
+struct MaterialComponent {
+    glm::vec3 albedo = { 0.8f, 0.8f, 0.8f }; // The base color of the material.
+    std::shared_ptr<Texture> albedoMap;      // A texture for the base color (optional).
+
+    float metallic = 0.1f;                   // How metallic the surface is.
+    float roughness = 0.8f;                  // How rough the surface is.
+    // You can add more maps here later (normalMap, metallicMap, etc.)
+};
+
+
 // --- FIELD-SPECIFIC COMPONENTS ---
 
 struct FieldSourceTag {};
+
+enum class FieldColoringMode {
+    Magnitude, // Color is based on the vector's length (good for wind, flow).
+    Polarity   // Color is based on scalar potential (good for attraction/repulsion).
+};
 
 struct PotentialSourceComponent {
     float strength = 10.0f;
@@ -52,42 +78,35 @@ struct ParticleState {
 };
 
 struct FieldVisualizerComponent {
-    // --- General Properties ---
     FieldVisMode mode = FieldVisMode::Vector;
     bool isEnabled = true;
 
-    // --- Bounding Volume ---
-    // The size, position, and orientation of the visualization volume
-    // are controlled by this component AND the entity's TransformComponent.
-    glm::vec3 bounds = { 10.0f, 10.0f, 10.0f };
-
-    // --- Voxel Grid ---
-    // The number of samples to take along each axis of the bounding volume.
-    // This directly controls the density of the vectors/indicators.
-    glm::ivec3 density = { 10, 10, 10 };
+    glm::vec3 bounds = { 20.0f, 10.0f, 20.0f };
+    glm::ivec3 density = { 20, 10, 20 };
 
     // --- Data Mapping & Appearance ---
-    // Used to map a field's magnitude to a color.
-    std::vector<ColorStop> colorGradient;
+    FieldColoringMode coloringMode = FieldColoringMode::Magnitude; // The new mode selector.
+    std::vector<ColorStop> colorGradient; // Can now be used for magnitude or polarity.
+
+    // Used for Magnitude mode
     float minMagnitude = 0.0f;
-    float maxMagnitude = 1.0f;
+    float maxMagnitude = 2.0f;
 
-    // A global scale factor for the length of the visualized vectors.
+    // Used for Polarity mode
+    float minPotential = -1.0f;
+    float maxPotential = 1.0f;
+
     float vectorScale = 1.0f;
+    float arrowHeadScale = 0.50f;
+    float cullingThreshold = 0.01f;
 
-    // --- Data Sources ---
-    // An optional list of specific entities that act as sources for this field.
-    // If this vector is empty, the visualizer will consider ALL field sources in the scene.
     std::vector<entt::entity> sourceEntities;
-
-	// The state of the particles used for visualization.
     ParticleState particles;
 };
 
 struct PointEffectorComponent {
     float strength = 1.0f; // Positive for repulsion, negative for attraction
     float radius = 10.0f;  // How far the influence extends
-    // How the strength decreases with distance (e.g., linear, inverse-square)
     enum class FalloffType { None, Linear, InverseSquare };
     FalloffType falloff = FalloffType::Linear;
 };
@@ -95,7 +114,6 @@ struct PointEffectorComponent {
 struct SplineEffectorComponent {
     float strength = -1.0f; // Negative for attraction
     float radius = 5.0f;   // How far from the spline the influence is felt
-    // Define the direction of the force
     enum class ForceDirection { Perpendicular, Tangent };
     ForceDirection direction = ForceDirection::Perpendicular; // Pulls towards the nearest point
 };
@@ -103,7 +121,6 @@ struct SplineEffectorComponent {
 struct MeshEffectorComponent {
     float strength = 10.0f; // Positive for repulsion
     float distance = 2.0f; // How far out from the surface the repulsion is felt
-    // Direction is almost always the surface normal (outward)
 };
 
 struct DirectionalEffectorComponent {
@@ -111,7 +128,7 @@ struct DirectionalEffectorComponent {
     float strength = 1.0f;
 };
 
-// --- ...-SPECIFIC COMPONENTS ---
+// --- GEOMETRY & TRANSFORM COMPONENTS ---
 
 struct BoundingBoxComponent {
     glm::vec3 min = { -0.5f, -0.5f, -0.5f };
@@ -141,10 +158,7 @@ struct Vertex
     glm::vec2 uv{ 0.0f };
 
     Vertex() = default;
-
-    Vertex(const glm::vec3& p,
-        const glm::vec3& n,
-        const glm::vec2& t = glm::vec2(0.0f))
+    Vertex(const glm::vec3& p, const glm::vec3& n, const glm::vec2& t = glm::vec2(0.0f))
         : position(p), normal(n), uv(t) {
     }
 };
@@ -164,21 +178,19 @@ struct CameraComponent
 // --- RENDER-RELATED COMPONENTS ---
 
 struct RenderableMeshComponent {
-    glm::vec4 colour{ 0.8f,0.8f,0.8f,1.0f };
     std::vector<Vertex> vertices;
     std::vector<unsigned> indices;
+    // NOTE: The `glm::vec4 colour` member has been removed.
+    // Color is now handled by the MaterialComponent's 'albedo' property.
 };
 
 struct RenderResourceComponent
 {
-    struct Buffers         // one trio of GL objects *per context*
-    {
+    struct Buffers {
         GLuint VAO = 0;
         GLuint VBO = 0;
         GLuint EBO = 0;
     };
-
-    // key = context pointer, value = the trio above
     std::unordered_map<QOpenGLContext*, Buffers> perContext;
 };
 
@@ -204,16 +216,16 @@ struct RobotRootComponent {
     std::string name;
 };
 
-struct MaterialComponent
-{
-    MaterialDescription description;
-};
+// FIX: Removed the duplicate definition of MaterialComponent that was here.
+// The primary definition is now at the top of the file.
 
 // --- SCENE-WIDE & MISC COMPONENTS ---
 
 struct SceneProperties
 {
     bool fogEnabled = true;
+    // New: Added a background color property for the scene.
+    glm::vec4 backgroundColor = { 0.1f, 0.1f, 0.15f, 1.0f };
     glm::vec3 fogColor = { 0.1f, 0.1f, 0.1f };
     float fogStartDistance = 10.0f;
     float fogEndDistance = 75.0f;
@@ -222,23 +234,15 @@ struct SceneProperties
 /* ── spline data --------------------------------------------------------- */
 enum class SplineType { Linear, CatmullRom, Bezier, Parametric };
 
-// This struct remains for the parametric function case
 struct ParametricData { std::function<glm::vec3(float)> func; };
 
-// A more unified component for all spline types
 struct SplineComponent
 {
     SplineType type = SplineType::Linear;
-
-    // A single vector for all control-point based splines (Linear, Catmull-Rom, Bezier)
     std::vector<glm::vec3> controlPoints;
-
-    // A separate data holder for parametric splines
     ParametricData parametric;
-
     glm::vec4 glowColour{ 1.0f, 1.0f, 1.0f, 1.0f };
     glm::vec4 coreColour{ 1.0f, 1.0f, 1.0f, 1.0f };
-
     float thickness = 8.0f;
 };
 
@@ -255,16 +259,5 @@ struct GridComponent
     bool snappingEnabled = false;
     glm::vec3 xAxisColor = { 1.0f, 0.2f, 0.2f };
     glm::vec3 zAxisColor = { 0.2f, 0.2f, 1.0f };
-    glm::vec3 xAxis2Color = { 1.0f, 0.2f, 0.2f };
-    glm::vec3 zAxis2Color = { 0.2f, 0.2f, 1.0f };
-    glm::vec3 xAxis3Color = { 1.0f, 0.2f, 0.2f };
-    glm::vec3 zAxis3Color = { 0.2f, 0.2f, 1.0f };
-    glm::vec3 xAxis4Color = { 1.0f, 0.2f, 0.2f };
-    glm::vec3 zAxis4Color = { 0.2f, 0.2f, 1.0f };
-    glm::vec3 xAxis5Color = { 1.0f, 0.2f, 0.2f };
-    glm::vec3 zAxis5Color = { 0.2f, 0.2f, 1.0f };
-    glm::vec3 origin = { 1.0f, 0.2f, 0.2f };
-    glm::vec3 eulerOrient = { 1.0f, 0.2f, 0.2f };
-    glm::vec4 quaternionOrient = { 1.0f, 0.2f, 0.2f, 0.3f };
     float axisLineWidthPixels = 1.4f;
 };

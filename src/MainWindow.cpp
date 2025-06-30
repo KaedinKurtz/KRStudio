@@ -14,6 +14,7 @@
 #include "RobotEnrichmentDialog.hpp"
 #include "Mesh.hpp" // Required for the test cube's mesh data.
 #include "IntersectionSystem.hpp" 
+#include "RenderingSystem.hpp"
 
 #include <QVBoxLayout>
 #include <QFileDialog>
@@ -32,6 +33,9 @@ MainWindow::MainWindow(QWidget* parent)
 {
     // --- 1. Create the Scene and Initial Entities ---
     m_scene = std::make_unique<Scene>();
+
+    m_renderingSystem = std::make_unique<RenderingSystem>(nullptr);
+
     auto& registry = m_scene->getRegistry();
 
     // --- Set up scene-wide properties like fog ---
@@ -62,6 +66,12 @@ MainWindow::MainWindow(QWidget* parent)
         registry.emplace<BoundingBoxComponent>(cubeEntity);
 
         // NOTE: The IntersectionComponent has been removed and is no longer needed here.
+        registry.emplace<FieldSourceTag>(cubeEntity);
+
+        // 2. Add the specific effector component. Let's make it a repulsor.
+        auto& pointEffector = registry.emplace<MeshEffectorComponent>(cubeEntity);
+        pointEffector.strength = -2.0f; // A strong positive value for repulsion
+        pointEffector.distance = 7.0f;
 
         auto& mesh = registry.emplace<RenderableMeshComponent>(cubeEntity);
 
@@ -95,6 +105,7 @@ MainWindow::MainWindow(QWidget* parent)
             [](float t) { return glm::vec3(2 * std::cos(6.28f * 3 * t), 6 * t, 2 * std::sin(6.28f * 3 * t)); },
             { 0.9f,0.9f,0.9f,1 }, { 0.2f,0.6f,1.0f,1 }, 12.0f);
         reg.emplace<PulsingSplineTag>(ParamEntity);
+
         // --- Add these new examples ---
 
         // Linear (sharp green line)
@@ -110,11 +121,49 @@ MainWindow::MainWindow(QWidget* parent)
         reg.emplace<PulsingSplineTag>(bezierEntity);
     }
 
+    {
+        auto& registry = m_scene->getRegistry();
+
+        // 1. The Visualizer Entity
+        // This entity defines the volume in which the field will be rendered.
+        auto visualizerEntity = registry.create();
+        registry.emplace<TagComponent>(visualizerEntity, "Field Visualizer");
+        registry.emplace<TransformComponent>(visualizerEntity); // Positioned at the world origin
+        auto& visualizer = registry.emplace<FieldVisualizerComponent>(visualizerEntity);
+        visualizer.bounds = { 20.0f, 5.0f, 20.0f };
+        visualizer.density = { 20, 5, 20 };
+        visualizer.maxMagnitude = 5.0f; // Expecting forces up to this strength
+        visualizer.vectorScale = 0.5f; // Make arrows a bit smaller
+        // Create a default blue-to-red color gradient
+        visualizer.colorGradient.push_back({ 0.0f, glm::vec4(0.2f, 0.5f, 1.0f, 1.0f) }); // Blue for low magnitude
+        visualizer.colorGradient.push_back({ 1.0f, glm::vec4(1.0f, 0.3f, 0.3f, 1.0f) }); // Red for high magnitude
+
+
+        // 2. A Directional Effector (like wind)
+        auto windSource = registry.create();
+        registry.emplace<TagComponent>(windSource, "Wind Source");
+        registry.emplace<TransformComponent>(windSource);
+        registry.emplace<FieldSourceTag>(windSource); // REQUIRED tag
+        auto& directional = registry.emplace<DirectionalEffectorComponent>(windSource);
+        directional.direction = { 1.0f, 0.0f, 0.5f }; // Points somewhat diagonally
+        directional.strength = 1.5f;
+
+        // 3. A Point Effector (a repulsor)
+        auto repulsorSource = registry.create();
+        registry.emplace<TagComponent>(repulsorSource, "Repulsor");
+        auto& repulsorTransform = registry.emplace<TransformComponent>(repulsorSource);
+        repulsorTransform.translation = { 5.0f, 1.0f, 0.0f }; // Position it off to the side
+        registry.emplace<FieldSourceTag>(repulsorSource); // REQUIRED tag
+        auto& point = registry.emplace<PointEffectorComponent>(repulsorSource);
+        point.strength = 10.0f; // Positive strength = repulsion
+        point.radius = 4.0f;
+        point.falloff = PointEffectorComponent::FalloffType::Linear;
+    }
+
     // --- Create initial cameras for the viewports ---
-    auto cameraEntity1 = SceneBuilder::createCamera(registry,
-        { 0, 2, 5 }, { 1,0.3f,0 });
-    auto cameraEntity2 = SceneBuilder::createCamera(registry,
-        { 10, 5,10 }, { 0,0.6f,1 });
+    auto cameraEntity1 = SceneBuilder::createCamera(registry, { 0, 2, 5 }, { 1, 0.3f, 0 });
+    auto cameraEntity2 = SceneBuilder::createCamera(registry, { 10, 5, 10 }, { 0, 0.6f, 1 });
+
 
     // --- 3. Setup the Core UI Layout ---
     m_centralContainer = new QWidget(this);
@@ -130,15 +179,26 @@ MainWindow::MainWindow(QWidget* parent)
 
     this->setCentralWidget(m_centralContainer);
 
-
     // --- 4. Setup Dockable Widgets (Viewports & Panels) ---
-    ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), cameraEntity1, this);
+    // Create the viewports and pass them a pointer to the shared (but still uninitialized) rendering system.
+    ViewportWidget* viewport1 = new ViewportWidget(
+        m_scene.get(),
+        m_renderingSystem.get(),      // ← shared renderer
+        cameraEntity1,
+        this);
+
     m_viewports.push_back(viewport1);
     ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Perspective)");
     viewportDock1->setWidget(viewport1);
     m_dockManager->addDockWidget(ads::CenterDockWidgetArea, viewportDock1);
 
-    ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), cameraEntity2, this);
+    // ---------------------------------------------------------------------
+    ViewportWidget* viewport2 = new ViewportWidget(
+        m_scene.get(),
+        m_renderingSystem.get(),      // ← same renderer
+        cameraEntity2,
+        this);
+
     m_viewports.push_back(viewport2);
     ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Top Down)");
     viewportDock2->setWidget(viewport2);
@@ -148,7 +208,6 @@ MainWindow::MainWindow(QWidget* parent)
     ads::CDockWidget* propertiesDock = new ads::CDockWidget("Properties");
     propertiesDock->setWidget(propertiesPanel);
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock);
-
 
     // --- 5. Setup Signal/Slot Connections ---
     connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
@@ -177,7 +236,7 @@ MainWindow::MainWindow(QWidget* parent)
         menuBar()->setVisible(false);
     }
     resize(1600, 900);
-    setWindowTitle("KR Studio - ECS Refactor");
+    setWindowTitle("KR Studio ALPHA V0.602");
     setWindowIcon(QIcon(":/icons/kRLogoSquare.png"));
     statusBar()->showMessage("Ready.");
 }
@@ -185,16 +244,15 @@ MainWindow::MainWindow(QWidget* parent)
 // The destructor orchestrates a clean shutdown.
 MainWindow::~MainWindow()
 {
-    //qDebug() << "=====================================================";
-    //qDebug() << "[LIFETIME] MainWindow Destructor ~MainWindow() STARTING.";
-    //qDebug() << "[LIFETIME] MainWindow: Commanding all viewports to shut down...";
-    for (ViewportWidget* viewport : m_viewports) {
-        if (viewport) {
-            viewport->shutdown();
+    // On shutdown, make a context current before deleting the renderer's resources
+    if (!m_viewports.empty() && m_viewports[0]) {
+        m_viewports[0]->makeCurrent();
+        if (m_renderingSystem) {
+            m_renderingSystem->shutdown();
+            m_renderingSystem.reset();
         }
+        m_viewports[0]->doneCurrent();
     }
-    //qDebug() << "[LIFETIME] MainWindow: All viewports have been shut down.";
-    //qDebug() << "[LIFETIME] MainWindow: About to destroy Scene...";
 }
 
 // This slot handles loading robot files from the toolbar button.
