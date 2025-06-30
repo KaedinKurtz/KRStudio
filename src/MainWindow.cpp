@@ -27,15 +27,13 @@
 #include <DockManager.h>
 #include <DockWidget.h>
 #include <DockAreaWidget.h>
+#include <QApplication>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
     // --- 1. Create the Scene and Initial Entities ---
     m_scene = std::make_unique<Scene>();
-
-    m_renderingSystem = std::make_unique<RenderingSystem>(nullptr);
-
     auto& registry = m_scene->getRegistry();
 
     // --- Set up scene-wide properties like fog ---
@@ -64,98 +62,64 @@ MainWindow::MainWindow(QWidget* parent)
         registry.emplace<TagComponent>(cubeEntity, "Test Cube");
         registry.emplace<TransformComponent>(cubeEntity).translation = glm::vec3(0.0f, 0.5f, 0.0f);
         registry.emplace<BoundingBoxComponent>(cubeEntity);
-
-        // NOTE: The IntersectionComponent has been removed and is no longer needed here.
         registry.emplace<FieldSourceTag>(cubeEntity);
-
-        // 2. Add the specific effector component. Let's make it a repulsor.
         auto& pointEffector = registry.emplace<MeshEffectorComponent>(cubeEntity);
-        pointEffector.strength = -2.0f; // A strong positive value for repulsion
+        pointEffector.strength = -2.0f;
         pointEffector.distance = 7.0f;
-
         auto& mesh = registry.emplace<RenderableMeshComponent>(cubeEntity);
-
         const std::vector<float>& raw = Mesh::getLitCubeVertices();
         constexpr std::size_t stride = 6;
-
         mesh.vertices.reserve(raw.size() / stride);
-
         for (std::size_t i = 0; i < raw.size(); i += stride)
         {
             glm::vec3 pos{ raw[i],     raw[i + 1], raw[i + 2] };
             glm::vec3 normal{ raw[i + 3],   raw[i + 4], raw[i + 5] };
             mesh.vertices.emplace_back(pos, normal);
         }
-
         mesh.indices = Mesh::getLitCubeIndices();
     }
 
+    // --- Create Splines ---
     {
         using SB = SceneBuilder;
         auto& reg = m_scene->getRegistry();
-
-        // Catmull–Rom (big red swoop) - This one should already be there
-        auto CREntity = SB::makeCR(reg,
-            { {-2,0,-1}, {-2,0, 1}, { 2,0, 1}, { 2,0,-1} },
-            { 0.9f,0.9f,0.9f,1 }, { 0.9f,0.3f,0.3f,1 }, 18.0f);
+        auto CREntity = SB::makeCR(reg, { {-2,0,-1}, {-2,0, 1}, { 2,0, 1}, { 2,0,-1} }, { 0.9f,0.9f,0.9f,1 }, { 0.9f,0.3f,0.3f,1 }, 18.0f);
         reg.emplace<PulsingSplineTag>(CREntity);
-
-        // Parametric (blue helix) - This one should already be there
-        auto ParamEntity = SB::makeParam(reg,
-            [](float t) { return glm::vec3(2 * std::cos(6.28f * 3 * t), 6 * t, 2 * std::sin(6.28f * 3 * t)); },
-            { 0.9f,0.9f,0.9f,1 }, { 0.2f,0.6f,1.0f,1 }, 12.0f);
+        auto ParamEntity = SB::makeParam(reg, [](float t) { return glm::vec3(2 * std::cos(6.28f * 3 * t), 6 * t, 2 * std::sin(6.28f * 3 * t)); }, { 0.9f,0.9f,0.9f,1 }, { 0.2f,0.6f,1.0f,1 }, 12.0f);
         reg.emplace<PulsingSplineTag>(ParamEntity);
-
-        // --- Add these new examples ---
-
-        // Linear (sharp green line)
-        auto LinearEntity = SB::makeLinear(reg,
-            { {-5, 0.1, -5}, {-5, 2, -5}, {0, 2, -5}, {0, 0.1, -5} },
-            { 0.9f,0.9f,0.9f,1 }, { 0.1f, 1.0f, 0.2f, 1 }, 18.0f);
+        auto LinearEntity = SB::makeLinear(reg, { {-5, 0.1, -5}, {-5, 2, -5}, {0, 2, -5}, {0, 0.1, -5} }, { 0.9f,0.9f,0.9f,1 }, { 0.1f, 1.0f, 0.2f, 1 }, 18.0f);
         reg.emplace<PulsingSplineTag>(LinearEntity);
-
-        // Bezier (smooth yellow curve)
-        auto bezierEntity = SB::makeBezier(reg,
-            { {5, 0.1, -5}, {5, 4, -5}, {2, 4, -5}, {2, 0.1, -5} },
-            { 0.9f,0.9f,0.9f,1 }, { 1.0f, 0.9f, 0.2f, 1 }, 18.0f);
+        auto bezierEntity = SB::makeBezier(reg, { {5, 0.1, -5}, {5, 4, -5}, {2, 4, -5}, {2, 0.1, -5} }, { 0.9f,0.9f,0.9f,1 }, { 1.0f, 0.9f, 0.2f, 1 }, 18.0f);
         reg.emplace<PulsingSplineTag>(bezierEntity);
     }
 
+    // --- Create Field Visualizers and Effectors ---
     {
-        auto& registry = m_scene->getRegistry();
-
-        // 1. The Visualizer Entity
-        // This entity defines the volume in which the field will be rendered.
-        auto visualizerEntity = registry.create();
-        registry.emplace<TagComponent>(visualizerEntity, "Field Visualizer");
-        registry.emplace<TransformComponent>(visualizerEntity); // Positioned at the world origin
-        auto& visualizer = registry.emplace<FieldVisualizerComponent>(visualizerEntity);
+        auto& reg = m_scene->getRegistry();
+        auto visualizerEntity = reg.create();
+        reg.emplace<TagComponent>(visualizerEntity, "Field Visualizer");
+        reg.emplace<TransformComponent>(visualizerEntity);
+        auto& visualizer = reg.emplace<FieldVisualizerComponent>(visualizerEntity);
         visualizer.bounds = { 20.0f, 5.0f, 20.0f };
         visualizer.density = { 20, 5, 20 };
-        visualizer.maxMagnitude = 5.0f; // Expecting forces up to this strength
-        visualizer.vectorScale = 0.5f; // Make arrows a bit smaller
-        // Create a default blue-to-red color gradient
-        visualizer.colorGradient.push_back({ 0.0f, glm::vec4(0.2f, 0.5f, 1.0f, 1.0f) }); // Blue for low magnitude
-        visualizer.colorGradient.push_back({ 1.0f, glm::vec4(1.0f, 0.3f, 0.3f, 1.0f) }); // Red for high magnitude
-
-
-        // 2. A Directional Effector (like wind)
-        auto windSource = registry.create();
-        registry.emplace<TagComponent>(windSource, "Wind Source");
-        registry.emplace<TransformComponent>(windSource);
-        registry.emplace<FieldSourceTag>(windSource); // REQUIRED tag
-        auto& directional = registry.emplace<DirectionalEffectorComponent>(windSource);
-        directional.direction = { 1.0f, 0.0f, 0.5f }; // Points somewhat diagonally
+        visualizer.maxMagnitude = 5.0f;
+        visualizer.vectorScale = 0.5f;
+        visualizer.colorGradient.push_back({ 0.0f, glm::vec4(0.2f, 0.5f, 1.0f, 1.0f) });
+        visualizer.colorGradient.push_back({ 1.0f, glm::vec4(1.0f, 0.3f, 0.3f, 1.0f) });
+        auto windSource = reg.create();
+        reg.emplace<TagComponent>(windSource, "Wind Source");
+        reg.emplace<TransformComponent>(windSource);
+        reg.emplace<FieldSourceTag>(windSource);
+        auto& directional = reg.emplace<DirectionalEffectorComponent>(windSource);
+        directional.direction = { 1.0f, 0.0f, 0.5f };
         directional.strength = 1.5f;
-
-        // 3. A Point Effector (a repulsor)
-        auto repulsorSource = registry.create();
-        registry.emplace<TagComponent>(repulsorSource, "Repulsor");
-        auto& repulsorTransform = registry.emplace<TransformComponent>(repulsorSource);
-        repulsorTransform.translation = { 5.0f, 1.0f, 0.0f }; // Position it off to the side
-        registry.emplace<FieldSourceTag>(repulsorSource); // REQUIRED tag
-        auto& point = registry.emplace<PointEffectorComponent>(repulsorSource);
-        point.strength = 10.0f; // Positive strength = repulsion
+        auto repulsorSource = reg.create();
+        reg.emplace<TagComponent>(repulsorSource, "Repulsor");
+        auto& repulsorTransform = reg.emplace<TransformComponent>(repulsorSource);
+        repulsorTransform.translation = { 5.0f, 1.0f, 0.0f };
+        reg.emplace<FieldSourceTag>(repulsorSource);
+        auto& point = reg.emplace<PointEffectorComponent>(repulsorSource);
+        point.strength = 10.0f;
         point.radius = 4.0f;
         point.falloff = PointEffectorComponent::FalloffType::Linear;
     }
@@ -164,41 +128,28 @@ MainWindow::MainWindow(QWidget* parent)
     auto cameraEntity1 = SceneBuilder::createCamera(registry, { 0, 2, 5 }, { 1, 0.3f, 0 });
     auto cameraEntity2 = SceneBuilder::createCamera(registry, { 10, 5, 10 }, { 0, 0.6f, 1 });
 
+    // --- 2. Create the SINGLE Shared Rendering System ---
+    m_renderingSystem = std::make_unique<RenderingSystem>(nullptr);
 
-    // --- 3. Setup the Core UI Layout ---
+    // --- 3. Setup the Core UI Layout (No changes here) ---
     m_centralContainer = new QWidget(this);
     QVBoxLayout* mainLayout = new QVBoxLayout(m_centralContainer);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
-
     m_fixedTopToolbar = new StaticToolbar(this);
     mainLayout->addWidget(m_fixedTopToolbar, 0);
-
     m_dockManager = new ads::CDockManager();
     mainLayout->addWidget(m_dockManager, 1);
-
     this->setCentralWidget(m_centralContainer);
 
     // --- 4. Setup Dockable Widgets (Viewports & Panels) ---
-    // Create the viewports and pass them a pointer to the shared (but still uninitialized) rendering system.
-    ViewportWidget* viewport1 = new ViewportWidget(
-        m_scene.get(),
-        m_renderingSystem.get(),      // ← shared renderer
-        cameraEntity1,
-        this);
-
+    ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity1, this);
     m_viewports.push_back(viewport1);
     ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Perspective)");
     viewportDock1->setWidget(viewport1);
     m_dockManager->addDockWidget(ads::CenterDockWidgetArea, viewportDock1);
 
-    // ---------------------------------------------------------------------
-    ViewportWidget* viewport2 = new ViewportWidget(
-        m_scene.get(),
-        m_renderingSystem.get(),      // ← same renderer
-        cameraEntity2,
-        this);
-
+    ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity2, this);
     m_viewports.push_back(viewport2);
     ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Top Down)");
     viewportDock2->setWidget(viewport2);
@@ -209,29 +160,27 @@ MainWindow::MainWindow(QWidget* parent)
     propertiesDock->setWidget(propertiesPanel);
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock);
 
-    // --- 5. Setup Signal/Slot Connections ---
+    // --- 5. FINAL, ROBUST INITIALIZATION AND RENDER LOOP START ---
+
+    // 1. Create the timer, but DO NOT START IT YET.
+    m_masterRenderTimer = new QTimer(this);
+    connect(m_masterRenderTimer, &QTimer::timeout, this, &MainWindow::onMasterRender);
+
+    // 2. Connect the timer's start to the signal from the viewport.
+    //    This creates the dependency: "WHEN the renderer is ready, THEN start the render loop."
+    connect(viewport1, &ViewportWidget::renderingSystemInitialized, this, [this]() {
+        if (!m_masterRenderTimer->isActive()) {
+            qDebug() << "[LIFECYCLE] Received renderingSystemInitialized signal. Starting master render timer.";
+            m_masterRenderTimer->start(16);
+        }
+        });
+
+    // --- 6. Other Signal/Slot Connections ---
     connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
+    connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [viewport1](bool isFloating) { /* ... */ });
+    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, [viewport2](bool isFloating) { /* ... */ });
 
-    connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [viewport1](bool isFloating) {
-        if (isFloating && viewport1) {
-            QTimer::singleShot(0, viewport1, [=]() {
-                viewport1->getCamera().setToKnownGoodView();
-                viewport1->update();
-                });
-        }
-        });
-
-    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, [viewport2](bool isFloating) {
-        if (isFloating && viewport2) {
-            QTimer::singleShot(0, viewport2, [=]() {
-                viewport2->getCamera().forceRecalculateView(glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f), 0.0f);
-                viewport2->update();
-                });
-        }
-        });
-
-
-    // --- 6. Final Window Setup ---
+    // --- 7. Final Window Setup ---
     if (menuBar()) {
         menuBar()->setVisible(false);
     }
@@ -239,6 +188,25 @@ MainWindow::MainWindow(QWidget* parent)
     setWindowTitle("KR Studio ALPHA V0.602");
     setWindowIcon(QIcon(":/icons/kRLogoSquare.png"));
     statusBar()->showMessage("Ready.");
+}
+
+void MainWindow::onMasterRender()
+{
+    // This guard clause will now pass once the timer is started correctly.
+    if (!m_renderingSystem || !m_renderingSystem->isInitialized() || m_viewports.empty()) {
+        qWarning() << "onMasterRender called but system not ready. Skipping frame.";
+        return;
+    }
+
+    // "Borrow" the context from the first viewport to run the expensive scene render.
+    m_viewports[0]->makeCurrent();
+    m_renderingSystem->renderSceneToFBOs(m_scene->getRegistry(), m_viewports[0]->getCamera());
+    m_viewports[0]->doneCurrent();
+
+    // Schedule a repaint for all viewports. They will just run their cheap composite pass.
+    for (ViewportWidget* vp : m_viewports) {
+        vp->update();
+    }
 }
 
 // The destructor orchestrates a clean shutdown.

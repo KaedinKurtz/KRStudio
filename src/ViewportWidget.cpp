@@ -28,7 +28,7 @@ int ViewportWidget::s_instanceCounter = 0;
 
 static void propagateTransforms(entt::registry& r)
 {
-    auto viewParents = r.view<ParentComponent>();          // cache once
+    auto viewParents = r.view<ParentComponent>(); // cache once
 
     std::function<void(entt::entity, const glm::mat4&)> dfs =
         [&](entt::entity e, const glm::mat4& parentW)
@@ -45,22 +45,21 @@ static void propagateTransforms(entt::registry& r)
             }
         };
 
-    // roots (no ParentComponent)
+    // Process all root entities (those without a ParentComponent)
     for (auto e : r.view<TransformComponent>(entt::exclude<ParentComponent>))
         dfs(e, glm::mat4(1.0f));
 }
+
+
 
 ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, entt::entity cameraEntity, QWidget* parent)
     : QOpenGLWidget(parent),
     m_scene(scene),
     m_cameraEntity(cameraEntity),
-    m_renderingSystem(renderingSystem),
-    m_outlineShader(nullptr),
-    m_outlineVAO(0),
-    m_outlineVBO(0)
+    m_renderingSystem(renderingSystem)
 {
-    m_instanceId = s_instanceCounter++; // Assign unique ID
-    qDebug() << "Constructing ViewportWidget instance:" << m_instanceId;
+    m_instanceId = s_instanceCounter++;
+    qDebug() << "[LIFECYCLE] Constructing ViewportWidget instance:" << m_instanceId;
 
     QSurfaceFormat format;
     format.setDepthBufferSize(24);
@@ -70,10 +69,6 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
     format.setOption(QSurfaceFormat::DebugContext);
     setFormat(format);
     setFocusPolicy(Qt::StrongFocus);
-
-    auto* timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, QOverload<>::of(&ViewportWidget::update));
-    timer->start(16);
 }
 
 void ViewportWidget::setRenderingSystem(RenderingSystem* system)
@@ -85,25 +80,20 @@ ViewportWidget::~ViewportWidget() {}
 
 void ViewportWidget::initializeGL()
 {
-    initializeOpenGLFunctions();                       // hook up *this* v-table
+    initializeOpenGLFunctions();
 
-    // -------- optional: OpenGL debug logger ---------------
-    m_debugLogger = std::make_unique<QOpenGLDebugLogger>(this);
-    if (m_debugLogger->initialize())
-    {
-        connect(m_debugLogger.get(), &QOpenGLDebugLogger::messageLogged,
-            this, [](const QOpenGLDebugMessage& msg)
-            { qWarning() << "[OpenGL Debug]" << msg.message(); });
-        m_debugLogger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
+    // The first viewport to be created is responsible for initializing
+    // the one and only shared RenderingSystem. This is a robust pattern.
+    if (m_renderingSystem && !m_renderingSystem->isInitialized()) {
+        qDebug() << "[LIFECYCLE] Viewport" << m_instanceId << "is initializing the shared RenderingSystem.";
+        m_renderingSystem->setOpenGLFunctions(this);
+        m_renderingSystem->initialize(width(), height());
+
+        // Now that initialization is complete, announce it to the application.
+        // This is the crucial signal that will start the master render timer.
+        qDebug() << "[LIFECYCLE] Rendering system is initialized. Emitting signal.";
+        emit renderingSystemInitialized();
     }
-
-    // -------- hand renderer our function table ------------
-    if (m_renderingSystem && !m_renderingSystem->isInitialized())
-    {
-        m_renderingSystem->setOpenGLFunctions(this);         // *this* is a QOF_4_1_Core
-        m_renderingSystem->initialize(width(), height());    // first (and only) init
-    }
-
 }
 
 void ViewportWidget::shutdown()
@@ -119,54 +109,17 @@ void ViewportWidget::shutdown()
 
 void ViewportWidget::paintGL()
 {
-    if (!m_scene || !m_renderingSystem)   // safety
+    // If for any reason the renderer isn't ready, clear to black to avoid a frozen screen.
+    if (!m_renderingSystem || !m_renderingSystem->isInitialized()) {
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
         return;
+    }
 
-    /* --------- framebuffer-pixel size of *this* dock ------------ */
+    // This is the lightweight composite call from our new architecture.
     const int fbW = std::lround(width() * devicePixelRatioF());
     const int fbH = std::lround(height() * devicePixelRatioF());
-
-    /* --------- make sure shared FBO chain is large enough -------- */
-    m_renderingSystem->resize(fbW, fbH);          // no work when size unchanged
-
-    /* --------- camera transforms --------------------------------- */
-    auto& registry = m_scene->getRegistry();
-    auto& cam = getCamera();
-
-    m_renderingSystem->setCurrentCamera(m_cameraEntity);
-    m_renderingSystem->updateCameraTransforms(registry);
-
-    const float aspect = (fbH > 0) ? static_cast<float>(fbW) / fbH : 1.0f;
-
-    glm::mat4 V = cam.getViewMatrix();
-    glm::mat4 P = cam.getProjectionMatrix(aspect);
-    glm::vec3 eyePos = cam.getPosition();
-
-    auto outlines = IntersectionSystem::update(m_scene);
-
-    /* --------- viewport BEFORE composite pass -------------------- */
-    glViewport(0, 0, fbW, fbH);
-
-    /* --------- render once into the shared system ---------------- */
-    m_renderingSystem->beginFrame(registry);
-    m_renderingSystem->renderScene(registry, V, P, eyePos, outlines);
-    m_renderingSystem->endFrame();                  // draws composite quad
-
-    /* ---------  optional debug overlay --------------------------- */
-    if (m_outlineShader)
-    {
-        auto sel = registry.view<SelectedComponent>();
-        for (auto e : sel)
-        {
-            if (auto* box = registry.try_get<BoundingBoxComponent>(e))
-            {
-                DebugHelpers::drawAABBOutline(*this, *m_outlineShader,
-                    *box,
-                    m_outlineVAO, m_outlineVBO,
-                    V, P);
-            }
-        }
-    }
+    m_renderingSystem->compositeToScreen(getCamera(), fbW, fbH);
 }
 
 void ViewportWidget::updateAnimations(entt::registry& registry, float frameDt)

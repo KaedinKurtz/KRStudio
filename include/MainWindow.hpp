@@ -12,6 +12,7 @@ class StaticToolbar;
 class ViewportWidget;
 class Scene; // Forward-declare Scene
 class RenderingSystem;
+class QTimer;
 
 namespace ads {
     class CDockManager;
@@ -45,8 +46,11 @@ private:
     // as local variables in the constructor.
     std::vector<ViewportWidget*> m_viewports;
 
-private slots:
+    QTimer* m_masterRenderTimer;
+
+protected slots:
     void onLoadRobotClicked();
+    void onMasterRender();
 
 };
 

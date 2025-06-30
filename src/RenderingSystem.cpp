@@ -31,16 +31,17 @@ static const char* fbStatusStr(GLenum s)
 {
     switch (s)
     {
-    case GL_FRAMEBUFFER_COMPLETE:                       return "COMPLETE";
-    case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:          return "INCOMPLETE_ATTACHMENT";
-    case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:  return "MISSING_ATTACHMENT";
-    case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER:         return "INCOMPLETE_DRAW_BUFFER";
-    case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER:         return "INCOMPLETE_READ_BUFFER";
-    case GL_FRAMEBUFFER_UNSUPPORTED:                    return "UNSUPPORTED";
-    default:                                            return "UNKNOWN";
+    case GL_FRAMEBUFFER_COMPLETE: return "COMPLETE";
+    case GL_FRAMEBUFFER_UNDEFINED: return "UNDEFINED";
+    case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT: return "INCOMPLETE_ATTACHMENT";
+    case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT: return "INCOMPLETE_MISSING_ATTACHMENT";
+    case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER: return "INCOMPLETE_DRAW_BUFFER";
+    case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER: return "INCOMPLETE_READ_BUFFER";
+    case GL_FRAMEBUFFER_UNSUPPORTED: return "UNSUPPORTED";
+    case GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE: return "INCOMPLETE_MULTISAMPLE";
+    default: return "UNKNOWN";
     }
 }
-
 static void dumpCompositeUniforms(QOpenGLFunctions_4_1_Core* gl, Shader* sh)
 {
     GLint sceneLoc = sh->getLoc("sceneTexture");   // will throw if not found :contentReference[oaicite:0]{index=0}
@@ -226,6 +227,13 @@ static QOpenGLFunctions_4_1_Core* resolveGl41(QOpenGLContext* ctx)
     return f;
 }
 
+void RenderingSystem::checkAndLogGlError(const char* label) {
+    GLenum err;
+    while ((err = m_gl->glGetError()) != GL_NO_ERROR) {
+        qCritical() << "[GL ERROR] After" << label << "- Code:" << err;
+    }
+}
+
 //---------- CONSTRUCTOR / DESTRUCTOR ------------------
 
 RenderingSystem::RenderingSystem(QOpenGLWidget* viewport,
@@ -325,80 +333,37 @@ inline void RenderingSystem::ensureSize(int w, int h)
 
 void RenderingSystem::beginFrame(entt::registry& registry)
 {
-    m_registry = &registry;
-
-    // ------------------------------------------------------------------
-    // 1. Bind the off-screen framebuffer that collects the scene.
-    // ------------------------------------------------------------------
+    qDebug().nospace() << "[DEBUG] BeginFrame: Binding Main FBO (" << m_mainFBO << "). Checking status...";
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_mainFBO);
+    GLenum status = m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        qWarning() << "[DEBUG] BeginFrame: Main FBO is NOT COMPLETE! Status:" << fbStatusStr(status);
+    }
 
-    // ------------------------------------------------------------------
-    // 2. *** OPTIONAL DEBUG CLEAR ***
-    //    Turn this on to verify that the composite pass really shows
-    //    whatever ends up in m_mainFBO.
-    // ------------------------------------------------------------------
-    
-        m_gl->glClearColor(1.0f, 0.0f, 1.0f, 1.0f);          // magenta
-        m_gl->glClear(GL_COLOR_BUFFER_BIT);
-    
+    const auto& props = registry.ctx().get<SceneProperties>();
+    m_gl->glClearColor(props.backgroundColor.r, props.backgroundColor.g, props.backgroundColor.b, props.backgroundColor.a);
+    m_gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    // ------------------------------------------------------------------
-    // 3. Normal per-frame state.
-    // ------------------------------------------------------------------
+
+    GLboolean isSrgbEnabled;
+    m_gl->glGetBooleanv(GL_FRAMEBUFFER_SRGB, &isSrgbEnabled);
+    qDebug() << "[DEBUG] BeginFrame: Current GL_FRAMEBUFFER_SRGB state:" << (isSrgbEnabled ? "ENABLED" : "DISABLED");
+
     m_gl->glEnable(GL_DEPTH_TEST);
-    m_gl->glDepthFunc(GL_LESS);
-
-    // (If you actually use the stencil buffer elsewhere, leave this on)
-    m_gl->glEnable(GL_STENCIL_TEST);
-    m_gl->glStencilMask(0xFF);
-
-    // Scene-defined background colour
-    const auto& props = m_registry->ctx().get<SceneProperties>();
-    m_gl->glClearColor(props.backgroundColor.r,
-        props.backgroundColor.g,
-        props.backgroundColor.b,
-        props.backgroundColor.a);
-
-    // Full clear: colour + depth (+ stencil if attached)
-    m_gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT |
-        GL_STENCIL_BUFFER_BIT);
-
-    // ------------------------------------------------------------------
-    // 4. Make it explicit that we render/read from attachment 0 of the FBO.
-    //    This prevents the perpetual  GL_INVALID_ENUM <attachment>  spam
-    //    once we later bind back to the default framebuffer.
-    // ------------------------------------------------------------------
-    static const GLenum drawBuf = GL_COLOR_ATTACHMENT0;
-    m_gl->glDrawBuffers(1, &drawBuf);
-    m_gl->glReadBuffer(drawBuf);
-}
-
-void RenderingSystem::renderScene(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& camPos, const std::vector<std::vector<glm::vec3>>& intersectionOutlines) {
-    // All render passes are now active.
-    renderMeshes(registry, view, projection, camPos);
-    renderGrid(registry, view, projection, camPos);
-    renderSplines(registry, view, projection, camPos, m_width, m_height);
-    renderFieldVisualizers(registry, view, projection);
-    drawIntersections(intersectionOutlines, view, projection);
-    renderSelectionGlow(registry, view, projection);
-    m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, m_mainFBO);
-    m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    m_gl->glBlitFramebuffer(0, 0, m_width, m_height,
-        0, 0, m_width, m_height,
-        GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    m_gl->glDepthMask(GL_TRUE);
+    qDebug() << "[DEBUG] BeginFrame: State set: Depth Test ENABLED, Depth Mask TRUE.";
+    checkAndLogGlError("beginFrame");
 }
 
 void RenderingSystem::endFrame()
 {
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
-    if (!ctx) return;                       // safety – should never happen
+    if (!ctx) return;
+    GLuint defaultFBO = ctx->defaultFramebufferObject();
+    qDebug().nospace() << "[DEBUG] EndFrame: Binding Default FBO (" << defaultFBO << ").";
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, defaultFBO);
 
-    /* --------------------------------------------------------- */
-    /*  1. back-buffer                                           */
-    /* --------------------------------------------------------- */
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER,
-        ctx->defaultFramebufferObject());
-
+    qDebug() << "[DEBUG] EndFrame: Enabling GL_FRAMEBUFFER_SRGB for final composite.";
     m_gl->glEnable(GL_FRAMEBUFFER_SRGB);
 
     /* NOTE -----------------------------------------------------
@@ -439,12 +404,77 @@ void RenderingSystem::endFrame()
     m_gl->glBindVertexArray(0);
 
     /* --------------------------------------------------------- */
-    /* 4. Tidy                                                   */
+    /* 4. Tidy / Restore State                                   */
     /* --------------------------------------------------------- */
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0);
-    m_gl->glActiveTexture(GL_TEXTURE0);
+    // This is the crucial cleanup step!
+    qDebug() << "[DEBUG] EndFrame: Disabling GL_FRAMEBUFFER_SRGB to clean up.";
+    m_gl->glDisable(GL_FRAMEBUFFER_SRGB); // CRITICAL CLEANUP
+    checkAndLogGlError("endFrame");
+    m_gl->glBindTexture(GL_TEXTURE_2D, 0); // Unbind the texture from the last active unit.
+    m_gl->glActiveTexture(GL_TEXTURE0); // Reset the active texture unit to 0.
 }
 
+void RenderingSystem::renderSceneToFBOs(entt::registry& registry, const Camera& primaryCamera)
+{
+    // 1. Set up the camera matrices from the primary view
+    float aspect = (m_height > 0) ? static_cast<float>(m_width) / m_height : 1.0f;
+    m_sceneViewMatrix = primaryCamera.getViewMatrix();
+    m_sceneProjectionMatrix = primaryCamera.getProjectionMatrix(aspect);
+    m_sceneCameraPos = primaryCamera.getPosition();
+
+    // 2. Bind the main FBO and clear it
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_mainFBO);
+    const auto& props = registry.ctx().get<SceneProperties>();
+    m_gl->glClearColor(props.backgroundColor.r, props.backgroundColor.g, props.backgroundColor.b, props.backgroundColor.a);
+    m_gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    // Set default states for the scene render
+    m_gl->glEnable(GL_DEPTH_TEST);
+    m_gl->glDepthMask(GL_TRUE);
+    m_gl->glDisable(GL_BLEND);
+
+    // 3. Execute all the expensive render passes
+    // All of these can now correctly access member variables like m_gl
+    renderMeshes(registry, m_sceneViewMatrix, m_sceneProjectionMatrix, m_sceneCameraPos);
+    renderGrid(registry, m_sceneViewMatrix, m_sceneProjectionMatrix, m_sceneCameraPos);
+    renderSplines(registry, m_sceneViewMatrix, m_sceneProjectionMatrix, m_sceneCameraPos, m_width, m_height);
+    // add back field visualizer call
+    renderSelectionGlow(registry, m_sceneViewMatrix, m_sceneProjectionMatrix);
+}
+
+// This is the cheap function, run ONCE PER VIEWPORT.
+// <<< ADDED "RenderingSystem::" SCOPE >>>
+void RenderingSystem::compositeToScreen(const Camera& viewportCamera, int viewportWidth, int viewportHeight)
+{
+    // 1. Bind the actual window's framebuffer
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, QOpenGLContext::currentContext()->defaultFramebufferObject());
+    m_gl->glViewport(0, 0, viewportWidth, viewportHeight);
+
+    // 2. Set state for final composite
+    m_gl->glEnable(GL_FRAMEBUFFER_SRGB);
+    m_gl->glDisable(GL_DEPTH_TEST);
+    m_gl->glDisable(GL_BLEND);
+
+    // 3. Use the composite shader
+    m_compositeShader->use();
+    m_compositeShader->setInt("sceneTex", 0);
+    m_compositeShader->setInt("glowTex", 1);
+
+    // 4. Bind the textures rendered in renderSceneToFBOs
+    m_gl->glActiveTexture(GL_TEXTURE0);
+    m_gl->glBindTexture(GL_TEXTURE_2D, m_mainColorTexture);
+    m_gl->glActiveTexture(GL_TEXTURE1);
+    m_gl->glBindTexture(GL_TEXTURE_2D, m_pingpongTexture[1]);
+
+    // 5. Draw the full-screen quad
+    m_gl->glBindVertexArray(m_quadVAO);
+    m_gl->glDrawArrays(GL_TRIANGLES, 0, 3);
+    m_gl->glBindVertexArray(0);
+
+    // 6. Clean up state
+    m_gl->glDisable(GL_FRAMEBUFFER_SRGB);
+    m_gl->glActiveTexture(GL_TEXTURE0);
+}
 //---------- RENDER PASS IMPLEMENTATIONS ------------------
 
 void RenderingSystem::renderMeshes(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& camPos) {
@@ -574,14 +604,23 @@ void RenderingSystem::renderGrid(entt::registry& registry, const glm::mat4& view
 
 void RenderingSystem::renderSplines(entt::registry& registry, const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye, int viewportWidth, int viewportHeight)
 {
+    qDebug() << "[DEBUG] SplinePass: Starting...";
+
     if (!m_glowShader || !m_capShader) return;
 
-    // Common GL state for all splines
-    m_gl->glEnable(GL_DEPTH_TEST);
-    m_gl->glDepthMask(GL_FALSE); // Disable depth writing for transparency effects.
-    m_gl->glEnable(GL_BLEND);
-    m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    GLboolean prevDepthMask;
+    m_gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
 
+    // Common GL state for all splines
+    m_gl->glEnable(GL_BLEND);
+    m_gl->glDepthMask(GL_FALSE); // Disable depth writing for transparency effects.
+    qDebug() << "[DEBUG] SplinePass: State set: Blend ENABLED, Depth Mask FALSE.";
+
+    auto splineView = registry.view<SplineComponent>();
+   // qDebug() << "[DEBUG] SplinePass: Found" << splineView.size_hint() << "spline entities in the scene.";
+
+
+    int splineCounter = 0;
     for (auto e : registry.view<SplineComponent>())
     {
         const auto& sp = registry.get<SplineComponent>(e);
@@ -595,8 +634,10 @@ void RenderingSystem::renderSplines(entt::registry& registry, const glm::mat4& v
         case SplineType::Parametric: lineStripPoints = evaluateParametricCPU(sp.parametric.func, 128); break;
         }
 
-        if (lineStripPoints.size() < 2) continue;
-
+        if (lineStripPoints.size() < 2) {
+            qDebug() << "[DEBUG] SplinePass: Entity" << (int)e << "has < 2 vertices. SKIPPING.";
+            continue;
+        }
         // 2. Draw the main line segments using the glow shader.
         m_glowShader->use();
         m_glowShader->setMat4("u_view", view);
@@ -605,6 +646,12 @@ void RenderingSystem::renderSplines(entt::registry& registry, const glm::mat4& v
         m_glowShader->setVec2("u_viewport_size", glm::vec2(viewportWidth, viewportHeight));
         m_glowShader->setVec4("u_glowColour", sp.glowColour);
         m_glowShader->setVec4("u_coreColour", sp.coreColour);
+
+        qDebug().nospace() << "[DEBUG] SplinePass: Drawing spline" << splineCounter
+            << " | Verts: " << lineStripPoints.size()
+            << " | Glow Color: (" << sp.glowColour.r << "," << sp.glowColour.g << "," << sp.glowColour.b << "," << sp.glowColour.a << ")"
+            << " | Core Color: (" << sp.coreColour.r << "," << sp.coreColour.g << "," << sp.coreColour.b << "," << sp.coreColour.a << ")";
+
 
         // Convert line strip to line segments for GL_LINES topology.
         std::vector<glm::vec3> lineSegments;
@@ -628,6 +675,8 @@ void RenderingSystem::renderSplines(entt::registry& registry, const glm::mat4& v
         m_capShader->setVec4("u_glowColour", sp.glowColour);
         m_capShader->setVec4("u_coreColour", sp.coreColour);
 
+
+
         // Decide which points need a cap.
         std::vector<glm::vec3> capPoints;
         if (sp.type == SplineType::Linear) {
@@ -645,12 +694,29 @@ void RenderingSystem::renderSplines(entt::registry& registry, const glm::mat4& v
             m_gl->glBufferData(GL_ARRAY_BUFFER, capPoints.size() * sizeof(glm::vec3), capPoints.data(), GL_DYNAMIC_DRAW);
             m_gl->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(capPoints.size()));
         }
+        splineCounter++;
     }
 
-    // Cleanup OpenGL state.
-    m_gl->glDepthMask(GL_TRUE);
-    m_gl->glBindVertexArray(0);
+    qDebug() << "[DEBUG] SplinePass: Finished. Resetting state...";
+    m_gl->glDepthMask(GL_TRUE); // Explicitly reset the state
+    m_gl->glDisable(GL_BLEND);
+    qDebug() << "[DEBUG] SplinePass: State reset: Blend DISABLED, Depth Mask TRUE.";
 }
+
+void RenderingSystem::resetGLState()
+{
+    if (!m_gl) return;
+
+    // This function enforces a known, default state before a viewport renders.
+    // It's the most robust way to prevent state leakage.
+    m_gl->glDisable(GL_FRAMEBUFFER_SRGB); // Ensures we render to our FBO in linear space.
+    m_gl->glEnable(GL_DEPTH_TEST);
+    m_gl->glDepthMask(GL_TRUE); // Ensures opaque objects write to the depth buffer.
+    m_gl->glDisable(GL_BLEND);
+    m_gl->glDisable(GL_STENCIL_TEST);
+    m_gl->glUseProgram(0); // Unbind any shader.
+}
+
 
 void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection) {
     if (!m_instancedArrowShader || m_arrowVAO == 0) return;
