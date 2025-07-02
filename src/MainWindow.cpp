@@ -106,10 +106,11 @@ MainWindow::MainWindow(QWidget* parent)
         reg.emplace<TransformComponent>(visualizerEntity);
         auto& visualizer = reg.emplace<FieldVisualizerComponent>(visualizerEntity);
         visualizer.bounds = { glm::vec3(-5.0f, -2.5f, -5.0f), glm::vec3(10.0f, 2.5f, 5.0f) };
-        visualizer.density = { 50, 20, 50 };
-        visualizer.displayMode = FieldVisualizerComponent::DisplayMode::Flow;
-        visualizer.vectorScale = 0.5f;
+        visualizer.density = { 20, 10, 15 };
+        visualizer.displayMode = FieldVisualizerComponent::DisplayMode::Particles;
+        visualizer.vectorScale = 0.2f;
         visualizer.particleCount = 5000;
+		visualizer.flowBaseSpeed = 0.55f;
 		visualizer.flowBaseSpeed = 0.55f;
 		visualizer.flowScale = 0.30f;
 		visualizer.flowRandomWalk = 25.81f;
