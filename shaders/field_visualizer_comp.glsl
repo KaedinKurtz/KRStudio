@@ -195,9 +195,10 @@ void main()
         // while keeping its length (Z axis) constant.
         mat4 scale = mat4(1.0);
         float dynamicWidth = u_arrowHeadScale * abs(magnitude); // Use abs() for width scaling
-        scale[0][0] = dynamicWidth;                             // Scale X axis (width).
-        scale[1][1] = dynamicWidth;                             // Scale Y axis (width).
-        scale[2][2] = u_vectorScale;                            // Keep Z axis (length) at a constant scale.
+   
+        scale[0][0] = u_arrowHeadScale;              // Constant width
+        scale[1][1] = u_arrowHeadScale;              // Constant width
+        scale[2][2] = magnitude * u_vectorScale;     // Dynamic length based on field magnitude
         
         // Color interpolation based on field magnitude
         float normMag = clamp(abs(magnitude) / 5.0, 0.0, 1.0);
