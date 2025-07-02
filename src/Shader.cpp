@@ -1,5 +1,5 @@
 ﻿#include "Shader.hpp"
-#include <QOpenGLFunctions_4_1_Core>
+#include <QOpenGLFunctions_4_3_Core>
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -7,91 +7,74 @@
 #include <QDebug>
 
 
-Shader::Shader(QOpenGLFunctions_4_1_Core* gl,
-    const char* vertexPath,
-    const char* fragmentPath)
-    : m_gl(gl)
+Shader::Shader(QOpenGLFunctions_4_3_Core* gl, const char* vertexPath, const char* fragmentPath) : m_gl(gl)
 {
-    if (!m_gl)
-        throw std::runtime_error("OpenGL functions pointer is null.");
+    if (!m_gl) throw std::runtime_error("OpenGL functions pointer is null.");
 
-    /* ── 1. Read shader files into strings ─────────────────────────────── */
-    std::string   vertexCode;
-    std::string   fragmentCode;
-    std::ifstream vShaderFile;
-    std::ifstream fShaderFile;
-
+    std::string vertexCode, fragmentCode;
+    std::ifstream vShaderFile, fShaderFile;
     vShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
     fShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
-    try
-    {
+    try {
         vShaderFile.open(vertexPath);
         fShaderFile.open(fragmentPath);
-
         std::stringstream vStream, fStream;
         vStream << vShaderFile.rdbuf();
         fStream << fShaderFile.rdbuf();
-
         vertexCode = vStream.str();
         fragmentCode = fStream.str();
     }
-    catch (std::ifstream::failure&)
-    {
-        throw std::runtime_error(
-            std::string("SHADER::FILE_NOT_READ: ") +
-            vertexPath + " or " + fragmentPath);
+    catch (std::ifstream::failure&) {
+        throw std::runtime_error(std::string("SHADER::FILE_NOT_READ: ") + vertexPath + " or " + fragmentPath);
     }
 
     const char* vSrc = vertexCode.c_str();
     const char* fSrc = fragmentCode.c_str();
 
-    /* ── 2. Compile shaders ────────────────────────────────────────────── */
     GLuint vertex = m_gl->glCreateShader(GL_VERTEX_SHADER);
     m_gl->glShaderSource(vertex, 1, &vSrc, nullptr);
     m_gl->glCompileShader(vertex);
-    this->checkCompileErrors(vertex, "VERTEX");
+    checkCompileErrors(vertex, "VERTEX");
 
     GLuint fragment = m_gl->glCreateShader(GL_FRAGMENT_SHADER);
     m_gl->glShaderSource(fragment, 1, &fSrc, nullptr);
     m_gl->glCompileShader(fragment);
-    this->checkCompileErrors(fragment, "FRAGMENT");
+    checkCompileErrors(fragment, "FRAGMENT");
 
-    /* ── 3. Link program ───────────────────────────────────────────────── */
     ID = m_gl->glCreateProgram();
     m_gl->glAttachShader(ID, vertex);
     m_gl->glAttachShader(ID, fragment);
     m_gl->glLinkProgram(ID);
-    this->checkCompileErrors(ID, "PROGRAM");
+    checkCompileErrors(ID, "PROGRAM");
 
-    /* ── 4. Cleanup ────────────────────────────────────────────────────── */
     m_gl->glDeleteShader(vertex);
     m_gl->glDeleteShader(fragment);
 }
 
-Shader::Shader(QOpenGLFunctions_4_1_Core* gl,
-    const std::vector<std::string>& paths)
-    : m_gl(gl), ID(0)
+
+Shader::Shader(QOpenGLFunctions_4_3_Core* gl, const std::vector<std::string>& paths) : m_gl(gl), ID(0)
 {
     if (!m_gl) throw std::runtime_error("GL ptr null.");
 
-    auto stageFromName = [](const std::string& p)->GLenum
-        {
-            if (p.find("_vert") != std::string::npos) return GL_VERTEX_SHADER;
-            if (p.find("_tesc") != std::string::npos) return GL_TESS_CONTROL_SHADER;
-            if (p.find("_tese") != std::string::npos) return GL_TESS_EVALUATION_SHADER;
-            if (p.find("_geom") != std::string::npos) return GL_GEOMETRY_SHADER;
-            if (p.find("_frag") != std::string::npos) return GL_FRAGMENT_SHADER;
-            throw std::runtime_error("Cannot infer stage from name: " + p);
+    auto stageFromName = [](const std::string& p)->GLenum {
+        if (p.find("_vert") != std::string::npos) return GL_VERTEX_SHADER;
+        if (p.find("_tesc") != std::string::npos) return GL_TESS_CONTROL_SHADER;
+        if (p.find("_tese") != std::string::npos) return GL_TESS_EVALUATION_SHADER;
+        if (p.find("_geom") != std::string::npos) return GL_GEOMETRY_SHADER;
+        if (p.find("_frag") != std::string::npos) return GL_FRAGMENT_SHADER;
+        if (p.find("_comp") != std::string::npos) return GL_COMPUTE_SHADER; // Correctly identifies compute shaders
+        throw std::runtime_error("Cannot infer shader stage from name: " + p);
         };
 
-    std::vector<GLuint> shaders; shaders.reserve(paths.size());
+    std::vector<GLuint> shaders;
+    shaders.reserve(paths.size());
 
-    for (const auto& file : paths)
-    {
+    for (const auto& file : paths) {
         std::ifstream ifs(file, std::ios::in | std::ios::binary);
         if (!ifs) throw std::runtime_error("Cannot open " + file);
-        std::stringstream ss; ss << ifs.rdbuf();
+        std::stringstream ss;
+        ss << ifs.rdbuf();
         std::string src = ss.str();
 
         GLuint sh = m_gl->glCreateShader(stageFromName(file));
@@ -108,6 +91,12 @@ Shader::Shader(QOpenGLFunctions_4_1_Core* gl,
     checkCompileErrors(ID, "PROGRAM");
     for (auto sh : shaders) m_gl->glDeleteShader(sh);
 }
+
+std::unique_ptr<Shader> Shader::buildComputeShader(QOpenGLFunctions_4_3_Core* gl, const char* computePath)
+{
+    return std::make_unique<Shader>(gl, std::vector<std::string>{computePath});
+}
+
 
 GLint Shader::getLoc(const char* name) const
 {
@@ -177,16 +166,13 @@ bool Shader::checkCompileErrors(unsigned int shader, std::string type)
     return true;
 }
 
-std::unique_ptr<Shader> Shader::buildGeometryShader(QOpenGLFunctions_4_1_Core* gl, const std::string& vertexPath, const std::string& geometryPath, const std::string& fragmentPath)
+std::unique_ptr<Shader> Shader::buildGeometryShader(QOpenGLFunctions_4_3_Core* gl, const std::string& vertexPath, const std::string& geometryPath, const std::string& fragmentPath)
 {
-    // This is a simplified constructor path for shaders with a geometry stage.
-    // It's created as a static function for convenience.
-    std::vector<std::string> paths = { vertexPath, geometryPath, fragmentPath };
-    return std::make_unique<Shader>(gl, paths);
+    return std::make_unique<Shader>(gl, std::vector<std::string>{vertexPath, geometryPath, fragmentPath});
 }
 
 std::unique_ptr<Shader> Shader::buildTessellatedShader(
-    QOpenGLFunctions_4_1_Core* gl,
+    QOpenGLFunctions_4_3_Core* gl,
     const char* vsPath,
     const char* tcsPath,
     const char* tesPath,

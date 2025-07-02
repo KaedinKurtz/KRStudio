@@ -2,28 +2,33 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>         
-#include <QtOpenGL/QOpenGLFunctions_4_1_Core>
+#include <QtOpenGL/QOpenGLFunctions_4_3_Core>
 
 // Forward-declaration to avoid including heavy Qt headers here.
-class QOpenGLFunctions_4_1_Core;
+class QOpenGLFunctions_4_3_Core;
 
 class Shader
 {
 public:
     unsigned int ID;
-    Shader(QOpenGLFunctions_4_1_Core* gl,
+    Shader(QOpenGLFunctions_4_3_Core* gl,
         const char* vs, const char* fs);
     // The constructor takes a pointer to the OpenGL function implementation.
-    Shader(QOpenGLFunctions_4_1_Core* gl,
+    Shader(QOpenGLFunctions_4_3_Core* gl,
         const std::vector<std::string>& paths);
     static std::unique_ptr<Shader> buildTessellatedShader(
-        QOpenGLFunctions_4_1_Core* gl,
+        QOpenGLFunctions_4_3_Core* gl,
         const char* vsPath,
         const char* tcsPath,
         const char* tesPath,
         const char* fsPath);
     // The destructor is now declared to be implemented in the .cpp file.
     ~Shader();
+
+    static std::unique_ptr<Shader> buildComputeShader(
+        QOpenGLFunctions_4_3_Core* gl,
+        const char* computePath
+    );
 
     void use();
     GLint  getLoc(const char* name) const;
@@ -38,7 +43,7 @@ public:
 	void setVec2(const std::string& name, const glm::vec2& value) const;
 
     static std::unique_ptr<Shader> buildGeometryShader(
-        QOpenGLFunctions_4_1_Core* gl,
+        QOpenGLFunctions_4_3_Core* gl,
         const std::string& vertexPath,
         const std::string& geometryPath,
         const std::string& fragmentPath
@@ -50,8 +55,8 @@ protected:
 private:
     
 
-    QOpenGLFunctions_4_1_Core* m_gl = nullptr;
-    // Utility function for checking shader compilation/linking errors.
+    QOpenGLFunctions_4_3_Core* m_gl = nullptr;
+    // Utility function for checking shader compilation linking errors.
     // The implementation is now memory-safe.
     bool checkCompileErrors(unsigned int shader, std::string type);
 };

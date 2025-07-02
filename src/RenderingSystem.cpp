@@ -6,10 +6,11 @@
 #include "PrimitiveBuilders.hpp"
 #include "FieldSolver.hpp" // Included for the new FieldSolver integration
 
-#include <QOpenGLFunctions_4_1_Core>
+#include <QOpenGLFunctions_4_3_Core>
 #include <QOpenGLContext> // Required for per-context resource management
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 #include <QDebug>
 #include <stdexcept>
 #include <string>
@@ -17,6 +18,7 @@
 #include <QSurface>
 #include <QOpenGLWidget>
 #include <QOpenGLVersionFunctionsFactory>
+#include <random>
 
 #define CHECK_GL_ERROR()                                                       \
     do {                                                                       \
@@ -26,6 +28,43 @@
                         << "in file" << __FILE__;                              \
         }                                                                      \
     } while (0)
+
+struct GLStateSnapshot {
+    GLboolean blendEnabled;
+    GLboolean depthMask;
+    GLboolean cullFaceEnabled;
+    GLint blendSrcRGB;
+    GLint blendDstRGB;
+    GLint blendSrcAlpha;
+    GLint blendDstAlpha;
+    GLint blendEquationRGB;
+    GLint blendEquationAlpha;
+};
+
+void restoreGLState(QOpenGLFunctions_4_3_Core* gl, const GLStateSnapshot& snapshot) {
+    if (snapshot.blendEnabled) gl->glEnable(GL_BLEND);
+    else gl->glDisable(GL_BLEND);
+
+    gl->glDepthMask(snapshot.depthMask);
+
+    if (snapshot.cullFaceEnabled) gl->glEnable(GL_CULL_FACE);
+    else gl->glDisable(GL_CULL_FACE);
+
+    gl->glBlendFuncSeparate(snapshot.blendSrcRGB, snapshot.blendDstRGB, snapshot.blendSrcAlpha, snapshot.blendDstAlpha);
+    gl->glBlendEquationSeparate(snapshot.blendEquationRGB, snapshot.blendEquationAlpha);
+}
+
+void saveGLState(QOpenGLFunctions_4_3_Core* gl, GLStateSnapshot& snapshot) {
+    gl->glGetBooleanv(GL_BLEND, &snapshot.blendEnabled);
+    gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &snapshot.depthMask);
+    gl->glGetBooleanv(GL_CULL_FACE, &snapshot.cullFaceEnabled);
+    gl->glGetIntegerv(GL_BLEND_SRC_RGB, &snapshot.blendSrcRGB);
+    gl->glGetIntegerv(GL_BLEND_DST_RGB, &snapshot.blendDstRGB);
+    gl->glGetIntegerv(GL_BLEND_SRC_ALPHA, &snapshot.blendSrcAlpha);
+    gl->glGetIntegerv(GL_BLEND_DST_ALPHA, &snapshot.blendDstAlpha);
+    gl->glGetIntegerv(GL_BLEND_EQUATION_RGB, &snapshot.blendEquationRGB);
+    gl->glGetIntegerv(GL_BLEND_EQUATION_ALPHA, &snapshot.blendEquationAlpha);
+}
 
 static const char* fbStatusStr(GLenum s)
 {
@@ -42,7 +81,7 @@ static const char* fbStatusStr(GLenum s)
     default: return "UNKNOWN";
     }
 }
-static void dumpCompositeUniforms(QOpenGLFunctions_4_1_Core* gl, Shader* sh)
+static void dumpCompositeUniforms(QOpenGLFunctions_4_3_Core* gl, Shader* sh)
 {
     GLint sceneLoc = sh->getLoc("sceneTexture");   // will throw if not found :contentReference[oaicite:0]{index=0}
     GLint glowLoc = sh->getLoc("glowTexture");
@@ -51,7 +90,7 @@ static void dumpCompositeUniforms(QOpenGLFunctions_4_1_Core* gl, Shader* sh)
         << glowLoc;
 }
 
-static void dumpCompositeAttributes(QOpenGLFunctions_4_1_Core* gl, Shader* sh)
+static void dumpCompositeAttributes(QOpenGLFunctions_4_3_Core* gl, Shader* sh)
 {
     GLint posAttrib = gl->glGetAttribLocation(sh->ID, "pos");   // `ID` is public :contentReference[oaicite:1]{index=1}
     qDebug().nospace() << "[Composite] expects attribute 'pos' ? "
@@ -61,7 +100,7 @@ static void dumpCompositeAttributes(QOpenGLFunctions_4_1_Core* gl, Shader* sh)
 /*  When you suspect the texture itself is empty, call this.
     It reads the very first pixel so you can see whether anything
     besides pure-black ever makes it into the render target.   */
-static void debugTexturePixel(QOpenGLFunctions_4_1_Core* gl,
+static void debugTexturePixel(QOpenGLFunctions_4_3_Core* gl,
     GLuint tex, const char* label)
 {
     GLuint fbo = 0;
@@ -218,11 +257,11 @@ static glm::vec4 getColorFromGradient(float value, const std::vector<ColorStop>&
     return gradient.back().color; // Fallback.
 }
 
-static QOpenGLFunctions_4_1_Core* resolveGl41(QOpenGLContext* ctx)
+static QOpenGLFunctions_4_3_Core* resolveGl41(QOpenGLContext* ctx)
 {
     if (!ctx) return nullptr;                     // no context – nothing to do
     auto* f = QOpenGLVersionFunctionsFactory
-        ::get<QOpenGLFunctions_4_1_Core>(ctx); // always available
+        ::get<QOpenGLFunctions_4_3_Core>(ctx); // always available
     if (f) f->initializeOpenGLFunctions();        // one-time init
     return f;
 }
@@ -234,20 +273,39 @@ void RenderingSystem::checkAndLogGlError(const char* label) {
     }
 }
 
+void RenderingSystem::ensureGlResolved()
+{
+    QOpenGLContext* currentCtx = QOpenGLContext::currentContext();
+    if (currentCtx == m_lastContext && m_gl) {
+        return;
+    }
+    qDebug() << "OpenGL context changed. Re-resolving function pointers for" << currentCtx;
+    if (!currentCtx) {
+        m_gl = nullptr;
+        m_lastContext = nullptr;
+        return;
+    }
+    m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(currentCtx);
+    if (m_gl) {
+        m_gl->initializeOpenGLFunctions();
+    }
+    else {
+        qCritical() << "Failed to get GL functions for the new context.";
+    }
+    m_lastContext = currentCtx;
+}
+
+QOpenGLContext* RenderingSystem::currentCtxOrNull()
+{
+    // tiny utility: never throws, never logs
+    return QOpenGLContext::currentContext();
+}
+
 //---------- CONSTRUCTOR / DESTRUCTOR ------------------
 
-RenderingSystem::RenderingSystem(QOpenGLWidget* viewport,
-    QOpenGLFunctions_4_1_Core* gl /* = nullptr */)
-    : m_viewportWidget(viewport)
-    , m_gl(gl)
+RenderingSystem::RenderingSystem(QOpenGLWidget* w, QOpenGLFunctions_4_3_Core* gl, QObject* parent)
+    :m_viewportWidget(w), m_gl(gl)
 {
-    // Grab functions from the widget’s context if the caller didn’t pass any
-    if (!m_gl && m_viewportWidget)
-        m_gl = resolveGl41(m_viewportWidget->context());
-
-    if (!m_gl)
-        qWarning() << "[RenderingSystem] Failed to obtain 4.1 core functions!";
-
     m_fieldSolver = std::make_unique<FieldSolver>();
 }
 
@@ -255,25 +313,83 @@ RenderingSystem::~RenderingSystem() {}
 
 //---------- PUBLIC: RENDER LOOP & LIFECYCLE MANAGEMENT ------------------
 
-void RenderingSystem::initialize(int width, int height) {
+void RenderingSystem::initialize(int w, int h)
+{
+    ensureGlResolved();
     if (!m_gl) {
-        qWarning() << "[RenderingSystem] Cannot initialize, GL functions not set.";
-        return;
+        qFatal("RenderingSystem::initialize – no current context was provided.");
     }
-    m_width = width;
-    m_height = height;
-
     initShaders();
-    initFramebuffers(width, height);
-    initRenderPrimitives();
-    initFullscreenQuad();
 
     m_gl->glEnable(GL_DEPTH_TEST);
     m_gl->glEnable(GL_BLEND);
     m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    m_isInitialized = true;
 }
 
-void RenderingSystem::shutdown() {
+void RenderingSystem::shutdown(entt::registry& registry) {
+    if (!m_gl) return;
+
+    qDebug() << "[LIFECYCLE] Shutting down per-context GPU resources.";
+
+    // Per-context primitives (VAOs for grid, lines, etc.)
+    for (auto const& primitives : m_contextPrimitives) {
+        if (primitives.gridVAO) m_gl->glDeleteVertexArrays(1, &primitives.gridVAO);
+        if (primitives.gridVBO) m_gl->glDeleteBuffers(1, &primitives.gridVBO);
+        if (primitives.lineVAO) m_gl->glDeleteVertexArrays(1, &primitives.lineVAO);
+        if (primitives.lineVBO) m_gl->glDeleteBuffers(1, &primitives.lineVBO);
+        if (primitives.capVAO) m_gl->glDeleteVertexArrays(1, &primitives.capVAO);
+        if (primitives.capVBO) m_gl->glDeleteBuffers(1, &primitives.capVBO);
+        if (primitives.compositeVAO) m_gl->glDeleteVertexArrays(1, &primitives.compositeVAO);
+        if (primitives.arrowVAO) m_gl->glDeleteVertexArrays(1, &primitives.arrowVAO);
+        if (primitives.arrowVBO) m_gl->glDeleteBuffers(1, &primitives.arrowVBO);
+        if (primitives.arrowEBO) m_gl->glDeleteBuffers(1, &primitives.arrowEBO);
+        if (primitives.instanceVBO) m_gl->glDeleteBuffers(1, &primitives.instanceVBO);
+    }
+    m_contextPrimitives.clear();
+
+    // Per-viewport FBOs
+    for (auto const& [widget, target] : m_targets) {
+        m_gl->glDeleteFramebuffers(1, &target.mainFBO);
+        m_gl->glDeleteTextures(1, &target.mainColorTexture);
+        m_gl->glDeleteTextures(1, &target.mainDepthTexture);
+        m_gl->glDeleteFramebuffers(1, &target.glowFBO);
+        m_gl->glDeleteTextures(1, &target.glowTexture);
+        m_gl->glDeleteFramebuffers(2, target.pingpongFBO);
+        m_gl->glDeleteTextures(2, target.pingpongTexture);
+    }
+    m_targets.clear();
+
+    qDebug() << "[LIFECYCLE] Shutting down per-entity GPU resources.";
+    auto view = registry.view<RenderResourceComponent>();
+    for (auto entity : view)
+    {
+        auto& res = view.get<RenderResourceComponent>(entity);
+        for (auto const& [context, buffers] : res.perContext) {
+            if (buffers.VAO) m_gl->glDeleteVertexArrays(1, &buffers.VAO);
+            if (buffers.VBO) m_gl->glDeleteBuffers(1, &buffers.VBO);
+            if (buffers.EBO) m_gl->glDeleteBuffers(1, &buffers.EBO);
+        }
+        res.perContext.clear();
+    }
+
+    auto visualizerView = registry.view<FieldVisualizerComponent>();
+    for (auto entity : visualizerView) {
+        auto& vis = visualizerView.get<FieldVisualizerComponent>(entity);
+        // Cleanup particle buffers
+        if (vis.particleVAO) m_gl->glDeleteVertexArrays(1, &vis.particleVAO);
+        if (vis.particleBuffer[0]) m_gl->glDeleteBuffers(2, vis.particleBuffer);
+        vis.particleVAO = 0;
+        vis.particleBuffer[0] = 0;
+        vis.particleBuffer[1] = 0;
+
+        // Cleanup arrow buffers
+        if (vis.gpuData.samplePointsSSBO) m_gl->glDeleteBuffers(1, &vis.gpuData.samplePointsSSBO);
+        if (vis.gpuData.instanceDataSSBO) m_gl->glDeleteBuffers(1, &vis.gpuData.instanceDataSSBO);
+        if (vis.gpuData.commandUBO) m_gl->glDeleteBuffers(1, &vis.gpuData.commandUBO);
+    }
+    // Reset all shader pointers
     m_phongShader.reset();
     m_gridShader.reset();
     m_outlineShader.reset();
@@ -286,27 +402,11 @@ void RenderingSystem::shutdown() {
     m_blurShader.reset();
     m_compositeShader.reset();
 
-    m_gl->glDeleteVertexArrays(1, &m_gridQuadVAO);
-    m_gl->glDeleteBuffers(1, &m_gridQuadVBO);
-    m_gl->glDeleteVertexArrays(1, &m_arrowVAO);
-    m_gl->glDeleteBuffers(1, &m_arrowVBO);
-    m_gl->glDeleteBuffers(1, &m_arrowEBO);
-    m_gl->glDeleteBuffers(1, &m_instanceVBO);
-    m_gl->glDeleteVertexArrays(1, &m_lineVAO);
-    m_gl->glDeleteBuffers(1, &m_lineVBO);
-    m_gl->glDeleteVertexArrays(1, &m_capVAO);
-    m_gl->glDeleteBuffers(1, &m_capVBO);
+    // Delete remaining globally shared resources
     m_gl->glDeleteVertexArrays(1, &m_intersectionVAO);
     m_gl->glDeleteBuffers(1, &m_intersectionVBO);
-    m_gl->glDeleteVertexArrays(1, &m_quadVAO);
 
-    m_gl->glDeleteFramebuffers(1, &m_mainFBO);
-    m_gl->glDeleteTextures(1, &m_mainColorTexture);
-    m_gl->glDeleteRenderbuffers(1, &m_mainDepthRenderbuffer);
-    m_gl->glDeleteFramebuffers(1, &m_glowFBO);
-    m_gl->glDeleteTextures(1, &m_glowTexture);
-    m_gl->glDeleteFramebuffers(2, m_pingpongFBO);
-    m_gl->glDeleteTextures(2, m_pingpongTexture);
+    m_isInitialized = false;
 }
 
 void RenderingSystem::resize(int reqW, int reqH)
@@ -333,147 +433,36 @@ inline void RenderingSystem::ensureSize(int w, int h)
 
 void RenderingSystem::beginFrame(entt::registry& registry)
 {
-    qDebug().nospace() << "[DEBUG] BeginFrame: Binding Main FBO (" << m_mainFBO << "). Checking status...";
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_mainFBO);
-    GLenum status = m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        qWarning() << "[DEBUG] BeginFrame: Main FBO is NOT COMPLETE! Status:" << fbStatusStr(status);
-    }
-
-    const auto& props = registry.ctx().get<SceneProperties>();
-    m_gl->glClearColor(props.backgroundColor.r, props.backgroundColor.g, props.backgroundColor.b, props.backgroundColor.a);
-    m_gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-
-    GLboolean isSrgbEnabled;
-    m_gl->glGetBooleanv(GL_FRAMEBUFFER_SRGB, &isSrgbEnabled);
-    qDebug() << "[DEBUG] BeginFrame: Current GL_FRAMEBUFFER_SRGB state:" << (isSrgbEnabled ? "ENABLED" : "DISABLED");
-
-    m_gl->glEnable(GL_DEPTH_TEST);
-    m_gl->glDepthMask(GL_TRUE);
-    qDebug() << "[DEBUG] BeginFrame: State set: Depth Test ENABLED, Depth Mask TRUE.";
-    checkAndLogGlError("beginFrame");
-}
-
-void RenderingSystem::endFrame()
-{
-    QOpenGLContext* ctx = QOpenGLContext::currentContext();
-    if (!ctx) return;
-    GLuint defaultFBO = ctx->defaultFramebufferObject();
-    qDebug().nospace() << "[DEBUG] EndFrame: Binding Default FBO (" << defaultFBO << ").";
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, defaultFBO);
-
-    qDebug() << "[DEBUG] EndFrame: Enabling GL_FRAMEBUFFER_SRGB for final composite.";
-    m_gl->glEnable(GL_FRAMEBUFFER_SRGB);
-
-    /* NOTE -----------------------------------------------------
-     *  paintGL() has already called glViewport(0,0, fbW, fbH)
-     *  for the *current* viewport widget.  Do NOT change it
-     *  here or we will clip / stretch other viewports.
-     * -------------------------------------------------------- */
-   
-     /* --------------------------------------------------------- */
-     /*  2. States                                                */
-     /* --------------------------------------------------------- */
-    m_gl->glDisable(GL_DEPTH_TEST);
-    m_gl->glDisable(GL_STENCIL_TEST);
-    m_gl->glDisable(GL_BLEND);
-    m_gl->glDisable(GL_CULL_FACE);
-    m_gl->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    m_gl->glDepthMask(GL_TRUE);
-    m_gl->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);      // black backdrop
-    m_gl->glClear(GL_COLOR_BUFFER_BIT);
-
-    /* --------------------------------------------------------- */
-    /*  3. Composite                                             */
-    /* --------------------------------------------------------- */
-    m_compositeShader->use();
-    m_compositeShader->setInt("sceneTex", 0);
-    m_compositeShader->setInt("glowTex", 1);
-
-    // 0 : scene colour
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_mainColorTexture);
-
-    // 1 : final blurred glow
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_pingpongTexture[1]);
-
-    m_gl->glBindVertexArray(m_quadVAO);
-    m_gl->glDrawArrays(GL_TRIANGLES, 0, 3);          // fullscreen triangle
-    m_gl->glBindVertexArray(0);
-
-    /* --------------------------------------------------------- */
-    /* 4. Tidy / Restore State                                   */
-    /* --------------------------------------------------------- */
-    // This is the crucial cleanup step!
-    qDebug() << "[DEBUG] EndFrame: Disabling GL_FRAMEBUFFER_SRGB to clean up.";
-    m_gl->glDisable(GL_FRAMEBUFFER_SRGB); // CRITICAL CLEANUP
-    checkAndLogGlError("endFrame");
-    m_gl->glBindTexture(GL_TEXTURE_2D, 0); // Unbind the texture from the last active unit.
-    m_gl->glActiveTexture(GL_TEXTURE0); // Reset the active texture unit to 0.
+    //
+    // [DEPRECATED] This function was part of the old single-render pipeline. 
+    // Its logic (binding and clearing the main FBO) is now handled at the
+    // start of the new renderView() function for each viewport individually.
+    //
 }
 
 void RenderingSystem::renderSceneToFBOs(entt::registry& registry, const Camera& primaryCamera)
 {
-    // 1. Set up the camera matrices from the primary view
-    float aspect = (m_height > 0) ? static_cast<float>(m_width) / m_height : 1.0f;
-    m_sceneViewMatrix = primaryCamera.getViewMatrix();
-    m_sceneProjectionMatrix = primaryCamera.getProjectionMatrix(aspect);
-    m_sceneCameraPos = primaryCamera.getPosition();
+    //
+    // [DEPRECATED] This function was the core of the old single-render pipeline.
+    // All the render passes it used to call (renderMeshes, renderGrid, etc.)
+    // are now called directly from within the new renderView() function.
+    //
+}
 
-    // 2. Bind the main FBO and clear it
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_mainFBO);
-    const auto& props = registry.ctx().get<SceneProperties>();
-    m_gl->glClearColor(props.backgroundColor.r, props.backgroundColor.g, props.backgroundColor.b, props.backgroundColor.a);
-    m_gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-    // Set default states for the scene render
-    m_gl->glEnable(GL_DEPTH_TEST);
-    m_gl->glDepthMask(GL_TRUE);
-    m_gl->glDisable(GL_BLEND);
-
-    // 3. Execute all the expensive render passes
-    // All of these can now correctly access member variables like m_gl
-    renderMeshes(registry, m_sceneViewMatrix, m_sceneProjectionMatrix, m_sceneCameraPos);
-    renderGrid(registry, m_sceneViewMatrix, m_sceneProjectionMatrix, m_sceneCameraPos);
-    renderSplines(registry, m_sceneViewMatrix, m_sceneProjectionMatrix, m_sceneCameraPos, m_width, m_height);
-    // add back field visualizer call
-    renderSelectionGlow(registry, m_sceneViewMatrix, m_sceneProjectionMatrix);
+bool RenderingSystem::isRenderCtx(const QOpenGLContext* ctx) const noexcept
+{
+    return ctx && (ctx == m_ownerCtx || ctx->shareGroup() == m_ownerCtx->shareGroup());
 }
 
 // This is the cheap function, run ONCE PER VIEWPORT.
 // <<< ADDED "RenderingSystem::" SCOPE >>>
-void RenderingSystem::compositeToScreen(const Camera& viewportCamera, int viewportWidth, int viewportHeight)
+void RenderingSystem::compositeToScreen(int vpW, int vpH)
 {
-    // 1. Bind the actual window's framebuffer
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, QOpenGLContext::currentContext()->defaultFramebufferObject());
-    m_gl->glViewport(0, 0, viewportWidth, viewportHeight);
-
-    // 2. Set state for final composite
-    m_gl->glEnable(GL_FRAMEBUFFER_SRGB);
-    m_gl->glDisable(GL_DEPTH_TEST);
-    m_gl->glDisable(GL_BLEND);
-
-    // 3. Use the composite shader
-    m_compositeShader->use();
-    m_compositeShader->setInt("sceneTex", 0);
-    m_compositeShader->setInt("glowTex", 1);
-
-    // 4. Bind the textures rendered in renderSceneToFBOs
-    m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_mainColorTexture);
-    m_gl->glActiveTexture(GL_TEXTURE1);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_pingpongTexture[1]);
-
-    // 5. Draw the full-screen quad
-    m_gl->glBindVertexArray(m_quadVAO);
-    m_gl->glDrawArrays(GL_TRIANGLES, 0, 3);
-    m_gl->glBindVertexArray(0);
-
-    // 6. Clean up state
-    m_gl->glDisable(GL_FRAMEBUFFER_SRGB);
-    m_gl->glActiveTexture(GL_TEXTURE0);
+    //
+    // [DEPRECATED] This function's logic has been merged into the end of the
+    // new renderView() function. That function now handles the final composite
+    // pass to draw the result to the screen for each viewport.
+    //
 }
 //---------- RENDER PASS IMPLEMENTATIONS ------------------
 
@@ -488,6 +477,7 @@ void RenderingSystem::renderMeshes(entt::registry& registry, const glm::mat4& vi
     m_phongShader->setVec3("viewPos", camPos);
 
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    if (!ctx) return;
     auto viewRM = registry.view<RenderableMeshComponent, TransformComponent>();
 
     for (auto entity : viewRM) {
@@ -498,8 +488,6 @@ void RenderingSystem::renderMeshes(entt::registry& registry, const glm::mat4& vi
         auto& mesh = viewRM.get<RenderableMeshComponent>(entity);
         auto& xf = viewRM.get<TransformComponent>(entity);
 
-        // FIX: Use MaterialComponent. If it doesn't exist, fall back to a default gray color.
-        // The reference to 'mesh.colour' is now removed.
         auto* mat = registry.try_get<MaterialComponent>(entity);
         m_phongShader->setVec3("objectColor", mat ? mat->albedo : glm::vec3(0.8f));
 
@@ -536,15 +524,33 @@ void RenderingSystem::renderMeshes(entt::registry& registry, const glm::mat4& vi
 void RenderingSystem::renderGrid(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& camPos)
 {
     if (!m_gridShader) return;
+
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    if (!ctx) return;
+    auto& primitives = m_contextPrimitives[ctx];
+
+    if (primitives.gridVAO == 0) {
+        qDebug() << "Creating grid primitives for context" << ctx;
+        float gridPlaneVertices[] = { -2000.f,0,-2000.f, 2000.f,0,-2000.f, 2000.f,0,2000.f, -2000.f,0,-2000.f, 2000.f,0,2000.f, -2000.f,0,2000.f };
+        m_gl->glGenVertexArrays(1, &primitives.gridVAO);
+        m_gl->glGenBuffers(1, &primitives.gridVBO);
+        m_gl->glBindVertexArray(primitives.gridVAO);
+        m_gl->glBindBuffer(GL_ARRAY_BUFFER, primitives.gridVBO);
+        m_gl->glBufferData(GL_ARRAY_BUFFER, sizeof(gridPlaneVertices), gridPlaneVertices, GL_STATIC_DRAW);
+        m_gl->glEnableVertexAttribArray(0);
+        m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+        // Connect this context's destruction signal to our cleanup slot.
+         
+    }
+
+    const auto drawQuad = [&] {
+        m_gl->glBindVertexArray(primitives.gridVAO);
+        m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
+        };
+
     auto viewG = registry.view<GridComponent, TransformComponent>();
     if (viewG.begin() == viewG.end()) return;
-
-    // Lambda to draw the grid's quad geometry.
-    const auto drawQuad = [&] {
-        m_gl->glBindVertexArray(m_gridQuadVAO);
-        m_gl->glDrawArrays(GL_TRIANGLES, 0, 6);
-        m_gl->glBindVertexArray(0);
-        };
 
     m_gridShader->use();
     m_gl->glEnable(GL_POLYGON_OFFSET_FILL);
@@ -608,37 +614,77 @@ void RenderingSystem::renderSplines(entt::registry& registry, const glm::mat4& v
 
     if (!m_glowShader || !m_capShader) return;
 
-    GLboolean prevDepthMask;
-    m_gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+    // Save the current OpenGL state to ensure this pass is isolated.
+    GLStateSnapshot stateBeforeSplines;
+    saveGLState(m_gl, stateBeforeSplines);
 
-    // Common GL state for all splines
-    m_gl->glEnable(GL_BLEND);
-    m_gl->glDepthMask(GL_FALSE); // Disable depth writing for transparency effects.
-    qDebug() << "[DEBUG] SplinePass: State set: Blend ENABLED, Depth Mask FALSE.";
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    if (!ctx) {
+        restoreGLState(m_gl, stateBeforeSplines); // Always restore state on early exit
+        return;
+    }
+    auto& primitives = m_contextPrimitives[ctx];
 
-    auto splineView = registry.view<SplineComponent>();
-   // qDebug() << "[DEBUG] SplinePass: Found" << splineView.size_hint() << "spline entities in the scene.";
-
-
-    int splineCounter = 0;
-    for (auto e : registry.view<SplineComponent>())
+    // --- On-Demand Creation for Primitives (remains the same) ---
+    if (primitives.lineVAO == 0)
     {
-        const auto& sp = registry.get<SplineComponent>(e);
-        std::vector<glm::vec3> lineStripPoints;
+        qDebug() << "Creating spline LINE primitives for context" << ctx;
+        m_gl->glGenVertexArrays(1, &primitives.lineVAO);
+        m_gl->glGenBuffers(1, &primitives.lineVBO);
+        m_gl->glBindVertexArray(primitives.lineVAO);
+        m_gl->glBindBuffer(GL_ARRAY_BUFFER, primitives.lineVBO);
+        m_gl->glEnableVertexAttribArray(0);
+        m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    }
+    if (primitives.capVAO == 0)
+    {
+        qDebug() << "Creating spline CAP primitives for context" << ctx;
+        m_gl->glGenVertexArrays(1, &primitives.capVAO);
+        m_gl->glGenBuffers(1, &primitives.capVBO);
+        m_gl->glBindVertexArray(primitives.capVAO);
+        m_gl->glBindBuffer(GL_ARRAY_BUFFER, primitives.capVBO);
+        m_gl->glEnableVertexAttribArray(0);
+        m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    }
 
-        // 1. Generate vertex data on the CPU based on spline type.
-        switch (sp.type) {
-        case SplineType::Linear:     lineStripPoints = evaluateLinearCPU(sp.controlPoints); break;
-        case SplineType::CatmullRom: lineStripPoints = evaluateCatmullRomCPU(sp.controlPoints, 64); break;
-        case SplineType::Bezier:     lineStripPoints = evaluateBezierCPU(sp.controlPoints, 64); break;
-        case SplineType::Parametric: lineStripPoints = evaluateParametricCPU(sp.parametric.func, 128); break;
-        }
+    // --- Set Specific State for Spline Rendering ---
+    m_gl->glEnable(GL_BLEND);
+    m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    m_gl->glDepthMask(GL_FALSE);
+    m_gl->glDisable(GL_CULL_FACE);
 
-        if (lineStripPoints.size() < 2) {
-            qDebug() << "[DEBUG] SplinePass: Entity" << (int)e << "has < 2 vertices. SKIPPING.";
+    // --- Iterate and Draw Splines ---
+    auto splineView = registry.view<SplineComponent>();
+    for (auto e : splineView)
+    {
+        auto& sp = splineView.get<const SplineComponent>(e);
+
+        if (sp.cachedVertices.size() < 2) {
             continue;
         }
-        // 2. Draw the main line segments using the glow shader.
+
+        // --- Caching Logic ---
+        // Only perform the expensive CPU calculation if the spline has changed.
+        if (sp.isDirty) {
+            qDebug() << "[Spline Cache] Recalculating vertices for dirty spline entity:" << (int)e;
+
+            // Perform the expensive, one-time calculation and store it.
+            switch (sp.type) {
+            case SplineType::Linear:     sp.cachedVertices = evaluateLinearCPU(sp.controlPoints); break;
+            case SplineType::CatmullRom: sp.cachedVertices = evaluateCatmullRomCPU(sp.controlPoints, 64); break;
+            case SplineType::Bezier:     sp.cachedVertices = evaluateBezierCPU(sp.controlPoints, 64); break;
+            case SplineType::Parametric: sp.cachedVertices = evaluateParametricCPU(sp.parametric.func, 128); break;
+            }
+            // Mark the spline as clean until its control points are modified again.
+            sp.isDirty = false;
+        }
+
+        // On every frame, we now use the fast, cached data.
+        if (sp.cachedVertices.size() < 2) {
+            continue;
+        }
+
+        // --- Draw Glow (using cached vertices) ---
         m_glowShader->use();
         m_glowShader->setMat4("u_view", view);
         m_glowShader->setMat4("u_proj", proj);
@@ -647,26 +693,20 @@ void RenderingSystem::renderSplines(entt::registry& registry, const glm::mat4& v
         m_glowShader->setVec4("u_glowColour", sp.glowColour);
         m_glowShader->setVec4("u_coreColour", sp.coreColour);
 
-        qDebug().nospace() << "[DEBUG] SplinePass: Drawing spline" << splineCounter
-            << " | Verts: " << lineStripPoints.size()
-            << " | Glow Color: (" << sp.glowColour.r << "," << sp.glowColour.g << "," << sp.glowColour.b << "," << sp.glowColour.a << ")"
-            << " | Core Color: (" << sp.coreColour.r << "," << sp.coreColour.g << "," << sp.coreColour.b << "," << sp.coreColour.a << ")";
-
-
-        // Convert line strip to line segments for GL_LINES topology.
+        // Convert cached line strip to line segments for GL_LINES topology.
         std::vector<glm::vec3> lineSegments;
-        lineSegments.reserve((lineStripPoints.size() - 1) * 2);
-        for (size_t i = 0; i < lineStripPoints.size() - 1; ++i) {
-            lineSegments.push_back(lineStripPoints[i]);
-            lineSegments.push_back(lineStripPoints[i + 1]);
+        lineSegments.reserve((sp.cachedVertices.size() - 1) * 2);
+        for (size_t i = 0; i < sp.cachedVertices.size() - 1; ++i) {
+            lineSegments.push_back(sp.cachedVertices[i]);
+            lineSegments.push_back(sp.cachedVertices[i + 1]);
         }
 
-        m_gl->glBindVertexArray(m_lineVAO);
-        m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_lineVBO);
+        m_gl->glBindVertexArray(primitives.lineVAO);
+        m_gl->glBindBuffer(GL_ARRAY_BUFFER, primitives.lineVBO);
         m_gl->glBufferData(GL_ARRAY_BUFFER, lineSegments.size() * sizeof(glm::vec3), lineSegments.data(), GL_DYNAMIC_DRAW);
         m_gl->glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lineSegments.size()));
 
-        // 3. Draw caps on line joints to make them appear rounded.
+        // --- Draw Caps (using cached vertices) ---
         m_capShader->use();
         m_capShader->setMat4("u_view", view);
         m_capShader->setMat4("u_proj", proj);
@@ -674,8 +714,6 @@ void RenderingSystem::renderSplines(entt::registry& registry, const glm::mat4& v
         m_capShader->setFloat("u_thickness", sp.thickness);
         m_capShader->setVec4("u_glowColour", sp.glowColour);
         m_capShader->setVec4("u_coreColour", sp.coreColour);
-
-
 
         // Decide which points need a cap.
         std::vector<glm::vec3> capPoints;
@@ -685,108 +723,465 @@ void RenderingSystem::renderSplines(entt::registry& registry, const glm::mat4& v
         }
         else {
             // For smooth splines, only cap the absolute start and end points.
-            capPoints = { lineStripPoints.front(), lineStripPoints.back() };
+            capPoints = { sp.cachedVertices.front(), sp.cachedVertices.back() };
         }
 
         if (!capPoints.empty()) {
-            m_gl->glBindVertexArray(m_capVAO);
-            m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_capVBO);
+            m_gl->glBindVertexArray(primitives.capVAO);
+            m_gl->glBindBuffer(GL_ARRAY_BUFFER, primitives.capVBO);
             m_gl->glBufferData(GL_ARRAY_BUFFER, capPoints.size() * sizeof(glm::vec3), capPoints.data(), GL_DYNAMIC_DRAW);
             m_gl->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(capPoints.size()));
         }
-        splineCounter++;
     }
 
+    // --- Restore State ---
     qDebug() << "[DEBUG] SplinePass: Finished. Resetting state...";
-    m_gl->glDepthMask(GL_TRUE); // Explicitly reset the state
-    m_gl->glDisable(GL_BLEND);
-    qDebug() << "[DEBUG] SplinePass: State reset: Blend DISABLED, Depth Mask TRUE.";
+    restoreGLState(m_gl, stateBeforeSplines);
+    m_gl->glBindVertexArray(0);
+    qDebug() << "[DEBUG] SplinePass: State perfectly restored.";
+}
+
+
+void RenderingSystem::updateAnimations(entt::registry& registry, float frameDt)
+{
+    // A persistent timer to drive all animations
+    static float timer = 0.f;
+    timer += frameDt;
+
+    // --- Pulsing Spline Logic ---
+    auto splineView = registry.view<PulsingSplineTag, SplineComponent>();
+
+    //! CORRECTED: Use size_hint() to check if the view has any entities.
+    if (splineView.size_hint() > 0) {
+        float pulseSpeed = 3.0f;
+        float brightness = (sin(timer * pulseSpeed) + 1.0f) / 2.0f; // Varies between 0.0 and 1.0
+        float minBrightness = 0.1f;
+        float finalBrightness = minBrightness + (1.0f - minBrightness) * brightness;
+
+        for (auto entity : splineView) {
+            auto& spline = splineView.get<SplineComponent>(entity);
+            spline.glowColour.a = 1.0f * finalBrightness;
+        }
+    }
+
+    // --- Pulsing Light Logic ---
+    auto lightView = registry.view<PulsingLightComponent, MaterialComponent>();
+    for (auto entity : lightView) {
+        auto& pulse = lightView.get<PulsingLightComponent>(entity);
+        auto& material = lightView.get<MaterialComponent>(entity);
+
+        // A sine wave gives a smooth pulse between 0.0 and 1.0
+        float blendFactor = (sin(timer * pulse.speed) + 1.0f) / 2.0f;
+
+        // Interpolate the material's color between the on and off colors
+        material.albedo = glm::mix(pulse.offColor, pulse.onColor, blendFactor);
+    }
 }
 
 void RenderingSystem::resetGLState()
 {
     if (!m_gl) return;
-
-    // This function enforces a known, default state before a viewport renders.
-    // It's the most robust way to prevent state leakage.
-    m_gl->glDisable(GL_FRAMEBUFFER_SRGB); // Ensures we render to our FBO in linear space.
+    m_gl->glDisable(GL_FRAMEBUFFER_SRGB);
     m_gl->glEnable(GL_DEPTH_TEST);
-    m_gl->glDepthMask(GL_TRUE); // Ensures opaque objects write to the depth buffer.
+    m_gl->glDepthMask(GL_TRUE);
+
     m_gl->glDisable(GL_BLEND);
     m_gl->glDisable(GL_STENCIL_TEST);
-    m_gl->glUseProgram(0); // Unbind any shader.
+    m_gl->glUseProgram(0);
 }
 
+void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection, float deltaTime)
+{
+    if (!m_gl) return;
 
-void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection) {
-    if (!m_instancedArrowShader || m_arrowVAO == 0) return;
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    if (!ctx) return;
 
-    auto visualizerView = registry.view<const FieldVisualizerComponent, const TransformComponent>();
+    // --- 1. GATHER ALL EFFECTOR DATA (CPU Side) ---
+    // This data is shared by both arrow and particle visualization modes.
+    std::vector<PointEffectorGpu> pointEffectors;
+    std::vector<TriangleGpu> triangleEffectors;
+    std::vector<DirectionalEffectorGpu> directionalEffectors;
 
-    for (auto entity : visualizerView) {
-        const auto& vis = visualizerView.get<const FieldVisualizerComponent>(entity);
+    auto pointView = registry.view<PointEffectorComponent, TransformComponent>();
+    for (auto entity : pointView) {
+        auto& comp = pointView.get<PointEffectorComponent>(entity);
+        auto& xf = pointView.get<TransformComponent>(entity);
+        PointEffectorGpu effector;
+        effector.position = glm::vec4(xf.translation, 1.0f);
+        effector.normal = glm::vec4(0.0f);
+        effector.strength = comp.strength;
+        effector.radius = comp.radius;
+        effector.falloffType = static_cast<int>(comp.falloff);
+        pointEffectors.push_back(effector);
+    }
+
+    auto splineView = registry.view<SplineEffectorComponent, SplineComponent>();
+    for (auto entity : splineView) {
+        auto& comp = splineView.get<SplineEffectorComponent>(entity);
+        auto& spline = splineView.get<SplineComponent>(entity);
+        if (spline.cachedVertices.empty()) continue;
+        for (size_t i = 0; i < spline.cachedVertices.size() - 1; ++i) {
+            glm::vec3 tangent = glm::normalize(spline.cachedVertices[i + 1] - spline.cachedVertices[i]);
+            glm::vec3 normal = glm::normalize(glm::cross(tangent, glm::vec3(0, 1, 0)));
+            if (comp.direction == SplineEffectorComponent::ForceDirection::Tangent) {
+                normal = tangent;
+            }
+            PointEffectorGpu effector;
+            effector.position = glm::vec4(spline.cachedVertices[i], 1.0f);
+            effector.normal = glm::vec4(normal, 0.0f);
+            effector.strength = comp.strength;
+            effector.radius = comp.radius;
+            effector.falloffType = 1;
+            pointEffectors.push_back(effector);
+        }
+    }
+
+    auto meshView = registry.view<MeshEffectorComponent, RenderableMeshComponent, TransformComponent>();
+    for (auto entity : meshView) {
+        auto& comp = meshView.get<MeshEffectorComponent>(entity);
+        auto& mesh = meshView.get<RenderableMeshComponent>(entity);
+        auto& xf = meshView.get<TransformComponent>(entity);
+        glm::mat4 model = xf.getTransform();
+        for (size_t i = 0; i < mesh.indices.size(); i += 3) {
+            TriangleGpu tri;
+            tri.v0 = model * glm::vec4(mesh.vertices[mesh.indices[i]].position, 1.0f);
+            tri.v1 = model * glm::vec4(mesh.vertices[mesh.indices[i + 1]].position, 1.0f);
+            tri.v2 = model * glm::vec4(mesh.vertices[mesh.indices[i + 2]].position, 1.0f);
+            tri.v0.w = comp.strength;
+            tri.normal.w = comp.distance;
+            triangleEffectors.push_back(tri);
+        }
+    }
+
+    auto dirView = registry.view<DirectionalEffectorComponent>();
+    for (auto entity : dirView) {
+        auto& comp = dirView.get<DirectionalEffectorComponent>(entity);
+        DirectionalEffectorGpu effector;
+        effector.direction = glm::vec4(glm::normalize(comp.direction), 0.0f);
+        effector.strength = comp.strength;
+        directionalEffectors.push_back(effector);
+    }
+
+    // --- 2. UPLOAD ALL EFFECTOR DATA TO GPU ---
+    if (m_effectorDataUBO == 0) m_gl->glGenBuffers(1, &m_effectorDataUBO);
+    m_gl->glBindBuffer(GL_UNIFORM_BUFFER, m_effectorDataUBO);
+    m_gl->glBufferData(GL_UNIFORM_BUFFER, 256 * sizeof(PointEffectorGpu) + 16 * sizeof(DirectionalEffectorGpu), nullptr, GL_DYNAMIC_DRAW);
+    if (!pointEffectors.empty()) {
+        m_gl->glBufferSubData(GL_UNIFORM_BUFFER, 0, std::min(size_t(256), pointEffectors.size()) * sizeof(PointEffectorGpu), pointEffectors.data());
+    }
+    if (!directionalEffectors.empty()) {
+        size_t directionalOffset = 256 * sizeof(PointEffectorGpu);
+        m_gl->glBufferSubData(GL_UNIFORM_BUFFER, directionalOffset, std::min(size_t(16), directionalEffectors.size()) * sizeof(DirectionalEffectorGpu), directionalEffectors.data());
+    }
+    m_gl->glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+    if (m_triangleDataSSBO == 0) m_gl->glGenBuffers(1, &m_triangleDataSSBO);
+    m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_triangleDataSSBO);
+    m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, triangleEffectors.size() * sizeof(TriangleGpu), triangleEffectors.empty() ? nullptr : triangleEffectors.data(), GL_DYNAMIC_DRAW);
+    m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    auto& arrowPrimitives = m_contextPrimitives[ctx];
+    if (arrowPrimitives.arrowVAO == 0) {
+        qDebug() << "Creating instanced arrow primitives for context" << ctx;
+        std::vector<Vertex> arrowVertices;
+        std::vector<unsigned int> arrowIndices;
+        createArrowPrimitive(arrowVertices, arrowIndices);
+        arrowPrimitives.arrowIndexCount = arrowIndices.size();
+        m_gl->glGenVertexArrays(1, &arrowPrimitives.arrowVAO);
+        m_gl->glGenBuffers(1, &arrowPrimitives.arrowVBO);
+        m_gl->glGenBuffers(1, &arrowPrimitives.arrowEBO);
+        m_gl->glBindVertexArray(arrowPrimitives.arrowVAO);
+        m_gl->glBindBuffer(GL_ARRAY_BUFFER, arrowPrimitives.arrowVBO);
+        m_gl->glBufferData(GL_ARRAY_BUFFER, arrowVertices.size() * sizeof(Vertex), arrowVertices.data(), GL_STATIC_DRAW);
+        m_gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrowPrimitives.arrowEBO);
+        m_gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, arrowIndices.size() * sizeof(unsigned int), arrowIndices.data(), GL_STATIC_DRAW);
+        m_gl->glEnableVertexAttribArray(0);
+        m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+        m_gl->glEnableVertexAttribArray(1);
+        m_gl->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+        m_gl->glBindVertexArray(0);
+    }
+
+    // --- 3. MAIN LOOP FOR EACH VISUALIZER ---
+    auto visualizerView = registry.view<FieldVisualizerComponent, TransformComponent>();
+    for (auto entity : visualizerView)
+    {
+        auto& vis = visualizerView.get<FieldVisualizerComponent>(entity);
         if (!vis.isEnabled) continue;
-
         const auto& xf = visualizerView.get<const TransformComponent>(entity);
 
-        struct InstanceData { glm::mat4 modelMatrix; glm::vec3 color; };
-        std::vector<InstanceData> instanceData;
-        glm::vec3 minBound = -vis.bounds / 2.0f;
-
-        // Generate instance data for each arrow.
-        for (int x = 0; x < vis.density.x; ++x) {
-            for (int y = 0; y < vis.density.y; ++y) {
-                for (int z = 0; z < vis.density.z; ++z) {
-                    // Calculate sample position in world space.
-                    glm::vec3 t = {
-                        (vis.density.x > 1) ? static_cast<float>(x) / (vis.density.x - 1) : 0.5f,
-                        (vis.density.y > 1) ? static_cast<float>(y) / (vis.density.y - 1) : 0.5f,
-                        (vis.density.z > 1) ? static_cast<float>(z) / (vis.density.z - 1) : 0.5f,
-                    };
-                    glm::vec3 localPos = minBound + t * vis.bounds;
-                    glm::vec3 worldPos = xf.getTransform() * glm::vec4(localPos, 1.0f);
-
-                    // Sample the field and check magnitude.
-                    glm::vec3 fieldValue = m_fieldSolver->getVectorAt(registry, worldPos, vis.sourceEntities);
-                    float magnitude = glm::length(fieldValue);
-                    if (magnitude < vis.cullingThreshold) continue;
-
-                    // Build the transformation matrix for this arrow instance.
-                    glm::mat4 trans = glm::translate(glm::mat4(1.0f), worldPos);
-                    glm::mat4 rot = glm::mat4_cast(rotationBetweenVectors(glm::vec3(0, 0, 1), fieldValue));
-                    glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(vis.arrowHeadScale, vis.arrowHeadScale, magnitude * vis.vectorScale));
-                    glm::mat4 model = trans * rot * scale;
-
-                    // Determine the color based on magnitude or potential (polarity).
-                    glm::vec3 color;
-                    if (vis.coloringMode == FieldColoringMode::Polarity) {
-                        float potential = m_fieldSolver->getPotentialAt(registry, worldPos, vis.sourceEntities);
-                        float normPotential = (potential - vis.minPotential) / (vis.maxPotential - vis.minPotential);
-                        color = glm::vec3(getColorFromGradient(glm::clamp(normPotential, 0.0f, 1.0f), vis.colorGradient));
-                    }
-                    else { // Default to Magnitude
-                        float normMag = glm::clamp((magnitude - vis.minMagnitude) / (vis.maxMagnitude - vis.minMagnitude), 0.0f, 1.0f);
-                        color = glm::vec3(getColorFromGradient(normMag, vis.colorGradient));
-                    }
-
-                    instanceData.push_back({ model, color });
+        if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Particles)
+        {
+            if (!m_particleUpdateComputeShader || !m_particleRenderShader) continue;
+            if (vis.particleBuffer[0] == 0) {
+                std::vector<Particle> particles(vis.particleCount);
+                std::mt19937 rng(std::random_device{}());
+                std::uniform_real_distribution<float> distrib(0.0f, 1.0f);
+                glm::vec3 boundsSize = vis.bounds.max - vis.bounds.min;
+                for (int i = 0; i < vis.particleCount; ++i) {
+                    particles[i].position = glm::vec4(vis.bounds.min + distrib(rng) * boundsSize, 1.0f);
+                    particles[i].velocity = glm::vec4(0.0f);
+                    particles[i].color = vis.particleColor;
+                    particles[i].age = distrib(rng) * vis.flowLifetime; // Use flow lifetime for consistency
+                    particles[i].lifetime = vis.flowLifetime;
+                    particles[i].size = vis.particleSize;
                 }
+                m_gl->glGenBuffers(2, vis.particleBuffer);
+                m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[0]);
+                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, particles.size() * sizeof(Particle), particles.data(), GL_DYNAMIC_DRAW);
+                m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[1]);
+                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, particles.size() * sizeof(Particle), nullptr, GL_DYNAMIC_DRAW);
+                m_gl->glGenVertexArrays(1, &vis.particleVAO);
             }
+
+            m_particleUpdateComputeShader->use();
+            m_gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, m_effectorDataUBO);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_triangleDataSSBO);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, vis.particleBuffer[vis.currentReadBuffer]);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, vis.particleBuffer[1 - vis.currentReadBuffer]);
+            m_particleUpdateComputeShader->setMat4("u_visualizerModelMatrix", xf.getTransform());
+            m_particleUpdateComputeShader->setFloat("u_deltaTime", deltaTime);
+            m_particleUpdateComputeShader->setFloat("u_time", m_elapsedTime);
+            m_particleUpdateComputeShader->setVec3("u_boundsMin", vis.bounds.min);
+            m_particleUpdateComputeShader->setVec3("u_boundsMax", vis.bounds.max);
+            m_particleUpdateComputeShader->setInt("u_pointEffectorCount", static_cast<int>(pointEffectors.size()));
+            m_particleUpdateComputeShader->setInt("u_directionalEffectorCount", static_cast<int>(directionalEffectors.size()));
+            m_particleUpdateComputeShader->setInt("u_triangleEffectorCount", static_cast<int>(triangleEffectors.size()));
+            m_gl->glDispatchCompute(vis.particleCount / 256 + 1, 1, 1);
+            m_gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+            m_gl->glEnable(GL_PROGRAM_POINT_SIZE);
+            m_gl->glEnable(GL_BLEND);
+            m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            m_gl->glDepthMask(GL_FALSE);
+            m_particleRenderShader->use();
+            m_particleRenderShader->setMat4("u_view", view);
+            m_particleRenderShader->setMat4("u_projection", projection);
+            m_gl->glBindVertexArray(vis.particleVAO);
+            m_gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[1 - vis.currentReadBuffer]);
+            m_gl->glEnableVertexAttribArray(0);
+            m_gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position));
+            m_gl->glEnableVertexAttribArray(1);
+            m_gl->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, color));
+            m_gl->glEnableVertexAttribArray(2);
+            m_gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, size));
+            m_gl->glDrawArrays(GL_POINTS, 0, vis.particleCount);
+            m_gl->glBindVertexArray(0);
+            m_gl->glDepthMask(GL_TRUE);
+            m_gl->glDisable(GL_BLEND);
+            m_gl->glDisable(GL_PROGRAM_POINT_SIZE);
+            vis.currentReadBuffer = 1 - vis.currentReadBuffer;
         }
-        if (instanceData.empty()) continue;
+        else if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Flow)
+        {
+            if (!m_flowVectorComputeShader || !m_instancedArrowShader) continue;
 
-        // Upload and draw all instances for this visualizer in one batch.
-        m_instancedArrowShader->use();
-        m_instancedArrowShader->setMat4("view", view);
-        m_instancedArrowShader->setMat4("projection", projection);
+            if (vis.particleBuffer[0] == 0) {
+                std::vector<Particle> particles(vis.particleCount);
+                std::mt19937 rng(std::random_device{}());
+                std::uniform_real_distribution<float> distrib(0.0f, 1.0f);
+                glm::vec3 boundsCenter = (vis.bounds.min + vis.bounds.max) / 2.0f;
+                glm::vec3 boundsHalfSize = (vis.bounds.max - vis.bounds.min) / 2.0f;
 
-        m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_instanceVBO);
-        m_gl->glBufferSubData(GL_ARRAY_BUFFER, 0, instanceData.size() * sizeof(InstanceData), instanceData.data());
+                for (int i = 0; i < vis.particleCount; ++i) {
 
-        m_gl->glBindVertexArray(m_arrowVAO);
-        m_gl->glDrawElementsInstanced(GL_TRIANGLES, m_arrowIndexCount, GL_UNSIGNED_INT, 0, instanceData.size());
+                    // NEW: Switch between different spawn distributions
+                    switch (vis.flowSpawnDistribution) {
+                    case FieldVisualizerComponent::FlowSpawnDistribution::RandomBox:
+                    {
+                        particles[i].position = glm::vec4(
+                            vis.bounds.min.x + distrib(rng) * boundsHalfSize.x * 2.0f,
+                            vis.bounds.min.y + distrib(rng) * boundsHalfSize.y * 2.0f,
+                            vis.bounds.min.z + distrib(rng) * boundsHalfSize.z * 2.0f,
+                            1.0f
+                        );
+                        break;
+                    }
+                    case FieldVisualizerComponent::FlowSpawnDistribution::RandomSphere:
+                    {
+                        float theta = 2.0f * 3.14159265f * distrib(rng);
+                        float phi = acos(1.0f - 2.0f * distrib(rng));
+                        float r = cbrt(distrib(rng)) * boundsHalfSize.x; // Use x as radius for a uniform spherical distribution
+                        particles[i].position = glm::vec4(
+                            boundsCenter.x + r * sin(phi) * cos(theta),
+                            boundsCenter.y + r * sin(phi) * sin(theta),
+                            boundsCenter.z + r * cos(phi),
+                            1.0f
+                        );
+                        break;
+                    }
+                    }
+
+                    particles[i].velocity = glm::vec4(0.0f);
+                    particles[i].color = glm::vec4(vis.flowColorStart, 1.0f);
+                    particles[i].age = distrib(rng) * vis.flowLifetime;
+                    particles[i].lifetime = vis.flowLifetime;
+                    particles[i].size = vis.particleSize;
+                }
+                m_gl->glGenBuffers(2, vis.particleBuffer);
+                m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[0]);
+                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, particles.size() * sizeof(Particle), particles.data(), GL_DYNAMIC_DRAW);
+                m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[1]);
+                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, particles.size() * sizeof(Particle), nullptr, GL_DYNAMIC_DRAW);
+
+                if (vis.gpuData.instanceDataSSBO == 0) m_gl->glGenBuffers(1, &vis.gpuData.instanceDataSSBO);
+                m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
+                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, vis.particleCount * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
+            }
+
+            m_flowVectorComputeShader->use();
+            m_gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, m_effectorDataUBO);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_triangleDataSSBO);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, vis.particleBuffer[vis.currentReadBuffer]);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, vis.particleBuffer[1 - vis.currentReadBuffer]);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, vis.gpuData.instanceDataSSBO);
+
+            m_flowVectorComputeShader->setMat4("u_visualizerModelMatrix", xf.getTransform());
+            m_flowVectorComputeShader->setFloat("u_deltaTime", deltaTime);
+            m_flowVectorComputeShader->setFloat("u_time", m_elapsedTime);
+            m_flowVectorComputeShader->setVec3("u_boundsMin", vis.bounds.min);
+            m_flowVectorComputeShader->setVec3("u_boundsMax", vis.bounds.max);
+            m_flowVectorComputeShader->setFloat("u_baseSpeed", vis.flowBaseSpeed);
+            m_flowVectorComputeShader->setFloat("u_velocityMultiplier", vis.flowVelocityMultiplier);
+            m_flowVectorComputeShader->setFloat("u_flowScale", vis.flowScale);
+            m_flowVectorComputeShader->setFloat("u_fadeInPercent", vis.flowFadeInTime);
+            m_flowVectorComputeShader->setFloat("u_fadeOutPercent", vis.flowFadeOutTime);
+            m_flowVectorComputeShader->setVec3("u_colorStart", vis.flowColorStart);
+            m_flowVectorComputeShader->setVec3("u_colorMid", vis.flowColorMid);
+            m_flowVectorComputeShader->setVec3("u_colorEnd", vis.flowColorEnd);
+            m_flowVectorComputeShader->setInt("u_pointEffectorCount", static_cast<int>(pointEffectors.size()));
+            m_flowVectorComputeShader->setInt("u_directionalEffectorCount", static_cast<int>(directionalEffectors.size()));
+            m_flowVectorComputeShader->setInt("u_triangleEffectorCount", static_cast<int>(triangleEffectors.size()));
+            m_flowVectorComputeShader->setFloat("u_seedOffset", static_cast<float>(rand()) / RAND_MAX);
+
+
+            m_gl->glDispatchCompute(vis.particleCount / 256 + 1, 1, 1);
+            m_gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+            m_instancedArrowShader->use();
+            m_instancedArrowShader->setMat4("view", view);
+            m_instancedArrowShader->setMat4("projection", projection);
+
+            m_gl->glBindVertexArray(arrowPrimitives.arrowVAO);
+            m_gl->glBindBuffer(GL_ARRAY_BUFFER, vis.gpuData.instanceDataSSBO);
+
+            GLsizei vec4Size = sizeof(glm::vec4);
+            m_gl->glEnableVertexAttribArray(2); m_gl->glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)offsetof(InstanceData, modelMatrix));
+            m_gl->glEnableVertexAttribArray(3); m_gl->glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + vec4Size));
+            m_gl->glEnableVertexAttribArray(4); m_gl->glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + 2 * vec4Size));
+            m_gl->glEnableVertexAttribArray(5); m_gl->glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + 3 * vec4Size));
+            m_gl->glEnableVertexAttribArray(6); m_gl->glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, color)));
+            m_gl->glVertexAttribDivisor(2, 1); m_gl->glVertexAttribDivisor(3, 1); m_gl->glVertexAttribDivisor(4, 1); m_gl->glVertexAttribDivisor(5, 1); m_gl->glVertexAttribDivisor(6, 1);
+
+            m_gl->glDrawElementsInstanced(GL_TRIANGLES, arrowPrimitives.arrowIndexCount, GL_UNSIGNED_INT, 0, vis.particleCount);
+
+            m_gl->glBindVertexArray(0);
+            vis.currentReadBuffer = 1 - vis.currentReadBuffer;
+        }
+        else if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Arrows)
+        {
+            if (!m_arrowFieldComputeShader || !m_instancedArrowShader) continue;
+
+            if (vis.isGpuDataDirty) {
+                if (vis.gpuData.samplePointsSSBO) m_gl->glDeleteBuffers(1, &vis.gpuData.samplePointsSSBO);
+                if (vis.gpuData.instanceDataSSBO) m_gl->glDeleteBuffers(1, &vis.gpuData.instanceDataSSBO);
+                if (vis.gpuData.commandUBO) m_gl->glDeleteBuffers(1, &vis.gpuData.commandUBO);
+
+                std::vector<glm::vec4> samplePoints;
+                vis.gpuData.numSamplePoints = vis.density.x * vis.density.y * vis.density.z;
+                samplePoints.reserve(vis.gpuData.numSamplePoints);
+                glm::vec3 boundsSize = vis.bounds.max - vis.bounds.min;
+                for (int x = 0; x < vis.density.x; ++x) {
+                    for (int y = 0; y < vis.density.y; ++y) {
+                        for (int z = 0; z < vis.density.z; ++z) {
+                            glm::vec3 t = {
+                                (vis.density.x > 1) ? static_cast<float>(x) / (vis.density.x - 1) : 0.5f,
+                                (vis.density.y > 1) ? static_cast<float>(y) / (vis.density.y - 1) : 0.5f,
+                                (vis.density.z > 1) ? static_cast<float>(z) / (vis.density.z - 1) : 0.5f,
+                            };
+                            samplePoints.emplace_back(glm::vec4(vis.bounds.min + t * boundsSize, 1.0f));
+                        }
+                    }
+                }
+                m_gl->glGenBuffers(1, &vis.gpuData.samplePointsSSBO);
+                m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.samplePointsSSBO);
+                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, samplePoints.size() * sizeof(glm::vec4), samplePoints.data(), GL_STATIC_DRAW);
+                m_gl->glGenBuffers(1, &vis.gpuData.instanceDataSSBO);
+                m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
+                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, vis.gpuData.numSamplePoints * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
+                struct DrawElementsIndirectCommand { GLuint count; GLuint instanceCount; GLuint firstIndex; GLuint baseVertex; GLuint baseInstance; };
+                DrawElementsIndirectCommand cmd = { (GLuint)arrowPrimitives.arrowIndexCount, 0, 0, 0, 0 };
+                m_gl->glGenBuffers(1, &vis.gpuData.commandUBO);
+                m_gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
+                m_gl->glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(cmd), &cmd, GL_DYNAMIC_DRAW);
+                vis.isGpuDataDirty = false;
+            }
+
+            m_arrowFieldComputeShader->use();
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, vis.gpuData.samplePointsSSBO);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vis.gpuData.instanceDataSSBO);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, vis.gpuData.commandUBO);
+            m_gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, m_effectorDataUBO);
+            m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_triangleDataSSBO);
+            m_arrowFieldComputeShader->setMat4("u_visualizerModelMatrix", xf.getTransform());
+            m_arrowFieldComputeShader->setFloat("u_vectorScale", vis.vectorScale);
+            m_arrowFieldComputeShader->setFloat("u_arrowHeadScale", vis.arrowHeadScale);
+            m_arrowFieldComputeShader->setFloat("u_cullingThreshold", vis.cullingThreshold);
+            m_arrowFieldComputeShader->setInt("u_pointEffectorCount", static_cast<int>(pointEffectors.size()));
+            m_arrowFieldComputeShader->setInt("u_directionalEffectorCount", static_cast<int>(directionalEffectors.size()));
+            m_arrowFieldComputeShader->setInt("u_triangleEffectorCount", static_cast<int>(triangleEffectors.size()));
+            m_gl->glDispatchCompute((GLuint)vis.gpuData.numSamplePoints / 256 + 1, 1, 1);
+            m_gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+
+            m_instancedArrowShader->use();
+            m_instancedArrowShader->setMat4("view", view);
+            m_instancedArrowShader->setMat4("projection", projection);
+            m_gl->glBindVertexArray(arrowPrimitives.arrowVAO);
+            m_gl->glBindBuffer(GL_ARRAY_BUFFER, vis.gpuData.instanceDataSSBO);
+            GLsizei vec4Size = sizeof(glm::vec4);
+            m_gl->glEnableVertexAttribArray(2);
+            m_gl->glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)offsetof(InstanceData, modelMatrix));
+            m_gl->glEnableVertexAttribArray(3);
+            m_gl->glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + vec4Size));
+            m_gl->glEnableVertexAttribArray(4);
+            m_gl->glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + 2 * vec4Size));
+            m_gl->glEnableVertexAttribArray(5);
+            m_gl->glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + 3 * vec4Size));
+            m_gl->glEnableVertexAttribArray(6);
+            m_gl->glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, color)));
+            m_gl->glVertexAttribDivisor(2, 1);
+            m_gl->glVertexAttribDivisor(3, 1);
+            m_gl->glVertexAttribDivisor(4, 1);
+            m_gl->glVertexAttribDivisor(5, 1);
+            m_gl->glVertexAttribDivisor(6, 1);
+            m_gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
+            m_gl->glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (void*)0);
+            m_gl->glBindVertexArray(0);
+        }
     }
-    m_gl->glBindVertexArray(0);
+}
+
+void RenderingSystem::updateSceneLogic(entt::registry& registry, float deltaTime)
+{
+    // --- Update Spline Caches ---
+    // This ensures that any "dirty" splines have their vertex data
+    // recalculated before any render pass needs to use it.
+    auto splineView = registry.view<SplineComponent>();
+    for (auto e : splineView)
+    {
+        auto& sp = splineView.get<SplineComponent>(e);
+        if (sp.isDirty) {
+            qDebug() << "[Scene Logic] Recalculating vertices for dirty spline entity:" << (int)e;
+            switch (sp.type) {
+            case SplineType::Linear:     sp.cachedVertices = evaluateLinearCPU(sp.controlPoints); break;
+            case SplineType::CatmullRom: sp.cachedVertices = evaluateCatmullRomCPU(sp.controlPoints, 64); break;
+            case SplineType::Bezier:     sp.cachedVertices = evaluateBezierCPU(sp.controlPoints, 64); break;
+            case SplineType::Parametric: sp.cachedVertices = evaluateParametricCPU(sp.parametric.func, 128); break;
+            }
+            sp.isDirty = false;
+        }
+    }
 }
 
 void RenderingSystem::drawIntersections(const std::vector<std::vector<glm::vec3>>& allOutlines, const glm::mat4& view, const glm::mat4& proj)
@@ -811,70 +1206,81 @@ void RenderingSystem::drawIntersections(const std::vector<std::vector<glm::vec3>
     m_gl->glEnable(GL_DEPTH_TEST); // Re-enable depth testing for subsequent passes.
 }
 
-void RenderingSystem::renderSelectionGlow(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection) {
+void RenderingSystem::renderSelectionGlow(QOpenGLWidget* viewport, entt::registry& registry, const glm::mat4& view, const glm::mat4& projection, TargetFBOs& target) {
+    
     auto viewSelected = registry.view<SelectedComponent, RenderableMeshComponent, TransformComponent>();
+
+    qDebug() << "[GLOW PASS] Starting for ViewportWidget:" << viewport;
+
+    //! Bind the dedicated glow FBO for this viewport.
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.glowFBO);
+    m_gl->glViewport(0, 0, target.w, target.h);
+    m_gl->glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    m_gl->glClear(GL_COLOR_BUFFER_BIT);
+
     if (viewSelected.size_hint() == 0) {
-        // If nothing is selected, we still need to clear the glow texture to avoid stale glows from previous frames.
-        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_glowFBO);
-        m_gl->glDrawBuffer(GL_COLOR_ATTACHMENT0);
-        m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
-        m_gl->glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        m_gl->glClear(GL_COLOR_BUFFER_BIT);
-        return;
+        return; // Early exit if nothing is selected
     }
 
-    // --- PASS 1: Render solid emissive color of selected objects to the glow FBO.
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_glowFBO);
-    m_gl->glDrawBuffer(GL_COLOR_ATTACHMENT0);
-    m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
-    m_gl->glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    m_gl->glClear(GL_COLOR_BUFFER_BIT); // No depth clear needed, we render on a clean slate.
-
+    // --- PASS 1: Render solid emissive color to the glow FBO ---
     m_emissiveSolidShader->use();
     m_emissiveSolidShader->setMat4("view", view);
     m_emissiveSolidShader->setMat4("projection", projection);
-    m_emissiveSolidShader->setVec3("emissiveColor", glm::vec3(1.0f, 0.75f, 0.1f)); // Bright yellow/orange glow.
+    m_emissiveSolidShader->setVec3("emissiveColor", glm::vec3(1.0f, 0.75f, 0.1f));
+
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    if (!ctx) return;
 
     for (auto entity : viewSelected) {
         auto [mesh, transform] = viewSelected.get<RenderableMeshComponent, TransformComponent>(entity);
         m_emissiveSolidShader->setMat4("model", transform.getTransform());
 
-        // We must use the same per-context resource logic as in renderMeshes.
         auto& res = registry.get_or_emplace<RenderResourceComponent>(entity);
-        auto& buf = res.perContext[QOpenGLContext::currentContext()];
+        auto& buf = res.perContext[ctx];
         if (buf.VAO != 0) {
             m_gl->glBindVertexArray(buf.VAO);
             m_gl->glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.indices.size()), GL_UNSIGNED_INT, nullptr);
         }
     }
 
-    // --- PASS 2: Apply Gaussian blur to the glow texture using ping-pong FBOs.
+    // --- PASS 2: Apply Gaussian blur ---
     bool horizontal = true, first_iteration = true;
-    unsigned int amount = 10; // Number of blur passes (5 horizontal, 5 vertical).
+    unsigned int amount = 9;
     m_blurShader->use();
     m_blurShader->setInt("screenTexture", 0);
     m_gl->glActiveTexture(GL_TEXTURE0);
-    m_gl->glDisable(GL_DEPTH_TEST); // Blur is a 2D effect.
+    m_gl->glDisable(GL_DEPTH_TEST);
+
+    auto& primitives = m_contextPrimitives[QOpenGLContext::currentContext()];
+    if (primitives.compositeVAO == 0) {
+        m_gl->glGenVertexArrays(1, &primitives.compositeVAO);
+    }
 
     for (unsigned int i = 0; i < amount; i++) {
-        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_pingpongFBO[horizontal]);
-        m_gl->glDrawBuffer(GL_COLOR_ATTACHMENT0);
-        m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
+        //! Bind the correct ping-pong FBO for this target.
+        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.pingpongFBO[horizontal]);
+        m_gl->glViewport(0, 0, target.w, target.h);
+
+        //! DEBUG: Log the clear call to be 100% sure it's happening.
+        qDebug() << "[GLOW PASS] Clearing pingpongFBO[" << horizontal << "] (" << target.pingpongFBO[horizontal] << ")";
+
+
+        m_gl->glClear(GL_COLOR_BUFFER_BIT); // Clear is essential to prevent accumulation.
+
         m_blurShader->setBool("horizontal", horizontal);
 
-        // On the first pass, the input is the original glow texture.
-        // After that, the input is the output of the previous blur pass.
-        m_gl->glBindTexture(GL_TEXTURE_2D, first_iteration ? m_glowTexture : m_pingpongTexture[!horizontal]);
+        //! Bind the correct texture: either the initial glow or the other ping-pong texture.
+        GLuint textureToBlur = first_iteration ? target.glowTexture : target.pingpongTexture[!horizontal];
+        m_gl->glBindTexture(GL_TEXTURE_2D, textureToBlur);
 
-        m_gl->glBindVertexArray(m_quadVAO);
+        m_gl->glBindVertexArray(primitives.compositeVAO);
         m_gl->glDrawArrays(GL_TRIANGLES, 0, 3);
 
         horizontal = !horizontal;
         if (first_iteration) first_iteration = false;
     }
 
-    m_gl->glEnable(GL_DEPTH_TEST); // Re-enable depth testing for the next frame's main passes.
-    // The final, fully blurred texture is now in m_pingpongTexture[0].
+    m_gl->glEnable(GL_DEPTH_TEST);
 }
 
 
@@ -895,165 +1301,286 @@ void RenderingSystem::updateCameraTransforms(entt::registry& r)
     for (auto e : view) {
         auto& cam = view.get<CameraComponent>(e).camera;
         auto& xf = view.get<TransformComponent>(e);
-
-        xf.translation = cam.getPosition(); // Position comes directly from camera.
-
-        // Build a rotation matrix to align the object's Z-axis with the camera's view direction.
+        xf.translation = cam.getPosition();
         glm::vec3 fwd = glm::normalize(cam.getFocalPoint() - cam.getPosition());
-        glm::vec3 up = glm::vec3(0, 1, 0); // Assuming world up is +Y.
+        glm::vec3 up = glm::vec3(0, 1, 0);
         glm::vec3 right = glm::normalize(glm::cross(fwd, up));
         up = glm::cross(right, fwd);
-
         xf.rotation = glm::quat_cast(glm::mat3(right, up, -fwd));
     }
 }
 
 void RenderingSystem::initShaders() {
     try {
-        m_phongShader = std::make_unique<Shader>(m_gl, "D:/RoboticsSoftware/shaders/vertex_shader.glsl", "D:/RoboticsSoftware/shaders/fragment_shader.glsl");
-        m_gridShader = std::make_unique<Shader>(m_gl, "D:/RoboticsSoftware/shaders/grid_vert.glsl", "D:/RoboticsSoftware/shaders/grid_frag.glsl");
-        m_instancedArrowShader = std::make_unique<Shader>(m_gl, "D:/RoboticsSoftware/shaders/instanced_arrow_vert.glsl", "D:/RoboticsSoftware/shaders/instanced_arrow_frag.glsl");
-        m_outlineShader = std::make_unique<Shader>(m_gl, "D:/RoboticsSoftware/shaders/outline_vert.glsl", "D:/RoboticsSoftware/shaders/outline_frag.glsl");
+        // --- Use the (const char*, const char*) constructor for simple shaders ---
+        // This is the most direct and clear way for simple vertex/fragment pairs.
+        m_phongShader = std::make_unique<Shader>(m_gl,
+            "D:/RoboticsSoftware/shaders/vertex_shader.glsl",
+            "D:/RoboticsSoftware/shaders/fragment_shader.glsl"
+        );
+        m_gridShader = std::make_unique<Shader>(m_gl,
+            "D:/RoboticsSoftware/shaders/grid_vert.glsl",
+            "D:/RoboticsSoftware/shaders/grid_frag.glsl"
+        );
+        m_instancedArrowShader = std::make_unique<Shader>(m_gl,
+            "D:/RoboticsSoftware/shaders/instanced_arrow_vert.glsl",
+            "D:/RoboticsSoftware/shaders/instanced_arrow_frag.glsl"
+        );
+        m_outlineShader = std::make_unique<Shader>(m_gl,
+            "D:/RoboticsSoftware/shaders/outline_vert.glsl",
+            "D:/RoboticsSoftware/shaders/outline_frag.glsl"
+        );
+        m_emissiveSolidShader = std::make_unique<Shader>(m_gl,
+            "D:/RoboticsSoftware/shaders/vertex_shader.glsl",
+            "D:/RoboticsSoftware/shaders/emissive_solid_frag.glsl"
+        );
+        m_blurShader = std::make_unique<Shader>(m_gl,
+            "D:/RoboticsSoftware/shaders/post_process_vert.glsl",
+            "D:/RoboticsSoftware/shaders/gaussian_blur_frag.glsl"
+        );
+        m_compositeShader = std::make_unique<Shader>(m_gl,
+            "D:/RoboticsSoftware/shaders/post_process_vert.glsl",
+            "D:/RoboticsSoftware/shaders/composite_frag.glsl"
+        );
 
-        m_emissiveSolidShader = std::make_unique<Shader>(m_gl, "D:/RoboticsSoftware/shaders/vertex_shader.glsl", "D:/RoboticsSoftware/shaders/emissive_solid_frag.glsl");
-        m_blurShader = std::make_unique<Shader>(m_gl, "D:/RoboticsSoftware/shaders/post_process_vert.glsl", "D:/RoboticsSoftware/shaders/gaussian_blur_frag.glsl");
-        m_compositeShader = std::make_unique<Shader>(m_gl, "D:/RoboticsSoftware/shaders/post_process_vert.glsl", "D:/RoboticsSoftware/shaders/composite_frag.glsl");
+        // --- Use the static factory methods for complex shaders ---
+        // This is the correct pattern for shaders with more than two stages or special types.
+        m_glowShader = Shader::buildGeometryShader(m_gl,
+            "D:/RoboticsSoftware/shaders/glow_line_vert.glsl",
+            "D:/RoboticsSoftware/shaders/glow_line_geom.glsl",
+            "D:/RoboticsSoftware/shaders/glow_line_frag.glsl"
+        );
+        m_capShader = Shader::buildGeometryShader(m_gl,
+            "D:/RoboticsSoftware/shaders/cap_vert.glsl",
+            "D:/RoboticsSoftware/shaders/cap_geom.glsl",
+            "D:/RoboticsSoftware/shaders/cap_frag.glsl"
+        );
 
-        // NOTE: The following lines will still fail until you modify Shader.hpp
-        // See instructions below on how to add the 'buildGeometryShader' function.
-        m_glowShader = Shader::buildGeometryShader(m_gl, "D:/RoboticsSoftware/shaders/glow_line_vert.glsl", "D:/RoboticsSoftware/shaders/glow_line_geom.glsl", "D:/RoboticsSoftware/shaders/glow_line_frag.glsl");
-        m_capShader = Shader::buildGeometryShader(m_gl, "D:/RoboticsSoftware/shaders/cap_vert.glsl", "D:/RoboticsSoftware/shaders/cap_geom.glsl", "D:/RoboticsSoftware/shaders/cap_frag.glsl");
+        // This was the line causing the error. It should use a factory method,
+        // not a constructor call via make_unique.
+        m_arrowFieldComputeShader = Shader::buildComputeShader(m_gl,
+            "D:/RoboticsSoftware/shaders/field_visualizer_comp.glsl"
+        );
+
+        m_particleUpdateComputeShader = Shader::buildComputeShader(m_gl,
+            "D:/RoboticsSoftware/shaders/particle_update_comp.glsl"
+        );
+
+        m_particleRenderShader = std::make_unique<Shader>(m_gl,
+            "D:/RoboticsSoftware/shaders/particle_render_vert.glsl",
+            "D:/RoboticsSoftware/shaders/particle_render_frag.glsl"
+        );
+
+        m_flowVectorComputeShader = Shader::buildComputeShader(m_gl,
+            "D:/RoboticsSoftware/shaders/flow_vector_update_comp.glsl"
+        );
     }
     catch (const std::runtime_error& e) {
         qFatal("[RenderingSystem] FATAL: Shader initialization failed: %s", e.what());
     }
+    {
+        GLint ok = 0, len = 0;
+        m_gl->glGetProgramiv(m_compositeShader->ID, GL_LINK_STATUS, &ok);
+        if (!ok) {
+            m_gl->glGetProgramiv(m_compositeShader->ID, GL_INFO_LOG_LENGTH, &len);
+            std::string log(len, '\0');
+            m_gl->glGetProgramInfoLog(m_compositeShader->ID, len, nullptr, log.data());
+            qCritical() << "[Composite-LINK-FAIL]\n" << log.c_str();
+        }
+        else {
+            GLint vUVSeen = m_gl->glGetAttribLocation(m_compositeShader->ID, "vUV"); // returns −1 if not a real attribute/varying
+            qDebug() << "[Composite] link OK ;  glGetAttribLocation(\"vUV\") =" << vUVSeen;
+        }
+    }
 }
 
-void RenderingSystem::initFullscreenQuad() {
-    // A single, empty VAO is sufficient for drawing a fullscreen triangle.
-    // The vertex positions are generated directly in the vertex shader (a common trick).
-    m_gl->glGenVertexArrays(1, &m_quadVAO);
-}
+void RenderingSystem::dumpRenderTargets() const
+{
+    // This function now finds the viewport widget for the current OpenGL context
+    // and dumps its specific render target textures for debugging.
 
-void RenderingSystem::initRenderPrimitives() {
-    // --- Grid Plane ---
-    float gridPlaneVertices[] = { -2000.f,0,-2000.f, 2000.f,0,-2000.f, 2000.f,0,2000.f, -2000.f,0,-2000.f, 2000.f,0,2000.f, -2000.f,0,2000.f };
-    m_gl->glGenVertexArrays(1, &m_gridQuadVAO);
-    m_gl->glGenBuffers(1, &m_gridQuadVBO);
-    m_gl->glBindVertexArray(m_gridQuadVAO);
-    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_gridQuadVBO);
-    m_gl->glBufferData(GL_ARRAY_BUFFER, sizeof(gridPlaneVertices), gridPlaneVertices, GL_STATIC_DRAW);
-    m_gl->glEnableVertexAttribArray(0);
-    m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    if (!m_gl || !m_viewportWidget) return;
 
-    // --- Instanced Arrow for Vector Fields ---
-    std::vector<Vertex> arrowVertices;
-    std::vector<unsigned int> arrowIndices;
-    createArrowPrimitive(arrowVertices, arrowIndices);
-    m_arrowIndexCount = arrowIndices.size();
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    if (!ctx) {
+        qWarning() << "[dumpRenderTargets] No active OpenGL context.";
+        return;
+    }
 
-    m_gl->glGenVertexArrays(1, &m_arrowVAO);
-    m_gl->glGenBuffers(1, &m_arrowVBO);
-    m_gl->glGenBuffers(1, &m_arrowEBO);
-    m_gl->glGenBuffers(1, &m_instanceVBO);
-    m_gl->glBindVertexArray(m_arrowVAO);
-    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_arrowVBO);
-    m_gl->glBufferData(GL_ARRAY_BUFFER, arrowVertices.size() * sizeof(Vertex), arrowVertices.data(), GL_STATIC_DRAW);
-    m_gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_arrowEBO);
-    m_gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, arrowIndices.size() * sizeof(unsigned int), arrowIndices.data(), GL_STATIC_DRAW);
-
-    // Base mesh attributes (aPos, aNormal)
-    m_gl->glEnableVertexAttribArray(0);
-    m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
-    m_gl->glEnableVertexAttribArray(1);
-    m_gl->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-
-    // Per-instance attributes (model matrix, color)
-    struct InstanceData { glm::mat4 modelMatrix; glm::vec3 color; };
-    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_instanceVBO);
-    m_gl->glBufferData(GL_ARRAY_BUFFER, 20 * 20 * 20 * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
-
-    GLsizei vec4Size = sizeof(glm::vec4);
-    // FIX: Cast integer offsets to uintptr_t before casting to void* to prevent 64-bit warnings.
-    m_gl->glEnableVertexAttribArray(2); m_gl->glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)0);
-    m_gl->glEnableVertexAttribArray(3); m_gl->glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(uintptr_t)(vec4Size));
-    m_gl->glEnableVertexAttribArray(4); m_gl->glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(uintptr_t)(2 * vec4Size));
-    m_gl->glEnableVertexAttribArray(5); m_gl->glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(uintptr_t)(3 * vec4Size));
-    m_gl->glVertexAttribDivisor(2, 1); m_gl->glVertexAttribDivisor(3, 1); m_gl->glVertexAttribDivisor(4, 1); m_gl->glVertexAttribDivisor(5, 1);
-
-    m_gl->glEnableVertexAttribArray(6);
-    // FIX: Cast integer offsets to uintptr_t before casting to void* to prevent 64-bit warnings.
-    m_gl->glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(uintptr_t)(sizeof(glm::mat4)));
-    m_gl->glVertexAttribDivisor(6, 1);
-
-    // --- Spline Primitives (Line & Cap) ---
-    m_gl->glGenVertexArrays(1, &m_lineVAO);
-    m_gl->glGenBuffers(1, &m_lineVBO);
-    m_gl->glBindVertexArray(m_lineVAO);
-    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_lineVBO);
-    m_gl->glEnableVertexAttribArray(0);
-    m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
-
-    m_gl->glGenVertexArrays(1, &m_capVAO);
-    m_gl->glGenBuffers(1, &m_capVBO);
-    m_gl->glBindVertexArray(m_capVAO);
-    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_capVBO);
-    m_gl->glEnableVertexAttribArray(0);
-    m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
-
-    // --- Intersection Outline Primitive ---
-    m_gl->glGenVertexArrays(1, &m_intersectionVAO);
-    m_gl->glGenBuffers(1, &m_intersectionVBO);
-    m_gl->glBindVertexArray(m_intersectionVAO);
-    m_gl->glBindBuffer(GL_ARRAY_BUFFER, m_intersectionVBO);
-    m_gl->glEnableVertexAttribArray(0);
-    m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
-
-    m_gl->glBindVertexArray(0); // Unbind VAO.
+    // Since a widget's context is made current before painting, we can use the
+    // stored m_viewportWidget as a key, assuming it's the one painting.
+    // Note: A more complex setup might need to map context back to a widget.
+    if (m_targets.count(m_viewportWidget)) {
+        const TargetFBOs& target = m_targets.at(m_viewportWidget);
+        debugTexturePixel(m_gl, target.mainColorTexture, "MainColour");
+        debugTexturePixel(m_gl, target.pingpongTexture[0], "BlurredGlow");
+    }
+    else {
+        qWarning() << "[dumpRenderTargets] No render targets found for the current viewport.";
+    }
 }
 
 void RenderingSystem::initFramebuffers(int width, int height) {
-    // Main Scene Framebuffer
-    m_gl->glGenFramebuffers(1, &m_mainFBO);
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_mainFBO);
-    m_gl->glGenTextures(1, &m_mainColorTexture);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_mainColorTexture);
+    //
+    // [DEPRECATED] This function is no longer used.
+    // Per-viewport framebuffers are now created and managed on-demand 
+    // by the initOrResizeFBOsForTarget() helper function, which is
+    // called from within renderView().
+    //
+}
+
+void RenderingSystem::renderView(QOpenGLWidget* viewport, entt::registry& registry, entt::entity cameraEntity, int vpW, int vpH)
+{
+    ensureGlResolved();
+    if (!m_gl) return;
+
+    m_currentCamera = cameraEntity;
+    const auto& camera = registry.get<CameraComponent>(cameraEntity).camera;
+
+    // CORRECTED: Calculate deltaTime once per frame or get from a timer.
+    // For now, we'll assume a steady 60 FPS.
+    const float deltaTime = 1.0f / 60.0f;
+    m_elapsedTime += deltaTime;
+
+
+    //! Get or create the dedicated framebuffer set for the currently rendering viewport.
+    TargetFBOs& target = m_targets[viewport];
+
+    //! Check if FBOs need to be created or resized for this viewport.
+    if (target.mainFBO == 0 || vpW > target.w || vpH > target.h) {
+        initOrResizeFBOsForTarget(target, vpW, vpH);
+    }
+
+    // --- 1. Bind and Clear this Viewport's Framebuffer ---
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.mainFBO);
+    m_gl->glViewport(0, 0, target.w, target.h); // Use the FBO's allocated size
+
+    resetGLState();
+
+    const auto& props = registry.ctx().get<SceneProperties>();
+    m_gl->glClearColor(props.backgroundColor.r, props.backgroundColor.g, props.backgroundColor.b, props.backgroundColor.a);
+    m_gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    // --- 2. Main Scene Pass ---
+    m_gl->glEnable(GL_DEPTH_TEST);
+    m_gl->glDepthMask(GL_TRUE);
+
+    float aspect = (vpH > 0) ? static_cast<float>(vpW) / vpH : 1.0f;
+    glm::mat4 view = camera.getViewMatrix();
+    glm::mat4 projection = camera.getProjectionMatrix(aspect);
+    glm::vec3 camPos = camera.getPosition();
+
+    // Perform all render passes into the dedicated FBO
+    renderMeshes(registry, view, projection, camPos);
+    renderGrid(registry, view, projection, camPos);
+    renderSplines(registry, view, projection, camPos, target.w, target.h);
+
+    // Pass deltaTime to the visualizer
+    renderFieldVisualizers(registry, view, projection, deltaTime);
+
+    //! The glow pass now needs to know which FBO set to use.
+    renderSelectionGlow(viewport, registry, view, projection, target);
+
+    // --- 3. Final Composite to Screen ---
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    if (!ctx) return;
+    auto& primitives = m_contextPrimitives[ctx];
+
+    if (primitives.compositeVAO == 0) {
+        m_gl->glGenVertexArrays(1, &primitives.compositeVAO);
+    }
+
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+    m_gl->glViewport(0, 0, vpW, vpH); // Set viewport to the actual window size
+
+    m_gl->glDisable(GL_DEPTH_TEST);
+    m_gl->glDepthMask(GL_FALSE);
+    m_gl->glDisable(GL_BLEND);
+    m_gl->glEnable(GL_FRAMEBUFFER_SRGB);
+
+    m_compositeShader->use();
+    m_compositeShader->setInt("sceneTexture", 0);
+    m_compositeShader->setInt("glowTexture", 1);
+
+    m_gl->glActiveTexture(GL_TEXTURE0);
+    //! Use the color texture from this viewport's dedicated FBO
+    m_gl->glBindTexture(GL_TEXTURE_2D, target.mainColorTexture);
+
+    m_gl->glActiveTexture(GL_TEXTURE1);
+    //! Use the blurred glow texture from this viewport's dedicated FBO
+    m_gl->glBindTexture(GL_TEXTURE_2D, target.pingpongTexture[0]);
+
+    m_gl->glBindVertexArray(primitives.compositeVAO);
+    m_gl->glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    // --- 4. Restore State for Next Viewport ---
+    m_gl->glBindVertexArray(0);
+    m_gl->glDisable(GL_FRAMEBUFFER_SRGB);
+    m_gl->glEnable(GL_DEPTH_TEST);
+    m_gl->glDepthMask(GL_TRUE);
+    m_gl->glActiveTexture(GL_TEXTURE0);
+}
+
+void RenderingSystem::initOrResizeFBOsForTarget(TargetFBOs& target, int width, int height) {
+    ensureGlResolved();
+
+    // First, delete old resources if they exist
+    if (target.mainFBO != 0) {
+        m_gl->glDeleteFramebuffers(1, &target.mainFBO);
+        m_gl->glDeleteTextures(1, &target.mainColorTexture);
+        m_gl->glDeleteTextures(1, &target.mainDepthTexture);
+        m_gl->glDeleteFramebuffers(1, &target.glowFBO);
+        m_gl->glDeleteTextures(1, &target.glowTexture);
+        m_gl->glDeleteFramebuffers(2, target.pingpongFBO);
+        m_gl->glDeleteTextures(2, target.pingpongTexture);
+    }
+
+    target.w = width;
+    target.h = height;
+
+    // Main Scene FBO
+    m_gl->glGenFramebuffers(1, &target.mainFBO);
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.mainFBO);
+    m_gl->glGenTextures(1, &target.mainColorTexture);
+    m_gl->glBindTexture(GL_TEXTURE_2D, target.mainColorTexture);
     m_gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
     m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_mainColorTexture, 0);
-    m_gl->glGenRenderbuffers(1, &m_mainDepthRenderbuffer);
-    m_gl->glBindRenderbuffer(GL_RENDERBUFFER, m_mainDepthRenderbuffer);
-    m_gl->glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-    m_gl->glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_mainDepthRenderbuffer);
+    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target.mainColorTexture, 0);
+
+    m_gl->glGenTextures(1, &target.mainDepthTexture);
+    m_gl->glBindTexture(GL_TEXTURE_2D, target.mainDepthTexture);
+    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, target.mainDepthTexture, 0);
+
     if (m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         qWarning() << "Main FBO not complete!";
 
-    // Glow Framebuffer
-    m_gl->glGenFramebuffers(1, &m_glowFBO);
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_glowFBO);
-    m_gl->glGenTextures(1, &m_glowTexture);
-    m_gl->glBindTexture(GL_TEXTURE_2D, m_glowTexture);
+    // Glow FBO
+    m_gl->glGenFramebuffers(1, &target.glowFBO);
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.glowFBO);
+    m_gl->glGenTextures(1, &target.glowTexture);
+    m_gl->glBindTexture(GL_TEXTURE_2D, target.glowTexture);
     m_gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
     m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_glowTexture, 0);
+    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target.glowTexture, 0);
     if (m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         qWarning() << "Glow FBO not complete!";
 
-    // Ping-Pong Framebuffers for Blurring
-    m_gl->glGenFramebuffers(2, m_pingpongFBO);
-    m_gl->glGenTextures(2, m_pingpongTexture);
+    // Ping-Pong FBOs for Blurring
+    m_gl->glGenFramebuffers(2, target.pingpongFBO);
+    m_gl->glGenTextures(2, target.pingpongTexture);
     for (unsigned int i = 0; i < 2; i++) {
-        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, m_pingpongFBO[i]);
-        m_gl->glBindTexture(GL_TEXTURE_2D, m_pingpongTexture[i]);
+        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, target.pingpongFBO[i]);
+        m_gl->glBindTexture(GL_TEXTURE_2D, target.pingpongTexture[i]);
         m_gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
         m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_pingpongTexture[i], 0);
+        m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target.pingpongTexture[i], 0);
         if (m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
             qWarning() << "Pingpong FBO " << i << " not complete!";
     }
 
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind FBO
 }

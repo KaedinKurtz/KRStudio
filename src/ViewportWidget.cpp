@@ -1,5 +1,5 @@
 ﻿#include <QOpenGLContext>
-#include <QOpenGLFunctions_4_1_Core>
+#include <QOpenGLFunctions_4_3_Core>
 #include <QOpenGLVersionFunctionsFactory>
 #include <QOpenGLDebugLogger>
 #include <QSurfaceFormat>
@@ -26,7 +26,7 @@
 
 int ViewportWidget::s_instanceCounter = 0;
 
-static void propagateTransforms(entt::registry& r)
+void ViewportWidget::propagateTransforms(entt::registry& r)
 {
     auto viewParents = r.view<ParentComponent>(); // cache once
 
@@ -50,8 +50,6 @@ static void propagateTransforms(entt::registry& r)
         dfs(e, glm::mat4(1.0f));
 }
 
-
-
 ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, entt::entity cameraEntity, QWidget* parent)
     : QOpenGLWidget(parent),
     m_scene(scene),
@@ -64,7 +62,7 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
     QSurfaceFormat format;
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
-    format.setVersion(4, 1);
+    format.setVersion(4, 3);
     format.setProfile(QSurfaceFormat::CoreProfile);
     format.setOption(QSurfaceFormat::DebugContext);
     setFormat(format);
@@ -80,28 +78,20 @@ ViewportWidget::~ViewportWidget() {}
 
 void ViewportWidget::initializeGL()
 {
+    // This function is called by Qt when the widget's context is made current.
+    // It initializes the QOpenGLFunctions for THIS specific widget instance.
     initializeOpenGLFunctions();
 
-    // The first viewport to be created is responsible for initializing
-    // the one and only shared RenderingSystem. This is a robust pattern.
-    if (m_renderingSystem && !m_renderingSystem->isInitialized()) {
-        qDebug() << "[LIFECYCLE] Viewport" << m_instanceId << "is initializing the shared RenderingSystem.";
-        m_renderingSystem->setOpenGLFunctions(this);
-        m_renderingSystem->initialize(width(), height());
-
-        // Now that initialization is complete, announce it to the application.
-        // This is the crucial signal that will start the master render timer.
-        qDebug() << "[LIFECYCLE] Rendering system is initialized. Emitting signal.";
-        emit renderingSystemInitialized();
-    }
+    // Now, signal to the MainWindow that this viewport's context is ready.
+    // The MainWindow will use this signal from the *primary* viewport to
+    // trigger the one-time initialization of the RenderingSystem.
+    emit glContextReady(); // We renamed the signal to this in ViewportWidget.hpp
 }
 
 void ViewportWidget::shutdown()
 {
     makeCurrent();
-    if (m_renderingSystem) {
-        m_renderingSystem->shutdown();
-    }
+    
     glDeleteVertexArrays(1, &m_outlineVAO);
     glDeleteBuffers(1, &m_outlineVBO);
     doneCurrent();
@@ -109,17 +99,38 @@ void ViewportWidget::shutdown()
 
 void ViewportWidget::paintGL()
 {
-    // If for any reason the renderer isn't ready, clear to black to avoid a frozen screen.
+    //! DEBUG: Announce which viewport is starting its paint event.
+    qDebug().nospace() << "========================================";
+    qDebug() << "[PAINT EVENT] Starting for ViewportWidget instance:" << this;
+
     if (!m_renderingSystem || !m_renderingSystem->isInitialized()) {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         return;
     }
 
-    // This is the lightweight composite call from our new architecture.
-    const int fbW = std::lround(width() * devicePixelRatioF());
-    const int fbH = std::lround(height() * devicePixelRatioF());
-    m_renderingSystem->compositeToScreen(getCamera(), fbW, fbH);
+    // Get the framebuffer dimensions for this specific viewport.
+    const int fbW = static_cast<int>(width() * devicePixelRatioF());
+    const int fbH = static_cast<int>(height() * devicePixelRatioF());
+
+    // Tell the rendering system to render a complete frame for this view.
+    // We pass our specific camera and dimensions.
+    m_renderingSystem->renderView(this, m_scene->getRegistry(), m_cameraEntity, fbW, fbH);
+}
+
+void ViewportWidget::renderNow()
+{
+    if (isVisible() && context()) {
+        makeCurrent();
+        paintGL();
+
+        //! DIAGNOSTIC: Force the GPU to finish all drawing for this viewport
+        //! before the CPU is allowed to continue to the next one.
+        glFinish();
+
+        context()->swapBuffers(context()->surface());
+        doneCurrent();
+    }
 }
 
 void ViewportWidget::updateAnimations(entt::registry& registry, float frameDt)
@@ -270,51 +281,6 @@ void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* ev)
     }
 }
 
-static void updateParticleFlow(entt::registry& registry, FieldSolver& fieldSolver, float frameDt)
-{
-    auto view = registry.view<FieldVisualizerComponent>();
-    for (auto entity : view)
-    {
-        auto& visualizer = view.get<FieldVisualizerComponent>(entity);
-        if (!visualizer.isEnabled || visualizer.mode != FieldVisMode::Flow) {
-            continue;
-        }
-
-        auto& particles = visualizer.particles;
-        // (Initialize particle positions/ages/lifetimes if they are empty)
-
-        // Loop through every particle
-        for (int i = 0; i < particles.particleCount; ++i)
-        {
-            particles.ages[i] += frameDt;
-
-            // If a particle is "dead", respawn it
-            if (particles.ages[i] >= particles.lifetimes[i]) {
-                // Reset its age and give it a new random position and lifetime
-                particles.ages[i] = 0.0f;
-                // particles.positions[i] = random_point_in_bounds(visualizer.bounds);
-                // particles.lifetimes[i] = random_lifetime();
-            }
-
-            // --- Advection Step ---
-            // Move the particle along the field vector
-            glm::vec3 fieldVec = fieldSolver.getVectorAt(registry, particles.positions[i], visualizer.sourceEntities);
-            particles.velocities[i] = fieldVec;
-            particles.positions[i] += fieldVec * frameDt * visualizer.vectorScale;
-
-
-            // --- Update Visuals ---
-            // Map turbulence (which you'd get from the solver) to color
-            // float turbulence = fieldSolver.getTurbulenceAt(registry, particles.positions[i]);
-            // particles.colors[i] = map_turbulence_to_color(turbulence);
-
-            // To fade in and out, calculate alpha based on age vs lifetime
-            float life_t = particles.ages[i] / particles.lifetimes[i]; // 0.0 to 1.0
-            float fade = sin(life_t * 3.14159f); // A sine curve makes a smooth fade in/out
-            particles.colors[i].a = fade;
-        }
-    }
-}
 
 
 

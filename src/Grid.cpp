@@ -13,7 +13,7 @@
 #include <QDebug>
 #include <algorithm> 
 
-Grid::Grid(QOpenGLFunctions_4_1_Core* glFunctions)
+Grid::Grid(QOpenGLFunctions_4_3_Core* glFunctions)
     : m_gl(glFunctions),
     m_gridShader(nullptr),
     m_gridMesh(nullptr),

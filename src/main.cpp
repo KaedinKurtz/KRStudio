@@ -40,7 +40,7 @@ int main(int argc, char* argv[])
     QSurfaceFormat format;
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
-    format.setVersion(4, 1); // Or your target OpenGL version
+    format.setVersion(4, 3); // Or your target OpenGL version
     format.setProfile(QSurfaceFormat::CoreProfile);
     format.setSamples(4); // Request a Core Profile context
     format.setOption(QSurfaceFormat::StereoBuffers, true);
