@@ -2,7 +2,7 @@
 
 #include "RobotDescription.hpp"
 #include <QOpenGLWidget>
-#include <QOpenGLFunctions_4_1_Core>
+#include <QOpenGLFunctions_4_3_Core>
 #include <memory>
 #include <entt/entt.hpp>
 #include <map> // For the mesh cache
@@ -12,7 +12,7 @@ class Shader;
 class Mesh;
 class QTimer;
 
-class PreviewViewport : public QOpenGLWidget, public QOpenGLFunctions_4_1_Core
+class PreviewViewport : public QOpenGLWidget, public QOpenGLFunctions_4_3_Core
 {
     Q_OBJECT
 

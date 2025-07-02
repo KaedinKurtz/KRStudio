@@ -63,9 +63,11 @@ MainWindow::MainWindow(QWidget* parent)
         registry.emplace<TransformComponent>(cubeEntity).translation = glm::vec3(0.0f, 0.5f, 0.0f);
         registry.emplace<BoundingBoxComponent>(cubeEntity);
         registry.emplace<FieldSourceTag>(cubeEntity);
+
         auto& pointEffector = registry.emplace<MeshEffectorComponent>(cubeEntity);
-        pointEffector.strength = -2.0f;
-        pointEffector.distance = 7.0f;
+        pointEffector.strength = -1.0f;
+        pointEffector.distance = 3.0f;
+
         auto& mesh = registry.emplace<RenderableMeshComponent>(cubeEntity);
         const std::vector<float>& raw = Mesh::getLitCubeVertices();
         constexpr std::size_t stride = 6;
@@ -91,6 +93,9 @@ MainWindow::MainWindow(QWidget* parent)
         reg.emplace<PulsingSplineTag>(LinearEntity);
         auto bezierEntity = SB::makeBezier(reg, { {5, 0.1, -5}, {5, 4, -5}, {2, 4, -5}, {2, 0.1, -5} }, { 0.9f,0.9f,0.9f,1 }, { 1.0f, 0.9f, 0.2f, 1 }, 18.0f);
         reg.emplace<PulsingSplineTag>(bezierEntity);
+       // auto& splineEffector = reg.emplace<SplineEffectorComponent>(bezierEntity);
+       // splineEffector.strength = -1.0f; // Example: make it an attractor
+       // splineEffector.radius = 02.00f;
     }
 
     // --- Create Field Visualizers and Effectors ---
@@ -100,19 +105,25 @@ MainWindow::MainWindow(QWidget* parent)
         reg.emplace<TagComponent>(visualizerEntity, "Field Visualizer");
         reg.emplace<TransformComponent>(visualizerEntity);
         auto& visualizer = reg.emplace<FieldVisualizerComponent>(visualizerEntity);
-        visualizer.bounds = { 20.0f, 5.0f, 20.0f };
-        visualizer.density = { 20, 5, 20 };
-        visualizer.maxMagnitude = 5.0f;
+        visualizer.bounds = { glm::vec3(-5.0f, -2.5f, -5.0f), glm::vec3(10.0f, 2.5f, 5.0f) };
+        visualizer.density = { 50, 20, 50 };
+        visualizer.displayMode = FieldVisualizerComponent::DisplayMode::Flow;
         visualizer.vectorScale = 0.5f;
-        visualizer.colorGradient.push_back({ 0.0f, glm::vec4(0.2f, 0.5f, 1.0f, 1.0f) });
-        visualizer.colorGradient.push_back({ 1.0f, glm::vec4(1.0f, 0.3f, 0.3f, 1.0f) });
+        visualizer.particleCount = 5000;
+		visualizer.flowBaseSpeed = 0.55f;
+		visualizer.flowScale = 0.30f;
+		visualizer.flowRandomWalk = 25.81f;
+        visualizer.flowSpawnDistribution = FieldVisualizerComponent::FlowSpawnDistribution::RandomSphere;
+        
         auto windSource = reg.create();
         reg.emplace<TagComponent>(windSource, "Wind Source");
         reg.emplace<TransformComponent>(windSource);
         reg.emplace<FieldSourceTag>(windSource);
         auto& directional = reg.emplace<DirectionalEffectorComponent>(windSource);
-        directional.direction = { 1.0f, 0.0f, 0.5f };
-        directional.strength = 1.5f;
+        directional.direction = { 1.0f, 0.0f, 0.50f };
+        directional.strength = 0.1f;
+        
+
         auto repulsorSource = reg.create();
         reg.emplace<TagComponent>(repulsorSource, "Repulsor");
         auto& repulsorTransform = reg.emplace<TransformComponent>(repulsorSource);
@@ -145,18 +156,21 @@ MainWindow::MainWindow(QWidget* parent)
     // --- 4. Setup Dockable Widgets (Viewports & Panels) ---
     ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity1, this);
     m_viewports.push_back(viewport1);
-    ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Perspective)");
+    m_renderingSystem->setViewportWidget(viewport1); // Associate the renderer with its primary viewport.
+
+    ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Camera 1)");
     viewportDock1->setWidget(viewport1);
     m_dockManager->addDockWidget(ads::CenterDockWidgetArea, viewportDock1);
 
+    // Create the SECONDARY viewport. It shares the same rendering system.
     ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity2, this);
     m_viewports.push_back(viewport2);
-    ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Top Down)");
+    ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Camera 2)");
     viewportDock2->setWidget(viewport2);
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, viewportDock2);
 
     PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this);
-    ads::CDockWidget* propertiesDock = new ads::CDockWidget("Properties");
+    ads::CDockWidget* propertiesDock = new ads::CDockWidget("Grids");
     propertiesDock->setWidget(propertiesPanel);
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock);
 
@@ -166,12 +180,21 @@ MainWindow::MainWindow(QWidget* parent)
     m_masterRenderTimer = new QTimer(this);
     connect(m_masterRenderTimer, &QTimer::timeout, this, &MainWindow::onMasterRender);
 
-    // 2. Connect the timer's start to the signal from the viewport.
-    //    This creates the dependency: "WHEN the renderer is ready, THEN start the render loop."
-    connect(viewport1, &ViewportWidget::renderingSystemInitialized, this, [this]() {
-        if (!m_masterRenderTimer->isActive()) {
-            qDebug() << "[LIFECYCLE] Received renderingSystemInitialized signal. Starting master render timer.";
-            m_masterRenderTimer->start(16);
+    // Connect to the primary viewport's signal. When its GL context is ready,
+    // we will initialize our shared RenderingSystem.
+    connect(viewport1, &ViewportWidget::glContextReady, this, [this, viewport1]() {
+        // Only initialize the system ONCE.
+        if (!m_renderingSystem->isInitialized()) {
+            qDebug() << "[LIFECYCLE] Primary viewport context is ready. Initializing RenderingSystem.";
+
+            // To initialize the renderer, we must borrow the primary viewport's context.
+            viewport1->makeCurrent();
+            m_renderingSystem->initialize(viewport1->width(), viewport1->height());
+            viewport1->doneCurrent();
+
+            // Now that the renderer is ready, we can safely start the main render loop.
+            qDebug() << "[LIFECYCLE] RenderingSystem is initialized. Starting master render timer.";
+            m_masterRenderTimer->start(16); // Target ~60 FPS
         }
         });
 
@@ -192,31 +215,45 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::onMasterRender()
 {
-    // This guard clause will now pass once the timer is started correctly.
-    if (!m_renderingSystem || !m_renderingSystem->isInitialized() || m_viewports.empty()) {
-        qWarning() << "onMasterRender called but system not ready. Skipping frame.";
-        return;
+    // --- 1. LOGIC UPDATES ---
+    // This section should run at a fixed rate to ensure smooth and
+    // predictable animation and physics, regardless of frame rate.
+    if (m_renderingSystem && m_renderingSystem->isInitialized())
+    {
+        // Use the timer's interval to get a consistent delta time.
+        const float deltaTime = static_cast<float>(m_masterRenderTimer->interval()) / 1000.0f;
+
+        // Update all time-based systems
+        m_renderingSystem->updateAnimations(m_scene->getRegistry(), deltaTime);
+        m_renderingSystem->updateSceneLogic(m_scene->getRegistry(), deltaTime); // Pass deltaTime here
+
+        // Update transforms based on camera state
+        m_renderingSystem->updateCameraTransforms(m_scene->getRegistry());
+        ViewportWidget::propagateTransforms(m_scene->getRegistry());
     }
 
-    // "Borrow" the context from the first viewport to run the expensive scene render.
-    m_viewports[0]->makeCurrent();
-    m_renderingSystem->renderSceneToFBOs(m_scene->getRegistry(), m_viewports[0]->getCamera());
-    m_viewports[0]->doneCurrent();
-
-    // Schedule a repaint for all viewports. They will just run their cheap composite pass.
-    for (ViewportWidget* vp : m_viewports) {
-        vp->update();
+    // --- 2. SCHEDULE REPAINT ---
+    // Asynchronously schedule a repaint for each viewport. Qt will handle
+    // calling paintGL efficiently without blocking the main thread.
+    for (ViewportWidget* vp : m_viewports)
+    {
+        if (vp) {
+            vp->update();
+        }
     }
 }
 
 // The destructor orchestrates a clean shutdown.
 MainWindow::~MainWindow()
 {
-    // On shutdown, make a context current before deleting the renderer's resources
+    // Stop the timer to prevent any more render calls during shutdown.
+    m_masterRenderTimer->stop();
+
     if (!m_viewports.empty() && m_viewports[0]) {
         m_viewports[0]->makeCurrent();
         if (m_renderingSystem) {
-            m_renderingSystem->shutdown();
+            // Pass the registry to the shutdown method
+            m_renderingSystem->shutdown(m_scene->getRegistry());
             m_renderingSystem.reset();
         }
         m_viewports[0]->doneCurrent();

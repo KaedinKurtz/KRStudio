@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QDebug>
-#include <QOpenGLFunctions_4_1_Core>
+#include <QOpenGLFunctions_4_3_Core>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <QString>
@@ -34,7 +34,7 @@ namespace DebugHelpers
 
     // The missing function that draws the outline for a selected entity's bounding box.
     inline void drawAABBOutline(
-        QOpenGLFunctions_4_1_Core& gl,
+        QOpenGLFunctions_4_3_Core& gl,
         Shader& outlineShader,
         const BoundingBoxComponent& box,
         unsigned int vao,

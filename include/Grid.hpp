@@ -1,6 +1,6 @@
 #pragma once
 
-#include <QOpenGLFunctions_4_1_Core>
+#include <QOpenGLFunctions_4_3_Core>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <vector>
@@ -15,7 +15,7 @@ class Camera;
 
 class Grid {
 public:
-    Grid(QOpenGLFunctions_4_1_Core* glFunctions);
+    Grid(QOpenGLFunctions_4_3_Core* glFunctions);
     ~Grid();
 
     void draw(const Camera& camera, float aspectRatio);
@@ -46,7 +46,7 @@ private:
     void createDefaultQuadMesh();
     void createSphereMesh(float radius, int sectorCount, int stackCount);
 
-    QOpenGLFunctions_4_1_Core* m_gl;
+    QOpenGLFunctions_4_3_Core* m_gl;
 
     std::unique_ptr<Shader> m_gridShader;
     std::unique_ptr<Mesh>   m_gridMesh;

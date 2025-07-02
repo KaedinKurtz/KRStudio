@@ -1,6 +1,6 @@
 #pragma once
 #include <QOpenGLWidget>
-#include <QOpenGLFunctions_4_1_Core>
+#include <QOpenGLFunctions_4_3_Core>
 #include <memory>
 #include <entt/fwd.hpp>
 
@@ -20,7 +20,7 @@ class QOpenGLDebugMessage; // Forward declaration
 class RenderingSystem;
 class Scene;
 
-class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_4_1_Core
+class ViewportWidget : public QOpenGLWidget, public QOpenGLFunctions_4_3_Core
 {
     Q_OBJECT
 public:
@@ -31,6 +31,7 @@ public:
     void shutdown();
 
     void setRenderingSystem(RenderingSystem* system);
+    static void propagateTransforms(entt::registry& r);
 
 protected:
     void initializeGL() override;
@@ -49,7 +50,7 @@ protected:
 public slots:
     // Add this slot
     void handleLoggedMessage(const QOpenGLDebugMessage& debugMessage);
-
+    void renderNow();
 private:
 
     Scene* m_scene;
@@ -70,5 +71,5 @@ private:
 
 signals: // <<< ADD THIS SECTION
     void viewportReady();
-    void renderingSystemInitialized();
+    void glContextReady();
 };
