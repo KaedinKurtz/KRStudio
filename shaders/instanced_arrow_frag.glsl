@@ -1,15 +1,19 @@
-#version 410 core
 
-// Input from the vertex shader
-in VS_OUT {
-    vec3 color;
-} fs_in;
+/*
+================================================================================
+|                           instanced_arrow_frag.glsl                          |
+================================================================================
+*/
+#version 430 core
 
-// Final output color
+// Input from the vertex shader, matching the 'out' variable name and type.
+in vec4 vs_color;
+
+// The final output color of the fragment.
 out vec4 FragColor;
 
 void main()
 {
-    // The color is simply the per-instance color passed from the vertex shader
-    FragColor = vec4(fs_in.color, 1.0);
+    // Set the fragment's color to the interpolated color received from the vertex shader.
+    FragColor = vs_color;
 }

@@ -2,7 +2,7 @@
  * @file line_vert.glsl
  * @brief Vertex shader for drawing simple transformed lines.
  */
-#version 410 core
+#version 430 core
 
 layout (location = 0) in vec3 aPos;
 

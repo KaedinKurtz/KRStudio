@@ -275,24 +275,46 @@ void RenderingSystem::checkAndLogGlError(const char* label) {
 
 void RenderingSystem::ensureGlResolved()
 {
-    QOpenGLContext* currentCtx = QOpenGLContext::currentContext();
-    if (currentCtx == m_lastContext && m_gl) {
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+
+    // 1 — Early-out: still on the same context and the function table is valid
+    if (ctx == m_lastContext && m_gl)
         return;
-    }
-    qDebug() << "OpenGL context changed. Re-resolving function pointers for" << currentCtx;
-    if (!currentCtx) {
+
+    qDebug() << "OpenGL context changed. Re-resolving function pointers for"
+        << ctx;
+
+    // 2 — Lost the context → clear cache and bail
+    if (!ctx) {
         m_gl = nullptr;
         m_lastContext = nullptr;
         return;
     }
-    m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(currentCtx);
-    if (m_gl) {
-        m_gl->initializeOpenGLFunctions();
+
+    // 3 — Grab (or re-grab) the function table for *this* context
+    m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(ctx);
+    if (!m_gl) {
+        qCritical() << "Failed to obtain GL 4.3 core functions!";
+        m_lastContext = nullptr;
+        return;
     }
-    else {
-        qCritical() << "Failed to get GL functions for the new context.";
-    }
-    m_lastContext = currentCtx;
+    m_gl->initializeOpenGLFunctions();
+
+    // 4 — Auto-invalidate the cache when this context is about to die
+    //     (DirectConnection: slot runs *inside* the context-shutdown thread)
+    QObject::connect(ctx, &QOpenGLContext::aboutToBeDestroyed,
+        ctx,                     // <- any QObject* is OK
+        [this, ctx]
+        {
+            if (ctx == m_lastContext) {
+                m_gl = nullptr;
+                m_lastContext = nullptr;
+            }
+        },
+        Qt::DirectConnection);
+
+    // 5 — Remember which context we’re bound to
+    m_lastContext = ctx;
 }
 
 QOpenGLContext* RenderingSystem::currentCtxOrNull()
@@ -319,11 +341,33 @@ void RenderingSystem::initialize(int w, int h)
     if (!m_gl) {
         qFatal("RenderingSystem::initialize – no current context was provided.");
     }
+
+    // +++ ADD THIS DIAGNOSTIC CODE +++
+    const GLubyte* glVersion = m_gl->glGetString(GL_VERSION);
+    const GLubyte* glslVersion = m_gl->glGetString(GL_SHADING_LANGUAGE_VERSION);
+    qDebug() << "========================================================";
+    qDebug() << "[DRIVER_INFO] Actual GL Version:" << (const char*)glVersion;
+    qDebug() << "[DRIVER_INFO] Actual GLSL Version:" << (const char*)glslVersion;
+    qDebug() << "========================================================";
+    // ++++++++++++++++++++++++++++++++
+
+
     initShaders();
 
     m_gl->glEnable(GL_DEPTH_TEST);
     m_gl->glEnable(GL_BLEND);
     m_gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    m_gl->glGenBuffers(1, &m_debugBuffer);
+    m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_debugBuffer);
+    m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * 4096 * 16, nullptr, GL_DYNAMIC_COPY);
+
+    // Create a buffer for the atomic counter, initialized to 0
+    m_gl->glGenBuffers(1, &m_debugAtomicCounter);
+    m_gl->glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, m_debugAtomicCounter);
+    m_gl->glBufferData(GL_ATOMIC_COUNTER_BUFFER, sizeof(GLuint), nullptr, GL_DYNAMIC_DRAW);
+    GLuint zero = 0;
+    m_gl->glBufferSubData(GL_ATOMIC_COUNTER_BUFFER, 0, sizeof(GLuint), &zero);
 
     m_isInitialized = true;
 }
@@ -347,6 +391,10 @@ void RenderingSystem::shutdown(entt::registry& registry) {
         if (primitives.arrowEBO) m_gl->glDeleteBuffers(1, &primitives.arrowEBO);
         if (primitives.instanceVBO) m_gl->glDeleteBuffers(1, &primitives.instanceVBO);
     }
+
+    if (m_debugBuffer) m_gl->glDeleteBuffers(1, &m_debugBuffer);
+    if (m_debugAtomicCounter) m_gl->glDeleteBuffers(1, &m_debugAtomicCounter);
+
     m_contextPrimitives.clear();
 
     // Per-viewport FBOs
@@ -407,6 +455,8 @@ void RenderingSystem::shutdown(entt::registry& registry) {
     m_gl->glDeleteBuffers(1, &m_intersectionVBO);
 
     m_isInitialized = false;
+    m_gl = nullptr;
+    m_lastContext = nullptr;
 }
 
 void RenderingSystem::resize(int reqW, int reqH)
@@ -792,17 +842,22 @@ void RenderingSystem::resetGLState()
 
 void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm::mat4& view, const glm::mat4& projection, float deltaTime)
 {
-    if (!m_gl) return;
+    if (!m_gl) {
+        qWarning() << "[FieldViz] Render call skipped: m_gl is null.";
+        return;
+    }
 
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
-    if (!ctx) return;
+    if (!ctx) {
+        qWarning() << "[FieldViz] Render call skipped: No active OpenGL context.";
+        return;
+    }
 
     // --- 1. GATHER ALL EFFECTOR DATA (CPU Side) ---
-    // This data is shared by both arrow and particle visualization modes.
     std::vector<PointEffectorGpu> pointEffectors;
     std::vector<TriangleGpu> triangleEffectors;
     std::vector<DirectionalEffectorGpu> directionalEffectors;
-
+    // ... (Effector gathering logic is correct and remains the same) ...
     auto pointView = registry.view<PointEffectorComponent, TransformComponent>();
     for (auto entity : pointView) {
         auto& comp = pointView.get<PointEffectorComponent>(entity);
@@ -815,7 +870,6 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
         effector.falloffType = static_cast<int>(comp.falloff);
         pointEffectors.push_back(effector);
     }
-
     auto splineView = registry.view<SplineEffectorComponent, SplineComponent>();
     for (auto entity : splineView) {
         auto& comp = splineView.get<SplineEffectorComponent>(entity);
@@ -836,7 +890,6 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
             pointEffectors.push_back(effector);
         }
     }
-
     auto meshView = registry.view<MeshEffectorComponent, RenderableMeshComponent, TransformComponent>();
     for (auto entity : meshView) {
         auto& comp = meshView.get<MeshEffectorComponent>(entity);
@@ -853,7 +906,6 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
             triangleEffectors.push_back(tri);
         }
     }
-
     auto dirView = registry.view<DirectionalEffectorComponent>();
     for (auto entity : dirView) {
         auto& comp = dirView.get<DirectionalEffectorComponent>(entity);
@@ -875,7 +927,6 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
         m_gl->glBufferSubData(GL_UNIFORM_BUFFER, directionalOffset, std::min(size_t(16), directionalEffectors.size()) * sizeof(DirectionalEffectorGpu), directionalEffectors.data());
     }
     m_gl->glBindBuffer(GL_UNIFORM_BUFFER, 0);
-
     if (m_triangleDataSSBO == 0) m_gl->glGenBuffers(1, &m_triangleDataSSBO);
     m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_triangleDataSSBO);
     m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, triangleEffectors.size() * sizeof(TriangleGpu), triangleEffectors.empty() ? nullptr : triangleEffectors.data(), GL_DYNAMIC_DRAW);
@@ -883,7 +934,6 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
 
     auto& arrowPrimitives = m_contextPrimitives[ctx];
     if (arrowPrimitives.arrowVAO == 0) {
-        qDebug() << "Creating instanced arrow primitives for context" << ctx;
         std::vector<Vertex> arrowVertices;
         std::vector<unsigned int> arrowIndices;
         createArrowPrimitive(arrowVertices, arrowIndices);
@@ -903,6 +953,16 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
         m_gl->glBindVertexArray(0);
     }
 
+
+    GLuint zero = 0;
+    m_gl->glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, m_debugAtomicCounter);
+    m_gl->glBufferSubData(GL_ATOMIC_COUNTER_BUFFER, 0, sizeof(GLuint), &zero);
+
+    // Bind the debug buffers to the binding points we used in the shaders
+    m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, m_debugBuffer);
+    m_gl->glBindBufferBase(GL_ATOMIC_COUNTER_BUFFER, 11, m_debugAtomicCounter);
+
+
     // --- 3. MAIN LOOP FOR EACH VISUALIZER ---
     auto visualizerView = registry.view<FieldVisualizerComponent, TransformComponent>();
     for (auto entity : visualizerView)
@@ -914,18 +974,25 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
         if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Particles)
         {
             if (!m_particleUpdateComputeShader || !m_particleRenderShader) continue;
-            if (vis.particleBuffer[0] == 0) {
-                std::vector<Particle> particles(vis.particleCount);
+
+            auto& settings = vis.particleSettings;
+
+            if (vis.particleBuffer[0] == 0 || vis.isGpuDataDirty) {
+                if (vis.particleBuffer[0] != 0) {
+                    m_gl->glDeleteBuffers(2, vis.particleBuffer);
+                    m_gl->glDeleteVertexArrays(1, &vis.particleVAO);
+                }
+                std::vector<Particle> particles(settings.particleCount);
                 std::mt19937 rng(std::random_device{}());
                 std::uniform_real_distribution<float> distrib(0.0f, 1.0f);
                 glm::vec3 boundsSize = vis.bounds.max - vis.bounds.min;
-                for (int i = 0; i < vis.particleCount; ++i) {
+                for (int i = 0; i < settings.particleCount; ++i) {
                     particles[i].position = glm::vec4(vis.bounds.min + distrib(rng) * boundsSize, 1.0f);
                     particles[i].velocity = glm::vec4(0.0f);
-                    particles[i].color = vis.particleColor;
-                    particles[i].age = distrib(rng) * vis.flowLifetime; // Use flow lifetime for consistency
-                    particles[i].lifetime = vis.flowLifetime;
-                    particles[i].size = vis.particleSize;
+                    particles[i].color = glm::vec4(1.0f); // Will be set by shader
+                    particles[i].age = distrib(rng) * settings.lifetime;
+                    particles[i].lifetime = settings.lifetime;
+                    particles[i].size = settings.baseSize;
                 }
                 m_gl->glGenBuffers(2, vis.particleBuffer);
                 m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[0]);
@@ -948,7 +1015,8 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
             m_particleUpdateComputeShader->setInt("u_pointEffectorCount", static_cast<int>(pointEffectors.size()));
             m_particleUpdateComputeShader->setInt("u_directionalEffectorCount", static_cast<int>(directionalEffectors.size()));
             m_particleUpdateComputeShader->setInt("u_triangleEffectorCount", static_cast<int>(triangleEffectors.size()));
-            m_gl->glDispatchCompute(vis.particleCount / 256 + 1, 1, 1);
+
+            m_gl->glDispatchCompute(settings.particleCount / 256 + 1, 1, 1);
             m_gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
             m_gl->glEnable(GL_PROGRAM_POINT_SIZE);
@@ -966,7 +1034,7 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
             m_gl->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, color));
             m_gl->glEnableVertexAttribArray(2);
             m_gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, size));
-            m_gl->glDrawArrays(GL_POINTS, 0, vis.particleCount);
+            m_gl->glDrawArrays(GL_POINTS, 0, settings.particleCount);
             m_gl->glBindVertexArray(0);
             m_gl->glDepthMask(GL_TRUE);
             m_gl->glDisable(GL_BLEND);
@@ -977,47 +1045,27 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
         {
             if (!m_flowVectorComputeShader || !m_instancedArrowShader) continue;
 
-            if (vis.particleBuffer[0] == 0) {
-                std::vector<Particle> particles(vis.particleCount);
+            auto& settings = vis.flowSettings;
+
+            if (vis.particleBuffer[0] == 0 || vis.isGpuDataDirty) {
+                if (vis.particleBuffer[0] != 0) {
+                    m_gl->glDeleteBuffers(2, vis.particleBuffer);
+                    if (vis.gpuData.instanceDataSSBO) m_gl->glDeleteBuffers(1, &vis.gpuData.instanceDataSSBO);
+                }
+                std::vector<Particle> particles(settings.particleCount);
                 std::mt19937 rng(std::random_device{}());
                 std::uniform_real_distribution<float> distrib(0.0f, 1.0f);
                 glm::vec3 boundsCenter = (vis.bounds.min + vis.bounds.max) / 2.0f;
                 glm::vec3 boundsHalfSize = (vis.bounds.max - vis.bounds.min) / 2.0f;
 
-                for (int i = 0; i < vis.particleCount; ++i) {
-
-                    // NEW: Switch between different spawn distributions
-                    switch (vis.flowSpawnDistribution) {
-                    case FieldVisualizerComponent::FlowSpawnDistribution::RandomBox:
-                    {
-                        particles[i].position = glm::vec4(
-                            vis.bounds.min.x + distrib(rng) * boundsHalfSize.x * 2.0f,
-                            vis.bounds.min.y + distrib(rng) * boundsHalfSize.y * 2.0f,
-                            vis.bounds.min.z + distrib(rng) * boundsHalfSize.z * 2.0f,
-                            1.0f
-                        );
-                        break;
-                    }
-                    case FieldVisualizerComponent::FlowSpawnDistribution::RandomSphere:
-                    {
-                        float theta = 2.0f * 3.14159265f * distrib(rng);
-                        float phi = acos(1.0f - 2.0f * distrib(rng));
-                        float r = cbrt(distrib(rng)) * boundsHalfSize.x; // Use x as radius for a uniform spherical distribution
-                        particles[i].position = glm::vec4(
-                            boundsCenter.x + r * sin(phi) * cos(theta),
-                            boundsCenter.y + r * sin(phi) * sin(theta),
-                            boundsCenter.z + r * cos(phi),
-                            1.0f
-                        );
-                        break;
-                    }
-                    }
-
+                for (int i = 0; i < settings.particleCount; ++i) {
+                    // TODO: Implement different spawn distributions
+                    particles[i].position = glm::vec4(vis.bounds.min + distrib(rng) * boundsHalfSize * 2.0f, 1.0f);
                     particles[i].velocity = glm::vec4(0.0f);
-                    particles[i].color = glm::vec4(vis.flowColorStart, 1.0f);
-                    particles[i].age = distrib(rng) * vis.flowLifetime;
-                    particles[i].lifetime = vis.flowLifetime;
-                    particles[i].size = vis.particleSize;
+                    particles[i].color = glm::vec4(1.0f); // Default color
+                    particles[i].age = distrib(rng) * settings.lifetime;
+                    particles[i].lifetime = settings.lifetime;
+                    particles[i].size = settings.baseSize;
                 }
                 m_gl->glGenBuffers(2, vis.particleBuffer);
                 m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[0]);
@@ -1027,7 +1075,7 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
 
                 if (vis.gpuData.instanceDataSSBO == 0) m_gl->glGenBuffers(1, &vis.gpuData.instanceDataSSBO);
                 m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
-                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, vis.particleCount * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
+                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, settings.particleCount * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
             }
 
             m_flowVectorComputeShader->use();
@@ -1042,21 +1090,18 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
             m_flowVectorComputeShader->setFloat("u_time", m_elapsedTime);
             m_flowVectorComputeShader->setVec3("u_boundsMin", vis.bounds.min);
             m_flowVectorComputeShader->setVec3("u_boundsMax", vis.bounds.max);
-            m_flowVectorComputeShader->setFloat("u_baseSpeed", vis.flowBaseSpeed);
-            m_flowVectorComputeShader->setFloat("u_velocityMultiplier", vis.flowVelocityMultiplier);
-            m_flowVectorComputeShader->setFloat("u_flowScale", vis.flowScale);
-            m_flowVectorComputeShader->setFloat("u_fadeInPercent", vis.flowFadeInTime);
-            m_flowVectorComputeShader->setFloat("u_fadeOutPercent", vis.flowFadeOutTime);
-            m_flowVectorComputeShader->setVec3("u_colorStart", vis.flowColorStart);
-            m_flowVectorComputeShader->setVec3("u_colorMid", vis.flowColorMid);
-            m_flowVectorComputeShader->setVec3("u_colorEnd", vis.flowColorEnd);
+            m_flowVectorComputeShader->setFloat("u_baseSpeed", settings.baseSpeed);
+            m_flowVectorComputeShader->setFloat("u_velocityMultiplier", settings.speedIntensityMultiplier);
+            m_flowVectorComputeShader->setFloat("u_flowScale", settings.baseSize);
+            m_flowVectorComputeShader->setFloat("u_fadeInPercent", settings.growthPercentage);
+            m_flowVectorComputeShader->setFloat("u_fadeOutPercent", settings.shrinkPercentage);
+            // TODO: Pass gradient data to shader
             m_flowVectorComputeShader->setInt("u_pointEffectorCount", static_cast<int>(pointEffectors.size()));
             m_flowVectorComputeShader->setInt("u_directionalEffectorCount", static_cast<int>(directionalEffectors.size()));
             m_flowVectorComputeShader->setInt("u_triangleEffectorCount", static_cast<int>(triangleEffectors.size()));
             m_flowVectorComputeShader->setFloat("u_seedOffset", static_cast<float>(rand()) / RAND_MAX);
 
-
-            m_gl->glDispatchCompute(vis.particleCount / 256 + 1, 1, 1);
+            m_gl->glDispatchCompute(settings.particleCount / 256 + 1, 1, 1);
             m_gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
             m_instancedArrowShader->use();
@@ -1067,56 +1112,89 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
             m_gl->glBindBuffer(GL_ARRAY_BUFFER, vis.gpuData.instanceDataSSBO);
 
             GLsizei vec4Size = sizeof(glm::vec4);
-            m_gl->glEnableVertexAttribArray(2); m_gl->glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)offsetof(InstanceData, modelMatrix));
-            m_gl->glEnableVertexAttribArray(3); m_gl->glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + vec4Size));
-            m_gl->glEnableVertexAttribArray(4); m_gl->glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + 2 * vec4Size));
-            m_gl->glEnableVertexAttribArray(5); m_gl->glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + 3 * vec4Size));
-            m_gl->glEnableVertexAttribArray(6); m_gl->glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, color)));
+            m_gl->glEnableVertexAttribArray(2); m_gl->glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(InstanceData, modelMatrix));
+            m_gl->glEnableVertexAttribArray(3); m_gl->glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + vec4Size));
+            m_gl->glEnableVertexAttribArray(4); m_gl->glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + 2 * vec4Size));
+            m_gl->glEnableVertexAttribArray(5); m_gl->glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + 3 * vec4Size));
+            m_gl->glEnableVertexAttribArray(6); m_gl->glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, color)));
             m_gl->glVertexAttribDivisor(2, 1); m_gl->glVertexAttribDivisor(3, 1); m_gl->glVertexAttribDivisor(4, 1); m_gl->glVertexAttribDivisor(5, 1); m_gl->glVertexAttribDivisor(6, 1);
 
-            m_gl->glDrawElementsInstanced(GL_TRIANGLES, arrowPrimitives.arrowIndexCount, GL_UNSIGNED_INT, 0, vis.particleCount);
+            m_gl->glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLsizei>(arrowPrimitives.arrowIndexCount), GL_UNSIGNED_INT, 0, settings.particleCount);
 
             m_gl->glBindVertexArray(0);
             vis.currentReadBuffer = 1 - vis.currentReadBuffer;
         }
-        else if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Arrows)
+        if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Arrows)
         {
-            if (!m_arrowFieldComputeShader || !m_instancedArrowShader) continue;
+            if (!m_arrowFieldComputeShader || !m_instancedArrowShader) {
+                qWarning() << "[FieldViz] Arrow render skipped: Shaders not loaded.";
+                continue;
+            }
+
+            // FIX: Access settings from the correct nested struct
+            auto& settings = vis.arrowSettings;
 
             if (vis.isGpuDataDirty) {
+                qDebug() << "[FieldViz] isGpuDataDirty is true. Recreating arrow buffers with density:" << settings.density.x << "x" << settings.density.y << "x" << settings.density.z;
+
                 if (vis.gpuData.samplePointsSSBO) m_gl->glDeleteBuffers(1, &vis.gpuData.samplePointsSSBO);
                 if (vis.gpuData.instanceDataSSBO) m_gl->glDeleteBuffers(1, &vis.gpuData.instanceDataSSBO);
                 if (vis.gpuData.commandUBO) m_gl->glDeleteBuffers(1, &vis.gpuData.commandUBO);
 
                 std::vector<glm::vec4> samplePoints;
-                vis.gpuData.numSamplePoints = vis.density.x * vis.density.y * vis.density.z;
-                samplePoints.reserve(vis.gpuData.numSamplePoints);
-                glm::vec3 boundsSize = vis.bounds.max - vis.bounds.min;
-                for (int x = 0; x < vis.density.x; ++x) {
-                    for (int y = 0; y < vis.density.y; ++y) {
-                        for (int z = 0; z < vis.density.z; ++z) {
-                            glm::vec3 t = {
-                                (vis.density.x > 1) ? static_cast<float>(x) / (vis.density.x - 1) : 0.5f,
-                                (vis.density.y > 1) ? static_cast<float>(y) / (vis.density.y - 1) : 0.5f,
-                                (vis.density.z > 1) ? static_cast<float>(z) / (vis.density.z - 1) : 0.5f,
-                            };
-                            samplePoints.emplace_back(glm::vec4(vis.bounds.min + t * boundsSize, 1.0f));
+                vis.gpuData.numSamplePoints = settings.density.x * settings.density.y * settings.density.z;
+
+                qDebug() << "[FieldViz] Calculated numSamplePoints:" << vis.gpuData.numSamplePoints;
+                /*
+                if (glm::length2(vis.bounds.max - vis.bounds.min) < 1e-6f) {
+                    vis.bounds.min = glm::vec3(-5.0f);
+                    vis.bounds.max = glm::vec3(5.0f);
+                }
+                */
+
+                if (vis.gpuData.numSamplePoints == 0) {
+                    qWarning() << "[FieldViz] Arrow density is zero, skipping buffer creation.";
+                }
+                else {
+                    samplePoints.reserve(vis.gpuData.numSamplePoints);
+                    glm::vec3 boundsSize = vis.bounds.max - vis.bounds.min;
+                    for (int x = 0; x < settings.density.x; ++x) {
+                        for (int y = 0; y < settings.density.y; ++y) {
+                            for (int z = 0; z < settings.density.z; ++z) {
+                                glm::vec3 t = {
+                                    (settings.density.x > 1) ? static_cast<float>(x) / (settings.density.x - 1) : 0.5f,
+                                    (settings.density.y > 1) ? static_cast<float>(y) / (settings.density.y - 1) : 0.5f,
+                                    (settings.density.z > 1) ? static_cast<float>(z) / (settings.density.z - 1) : 0.5f,
+                                };
+                                samplePoints.emplace_back(glm::vec4(vis.bounds.min + t * boundsSize, 1.0f));
+                            }
                         }
                     }
+                    m_gl->glGenBuffers(1, &vis.gpuData.samplePointsSSBO);
+                    m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.samplePointsSSBO);
+                    m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, samplePoints.size() * sizeof(glm::vec4), samplePoints.data(), GL_STATIC_DRAW);
+
+                    m_gl->glGenBuffers(1, &vis.gpuData.instanceDataSSBO);
+                    m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
+                    m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, vis.gpuData.numSamplePoints * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
+
+                    struct DrawElementsIndirectCommand { GLuint count; GLuint instanceCount; GLuint firstIndex; GLuint baseVertex; GLuint baseInstance; };
+                    DrawElementsIndirectCommand cmd = { (GLuint)arrowPrimitives.arrowIndexCount, 0, 0, 0, 0 };
+                    m_gl->glGenBuffers(1, &vis.gpuData.commandUBO);
+                    m_gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
+                    m_gl->glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(cmd), &cmd, GL_DYNAMIC_DRAW);
                 }
-                m_gl->glGenBuffers(1, &vis.gpuData.samplePointsSSBO);
-                m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.samplePointsSSBO);
-                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, samplePoints.size() * sizeof(glm::vec4), samplePoints.data(), GL_STATIC_DRAW);
-                m_gl->glGenBuffers(1, &vis.gpuData.instanceDataSSBO);
-                m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
-                m_gl->glBufferData(GL_SHADER_STORAGE_BUFFER, vis.gpuData.numSamplePoints * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
-                struct DrawElementsIndirectCommand { GLuint count; GLuint instanceCount; GLuint firstIndex; GLuint baseVertex; GLuint baseInstance; };
-                DrawElementsIndirectCommand cmd = { (GLuint)arrowPrimitives.arrowIndexCount, 0, 0, 0, 0 };
-                m_gl->glGenBuffers(1, &vis.gpuData.commandUBO);
-                m_gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
-                m_gl->glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(cmd), &cmd, GL_DYNAMIC_DRAW);
-                vis.isGpuDataDirty = false;
             }
+
+            if (vis.gpuData.numSamplePoints == 0) continue;
+
+            qDebug() << "[FieldViz] Dispatching compute shader for arrows. Scale:" << settings.vectorScale
+                << "Head Scale:" << settings.headScale << "Cull Thresh:" << settings.cullingThreshold;
+
+            m_gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
+            GLuint zero = 0;
+            // The instanceCount is the second integer in the struct, so its offset is sizeof(GLuint).
+            m_gl->glBufferSubData(GL_DRAW_INDIRECT_BUFFER, sizeof(GLuint), sizeof(GLuint), &zero);
 
             m_arrowFieldComputeShader->use();
             m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, vis.gpuData.samplePointsSSBO);
@@ -1125,40 +1203,114 @@ void RenderingSystem::renderFieldVisualizers(entt::registry& registry, const glm
             m_gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, m_effectorDataUBO);
             m_gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_triangleDataSSBO);
             m_arrowFieldComputeShader->setMat4("u_visualizerModelMatrix", xf.getTransform());
-            m_arrowFieldComputeShader->setFloat("u_vectorScale", vis.vectorScale);
-            m_arrowFieldComputeShader->setFloat("u_arrowHeadScale", vis.arrowHeadScale);
-            m_arrowFieldComputeShader->setFloat("u_cullingThreshold", vis.cullingThreshold);
+            m_arrowFieldComputeShader->setFloat("u_vectorScale", settings.vectorScale);
+            m_arrowFieldComputeShader->setFloat("u_arrowHeadScale", settings.headScale);
+            m_arrowFieldComputeShader->setFloat("u_cullingThreshold", settings.cullingThreshold);
             m_arrowFieldComputeShader->setInt("u_pointEffectorCount", static_cast<int>(pointEffectors.size()));
             m_arrowFieldComputeShader->setInt("u_directionalEffectorCount", static_cast<int>(directionalEffectors.size()));
             m_arrowFieldComputeShader->setInt("u_triangleEffectorCount", static_cast<int>(triangleEffectors.size()));
+
             m_gl->glDispatchCompute((GLuint)vis.gpuData.numSamplePoints / 256 + 1, 1, 1);
             m_gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+
+            struct DrawElementsIndirectCommand {
+                GLuint count;
+                GLuint instanceCount;
+                GLuint firstIndex;
+                GLuint baseVertex;
+                GLuint baseInstance;
+            };
+            DrawElementsIndirectCommand cmd;
+            m_gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
+            m_gl->glGetBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(DrawElementsIndirectCommand), &cmd);
+            m_gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+
+            qDebug() << "[INDIRECT_DRAW_DEBUG] Instance Count:" << cmd.instanceCount
+                << " | Index Count:" << cmd.count;
+            // --- END DEBUG ---
+
+
+            /* ---------- DEBUG: dump first few InstanceData records ---------- */
+            {
+                constexpr GLuint kDumpCount = 4;                    // how many structs to print
+                InstanceData dump[kDumpCount]{};                    // CPU-side mirror
+
+                // 1) read back the SSBO that the compute shader just filled
+            m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
+            m_gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                    sizeof(dump),    // bytes to copy
+                    dump);           // destination
+
+                // 2) spit them out in a human-readable way
+                qDebug().nospace() << "[INSTANCE_DUMP] sizeof(InstanceData) = "
+                    << sizeof(InstanceData) << "  (expect 96)";
+                for (GLuint i = 0; i < kDumpCount; ++i) {
+                    const auto& d = dump[i];
+                    qDebug().nospace()
+                        << "  [" << i << "] pos=("
+                        << d.modelMatrix[3].x << ", "
+                        << d.modelMatrix[3].y << ", "
+                        << d.modelMatrix[3].z << ")  "
+                        << "scaleZ=" << d.modelMatrix[2][2] << "  "
+                        << "colour=(" << d.color.r << ", "
+                        << d.color.g << ", "
+                        << d.color.b << ")";
+                }
+            }
+            /* ---------------------------------------------------------------- */
+
 
             m_instancedArrowShader->use();
             m_instancedArrowShader->setMat4("view", view);
             m_instancedArrowShader->setMat4("projection", projection);
+
             m_gl->glBindVertexArray(arrowPrimitives.arrowVAO);
             m_gl->glBindBuffer(GL_ARRAY_BUFFER, vis.gpuData.instanceDataSSBO);
             GLsizei vec4Size = sizeof(glm::vec4);
             m_gl->glEnableVertexAttribArray(2);
-            m_gl->glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)offsetof(InstanceData, modelMatrix));
+            m_gl->glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(InstanceData, modelMatrix));
             m_gl->glEnableVertexAttribArray(3);
-            m_gl->glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + vec4Size));
+            m_gl->glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + vec4Size));
             m_gl->glEnableVertexAttribArray(4);
-            m_gl->glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + 2 * vec4Size));
+            m_gl->glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + 2 * vec4Size));
             m_gl->glEnableVertexAttribArray(5);
-            m_gl->glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, modelMatrix) + 3 * vec4Size));
+            m_gl->glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + 3 * vec4Size));
             m_gl->glEnableVertexAttribArray(6);
-            m_gl->glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void*)(offsetof(InstanceData, color)));
+            m_gl->glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, color)));
             m_gl->glVertexAttribDivisor(2, 1);
             m_gl->glVertexAttribDivisor(3, 1);
             m_gl->glVertexAttribDivisor(4, 1);
             m_gl->glVertexAttribDivisor(5, 1);
             m_gl->glVertexAttribDivisor(6, 1);
+
+            //m_gl->glFrontFace(GL_CW);
+
             m_gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
             m_gl->glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (void*)0);
+
+           // m_gl->glFrontFace(GL_CCW);
+
+            m_gl->glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+
+            struct InstanceData {
+                glm::mat4 modelMatrix;
+                glm::vec4 color;
+                glm::vec4 _padding;
+            };
+
+
+
+            InstanceData firstInstance;
+            m_gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
+            m_gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(InstanceData), &firstInstance);
+
+            qDebug() << "========================================================";
+            qDebug() << "[CANARY_TEST] Color of first instance: " << glm::to_string(firstInstance.color).c_str();
+            qDebug() << "========================================================";
+
             m_gl->glBindVertexArray(0);
         }
+        vis.isGpuDataDirty = false; // Reset dirty flag after processing
     }
 }
 
@@ -1584,3 +1736,4 @@ void RenderingSystem::initOrResizeFBOsForTarget(TargetFBOs& target, int width, i
 
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind FBO
 }
+

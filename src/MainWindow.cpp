@@ -15,6 +15,8 @@
 #include "Mesh.hpp" // Required for the test cube's mesh data.
 #include "IntersectionSystem.hpp" 
 #include "RenderingSystem.hpp"
+#include "FlowVisualizerMenu.hpp"
+#include "Helpers.hpp"   
 
 #include <QVBoxLayout>
 #include <QFileDialog>
@@ -28,6 +30,106 @@
 #include <DockWidget.h>
 #include <DockAreaWidget.h>
 #include <QApplication>
+#include <QButtonGroup>
+#include <QSplitter>
+#include "DockSplitter.h" 
+
+const QString sidePanelStyle = R"(
+    /* General Window and Text Styling */
+    QWidget {
+        background-color: #2c313a; /* Dark gray background */
+        color: #d5d5d5;            /* Light gray text */
+        font-family: "Segoe UI";    /* Or another clean, modern font */
+        font-size: 9pt;
+    }
+
+    /* GroupBox Styling for a modern, clean look */
+    QGroupBox {
+        background-color: #353b46; /* Slightly lighter background for groups */
+        border: 1px solid #4a5260;
+        border-radius: 4px;
+        margin-top: 10px; /* Provides space for the title */
+    }
+
+    QGroupBox::title {
+        subcontrol-origin: margin;
+        subcontrol-position: top center;
+        padding: 0 5px;
+        background-color: #353b46;
+        border: none;
+    }
+
+    /* Apply a shared style to BOTH QToolButton and QPushButton */
+    QToolButton, QPushButton {
+        background-color: transparent;
+        border: 1px solid #4a5260;
+        border-radius: 4px;
+        padding: 5px;
+        min-width: 65px;
+        min-height: 20px;
+        color: #d5d5d5; /* Make sure text color is set */
+    }
+
+    QToolButton:hover, QPushButton:hover {
+        background-color: #4a5260;
+        border: 1px solid #5a6474;
+    }
+
+    QToolButton:pressed, QPushButton:pressed {
+        background-color: #5a6474;
+    }
+
+    QToolButton:checked { /* This is for toggle buttons like your tools */
+        background-color: #0078d7;
+        color: white;
+        border: 1px solid #0078d7;
+    }
+
+    QComboBox {
+        background-color: #2c313a;
+        border: 1px solid #4a5260;
+        border-radius: 4px;
+        padding: 5px;
+        min-height: 20px;
+    }
+
+    QComboBox:hover {
+        border: 1px solid #5a6474;
+    }
+
+    QComboBox::drop-down {
+        border: none;
+    }
+
+    QComboBox::down-arrow {
+        image: url(:/icons/chevron-down.png);
+        width: 12px;
+        height: 12px;
+    }
+    
+    QSlider::groove:horizontal {
+        border: 1px solid #4a5260;
+        height: 4px; 
+        background: #353b46;
+        margin: 2px 0;
+        border-radius: 2px;
+    }
+
+    QSlider::handle:horizontal {
+        background: #0078d7;
+        border: 1px solid #0078d7;
+        width: 14px;
+        margin: -5px 0; 
+        border-radius: 7px;
+    }
+
+    QFrame[frameShape="VLine"] {
+        border: 1px solid #4a5260;
+    }
+    QFrame[frameShape="HLine"] {
+        border: 1px solid #4a5260;
+    }
+)";
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -106,23 +208,37 @@ MainWindow::MainWindow(QWidget* parent)
         reg.emplace<TransformComponent>(visualizerEntity);
         auto& visualizer = reg.emplace<FieldVisualizerComponent>(visualizerEntity);
         visualizer.bounds = { glm::vec3(-5.0f, -2.5f, -5.0f), glm::vec3(10.0f, 2.5f, 5.0f) };
-        visualizer.density = { 20, 10, 15 };
-        visualizer.displayMode = FieldVisualizerComponent::DisplayMode::Particles;
-        visualizer.vectorScale = 0.2f;
-        visualizer.particleCount = 5000;
-		visualizer.flowBaseSpeed = 0.55f;
-		visualizer.flowBaseSpeed = 0.55f;
-		visualizer.flowScale = 0.30f;
-		visualizer.flowRandomWalk = 25.81f;
-        visualizer.flowSpawnDistribution = FieldVisualizerComponent::FlowSpawnDistribution::RandomSphere;
-        
+        visualizer.displayMode = FieldVisualizerComponent::DisplayMode::Arrows;
+        auto& registry = m_scene->getRegistry();
+        QTimer::singleShot(0, this, [this, &registry] {
+            auto view = registry.view<FieldVisualizerComponent>();
+            if (!view.empty())
+                m_flowVisualizerMenu->updateControlsFromComponent(
+                    firstComponent<FieldVisualizerComponent>(registry));
+            });
+        // Set properties on the correct sub-struct
+
+        visualizer.arrowSettings.density = { 15, 5, 15 };
+        visualizer.arrowSettings.vectorScale = 0.5f;
+        visualizer.arrowSettings.headScale = 0.4f;
+        visualizer.arrowSettings.intensityMultiplier = 1.0f;
+        visualizer.arrowSettings.cullingThreshold = 0.01f;
+        visualizer.arrowSettings.coloringMode = FieldVisualizerComponent::ColoringMode::Intensity;
+        visualizer.bounds.max = { 4, 2, 4 };
+		visualizer.bounds.min = { -4, -2, -4 };
+        visualizer.flowSettings.particleCount = 5000;
+        visualizer.flowSettings.baseSpeed = 0.15f;
+        visualizer.flowSettings.baseSize = 0.30f; // Was flowScale
+        visualizer.flowSettings.randomWalkStrength = 0.1f; // Was flowRandomWalk
+        visualizer.flowSettings.lifetime = 7.0f;
+
         auto windSource = reg.create();
         reg.emplace<TagComponent>(windSource, "Wind Source");
         reg.emplace<TransformComponent>(windSource);
         reg.emplace<FieldSourceTag>(windSource);
         auto& directional = reg.emplace<DirectionalEffectorComponent>(windSource);
         directional.direction = { 1.0f, 0.0f, 0.50f };
-        directional.strength = 0.1f;
+        directional.strength = 0.60f;
         
 
         auto repulsorSource = reg.create();
@@ -154,26 +270,50 @@ MainWindow::MainWindow(QWidget* parent)
     mainLayout->addWidget(m_dockManager, 1);
     this->setCentralWidget(m_centralContainer);
 
-    // --- 4. Setup Dockable Widgets (Viewports & Panels) ---
-    ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity1, this);
-    m_viewports.push_back(viewport1);
-    m_renderingSystem->setViewportWidget(viewport1); // Associate the renderer with its primary viewport.
+    ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity1, this); // Creates the first viewport widget.
+    m_viewports.push_back(viewport1); // Adds the viewport to a list for management.
+    m_renderingSystem->setViewportWidget(viewport1); // Associates the renderer with its primary viewport.
+    ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Camera 1)"); // Creates the first dockable viewport.
+    viewportDock1->setWidget(viewport1); // Sets the viewport as the content of the dock widget.
+    ads::CDockAreaWidget* viewportArea1 = m_dockManager->addDockWidget(ads::LeftDockWidgetArea, viewportDock1); // Docks the first viewport, creating our first column.
 
-    ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Camera 1)");
-    viewportDock1->setWidget(viewport1);
-    m_dockManager->addDockWidget(ads::CenterDockWidgetArea, viewportDock1);
+    // Create the SECONDARY viewport and dock it to the RIGHT of the FIRST one.
+    ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity2, this); // Creates the second viewport widget.
+    m_viewports.push_back(viewport2); // Adds the viewport to the list.
+    ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Camera 2)"); // Creates the second dockable viewport.
+    viewportDock2->setWidget(viewport2); // Sets the viewport as the content of the dock widget.
+    ads::CDockAreaWidget* viewportArea2 = m_dockManager->addDockWidget(ads::RightDockWidgetArea, viewportDock2, viewportArea1); // This is key: docks viewport 2 to the right OF viewport 1, creating a horizontal split.
 
-    // Create the SECONDARY viewport. It shares the same rendering system.
-    ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity2, this);
-    m_viewports.push_back(viewport2);
-    ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Camera 2)");
-    viewportDock2->setWidget(viewport2);
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, viewportDock2);
+    // Create the properties panel and dock it to the RIGHT of the SECOND viewport.
+    PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this); // Creates the properties panel widget.
+    propertiesPanel->setMinimumWidth(700); // Sets the minimum width of the properties panel. The dock widget will respect this.
+    ads::CDockWidget* propertiesDock = new ads::CDockWidget("Grid(s)"); // Creates the properties dock widget.
+    propertiesDock->setWidget(propertiesPanel); // Sets the properties panel as the content of the dock widget.
+    propertiesDock->setStyleSheet(sidePanelStyle); // Applies your custom style.
+    ads::CDockAreaWidget* propertiesArea = m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock, viewportArea2); // Docks the properties panel to the right OF viewport 2, creating our third column.
 
-    PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this);
-    ads::CDockWidget* propertiesDock = new ads::CDockWidget("Grids");
-    propertiesDock->setWidget(propertiesPanel);
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock);
+    // --- Set Proportions for the three main dock areas ---
+
+    ads::CDockSplitter* mainSplitter = viewportArea1->parentSplitter(); // Gets the custom splitter containing our dock areas.
+    if (mainSplitter) // Checks if the splitter is valid.
+    {
+        // We give it a list of integers representing the initial sizes for a 25:50:25 ratio.
+        mainSplitter->setSizes({ 1, 2, 1 });
+    }
+
+    // Create the flow visualizer menu and add it as a TAB to the properties area.
+    m_flowVisualizerMenu = new FlowVisualizerMenu(this); // Creates the flow visualizer menu widget.
+    ads::CDockWidget* flowMenuDock = new ads::CDockWidget("Field Visualizer"); // Creates the flow visualizer dock widget.
+    m_flowVisualizerMenu->setMinimumWidth(650); // Sets the minimum width for this widget as well.
+    flowMenuDock->setWidget(m_flowVisualizerMenu); // Sets the menu as the content of the dock widget.
+    flowMenuDock->setStyleSheet(sidePanelStyle); // Applies your custom style.
+    m_dockManager->addDockWidget(ads::CenterDockWidgetArea, flowMenuDock, propertiesArea); // Adds the flow menu as a tab in the properties dock area.
+    
+    connect(m_flowVisualizerMenu, &FlowVisualizerMenu::settingsChanged,
+        this, &MainWindow::onFlowVisualizerSettingsChanged);
+
+    connect(m_flowVisualizerMenu, &FlowVisualizerMenu::transformChanged,
+        this, &MainWindow::onFlowVisualizerTransformChanged);
 
     // --- 5. FINAL, ROBUST INITIALIZATION AND RENDER LOOP START ---
 
@@ -203,6 +343,10 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
     connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [viewport1](bool isFloating) { /* ... */ });
     connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, [viewport2](bool isFloating) { /* ... */ });
+    connect(m_flowVisualizerMenu, &FlowVisualizerMenu::settingsChanged, this, &MainWindow::onFlowVisualizerSettingsChanged);
+
+    updateVisualizerUI();
+    onFlowVisualizerSettingsChanged();
 
     // --- 7. Final Window Setup ---
     if (menuBar()) {
@@ -317,4 +461,139 @@ void MainWindow::onLoadRobotClicked()
         statusBar()->showMessage(QString("Successfully loaded robot '%1'").arg(QString::fromStdString(description.name)));
         SceneBuilder::spawnRobot(*m_scene, description);
     }
+}
+
+void MainWindow::onFlowVisualizerSettingsChanged()
+{
+    auto& registry = m_scene->getRegistry();
+    auto view = registry.view<FieldVisualizerComponent, TransformComponent>();
+
+    // --- FIX: Use .size_hint() to check if the view is empty ---
+    if (view.size_hint() == 0) {
+        qWarning() << "onFlowVisualizerSettingsChanged called, but no FieldVisualizerComponent found in scene.";
+        return;
+    }
+
+    auto visualizerEntity = view.front();
+    auto& visualizer = view.get<FieldVisualizerComponent>(visualizerEntity);
+    auto& transform = view.get<TransformComponent>(visualizerEntity);
+
+    // --- Update Transform and General Settings ---
+    transform.translation = m_flowVisualizerMenu->getFieldPosition();
+    transform.rotation = glm::quat(glm::radians(m_flowVisualizerMenu->getFieldOrientation()));
+    visualizer.isEnabled = m_flowVisualizerMenu->isMasterVisible();
+    visualizer.displayMode = m_flowVisualizerMenu->getDisplayMode();
+    visualizer.bounds = m_flowVisualizerMenu->getBounds();
+
+    // --- FIX: Update the correct nested struct based on the display mode ---
+    switch (visualizer.displayMode)
+    {
+    case FieldVisualizerComponent::DisplayMode::Arrows:
+    {
+        auto& settings = visualizer.arrowSettings;
+        settings.density = m_flowVisualizerMenu->getArrowDensity();
+        settings.vectorScale = m_flowVisualizerMenu->getArrowBaseSize();
+        settings.headScale = m_flowVisualizerMenu->getArrowHeadScale();
+        settings.intensityMultiplier = m_flowVisualizerMenu->getArrowIntensityMultiplier();
+        settings.cullingThreshold = m_flowVisualizerMenu->getArrowCullingThreshold();
+        settings.scaleByLength = m_flowVisualizerMenu->isArrowLengthScaled();
+        settings.lengthScaleMultiplier = m_flowVisualizerMenu->getArrowLengthScaleMultiplier();
+        settings.scaleByThickness = m_flowVisualizerMenu->isArrowThicknessScaled();
+        settings.thicknessScaleMultiplier = m_flowVisualizerMenu->getArrowThicknessScaleMultiplier();
+        settings.coloringMode = m_flowVisualizerMenu->getArrowColoringMode();
+        settings.xPosColor = m_flowVisualizerMenu->getArrowDirColor(0);
+        settings.xNegColor = m_flowVisualizerMenu->getArrowDirColor(1);
+        settings.yPosColor = m_flowVisualizerMenu->getArrowDirColor(2);
+        settings.yNegColor = m_flowVisualizerMenu->getArrowDirColor(3);
+        settings.zPosColor = m_flowVisualizerMenu->getArrowDirColor(4);
+        settings.zNegColor = m_flowVisualizerMenu->getArrowDirColor(5);
+        settings.intensityGradient = m_flowVisualizerMenu->getArrowIntensityGradient();
+        break;
+    }
+    case FieldVisualizerComponent::DisplayMode::Particles:
+    {
+        auto& settings = visualizer.particleSettings;
+        settings.isSolid = m_flowVisualizerMenu->isParticleSolid();
+        settings.particleCount = m_flowVisualizerMenu->getParticleCount();
+        settings.lifetime = m_flowVisualizerMenu->getParticleLifetime();
+        settings.baseSpeed = m_flowVisualizerMenu->getParticleBaseSpeed();
+        settings.speedIntensityMultiplier = m_flowVisualizerMenu->getParticleSpeedIntensityMult();
+        settings.baseSize = m_flowVisualizerMenu->getParticleBaseSize();
+        settings.peakSizeMultiplier = m_flowVisualizerMenu->getParticlePeakSizeMult();
+        settings.minSize = m_flowVisualizerMenu->getParticleMinSize();
+        settings.baseGlowSize = m_flowVisualizerMenu->getParticleBaseGlow();
+        settings.peakGlowMultiplier = m_flowVisualizerMenu->getParticlePeakGlowMult();
+        settings.minGlowSize = m_flowVisualizerMenu->getParticleMinGlow();
+        settings.randomWalkStrength = m_flowVisualizerMenu->getParticleRandomWalk();
+
+        settings.coloringMode = m_flowVisualizerMenu->getParticleColoringMode();
+        settings.xPosColor = m_flowVisualizerMenu->getParticleDirColor(0);
+        settings.xNegColor = m_flowVisualizerMenu->getParticleDirColor(1);
+        // ... etc for other particle direction colors
+        settings.intensityGradient = m_flowVisualizerMenu->getParticleIntensityGradient();
+        settings.lifetimeGradient = m_flowVisualizerMenu->getParticleLifetimeGradient();
+        break;
+    }
+    case FieldVisualizerComponent::DisplayMode::Flow:
+    {
+        auto& settings = visualizer.flowSettings;
+        settings.particleCount = m_flowVisualizerMenu->getFlowParticleCount();
+        settings.lifetime = m_flowVisualizerMenu->getFlowLifetime();
+        settings.baseSpeed = m_flowVisualizerMenu->getFlowBaseSpeed();
+        settings.speedIntensityMultiplier = m_flowVisualizerMenu->getFlowSpeedIntensityMult();
+        settings.baseSize = m_flowVisualizerMenu->getFlowBaseSize();
+        settings.headScale = m_flowVisualizerMenu->getFlowHeadScale();
+        settings.peakSizeMultiplier = m_flowVisualizerMenu->getFlowPeakSizeMult();
+        settings.minSize = m_flowVisualizerMenu->getFlowMinSize();
+        settings.growthPercentage = m_flowVisualizerMenu->getFlowGrowthPercent();
+        settings.shrinkPercentage = m_flowVisualizerMenu->getFlowShrinkPercent();
+        settings.randomWalkStrength = m_flowVisualizerMenu->getFlowRandomWalk();
+        settings.scaleByLength = m_flowVisualizerMenu->isFlowLengthScaled();
+        settings.lengthScaleMultiplier = m_flowVisualizerMenu->getFlowLengthScaleMultiplier();
+        settings.scaleByThickness = m_flowVisualizerMenu->isFlowThicknessScaled();
+        settings.thicknessScaleMultiplier = m_flowVisualizerMenu->getFlowThicknessScaleMultiplier();
+
+        settings.coloringMode = m_flowVisualizerMenu->getFlowColoringMode();
+        // ... etc for flow direction colors and gradients
+        break;
+    }
+    }
+
+    if (visualizer.displayMode == FieldVisualizerComponent::DisplayMode::Arrows) {
+        const auto& settings = visualizer.arrowSettings;
+        qDebug() << "[SETTINGS APPLIED] Mode: Arrows, Density:"
+            << settings.density.x << "x" << settings.density.y << "x" << settings.density.z
+            << "Scale:" << settings.vectorScale;
+    }
+
+    // Mark the component as dirty so the rendering system knows to update its GPU buffers.
+    visualizer.isGpuDataDirty = true;
+    qDebug() << "Flow visualizer settings successfully applied to component.";
+}
+
+void MainWindow::updateVisualizerUI()
+{
+    auto& registry = m_scene->getRegistry();
+    auto view = registry.view<const FieldVisualizerComponent>(); // View as const
+    if (view.size() == 0) return;
+
+    // Get the current state from the component
+    const auto& visualizer = view.get<const FieldVisualizerComponent>(view.front());
+
+    // Pass the component to the menu's new public setter function
+    m_flowVisualizerMenu->updateControlsFromComponent(visualizer);
+}
+
+void MainWindow::onFlowVisualizerTransformChanged()
+{
+    auto& reg = m_scene->getRegistry();
+    auto view = reg.view<TransformComponent, FieldVisualizerComponent>();
+    if (view.size_hint() == 0) return;
+
+    auto e = view.front();
+    auto [xf, viz] = view.get<TransformComponent, FieldVisualizerComponent>(e);
+
+    xf.translation = m_flowVisualizerMenu->getCentre();
+    xf.rotation = glm::quat(glm::radians(m_flowVisualizerMenu->getEuler()));
+    viz.isGpuDataDirty = true;          // in case centre moved
 }

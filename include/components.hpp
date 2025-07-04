@@ -72,53 +72,86 @@ struct AABB {
 struct InstanceData {
     glm::mat4 modelMatrix;
     glm::vec4 color;
+    glm::vec4 padding;
 };
 
 
 struct FieldVisualizerComponent {
-    bool isEnabled = true;
-
+    // --- FIX: Define enums inside the component for clear scope ---
     enum class DisplayMode { Arrows, Particles, Flow };
+    enum class ColoringMode { Intensity, Lifetime, Directional };
+
+    // --- General Settings (apply to all modes) ---
+    bool isEnabled = true;
     DisplayMode displayMode = DisplayMode::Arrows;
+    AABB bounds = { 
+        glm::vec3(-5.0f),
+        glm::vec3(5.0f) 
+    };
 
-    // --- NEW: Control the initial shape of the particle spawn ---
-    enum class FlowSpawnDistribution { RandomBox, RandomSphere };
-    FlowSpawnDistribution flowSpawnDistribution = FlowSpawnDistribution::RandomBox;
+    // --- FIX: Use nested structs for organization ---
+    struct ArrowSettings {
+        glm::ivec3 density = { 10, 10, 10 };
+        float vectorScale = 1.0f;
+        float headScale = 0.5f;
+        float intensityMultiplier = 1.0f;
+        float cullingThreshold = 0.01f;
+        bool scaleByLength = false;
+        float lengthScaleMultiplier = 1.0f;
+        bool scaleByThickness = false;
+        float thicknessScaleMultiplier = 1.0f;
+        ColoringMode coloringMode = ColoringMode::Intensity;
+        glm::vec4 xPosColor, xNegColor, yPosColor, yNegColor, zPosColor, zNegColor;
+        std::vector<ColorStop> intensityGradient;
+    } arrowSettings;
 
-    // --- Arrow Mode Settings ---
-    glm::ivec3 density = { 10, 10, 10 };
-    float vectorScale = 1.0f;
-    float arrowHeadScale = 0.50f;
-    float cullingThreshold = 0.01f;
+    struct FlowSettings {
+        int particleCount = 5000;
+        float lifetime = 7.0f;
+        float baseSpeed = 0.15f;
+        float speedIntensityMultiplier = 0.3f;
+        float baseSize = 0.1f;
+        float headScale = 0.5f;
+        float peakSizeMultiplier = 2.0f;
+        float minSize = 0.01f;
+        float growthPercentage = 0.2f;
+        float shrinkPercentage = 0.2f;
+        float randomWalkStrength = 0.1f;
+        bool scaleByLength = false;
+        float lengthScaleMultiplier = 1.0f;
+        bool scaleByThickness = false;
+        float thicknessScaleMultiplier = 1.0f;
+        ColoringMode coloringMode = ColoringMode::Intensity;
+        // TODO: Add color and gradient members
+    } flowSettings;
 
-    // --- Particle Mode Settings ---
-    int particleCount = 20000;
-    float particleSize = 1.5f;
-    glm::vec4 particleColor = { 1.0f, 0.8f, 0.4f, 0.7f };
-    float particleLifetime = 4.0f;
+    struct ParticleSettings {
+        bool isSolid = true;
+        int particleCount = 10000;
+        float lifetime = 4.0f;
+        float baseSpeed = 1.0f;
+        float speedIntensityMultiplier = 1.0f;
+        float baseSize = 0.05f;
+        float peakSizeMultiplier = 2.0f;
+        float minSize = 0.01f;
+        float baseGlowSize = 0.1f;
+        float peakGlowMultiplier = 2.0f;
+        float minGlowSize = 0.02f;
+        float randomWalkStrength = 0.1f;
+        ColoringMode coloringMode = ColoringMode::Intensity;
+        glm::vec4 xPosColor, xNegColor, yPosColor, yNegColor, zPosColor, zNegColor;
+        std::vector<ColorStop> intensityGradient;
+        std::vector<ColorStop> lifetimeGradient;
+    } particleSettings;
 
-    // --- Flow Mode Settings ---
-    float flowLifetime = 5.0f;
-    float flowBaseSpeed = 0.5f;
-    float flowVelocityMultiplier = 0.25f;
-    float flowScale = 0.15f;
-    float flowFadeInTime = 0.2f;
-    float flowFadeOutTime = 0.2f;
-    glm::vec3 flowColorStart = { 1.0f, 1.0f, 0.0f };
-    glm::vec3 flowColorMid = { 1.0f, 0.0f, 0.0f };
-    glm::vec3 flowColorEnd = { 0.5f, 0.0f, 0.5f };
-    float flowPeakScaleMultiplier = 2.0f;
-    float flowRandomWalk = 0.15f;
-
-    AABB bounds = { glm::vec3(-10.0f), glm::vec3(10.0f) };
-
-    // ... Internal State ...
+    // --- Internal GPU State ---
     bool isGpuDataDirty = true;
     FieldVisGpuData gpuData;
     GLuint particleBuffer[2] = { 0, 0 };
     GLuint particleVAO = 0;
     int currentReadBuffer = 0;
 };
+
 // --- Effector Components (Updated for GPU alignment) ---
 
 struct PointEffectorComponent {

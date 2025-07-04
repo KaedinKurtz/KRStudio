@@ -10,9 +10,10 @@
 class QWidget;
 class StaticToolbar;
 class ViewportWidget;
-class Scene; // Forward-declare Scene
+class Scene;
 class RenderingSystem;
 class QTimer;
+class FlowVisualizerMenu; // Forward-declare our new menu
 
 namespace ads {
     class CDockManager;
@@ -26,6 +27,10 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
+
+    void updateVisualizerUI();
+
+
 
 protected:
     // No changes needed here
@@ -41,9 +46,9 @@ private:
 
     std::unique_ptr<RenderingSystem> m_renderingSystem;
 
-    // We no longer need pointers to the individual viewports here,
-    // as the dock manager handles their lifecycle. We will create them
-    // as local variables in the constructor.
+    // A pointer to our menu widget
+    FlowVisualizerMenu* m_flowVisualizerMenu;
+
     std::vector<ViewportWidget*> m_viewports;
 
     QTimer* m_masterRenderTimer;
@@ -51,6 +56,6 @@ private:
 protected slots:
     void onLoadRobotClicked();
     void onMasterRender();
-
+    void onFlowVisualizerTransformChanged();
+    void onFlowVisualizerSettingsChanged();
 };
-

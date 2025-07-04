@@ -38,6 +38,7 @@ struct Particle {
 struct InstanceData {
     mat4 modelMatrix;
     vec4 color;
+    vec4 padding;
 };
 
 // --- Buffer Definitions ---

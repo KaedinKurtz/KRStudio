@@ -76,6 +76,8 @@ set(SOURCE_FILES
     src/KRobotParser.cpp
     src/SDFParser.cpp
     src/static_toolbar.ui
+    src/flowVisualizerMenu.ui
+    src/FlowVisualizerMenu.cpp
     resources.qrc
     external/pugixml/pugixml.cpp
 )
@@ -101,6 +103,7 @@ set(HEADER_FILES
     include/JointPropertiesWidget.hpp
     include/MeshUtils.hpp
     include/LedTweakDialog.hpp
+    include/FlowVisualizerMenu.hpp
 )
 
 qt_add_executable(RoboticsSoftware

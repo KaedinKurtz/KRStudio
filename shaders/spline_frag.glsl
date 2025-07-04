@@ -1,4 +1,4 @@
-#version 410 core
+#version 430 core
 out vec4 FragColor;
 uniform vec4  u_colour;
 uniform bool  u_emissive;
