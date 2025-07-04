@@ -208,6 +208,10 @@ private:
 
     GLuint m_effectorDataUBO = 0;
     GLuint m_triangleDataSSBO = 0;
+    const GLsizei stride = 96;
+    GLuint m_debugBuffer = 0;
+    GLuint m_debugAtomicCounter = 0;
+
 
     QHash<QOpenGLContext*, ContextPrimitives> m_contextPrimitives;
     void initOrResizeFBOsForTarget(TargetFBOs& target, int width, int height);

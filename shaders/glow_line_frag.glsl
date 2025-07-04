@@ -1,4 +1,4 @@
-#version 410 core
+#version 430 core
 out vec4 FragColor;
 
 in float g_fade_coord; // The -1 to 1 fade coordinate from the geometry shader

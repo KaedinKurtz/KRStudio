@@ -1,18 +1,15 @@
 #pragma once
 
-#include "RobotDescription.hpp"
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions_4_3_Core>
 #include <memory>
 #include <entt/entt.hpp>
-#include <map> // For the mesh cache
+#include "RobotDescription.hpp" // Keep for API compatibility
 
 class Scene;
-class Shader;
-class Mesh;
-class QTimer;
+class RenderingSystem;
 
-class PreviewViewport : public QOpenGLWidget, public QOpenGLFunctions_4_3_Core
+class PreviewViewport : public QOpenGLWidget, protected QOpenGLFunctions_4_3_Core
 {
     Q_OBJECT
 
@@ -20,11 +17,13 @@ public:
     explicit PreviewViewport(QWidget* parent = nullptr);
     ~PreviewViewport() override;
 
-    // --- ADD THIS SECTION ---
+    void setRenderingSystem(RenderingSystem* system, Scene* scene, entt::entity camera);
+
 public slots:
-    // A public slot to receive a new robot description and update the preview.
+    // --- ADDED BACK FOR API COMPATIBILITY ---
+    // These slots are called by your RobotEnrichmentDialog. We add them back
+    // with stub implementations to allow the project to compile.
     void updateRobot(const RobotDescription& description);
-    // A public slot to receive the new speed value from the UI slider.
     void setAnimationSpeed(int sliderValue);
     // --- END OF ADDED SECTION ---
 
@@ -33,28 +32,15 @@ protected:
     void paintGL() override;
     void resizeGL(int w, int h) override;
 
-private slots:
-    void onAnimationTick();
+    void mousePressEvent(QMouseEvent* ev) override;
+    void mouseReleaseEvent(QMouseEvent* ev) override;
+    void mouseMoveEvent(QMouseEvent* ev) override;
+    void wheelEvent(QWheelEvent* ev) override;
 
 private:
-    void applyJointAnimations();
+    RenderingSystem* m_renderingSystem = nullptr;
+    Scene* m_scene = nullptr;
+    entt::entity m_cameraEntity = entt::null;
 
-    std::unique_ptr<Scene> m_scene;
-    entt::entity m_cameraEntity;
-    std::unique_ptr<RobotDescription> m_robotDesc;
-
-    // Rendering
-    std::unique_ptr<Shader> m_phongShader;
-    struct CachedMesh {
-        std::unique_ptr<Mesh> mesh;
-        unsigned int VAO = 0;
-        unsigned int VBO = 0;
-        unsigned int EBO = 0;
-    };
-    std::map<std::string, CachedMesh> m_meshCache;
-
-    // Animation
-    QTimer* m_animationTimer;
-    float m_totalTime = 0.0f;
-    float m_animationSpeed = 1.0f;
+    QPoint m_lastMousePos;
 };

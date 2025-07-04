@@ -175,10 +175,12 @@
         <file>icons/KRLogo.PNG</file>
         <file>icons/KRLogoFilled.png</file>
         <file>icons/kRLogoSquare.png</file>
+        <file>icons/icons8-check-mark-48.png</file>
     </qresource>
     <qresource prefix="/styles">
         <file>dark_style.qss</file>
         <file>icons/Point Cloud Insert.png</file>
         <file>icons/Point Cloud.png</file>
     </qresource>
+    <qresource prefix="/new/prefix1"/>
 </RCC>

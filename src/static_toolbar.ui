@@ -206,7 +206,7 @@ QFrame[frameShape=&quot;VLine&quot;] {
          <enum>QTabWidget::TabShape::Rounded</enum>
         </property>
         <property name="currentIndex">
-         <number>0</number>
+         <number>5</number>
         </property>
         <property name="elideMode">
          <enum>Qt::TextElideMode::ElideNone</enum>
@@ -10630,8 +10630,8 @@ Inspector</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="view_button_group"/>
   <buttongroup name="viewport_shading_button_group"/>
   <buttongroup name="control_button_group"/>
+  <buttongroup name="view_button_group"/>
  </buttongroups>
 </ui>

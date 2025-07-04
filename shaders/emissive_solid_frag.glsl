@@ -1,4 +1,4 @@
-#version 410 core
+#version 430 core
 
 // This shader's only job is to output a single, solid color.
 // We use this to draw the shape of the selected object to our glow buffer.

@@ -29,6 +29,7 @@ struct TriangleGpu {
 struct InstanceData {
     mat4 modelMatrix;
     vec4 color;
+    vec4 padding;
 };
 
 layout(std430, binding = 0) readonly buffer SamplePointsBuffer { vec4 samplePoints[]; };
@@ -65,19 +66,21 @@ mat4 rotationBetweenVectors(vec3 start, vec3 dest) {
     dest = normalize(dest);
     vec3 v = cross(start, dest);
     float c = dot(start, dest);
-    if (c > 0.99999) {
+
+    if (c > 0.99999) { // Vectors are parallel
         return mat4(1.0);
     }
-    if (c < -0.99999) {
-        // Handle 180 degree rotation by creating a rotation matrix around an arbitrary axis (e.g., Y-axis)
-        // This is more robust than returning mat4(-1.0) which is not a valid rotation matrix.
-        mat4 rotation;
-        rotation[0] = vec4(-1, 0, 0, 0);
-        rotation[1] = vec4(0, -1, 0, 0);
-        rotation[2] = vec4(0, 0, -1, 0);
-        rotation[3] = vec4(0, 0, 0, 1);
-        return rotation;
+    
+    if (c < -0.99999) { // Vectors are opposite (180 degrees)
+        vec3 axis = abs(start.x) > abs(start.z) ? vec3(-start.y, start.x, 0.0) : vec3(0.0, -start.z, start.y);
+        axis = normalize(axis);
+        mat3 R;
+        R[0] = vec3(2*axis.x*axis.x - 1, 2*axis.y*axis.x,     2*axis.z*axis.x);
+        R[1] = vec3(2*axis.x*axis.y,     2*axis.y*axis.y - 1, 2*axis.z*axis.y);
+        R[2] = vec3(2*axis.x*axis.z,     2*axis.y*axis.z,     2*axis.z*axis.z - 1);
+        return mat4(R);
     }
+
     mat3 vx = mat3(0, v.z, -v.y, -v.z, 0, v.x, v.y, -v.x, 0);
     mat3 R = mat3(1.0) + vx + vx * vx * (1.0 / (1.0 + c));
     return mat4(R);
@@ -131,26 +134,22 @@ void main()
     uint gid = gl_GlobalInvocationID.x;
     if (gid >= samplePoints.length()) return;
 
-    if (gid == 0) drawCommand.instanceCount = 0;
-
     vec3 worldPos = (u_visualizerModelMatrix * samplePoints[gid]).xyz;
     vec3 totalField = vec3(0.0);
 
     // Point and Spline Proxy Effectors
     for (int i = 0; i < u_pointEffectorCount; ++i) {
-        // CORRECTED: Vector points from effector to sample point (worldPos - position).
-        // A positive strength (emitter) pushes away. A negative strength (attractor) pulls inward.
         vec3 diff = worldPos - pointEffectors[i].position.xyz;
         float dist = length(diff);
         if (dist < pointEffectors[i].radius && dist > 0.001) {
             float strength = pointEffectors[i].strength;
             vec3 forceDir;
-            if (pointEffectors[i].falloffType == 1) { // Linear Falloff
+            if (pointEffectors[i].falloffType == 1) {
                 strength *= (1.0 - dist / pointEffectors[i].radius);
             }
-            if (length(pointEffectors[i].normal.xyz) > 0.1) { // If a specific direction is provided
+            if (length(pointEffectors[i].normal.xyz) > 0.1) {
                 forceDir = normalize(pointEffectors[i].normal.xyz);
-            } else { // Otherwise, use the direction to/from the point
+            } else {
                 forceDir = normalize(diff);
             }
             totalField += forceDir * strength;
@@ -161,16 +160,12 @@ void main()
     for (int i = 0; i < u_triangleEffectorCount; ++i) {
         TriangleGpu tri = triangleEffectors[i];
         vec3 closestPoint = closestPointOnTriangle(worldPos, tri.v0.xyz, tri.v1.xyz, tri.v2.xyz);
-        
-        // CORRECTED: Vector points from mesh surface to sample point (worldPos - closestPoint).
         vec3 diff = worldPos - closestPoint;
         float dist = length(diff);
-        
-        float radius = tri.normal.w; // Radius is packed in the normal's w component.
+        float radius = tri.normal.w;
         if (dist > 0.001 && dist < radius) {
-            float strength = tri.v0.w; // Strength is packed in v0.w
-            strength *= (1.0 - dist / radius); // Linear falloff
-            
+            float strength = tri.v0.w;
+            strength *= (1.0 - dist / radius);
             totalField += normalize(diff) * strength;
         }
     }
@@ -187,24 +182,15 @@ void main()
         
         mat4 trans = mat4(1.0);
         trans[3] = vec4(worldPos, 1.0);
-
-        // CORRECTED: The final field vector is negated to flip all arrow directions.
         mat4 rot = rotationBetweenVectors(vec3(0.0, 0.0, -1.0), normalize(-totalField));
-
-        // MODIFIED: Scale the arrow's width (X and Y axes) by the field magnitude,
-        // while keeping its length (Z axis) constant.
         mat4 scale = mat4(1.0);
-        float dynamicWidth = u_arrowHeadScale * abs(magnitude); // Use abs() for width scaling
-   
-        scale[0][0] = u_arrowHeadScale;              // Constant width
-        scale[1][1] = u_arrowHeadScale;              // Constant width
-        scale[2][2] = magnitude * u_vectorScale;     // Dynamic length based on field magnitude
-        
-        // Color interpolation based on field magnitude
-        float normMag = clamp(abs(magnitude) / 5.0, 0.0, 1.0);
-        vec4 color = vec4(mix(vec3(0.2, 0.5, 1.0), vec3(1.0, 0.3, 0.3), normMag), 1.0);
+        scale[0][0] = u_arrowHeadScale;
+        scale[1][1] = u_arrowHeadScale;
+        scale[2][2] = magnitude * u_vectorScale;
         
         instanceData[instanceIndex].modelMatrix = trans * rot * scale;
-        instanceData[instanceIndex].color = color;
+
+        float normMag = clamp(abs(magnitude) / 5.0, 0.0, 1.0);
+        instanceData[instanceIndex].color = vec4(mix(vec3(0.2, 0.5, 1.0), vec3(1.0, 0.3, 0.3), normMag), 1.0);
     }
 }

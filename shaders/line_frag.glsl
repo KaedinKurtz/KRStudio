@@ -2,7 +2,7 @@
  * @file line_frag.glsl
  * @brief Fragment shader for drawing simple colored lines.
  */
-#version 410 core
+#version 430 core
 
 out vec4 FragColor;
 

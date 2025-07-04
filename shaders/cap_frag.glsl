@@ -1,4 +1,4 @@
-#version 410 core
+#version 430 core
 out vec4 FragColor;
 
 in vec2 g_uv; // Interpolated UVs from the geometry shader (-1 to 1)
