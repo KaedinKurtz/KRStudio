@@ -1,7 +1,7 @@
 ﻿{
   "name": "krstudio",
   "version-string": "0.1.0",
-  "builtin-baseline": "a9eee3b18df395dbb8be71a31bd78ea441056e42",
+  "builtin-baseline": "c6f09fc73ebfbfddd769f8fac9f33f95304c77e5",
 
   "dependencies": [
     {
@@ -12,4 +12,5 @@
     "glm",
     "urdfdom"
   ]
+
 }
