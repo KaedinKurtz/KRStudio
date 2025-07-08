@@ -4,6 +4,8 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <glm/vec3.hpp>  
+#include <QCoreApplication>
+#include <QDir>
 
 inline void loadStlIntoRenderable(const std::string& path,
     RenderableMeshComponent& meshOut,
@@ -38,4 +40,19 @@ inline void loadStlIntoRenderable(const std::string& path,
     for (unsigned f = 0; f < m->mNumFaces; ++f)
         for (unsigned k = 0; k < 3; ++k)
             meshOut.indices.push_back(m->mFaces[f].mIndices[k]);
+}
+
+inline void loadStlIntoRenderable(const QString& qPath,
+    RenderableMeshComponent& meshOut,
+    bool recalcNormals = true)
+{
+    loadStlIntoRenderable(qPath.toStdString(), meshOut, recalcNormals);
+}
+
+
+inline QString dataDir()
+{
+    // Path that holds shaders, meshes, icons … next to the executable
+    return QDir(QCoreApplication::applicationDirPath())
+        .absoluteFilePath("data");        // …/RoboticsSoftware.exe + /data
 }

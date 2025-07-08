@@ -18,13 +18,19 @@ find_package(glm REQUIRED)
 find_package(urdfdom CONFIG REQUIRED)
 
 # --- Define Paths to ADS Library ---
-set(ADS_ROOT "D:/RoboticsSoftware/ads")
-set(ADS_INCLUDE_DIR "${ADS_ROOT}/src")
-# --- CORRECTED PATH to Qt 6.9.0 build ---
-set(ADS_BUILD_DIR "${ADS_ROOT}/build/Desktop_Qt_6_9_0_MSVC2022_64bit-Debug") 
-set(ADS_LIB_DIR "${ADS_BUILD_DIR}/x64/lib")
-set(ADS_BIN_DIR "${ADS_BUILD_DIR}/x64/bin")
+set(ADS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/ads")
+if(NOT EXISTS "${ADS_ROOT}/src")
+    message(FATAL_ERROR "ADS_ROOT ('${ADS_ROOT}') does not look like an ADS checkout")
+endif()
 
+set(ADS_INCLUDE_DIR  "${ADS_ROOT}/src")
+# build output is typically ADS_ROOT/build/<preset>
+file(GLOB _ads_libs RELATIVE "${ADS_ROOT}" "${ADS_ROOT}/build/*/x64/lib")
+file(GLOB _ads_bins RELATIVE "${ADS_ROOT}" "${ADS_ROOT}/build/*/x64/bin")
+list(GET _ads_libs 0 ADS_LIB_DIR)
+list(GET _ads_bins 0 ADS_BIN_DIR)
+set(ADS_LIB_DIR "${ADS_ROOT}/${ADS_LIB_DIR}")
+set(ADS_BIN_DIR "${ADS_ROOT}/${ADS_BIN_DIR}")
 
 # --- Find ADS Library using find_library() ---
 # This is a more robust way to find the library. It will fail during configuration if not found.
@@ -41,8 +47,7 @@ find_library(
 find_library(
     ADS_LIBRARY_RELEASE
     NAMES qtadvanceddocking-qt6 qtadvanceddocking
-    # You will likely need to point this to a Release build directory for ADS
-    HINTS "D:/RoboticsSoftware/ads/build/Your-Release-Build-Folder/x64/lib"
+    HINTS "${ADS_LIB_DIR}"
 )
 
 find_package(assimp CONFIG REQUIRED)
