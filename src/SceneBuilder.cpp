@@ -30,8 +30,7 @@ entt::entity SceneBuilder::createCamera(entt::registry& registry,
         glm::angleAxis(glm::radians(-90.0f), glm::vec3(1, 0, 0));
 
     auto& gmesh = registry.emplace<RenderableMeshComponent>(gizE);
-    loadStlIntoRenderable(
-        "D:/RoboticsSoftware/external/miniViewportCamera.stl", gmesh);
+    loadStlIntoRenderable(dataDir() + "/external/miniViewportCamera.stl", gmesh);
 
     // FIX: Replaced C++20 designated initializer with C++17-compatible code.
 // First, emplace the component with its default values.

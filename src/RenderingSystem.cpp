@@ -7,6 +7,7 @@
 #include "Scene.hpp"
 #include "SplineUtils.hpp"
 #include "PreviewViewport.hpp"
+#include "MeshUtils.hpp"
 
 #include "OpaquePass.hpp"
 #include "GridPass.hpp"
@@ -73,7 +74,7 @@ void RenderingSystem::initializeResourcesForContext(QOpenGLFunctions_4_3_Core* g
     // --- Load All Shaders into the PER-CONTEXT Shader Map ---
     qDebug() << "[INIT] Loading all shaders for context" << ctx;
     try {
-        const QString shaderDir = "D:/RoboticsSoftware/shaders/";
+        const QString shaderDir = dataDir() + "/shaders/";
 
         // 4. ADD a line to get the specific shader map for this context
         auto& contextShaders = m_perContextShaders[ctx];
