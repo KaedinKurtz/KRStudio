@@ -1,0 +1,14 @@
+﻿{
+  "name": "krstudio",
+  "version-string": "0.1.0",
+  // 👇  **THIS LINE is mandatory**
+  "builtin-baseline": "a9eee3b18df395dbb8be71a31bd78ea441056e42",
+
+  "dependencies": [
+    "qt6-base",
+    "qt6-opengl",
+    "assimp",
+    "glm",
+    "urdfdom"
+  ]
+}
