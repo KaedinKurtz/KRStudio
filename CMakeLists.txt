@@ -49,61 +49,25 @@ find_package(assimp CONFIG REQUIRED)
 
 
 # --- Define the Executable Target ---
-set(SOURCE_FILES
-    src/main.cpp
-    src/Camera.cpp
-    src/Shader.cpp
-    src/Mesh.cpp
-    src/Robot.cpp
-    src/MainWindow.cpp
-    src/ViewportWidget.cpp
-    src/DiagnosticsPanel.cpp
-    src/StaticToolbar.cpp
-    src/Grid.cpp
-    src/RenderingSystem.cpp
-    src/Scene.cpp
-    src/PropertiesPanel.cpp
-    src/gridPropertiesWidget.cpp
-    src/LinkPropertiesWidget.cpp
-    src/SceneBuilder.cpp
-    src/JointPropertiesWidget.cpp
-    src/PreviewViewport.cpp
-    src/RobotEnrichmentDialog.cpp
-    src/IntersectionSystem.cpp
-    src/URDFParser.cpp
-    src/URDFImporterDialog.cpp
-    src/KRobotWriter.cpp
-    src/KRobotParser.cpp
-    src/SDFParser.cpp
-    src/static_toolbar.ui
-    src/flowVisualizerMenu.ui
-    src/FlowVisualizerMenu.cpp
-    resources.qrc
-    external/pugixml/pugixml.cpp
+
+file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/*Headers/*.hpp"
 )
 
-set(HEADER_FILES
-    include/MainWindow.hpp
-    include/ViewportWidget.hpp
-    include/DiagnosticsPanel.hpp
-    include/StaticToolbar.hpp
-    include/PropertiesPanel.hpp
-    include/gridPropertiesWidget.hpp
-    include/IntersectionSystem.hpp
-    include/RenderingSystem.hpp
-    include/URDFParser.hpp
-    include/URDFImporterDialog.hpp
-    include/KRobotParser.hpp
-    include/KRobotWriter.hpp
-    include/SDFParser.hpp
-    include/SceneBuilder.hpp
-    include/PreviewViewport.hpp
-    include/RobotEnrichmentDialog.hpp
-    include/LinkPropertiesWidget.hpp
-    include/JointPropertiesWidget.hpp
-    include/MeshUtils.hpp
-    include/LedTweakDialog.hpp
-    include/FlowVisualizerMenu.hpp
+file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cxx"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.qrc"
+)
+
+set(PROJECT_INCLUDE_DIRS
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/ObjectHeaders"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/RenderingHeaders"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/UIHeaders"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/UtilityHeaders"
 )
 
 qt_add_executable(RoboticsSoftware
@@ -112,15 +76,17 @@ qt_add_executable(RoboticsSoftware
     ${HEADER_FILES}
 )
 
+add_compile_definitions(RS_DEBUG_DUMP)
+
 # --- Target-Specific Properties ---
 target_compile_definitions(RoboticsSoftware PRIVATE GLM_ENABLE_EXPERIMENTAL)
 
 target_include_directories(RoboticsSoftware PRIVATE
-    "include"
-    "external"
+    ${PROJECT_INCLUDE_DIRS}                 # new header structure
+    "${CMAKE_CURRENT_SOURCE_DIR}/external"  # existing external dir
     "${ADS_INCLUDE_DIR}"
     ${urdfdom_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml 
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml"
 )
 
 # Note: We are not using target_link_directories() for ADS anymore.

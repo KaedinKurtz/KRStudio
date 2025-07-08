@@ -152,6 +152,14 @@ struct FieldVisualizerComponent {
     int currentReadBuffer = 0;
 };
 
+struct DrawElementsIndirectCommand {
+    GLuint count;          // The number of indices in the mesh to draw.
+    GLuint instanceCount;  // The number of instances to draw. THIS is what the compute shader will set.
+    GLuint firstIndex;     // The starting offset in the index buffer. Usually 0.
+    GLuint baseVertex;     // A constant added to each index. Usually 0.
+    GLuint baseInstance;   // The starting instance for instanced drawing. Usually 0.
+};
+
 // --- Effector Components (Updated for GPU alignment) ---
 
 struct PointEffectorComponent {

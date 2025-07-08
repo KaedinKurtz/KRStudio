@@ -27,11 +27,13 @@ public:
     ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, entt::entity cameraEntity, QWidget* parent = nullptr);
     ~ViewportWidget() override;
     Camera& getCamera();
-
+    entt::entity getCameraEntity() const { return m_cameraEntity; }
     void shutdown();
 
     void setRenderingSystem(RenderingSystem* system);
     static void propagateTransforms(entt::registry& r);
+
+    void resizeTargetFbos(QOpenGLWidget* vp, int fbW, int fbH);
 
 protected:
     void initializeGL() override;
@@ -47,25 +49,31 @@ protected:
 
 	const float frameDt = 1.0f / 60.0f; // Fixed frame rate for simplicity
 
+
+
 public slots:
     // Add this slot
     void handleLoggedMessage(const QOpenGLDebugMessage& debugMessage);
     void renderNow();
-private:
 
+protected: // Change 'private' to 'protected' for these members
     Scene* m_scene;
     entt::entity m_cameraEntity;
     RenderingSystem* m_renderingSystem;
+    QPoint m_lastMousePos;
+
+
+private:
+
     std::unique_ptr<QOpenGLDebugLogger> m_debugLogger;
     std::unique_ptr<Shader> m_outlineShader;
     unsigned int m_outlineVAO = 0;
     unsigned int m_outlineVBO = 0;
-    QPoint m_lastMousePos;
 
     int m_instanceId; // Add this
     static int s_instanceCounter; // Add this
 
-    static void updateAnimations(entt::registry& registry, float frameDt);
+    //static void updateAnimations(entt::registry& registry, float frameDt);
 
     bool m_hasSignaledReady = false;
 

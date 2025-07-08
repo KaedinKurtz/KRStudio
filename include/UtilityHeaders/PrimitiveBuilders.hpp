@@ -4,6 +4,8 @@
 #include <map>
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
+#include <QtGui/qopengl.h>                // GLuint / GLenum / …
+#include <QOpenGLFunctions_4_3_Core>
 #include "components.hpp"
 
 /* ------------------------------------------------------------------------- */
@@ -102,7 +104,7 @@ inline void buildIcoSphere(std::vector<Vertex>& verts,
 /* ------------------------------------------------------------------------- */
 /* createArrowPrimitive - simple 3D arrow along +Z for instancing           */
 /* ------------------------------------------------------------------------- */
-inline void createArrowPrimitive(std::vector<Vertex>& vertices, std::vector<unsigned int>& indices)
+inline std::size_t createArrowPrimitive(std::vector<Vertex>& vertices, std::vector<unsigned int>& indices)
 {
     vertices.clear();
     indices.clear();
@@ -145,4 +147,105 @@ inline void createArrowPrimitive(std::vector<Vertex>& vertices, std::vector<unsi
     indices.insert(indices.end(), { 6, 10, 11, 6, 11, 7 });
     indices.insert(indices.end(), { 7, 11, 12, 7, 12, 8 });
     indices.insert(indices.end(), { 8, 12, 9, 8, 9, 5 });
+
+    return indices.size();
+}
+
+/* ------------------------------------------------------------------------- *
+ *  VERY-SMALL helpers – they only create valid VAO / VBO data so that the
+ *  renderer has something to bind.  Feel free to replace them with higher
+ *  quality meshes later.                                                    *
+ * ------------------------------------------------------------------------- */
+inline void buildGrid(QOpenGLFunctions_4_3_Core* gl,
+    GLuint vao, GLuint vbo)
+{
+    struct P { glm::vec3 pos; };
+    const P verts[] = {
+        {{-1,0,0}}, {{+1,0,0}},      // simple X line
+        {{0,-1,0}}, {{0,+1,0}}       // simple Y line
+    };
+
+    gl->glBindVertexArray(vao);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    gl->glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+
+    gl->glEnableVertexAttribArray(0);
+    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        sizeof(P), (void*)0);
+    gl->glBindVertexArray(0);
+}
+
+inline void buildUnitLine(QOpenGLFunctions_4_3_Core* gl,
+    GLuint vao, GLuint vbo)
+{
+    struct P { glm::vec3 pos; };
+    const P verts[] = { {{0,0,0}}, {{0,0,1}} };      // +Z unit line
+
+    gl->glBindVertexArray(vao);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    gl->glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+
+    gl->glEnableVertexAttribArray(0);
+    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        sizeof(P), (void*)0);
+    gl->glBindVertexArray(0);
+}
+
+inline void buildCap(QOpenGLFunctions_4_3_Core* gl,
+    GLuint vao, GLuint vbo)
+{
+    // one-triangle disc (cheap placeholder)
+    struct P { glm::vec3 pos; };
+    const P verts[] = { {{0,0,0}}, {{1,0,0}}, {{0,1,0}} };
+
+    gl->glBindVertexArray(vao);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    gl->glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+
+    gl->glEnableVertexAttribArray(0);
+    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        sizeof(P), (void*)0);
+    gl->glBindVertexArray(0);
+}
+
+inline void setupFullscreenQuadAttribs(QOpenGLFunctions_4_3_Core* gl,
+    GLuint vao)
+{
+    // Attribute-less draw: VAO with no buffers bound; we’ll call glDrawArrays
+    gl->glBindVertexArray(vao);
+    gl->glBindVertexArray(0);
+}
+
+/* ------------------------------------------------------------------------- *
+ * buildArrowMesh  – uses createArrowPrimitive() you already have            *
+ * ------------------------------------------------------------------------- */
+inline std::size_t buildArrowMesh(QOpenGLFunctions_4_3_Core* gl,
+    GLuint vao, GLuint vbo, GLuint ebo)
+{
+    std::vector<Vertex>        verts;
+    std::vector<unsigned int>  idx;
+    std::size_t indexCount = createArrowPrimitive(verts, idx);
+
+    gl->glBindVertexArray(vao);
+
+    gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    gl->glBufferData(GL_ARRAY_BUFFER,
+        verts.size() * sizeof(Vertex),
+        verts.data(), GL_STATIC_DRAW);
+
+    gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+        idx.size() * sizeof(unsigned int),
+        idx.data(), GL_STATIC_DRAW);
+
+    // layout : location 0 = position,  location 1 = normal
+    gl->glEnableVertexAttribArray(0);
+    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        sizeof(Vertex), (void*)offsetof(Vertex, position));
+    gl->glEnableVertexAttribArray(1);
+    gl->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+        sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+    gl->glBindVertexArray(0);
+    return indexCount;
 }

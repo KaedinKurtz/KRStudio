@@ -3,106 +3,73 @@
 #include "Scene.hpp"
 #include "Camera.hpp"
 #include "components.hpp"
+#include "SceneBuilder.hpp"
 
-#include <QMouseEvent>
-#include <QWheelEvent>
+#include <QOpenGLVersionFunctionsFactory>
+#include <QOpenGLFunctions_4_3_Core>
 #include <QDebug>
+#include <vector> // Required for the clearPreview temporary vector
 
+// The constructor now creates its own world.
 PreviewViewport::PreviewViewport(QWidget* parent)
-    : QOpenGLWidget(parent)
+    : ViewportWidget(nullptr, nullptr, entt::null, parent)
 {
-    QSurfaceFormat format;
-    format.setDepthBufferSize(24);
-    format.setStencilBufferSize(8);
-    format.setVersion(4, 3);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setOption(QSurfaceFormat::DebugContext);
-    setFormat(format);
-    setFocusPolicy(Qt::StrongFocus);
+    // 1. Create the self-contained resources
+    m_previewScene = std::make_unique<Scene>();
+    m_previewRenderSystem = std::make_unique<RenderingSystem>(this);
+
+    // 2. GET THE REGISTRY AND ADD THIS LINE
+    auto& registry = m_previewScene->getRegistry();
+    registry.ctx().emplace<SceneProperties>(); // <-- This is the fix
+
+    // 3. Continue with existing setup...
+    m_cameraEntity = SceneBuilder::createCamera(registry, { 0, 1, 3 });
+    m_scene = m_previewScene.get();
+    m_renderingSystem = m_previewRenderSystem.get();
 }
 
-// --- FIX: Destructor is now empty ---
-// All GPU resource cleanup is handled by RenderingSystem::shutdown(),
-// so this destructor should do nothing. This prevents the crash on exit.
+// The destructor ensures a clean shutdown of its own RenderingSystem.
 PreviewViewport::~PreviewViewport()
 {
+    if (m_previewRenderSystem && m_previewRenderSystem->isInitialized()) {
+        makeCurrent();
+        auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(context());
+        if (gl) {
+            m_previewRenderSystem->shutdown(gl);
+        }
+        doneCurrent();
+    }
 }
 
-void PreviewViewport::setRenderingSystem(RenderingSystem* system, Scene* scene, entt::entity camera)
-{
-    m_renderingSystem = system;
-    m_scene = scene;
-    m_cameraEntity = camera;
-}
-
-void PreviewViewport::updateRobot(const RobotDescription& description)
-{
-    qWarning() << "PreviewViewport::updateRobot is deprecated and has no effect.";
-}
-
-void PreviewViewport::setAnimationSpeed(int sliderValue)
-{
-    qWarning() << "PreviewViewport::setAnimationSpeed is deprecated and has no effect.";
-}
-
+// We override initializeGL to set up our OWN rendering system.
 void PreviewViewport::initializeGL()
 {
-    initializeOpenGLFunctions();
+    ViewportWidget::initializeGL();
 }
 
-void PreviewViewport::paintGL()
+// Public API to load a robot into the private scene.
+void PreviewViewport::loadRobotForPreview(const RobotDescription& description)
 {
-    if (!m_renderingSystem || !m_scene || !m_renderingSystem->isInitialized() || !m_scene->getRegistry().valid(m_cameraEntity)) {
-        glClearColor(0.15f, 0.16f, 0.18f, 1.0f); // A slightly different color to confirm it's this path
-        glClear(GL_COLOR_BUFFER_BIT);
-        return;
-    }
-
-    const int fbW = static_cast<int>(width() * devicePixelRatioF());
-    const int fbH = static_cast<int>(height() * devicePixelRatioF());
-
-    m_renderingSystem->renderView(this, m_scene->getRegistry(), m_cameraEntity, fbW, fbH);
-}
-
-void PreviewViewport::resizeGL(int w, int h)
-{
-}
-
-void PreviewViewport::mousePressEvent(QMouseEvent* ev)
-{
-    m_lastMousePos = ev->pos();
-    setFocus();
-}
-
-void PreviewViewport::mouseReleaseEvent(QMouseEvent* ev)
-{
-}
-
-void PreviewViewport::mouseMoveEvent(QMouseEvent* ev)
-{
-    if (!m_scene || !m_scene->getRegistry().valid(m_cameraEntity)) return;
-
-    int dx = ev->pos().x() - m_lastMousePos.x();
-    int dy = ev->pos().y() - m_lastMousePos.y();
-
-    auto& camera = m_scene->getRegistry().get<CameraComponent>(m_cameraEntity).camera;
-
-    if (ev->buttons() & Qt::LeftButton) {
-        camera.orbit(dx, dy);
-    }
-    else if (ev->buttons() & Qt::MiddleButton) {
-        camera.pan(dx, dy, width(), height());
-    }
-
-    m_lastMousePos = ev->pos();
+    if (!m_previewScene) return;
+    clearPreview();
+    SceneBuilder::spawnRobot(*m_previewScene, description);
     update();
 }
 
-void PreviewViewport::wheelEvent(QWheelEvent* ev)
+// Helper to clear the scene.
+void PreviewViewport::clearPreview()
 {
-    if (!m_scene || !m_scene->getRegistry().valid(m_cameraEntity)) return;
+    if (!m_previewScene) return;
+    auto& registry = m_previewScene->getRegistry();
 
-    auto& camera = m_scene->getRegistry().get<CameraComponent>(m_cameraEntity).camera;
-    camera.dolly(ev->angleDelta().y());
-    update();
+    // This is the robust way to destroy entities while iterating.
+    // We collect them into a vector first to avoid invalidating the view's iterator.
+    auto view = registry.view<entt::entity>();
+    std::vector<entt::entity> to_destroy;
+    for (auto entity : view) {
+        if (entity != m_cameraEntity) {
+            to_destroy.push_back(entity);
+        }
+    }
+    registry.destroy(to_destroy.begin(), to_destroy.end());
 }

@@ -49,7 +49,6 @@ private:
     // A pointer to our menu widget
     FlowVisualizerMenu* m_flowVisualizerMenu;
 
-    std::vector<ViewportWidget*> m_viewports;
 
     QTimer* m_masterRenderTimer;
 

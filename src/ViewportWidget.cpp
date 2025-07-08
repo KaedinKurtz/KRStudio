@@ -23,6 +23,7 @@
 #include "DebugHelpers.hpp"
 #include "LedTweakDialog.hpp"
 #include "FieldSolver.hpp"
+#include "BlackBox.hpp"
 
 int ViewportWidget::s_instanceCounter = 0;
 
@@ -76,16 +77,40 @@ void ViewportWidget::setRenderingSystem(RenderingSystem* system)
 
 ViewportWidget::~ViewportWidget() {}
 
-void ViewportWidget::initializeGL()
-{
-    // This function is called by Qt when the widget's context is made current.
-    // It initializes the QOpenGLFunctions for THIS specific widget instance.
-    initializeOpenGLFunctions();
+void ViewportWidget::initializeGL() {
+    initializeOpenGLFunctions(); // New Qt-6 context
 
-    // Now, signal to the MainWindow that this viewport's context is ready.
-    // The MainWindow will use this signal from the *primary* viewport to
-    // trigger the one-time initialization of the RenderingSystem.
-    emit glContextReady(); // We renamed the signal to this in ViewportWidget.hpp
+    // 1. Make the renderer remember this context/widget.
+    m_renderingSystem->ensureContextIsTracked(this);
+
+    // 2. If this is the very first context, bootstrap the shared GPU resources.
+    if (!m_renderingSystem->isInitialized()) {
+        auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(context());
+        if (!gl) {
+            qFatal("Could not obtain 4.3 core functions for this context");
+        }
+        // Pass the scene pointer, which is now required.
+        m_renderingSystem->initializeSharedResources(gl, m_scene);
+    }
+#ifdef RS_DEBUG_DUMP
+    dbg::BlackBox::instance().dumpState("Initialize", *m_renderingSystem,
+        this, this);
+#endif
+}
+
+void ViewportWidget::resizeGL(int w, int h) {
+    if (!m_renderingSystem) return;
+
+    const int fbW = int(w * devicePixelRatioF());
+    const int fbH = int(h * devicePixelRatioF());
+
+    // Call the new, correctly named function, passing 'this' which is a ViewportWidget*.
+    m_renderingSystem->onViewportResized(this, this, fbW, fbH);
+
+#ifdef RS_DEBUG_DUMP
+    dbg::BlackBox::instance().dumpState("Resize", *m_renderingSystem,
+        this, this);
+#endif
 }
 
 void ViewportWidget::shutdown()
@@ -99,11 +124,9 @@ void ViewportWidget::shutdown()
 
 void ViewportWidget::paintGL()
 {
-    //! DEBUG: Announce which viewport is starting its paint event.
-    qDebug().nospace() << "========================================";
-    qDebug() << "[PAINT EVENT] Starting for ViewportWidget instance:" << this;
-
+    // The paint event is now very clean.
     if (!m_renderingSystem || !m_renderingSystem->isInitialized()) {
+        // If the renderer isn't ready yet, just clear to black.
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         return;
@@ -113,9 +136,9 @@ void ViewportWidget::paintGL()
     const int fbW = static_cast<int>(width() * devicePixelRatioF());
     const int fbH = static_cast<int>(height() * devicePixelRatioF());
 
-    // Tell the rendering system to render a complete frame for this view.
-    // We pass our specific camera and dimensions.
-    m_renderingSystem->renderView(this, m_scene->getRegistry(), m_cameraEntity, fbW, fbH);
+    // Tell the rendering system to render a complete frame FOR US,
+    // passing ourself as the target.
+    m_renderingSystem->renderView(this, this, fbW, fbH);
 }
 
 void ViewportWidget::renderNow()
@@ -132,6 +155,7 @@ void ViewportWidget::renderNow()
         doneCurrent();
     }
 }
+/*
 
 void ViewportWidget::updateAnimations(entt::registry& registry, float frameDt)
 {
@@ -162,6 +186,7 @@ void ViewportWidget::updateAnimations(entt::registry& registry, float frameDt)
         spline.glowColour.a = 1.0f * finalBrightness;
     }
 }
+*/
 
 void ViewportWidget::handleLoggedMessage(const QOpenGLDebugMessage& debugMessage)
 {
@@ -185,13 +210,6 @@ Camera& ViewportWidget::getCamera()
     return cameraComp->camera;
 }
 
-void ViewportWidget::resizeGL(int w, int h)
-{
-    if (!m_renderingSystem) return;
-    const int ww = std::lround(w * devicePixelRatioF());
-    const int hh = std::lround(h * devicePixelRatioF());
-    m_renderingSystem->resize(ww, hh);                // single shared FBO
-}
 
 void ViewportWidget::mousePressEvent(QMouseEvent* ev)
 {
@@ -280,7 +298,6 @@ void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* ev)
         update();
     }
 }
-
 
 
 
