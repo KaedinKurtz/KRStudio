@@ -26,9 +26,6 @@ private:
     // A helper function to create the VAO/VBO for a specific context.
     void createGridForContext(QOpenGLContext* ctx, QOpenGLFunctions_4_3_Core* gl);
 
-    // --- Member Variables ---
-    Shader* m_gridShader = nullptr; // A non-owning pointer to the shared shader.
-
     // Each OpenGL context gets its own VAO and VBO for the grid plane.
     QHash<QOpenGLContext*, GLuint> m_gridVAOs;
     QHash<QOpenGLContext*, GLuint> m_gridVBOs;

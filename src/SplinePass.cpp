@@ -35,14 +35,14 @@ SplinePass::~SplinePass() {
 }
 
 void SplinePass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl) {
-    m_glowShader = renderer.getShader("glow");
-    m_capShader = renderer.getShader("cap");
-    if (!m_glowShader || !m_capShader) {
-        qFatal("SplinePass failed to initialize: Could not find 'glow' or 'cap' shader.");
-    }
+
 }
 
 void SplinePass::execute(const RenderFrameContext& context) {
+    Shader* glowShader = context.renderer.getShader("glow");
+    Shader* capShader = context.renderer.getShader("cap");
+    if (!glowShader || !capShader) return;
+    
     auto* gl = context.gl;
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
@@ -66,13 +66,13 @@ void SplinePass::execute(const RenderFrameContext& context) {
         if (sp.cachedVertices.size() < 2) continue;
 
         // --- Draw Glow Lines ---
-        m_glowShader->use(gl);
-        m_glowShader->setMat4(gl, "u_view", context.view);
-        m_glowShader->setMat4(gl, "u_proj", context.projection);
-        m_glowShader->setFloat(gl, "u_thickness", sp.thickness);
-        m_glowShader->setVec2(gl, "u_viewport_size", glm::vec2(context.viewportWidth, context.viewportHeight));
-        m_glowShader->setVec4(gl, "u_glowColour", sp.glowColour);
-        m_glowShader->setVec4(gl, "u_coreColour", sp.coreColour);
+        glowShader->use(gl);
+        glowShader->setMat4(gl, "u_view", context.view);
+        glowShader->setMat4(gl, "u_proj", context.projection);
+        glowShader->setFloat(gl, "u_thickness", sp.thickness);
+        glowShader->setVec2(gl, "u_viewport_size", glm::vec2(context.viewportWidth, context.viewportHeight));
+        glowShader->setVec4(gl, "u_glowColour", sp.glowColour);
+        glowShader->setVec4(gl, "u_coreColour", sp.coreColour);
 
         std::vector<glm::vec3> lineSegments;
         lineSegments.reserve((sp.cachedVertices.size() - 1) * 2);
@@ -87,13 +87,13 @@ void SplinePass::execute(const RenderFrameContext& context) {
         gl->glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lineSegments.size()));
 
         // --- Draw End Caps ---
-        m_capShader->use(gl);
-        m_capShader->setMat4(gl, "u_view", context.view);
-        m_capShader->setMat4(gl, "u_proj", context.projection);
-        m_capShader->setVec2(gl, "u_viewport_size", glm::vec2(context.viewportWidth, context.viewportHeight));
-        m_capShader->setFloat(gl, "u_thickness", sp.thickness);
-        m_capShader->setVec4(gl, "u_glowColour", sp.glowColour);
-        m_capShader->setVec4(gl, "u_coreColour", sp.coreColour);
+        capShader->use(gl);
+        capShader->setMat4(gl, "u_view", context.view);
+        capShader->setMat4(gl, "u_proj", context.projection);
+        capShader->setVec2(gl, "u_viewport_size", glm::vec2(context.viewportWidth, context.viewportHeight));
+        capShader->setFloat(gl, "u_thickness", sp.thickness);
+        capShader->setVec4(gl, "u_glowColour", sp.glowColour);
+        capShader->setVec4(gl, "u_coreColour", sp.coreColour);
 
         std::vector<glm::vec3> capPoints;
         if (sp.type == SplineType::Linear) {

@@ -23,10 +23,6 @@ private:
     // Helper to create the VAOs/VBOs for a new context.
     void createPrimitivesForContext(QOpenGLContext* ctx, QOpenGLFunctions_4_3_Core* gl);
 
-    // --- Member Variables ---
-    Shader* m_glowShader = nullptr;
-    Shader* m_capShader = nullptr;
-
     // Each context gets its own set of primitives.
     QHash<QOpenGLContext*, GLuint> m_lineVAOs;
     QHash<QOpenGLContext*, GLuint> m_lineVBOs;

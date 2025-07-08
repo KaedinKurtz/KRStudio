@@ -12,6 +12,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
 #include <QMessageBox>
+#include <QOpenGLContext>
 
 #include "ViewportWidget.hpp"
 #include "RenderingSystem.hpp"
@@ -26,6 +27,9 @@
 #include "BlackBox.hpp"
 
 int ViewportWidget::s_instanceCounter = 0;
+
+static GLuint s_testTextureId = 0;
+static bool s_isFirstContextInit = true;
 
 void ViewportWidget::propagateTransforms(entt::registry& r)
 {
@@ -59,15 +63,8 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
 {
     m_instanceId = s_instanceCounter++;
     qDebug() << "[LIFECYCLE] Constructing ViewportWidget instance:" << m_instanceId;
-
-    QSurfaceFormat format;
-    format.setDepthBufferSize(24);
-    format.setStencilBufferSize(8);
-    format.setVersion(4, 3);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setOption(QSurfaceFormat::DebugContext);
-    setFormat(format);
     setFocusPolicy(Qt::StrongFocus);
+
 }
 
 void ViewportWidget::setRenderingSystem(RenderingSystem* system)
@@ -78,24 +75,35 @@ void ViewportWidget::setRenderingSystem(RenderingSystem* system)
 ViewportWidget::~ViewportWidget() {}
 
 void ViewportWidget::initializeGL() {
-    initializeOpenGLFunctions(); // New Qt-6 context
+    // This function will now print a very distinct block of text to the log.
+    qDebug() << "\n\n=====================================================================";
+    qDebug() << "============== VIEWPORT INITIALIZEGL() TRIGGERED ==============";
+    qDebug() << "=====================================================================";
+    qDebug() << " > Widget Address:          " << this;
+    qDebug() << " > Context Address:         " << context();
+    qDebug() << " > RenderingSystem Address: " << m_renderingSystem;
 
-    // 1. Make the renderer remember this context/widget.
-    m_renderingSystem->ensureContextIsTracked(this);
+    if (m_renderingSystem) {
+        // We are using the isContextInitialized helper we added previously
+        qDebug() << " > Context already known?:    " << m_renderingSystem->isContextInitialized(context());
 
-    // 2. If this is the very first context, bootstrap the shared GPU resources.
-    if (!m_renderingSystem->isInitialized()) {
+        initializeOpenGLFunctions();
         auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(context());
-        if (!gl) {
-            qFatal("Could not obtain 4.3 core functions for this context");
+
+        if (gl) {
+            m_renderingSystem->ensureContextIsTracked(this);
+            m_renderingSystem->initializeResourcesForContext(gl, m_scene);
         }
-        // Pass the scene pointer, which is now required.
-        m_renderingSystem->initializeSharedResources(gl, m_scene);
+        else {
+            qCritical() << " > CRITICAL: Failed to get GL functions in initializeGL!";
+        }
+
     }
-#ifdef RS_DEBUG_DUMP
-    dbg::BlackBox::instance().dumpState("Initialize", *m_renderingSystem,
-        this, this);
-#endif
+    else {
+        qCritical() << " > CRITICAL: RenderingSystem pointer is NULL!";
+    }
+    qDebug() << "=====================================================================";
+    qDebug() << "============== VIEWPORT INITIALIZEGL() END ==================\n\n";
 }
 
 void ViewportWidget::resizeGL(int w, int h) {
@@ -124,21 +132,27 @@ void ViewportWidget::shutdown()
 
 void ViewportWidget::paintGL()
 {
-    // The paint event is now very clean.
-    if (!m_renderingSystem || !m_renderingSystem->isInitialized()) {
-        // If the renderer isn't ready yet, just clear to black.
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+    qDebug() << "~~~~~~~~~~~~~~ PAINTGL CALLED FOR WIDGET:" << this << "~~~~~~~~~~~~~~";
+
+    if (!m_renderingSystem) return;
+
+    // Get the GL functions for the current, active context
+    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(context());
+    if (!gl) {
+        qCritical("paintGL: Could not get GL functions for current context!");
         return;
     }
 
-    // Get the framebuffer dimensions for this specific viewport.
+    // This is the key: We ensure resources for this context exist
+    // at the beginning of every paint call. The function has its own
+    // internal guard, so it will only do heavy work once per new context.
+    m_renderingSystem->initializeResourcesForContext(gl, m_scene);
+
+    // The rest of the function proceeds as normal...
     const int fbW = static_cast<int>(width() * devicePixelRatioF());
     const int fbH = static_cast<int>(height() * devicePixelRatioF());
 
-    // Tell the rendering system to render a complete frame FOR US,
-    // passing ourself as the target.
-    m_renderingSystem->renderView(this, this, fbW, fbH);
+    m_renderingSystem->renderView(this, gl, fbW, fbH);
 }
 
 void ViewportWidget::renderNow()

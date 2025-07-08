@@ -11,14 +11,14 @@
 SelectionGlowPass::~SelectionGlowPass() { /* ... destructor ... */ }
 
 void SelectionGlowPass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl) {
-    m_emissiveSolidShader = renderer.getShader("emissive_solid");
-    m_blurShader = renderer.getShader("blur");
-    if (!m_emissiveSolidShader || !m_blurShader) {
-        qFatal("SelectionGlowPass failed to initialize: A required shader was not found.");
-    }
+
 }
 
 void SelectionGlowPass::execute(const RenderFrameContext& context) {
+    Shader* emissiveSolidShader = context.renderer.getShader("emissive_solid");
+    Shader* blurShader = context.renderer.getShader("blur");
+    if (!emissiveSolidShader || !blurShader) return;
+    
     auto* gl = context.gl;
     auto& registry = context.registry;
     auto& target = context.targetFBOs;
@@ -38,14 +38,14 @@ void SelectionGlowPass::execute(const RenderFrameContext& context) {
         return;
     }
 
-    m_emissiveSolidShader->use(gl);
-    m_emissiveSolidShader->setMat4(gl, "view", context.view);
-    m_emissiveSolidShader->setMat4(gl, "projection", context.projection);
-    m_emissiveSolidShader->setVec3(gl, "emissiveColor", glm::vec3(1.0f, 0.75f, 0.1f));
+    emissiveSolidShader->use(gl);
+    emissiveSolidShader->setMat4(gl, "view", context.view);
+    emissiveSolidShader->setMat4(gl, "projection", context.projection);
+    emissiveSolidShader->setVec3(gl, "emissiveColor", glm::vec3(1.0f, 0.75f, 0.1f));
 
     for (auto entity : viewSelected) {
         const auto& [mesh, transform] = viewSelected.get<const RenderableMeshComponent, const TransformComponent>(entity);
-        m_emissiveSolidShader->setMat4(gl, "model", transform.getTransform());
+        emissiveSolidShader->setMat4(gl, "model", transform.getTransform());
 
         // Use the renderer's helper to get the mesh buffers
         const auto& buffers = context.renderer.getOrCreateMeshBuffers(gl, ctx, entity);
@@ -57,8 +57,8 @@ void SelectionGlowPass::execute(const RenderFrameContext& context) {
 
     // --- Pass 2: Apply Gaussian blur using ping-pong FBOs ---
     gl->glDisable(GL_DEPTH_TEST);
-    m_blurShader->use(gl);
-    m_blurShader->setInt(gl, "screenTexture", 0);
+    blurShader->use(gl);
+    blurShader->setInt(gl, "screenTexture", 0);
     gl->glActiveTexture(GL_TEXTURE0);
 
     // Ensure the composite VAO exists for this context.
@@ -72,7 +72,7 @@ void SelectionGlowPass::execute(const RenderFrameContext& context) {
     unsigned int amount = 10; // A 10-pass blur is smoother
     for (unsigned int i = 0; i < amount; i++) {
         gl->glBindFramebuffer(GL_FRAMEBUFFER, target.pingpongFBO[horizontal]);
-        m_blurShader->setBool(gl, "horizontal", horizontal);
+        blurShader->setBool(gl, "horizontal", horizontal);
 
         // Bind the texture from the previous step to read from.
         gl->glBindTexture(GL_TEXTURE_2D, first_iteration ? target.glowTexture : target.pingpongTexture[!horizontal]);

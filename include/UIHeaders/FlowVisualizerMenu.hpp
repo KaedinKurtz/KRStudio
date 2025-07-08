@@ -95,6 +95,7 @@ public:
 Q_SIGNALS:
     void settingsChanged();
 	void transformChanged();
+    void testViewportRequested();
 
 private slots:
     void onMasterVisibilityChanged(bool checked);

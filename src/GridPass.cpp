@@ -16,13 +16,15 @@ GridPass::~GridPass() {
 }
 
 void GridPass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl) {
-    m_gridShader = renderer.getShader("grid");
-    if (!m_gridShader) {
-        qFatal("GridPass failed to initialize: Could not find 'grid' shader in RenderingSystem.");
-    }
+
 }
 
 void GridPass::execute(const RenderFrameContext& context) {
+    Shader* gridShader = context.renderer.getShader("grid");
+    if (!gridShader) {
+        // If there's no shader for this context, we can't do anything.
+        return;
+    }
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
 
@@ -37,7 +39,7 @@ void GridPass::execute(const RenderFrameContext& context) {
     // FIX: Use size_hint() to check if the view is empty.
     if (viewG.size_hint() == 0) return;
 
-    m_gridShader->use(gl);
+    gridShader->use(gl);
     gl->glEnable(GL_POLYGON_OFFSET_FILL);
 
     // FIX: Use .value() for read-only access to the QHash.
@@ -52,11 +54,32 @@ void GridPass::execute(const RenderFrameContext& context) {
         const float camDist = glm::length(context.camera.getPosition() - xf.translation);
 
         // FIX: Use the context object for all rendering data.
-        m_gridShader->setMat4(gl, "u_viewMatrix", context.view);
-        m_gridShader->setMat4(gl, "u_projectionMatrix", context.projection);
-        m_gridShader->setMat4(gl, "u_gridModelMatrix", xf.getTransform());
-        m_gridShader->setVec3(gl, "u_cameraPos", context.camera.getPosition());
-        // ... (set all other grid and fog uniforms) ...
+        gridShader->setMat4(gl, "u_viewMatrix", context.view);
+        gridShader->setMat4(gl, "u_projectionMatrix", context.projection);
+        gridShader->setMat4(gl, "u_gridModelMatrix", xf.getTransform());
+        gridShader->setVec3(gl, "u_cameraPos", context.camera.getPosition());
+        gridShader->setFloat(gl, "u_distanceToGrid", camDist);
+        gridShader->setBool(gl, "u_isDotted", grid.isDotted);
+        gridShader->setFloat(gl, "u_baseLineWidthPixels", grid.baseLineWidthPixels);
+        gridShader->setBool(gl, "u_showAxes", grid.showAxes);
+        gridShader->setVec3(gl, "u_xAxisColor", grid.xAxisColor);
+        gridShader->setVec3(gl, "u_zAxisColor", grid.zAxisColor);
+
+        gridShader->setInt(gl, "u_numLevels", static_cast<int>(grid.levels.size()));
+        for (size_t i = 0; i < grid.levels.size() && i < 5; ++i) { // Shader supports max 5 levels.
+            const std::string b = "u_levels[" + std::to_string(i) + "].";
+            gridShader->setFloat(gl, (b + "spacing").c_str(), grid.levels[i].spacing);
+            gridShader->setVec3(gl, (b + "color").c_str(), grid.levels[i].color);
+            gridShader->setFloat(gl, (b + "fadeInCameraDistanceStart").c_str(), grid.levels[i].fadeInCameraDistanceStart);
+            gridShader->setFloat(gl, (b + "fadeInCameraDistanceEnd").c_str(), grid.levels[i].fadeInCameraDistanceEnd);
+            gridShader->setBool(gl, ("u_levelVisible[" + std::to_string(i) + "]").c_str(), grid.levelVisible[i]);
+        }
+
+        const auto& props = registry.ctx().get<SceneProperties>();
+        gridShader->setBool(gl, "u_useFog", props.fogEnabled);
+        gridShader->setVec3(gl, "u_fogColor", props.fogColor);
+        gridShader->setFloat(gl, "u_fogStartDistance", props.fogStartDistance);
+        gridShader->setFloat(gl, "u_fogEndDistance", props.fogEndDistance);
 
         // This Z-fighting mitigation logic is correct.
         gl->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
