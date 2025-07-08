@@ -61,11 +61,13 @@ namespace DebugHelpers
             0, 4, 1, 5, 2, 6, 3, 7  // Connecting lines
         };
 
-        outlineShader.use();
-        outlineShader.setMat4("view", view);
-        outlineShader.setMat4("projection", projection);
-        outlineShader.setMat4("model", glm::mat4(1.0f)); // Outline is in world space
-        outlineShader.setVec3("outlineColor", glm::vec3(1.0f, 0.8f, 0.0f));
+        QOpenGLFunctions_4_3_Core* glPtr = &gl;
+
+        outlineShader.use(glPtr);
+        outlineShader.setMat4(glPtr, "view", view);
+        outlineShader.setMat4(glPtr, "projection", projection);
+        outlineShader.setMat4(glPtr, "model", glm::mat4(1.0f)); // Outline is in world space
+        outlineShader.setVec3(glPtr, "outlineColor", glm::vec3(1.0f, 0.8f, 0.0f));
 
         gl.glBindVertexArray(vao);
         gl.glBindBuffer(GL_ARRAY_BUFFER, vbo);

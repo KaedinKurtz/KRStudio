@@ -70,11 +70,10 @@ RobotEnrichmentDialog::RobotEnrichmentDialog(const RobotDescription& robotDesc, 
     populateTree();
     m_robotTreeWidget->expandAll();
 
-    m_previewViewport->updateRobot(*m_robotDescription);
+    m_previewViewport->loadRobotForPreview(*m_robotDescription);
     m_propertyEditorStack->setCurrentWidget(m_defaultEditor);
 
     // --- Connections ---
-    connect(speedSlider, &QSlider::valueChanged, m_previewViewport, &PreviewViewport::setAnimationSpeed);
     connect(m_robotTreeWidget, &QTreeWidget::currentItemChanged, this, &RobotEnrichmentDialog::onCurrentTreeItemChanged);
     connect(m_linkEditor, &LinkPropertiesWidget::propertiesChanged, this, &RobotEnrichmentDialog::onPropertiesChanged);
 
@@ -185,7 +184,7 @@ void RobotEnrichmentDialog::onPropertiesChanged()
 
     // After updating our data, tell the preview viewport to redraw.
     // Use * to dereference the unique_ptr to get the actual RobotDescription object.
-    m_previewViewport->updateRobot(*m_robotDescription);
+    m_previewViewport->loadRobotForPreview(*m_robotDescription);
 }
 
 void RobotEnrichmentDialog::onSave()

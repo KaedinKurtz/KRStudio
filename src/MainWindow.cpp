@@ -33,6 +33,7 @@
 #include <QButtonGroup>
 #include <QSplitter>
 #include "DockSplitter.h" 
+#include <QOpenGLVersionFunctionsFactory>
 
 const QString sidePanelStyle = R"(
     /* General Window and Text Styling */
@@ -271,15 +272,40 @@ MainWindow::MainWindow(QWidget* parent)
     this->setCentralWidget(m_centralContainer);
 
     ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity1, this); // Creates the first viewport widget.
-    m_viewports.push_back(viewport1); // Adds the viewport to a list for management.
-    m_renderingSystem->setViewportWidget(viewport1); // Associates the renderer with its primary viewport.
     ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Camera 1)"); // Creates the first dockable viewport.
     viewportDock1->setWidget(viewport1); // Sets the viewport as the content of the dock widget.
     ads::CDockAreaWidget* viewportArea1 = m_dockManager->addDockWidget(ads::LeftDockWidgetArea, viewportDock1); // Docks the first viewport, creating our first column.
+   
+
+    m_masterRenderTimer = new QTimer(this);
+    connect(m_masterRenderTimer, &QTimer::timeout, this, &MainWindow::onMasterRender);
+
+    connect(viewport1, &ViewportWidget::glContextReady, this, [this, viewport1]() {
+        if (!m_renderingSystem->isInitialized()) {
+            qDebug() << "[LIFECYCLE] Primary viewport context is ready. Initializing RenderingSystem.";
+
+            viewport1->makeCurrent();
+
+            // --- FIX ---
+            // initializeSharedResources now requires the Scene pointer.
+            // We also need to get the GL function pointer directly.
+            auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport1->context());
+            if (gl) {
+                m_renderingSystem->initializeSharedResources(gl, m_scene.get());
+            }
+            else {
+                qFatal("Could not get GL functions to initialize RenderingSystem.");
+            }
+
+            viewport1->doneCurrent();
+
+            qDebug() << "[LIFECYCLE] RenderingSystem is initialized. Starting master render timer.";
+            m_masterRenderTimer->start(16); // Target ~60 FPS
+        }
+        });
 
     // Create the SECONDARY viewport and dock it to the RIGHT of the FIRST one.
     ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity2, this); // Creates the second viewport widget.
-    m_viewports.push_back(viewport2); // Adds the viewport to the list.
     ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Camera 2)"); // Creates the second dockable viewport.
     viewportDock2->setWidget(viewport2); // Sets the viewport as the content of the dock widget.
     ads::CDockAreaWidget* viewportArea2 = m_dockManager->addDockWidget(ads::RightDockWidgetArea, viewportDock2, viewportArea1); // This is key: docks viewport 2 to the right OF viewport 1, creating a horizontal split.
@@ -321,23 +347,6 @@ MainWindow::MainWindow(QWidget* parent)
     m_masterRenderTimer = new QTimer(this);
     connect(m_masterRenderTimer, &QTimer::timeout, this, &MainWindow::onMasterRender);
 
-    // Connect to the primary viewport's signal. When its GL context is ready,
-    // we will initialize our shared RenderingSystem.
-    connect(viewport1, &ViewportWidget::glContextReady, this, [this, viewport1]() {
-        // Only initialize the system ONCE.
-        if (!m_renderingSystem->isInitialized()) {
-            qDebug() << "[LIFECYCLE] Primary viewport context is ready. Initializing RenderingSystem.";
-
-            // To initialize the renderer, we must borrow the primary viewport's context.
-            viewport1->makeCurrent();
-            m_renderingSystem->initialize(viewport1->width(), viewport1->height());
-            viewport1->doneCurrent();
-
-            // Now that the renderer is ready, we can safely start the main render loop.
-            qDebug() << "[LIFECYCLE] RenderingSystem is initialized. Starting master render timer.";
-            m_masterRenderTimer->start(16); // Target ~60 FPS
-        }
-        });
 
     // --- 6. Other Signal/Slot Connections ---
     connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
@@ -360,48 +369,55 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::onMasterRender()
 {
-    // --- 1. LOGIC UPDATES ---
-    // This section should run at a fixed rate to ensure smooth and
-    // predictable animation and physics, regardless of frame rate.
+    // --- 1. LOGIC UPDATES (No context needed) ---
     if (m_renderingSystem && m_renderingSystem->isInitialized())
     {
-        // Use the timer's interval to get a consistent delta time.
         const float deltaTime = static_cast<float>(m_masterRenderTimer->interval()) / 1000.0f;
 
-        // Update all time-based systems
-        m_renderingSystem->updateAnimations(m_scene->getRegistry(), deltaTime);
-        m_renderingSystem->updateSceneLogic(m_scene->getRegistry(), deltaTime); // Pass deltaTime here
+        // --- FIX ---
+        // These functions no longer take the registry as an argument.
+        m_renderingSystem->updateSceneLogic(deltaTime);
+        m_renderingSystem->updateCameraTransforms();
 
-        // Update transforms based on camera state
-        m_renderingSystem->updateCameraTransforms(m_scene->getRegistry());
+        // This function is still correct as it's a static method on ViewportWidget.
         ViewportWidget::propagateTransforms(m_scene->getRegistry());
     }
 
-    // --- 2. SCHEDULE REPAINT ---
-    // Asynchronously schedule a repaint for each viewport. Qt will handle
-    // calling paintGL efficiently without blocking the main thread.
-    for (ViewportWidget* vp : m_viewports)
+    // --- 2. SCHEDULE REPAINT (The Qt Way) ---
+    for (ads::CDockWidget* dockWidget : m_dockManager->dockWidgetsMap())
     {
+        ViewportWidget* vp = qobject_cast<ViewportWidget*>(dockWidget->widget());
         if (vp) {
             vp->update();
         }
     }
 }
-
 // The destructor orchestrates a clean shutdown.
 MainWindow::~MainWindow()
 {
-    // Stop the timer to prevent any more render calls during shutdown.
     m_masterRenderTimer->stop();
 
-    if (!m_viewports.empty() && m_viewports[0]) {
-        m_viewports[0]->makeCurrent();
-        if (m_renderingSystem) {
-            // Pass the registry to the shutdown method
-            m_renderingSystem->shutdown(m_scene->getRegistry());
-            m_renderingSystem.reset();
+    auto allDockWidgets = m_dockManager->dockWidgetsMap();
+    ViewportWidget* anyViewport = nullptr;
+    for (auto* dockWidget : allDockWidgets) {
+        anyViewport = qobject_cast<ViewportWidget*>(dockWidget->widget());
+        if (anyViewport) {
+            break;
         }
-        m_viewports[0]->doneCurrent();
+    }
+
+    if (anyViewport) {
+        anyViewport->makeCurrent();
+        if (m_renderingSystem) {
+            // --- FIX ---
+            // The shutdown function now only needs the GL function pointer,
+            // which can be retrieved from the viewport.
+            auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(anyViewport->context());
+            if (gl) {
+                m_renderingSystem->shutdown(gl);
+            }
+        }
+        anyViewport->doneCurrent();
     }
 }
 
@@ -566,7 +582,11 @@ void MainWindow::onFlowVisualizerSettingsChanged()
             << "Scale:" << settings.vectorScale;
     }
 
-    // Mark the component as dirty so the rendering system knows to update its GPU buffers.
+    // Mark the component as dirty so the rendering system knows to update its GPU buffe
+
+
+
+
     visualizer.isGpuDataDirty = true;
     qDebug() << "Flow visualizer settings successfully applied to component.";
 }
