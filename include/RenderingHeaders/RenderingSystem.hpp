@@ -14,6 +14,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <QElapsedTimer>
+#include <QTimer>
 
 // Forward declarations to keep this header light
 class QOpenGLContext;
@@ -68,6 +70,10 @@ private:
     // --- Private Helpers ---
     void initOrResizeFBOsForTarget(QOpenGLFunctions_4_3_Core* gl, TargetFBOs& target, int width, int height);
     void updateSplineCaches();
+
+    QTimer        m_frameTimer;     // drives the simulation
+    QElapsedTimer m_clock;
+
 
     // --- Core Member Variables ---
     bool m_isInitialized = false;

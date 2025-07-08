@@ -23,6 +23,7 @@ void OpaquePass::execute(const RenderFrameContext& context) {
     auto* gl = context.gl;
     auto& registry = context.registry;
     auto& renderer = context.renderer;
+    auto  curCam = renderer.getCurrentCameraEntity();
 
     // --- Shader and Uniform Setup ---
     phongShader->use(gl);
@@ -41,9 +42,9 @@ void OpaquePass::execute(const RenderFrameContext& context) {
     auto view = registry.view<RenderableMeshComponent, TransformComponent>();
     for (auto entity : view) {
         // Don't draw the camera's own geometry.
-        if (entity == renderer.getCurrentCameraEntity()) {
+        if (entity == curCam ||
+            isDescendantOf(registry, entity, curCam))
             continue;
-        }
 
         // Get the required components from the entity.
         auto& mesh = view.get<RenderableMeshComponent>(entity);

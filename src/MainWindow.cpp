@@ -133,6 +133,26 @@ const QString sidePanelStyle = R"(
     }
 )";
 
+using ads::CDockWidget;
+
+// ---------------------------------------------------------------------
+//  Small helper that strips the Floatable flag from any CDockWidget
+// ---------------------------------------------------------------------
+static void makeNonFloatable(CDockWidget* dw)
+{
+    auto feats = dw->features();
+    feats &= ~CDockWidget::DockWidgetFloatable;   // clear the bit
+    dw->setFeatures(feats);
+}
+
+void MainWindow::disableFloatingForAllDockWidgets()
+{
+    const auto docks = m_dockManager->findChildren<ads::CDockWidget*>();
+
+    for (auto* dw : docks)
+        makeNonFloatable(dw);
+}
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
@@ -261,56 +281,65 @@ MainWindow::MainWindow(QWidget* parent)
     // --- 2. Create the SINGLE Shared Rendering System ---
     m_renderingSystem = std::make_unique<RenderingSystem>(nullptr);
 
-    // --- 3. Setup the Core UI Layout (No changes here) ---
+    // ---------------------------------------------------------------------------
+// 3.  Core UI layout & dock setup – NO FLOATING VIEWPORTS
+// ---------------------------------------------------------------------------
     m_centralContainer = new QWidget(this);
-    QVBoxLayout* mainLayout = new QVBoxLayout(m_centralContainer);
+    auto* mainLayout = new QVBoxLayout(m_centralContainer);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
+
+    // fixed toolbar
     m_fixedTopToolbar = new StaticToolbar(this);
     mainLayout->addWidget(m_fixedTopToolbar, 0);
+
+    // ADS dock manager
     m_dockManager = new ads::CDockManager();
     mainLayout->addWidget(m_dockManager, 1);
-    this->setCentralWidget(m_centralContainer);
+    setCentralWidget(m_centralContainer);
 
-    ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity1, this); // Creates the first viewport widget.
-    m_viewports.append(viewport1);
-    ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Camera 1)"); // Creates the first dockable viewport.
-    viewportDock1->setWidget(viewport1); // Sets the viewport as the content of the dock widget.
-    ads::CDockAreaWidget* viewportArea1 = m_dockManager->addDockWidget(ads::LeftDockWidgetArea, viewportDock1); // Docks the first viewport, creating our first column.
-   
-    m_masterRenderTimer = new QTimer(this);
-    connect(m_masterRenderTimer, &QTimer::timeout, this, &MainWindow::onMasterRender);
+    // ---------------------------------------------------------------------------
+    // Viewport 1  (left)
+    // ---------------------------------------------------------------------------
+    ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(),
+        m_renderingSystem.get(),
+        cameraEntity1,
+        /*parent*/ this);
 
-    connect(viewport1, &ViewportWidget::glContextReady, this, [this, viewport1]() {
-        if (!m_renderingSystem->isInitialized()) {
-            qDebug() << "[LIFECYCLE] Primary viewport context is ready. Initializing RenderingSystem.";
+    ads::CDockWidget* viewportDock1 = new ads::CDockWidget(
+        QStringLiteral("3-D Viewport 1"));
+    viewportDock1->setWidget(viewport1);
 
-            viewport1->makeCurrent();
+    /*  <<<  forbid floating  >>>  */
+    viewportDock1->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
 
-            // --- FIX ---
-            // initializeSharedResources now requires the Scene pointer.
-            // We also need to get the GL function pointer directly.
-            auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport1->context());
-            if (gl) {
-                m_renderingSystem->initializeResourcesForContext(gl, m_scene.get());
-            }
-            else {
-                qFatal("Could not get GL functions to initialize RenderingSystem.");
-            }
+    ads::CDockAreaWidget* viewportArea1 =
+        m_dockManager->addDockWidget(ads::LeftDockWidgetArea,
+            viewportDock1);
 
-            viewport1->doneCurrent();
+    // ---------------------------------------------------------------------------
+    // Viewport 2  (right, same row)
+    // ---------------------------------------------------------------------------
+    ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(),
+        m_renderingSystem.get(),
+        cameraEntity2,
+        /*parent*/ this);
 
-            qDebug() << "[LIFECYCLE] RenderingSystem is initialized. Starting master render timer.";
-            m_masterRenderTimer->start(16); // Target ~60 FPS
-        }
-        });
+    ads::CDockWidget* viewportDock2 = new ads::CDockWidget(
+        QStringLiteral("3-D Viewport 2"));
+    viewportDock2->setWidget(viewport2);
+    viewportDock2->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
 
-    // Create the SECONDARY viewport and dock it to the RIGHT of the FIRST one.
-    ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity2, this); // Creates the second viewport widget.
-    m_viewports.append(viewport2);
-    ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Camera 2)"); // Creates the second dockable viewport.
-    viewportDock2->setWidget(viewport2); // Sets the viewport as the content of the dock widget.
-    ads::CDockAreaWidget* viewportArea2 = m_dockManager->addDockWidget(ads::RightDockWidgetArea, viewportDock2, viewportArea1); // This is key: docks viewport 2 to the right OF viewport 1, creating a horizontal split.
+    ads::CDockAreaWidget* viewportArea2 =
+        m_dockManager->addDockWidget(ads::RightDockWidgetArea,
+            viewportDock2,
+            viewportArea1);      // same horizontal row
+
+    // ---------------------------------------------------------------------------
+    // keep track of the docks so your later loops still work
+    // ---------------------------------------------------------------------------
+    m_dockContainers << viewportDock1 << viewportDock2;
+
 
     // Create the properties panel and dock it to the RIGHT of the SECOND viewport.
     PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this); // Creates the properties panel widget.
@@ -349,6 +378,33 @@ MainWindow::MainWindow(QWidget* parent)
     m_masterRenderTimer = new QTimer(this);
     connect(m_masterRenderTimer, &QTimer::timeout, this, &MainWindow::onMasterRender);
 
+    // The glContextReady connection for the first viewport to initialize the renderer
+    connect(viewport1, &ViewportWidget::glContextReady, this, [this, viewport1]() {
+        if (!m_renderingSystem->isInitialized()) {
+            qDebug() << "[LIFECYCLE] Primary viewport context is ready. Initializing RenderingSystem.";
+            viewport1->makeCurrent();
+            auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport1->context());
+            if (gl) {
+                m_renderingSystem->initializeResourcesForContext(gl, m_scene.get());
+            }
+            else {
+                qFatal("Could not get GL functions to initialize RenderingSystem.");
+            }
+            viewport1->doneCurrent();
+            qDebug() << "[LIFECYCLE] RenderingSystem is initialized. Starting master render timer.";
+            m_masterRenderTimer->start(16);
+        }
+        });
+
+
+    // --- Connect Signals for Updating Viewport Layouts ---
+    // We connect to signals that tell us when the user might have changed
+    // which tab is visible or moved a dock widget.
+    connect(m_dockManager, &ads::CDockManager::focusedDockWidgetChanged, this, &MainWindow::updateViewportLayouts);
+
+    // We still need topLevelChanged for each dock widget to handle docking/undocking
+    connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, &MainWindow::updateViewportLayouts);
+    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, &MainWindow::updateViewportLayouts);
 
     // --- 6. Other Signal/Slot Connections ---
     connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
@@ -398,6 +454,10 @@ MainWindow::MainWindow(QWidget* parent)
     setWindowTitle("KR Studio ALPHA V0.602");
     setWindowIcon(QIcon(":/icons/kRLogoSquare.png"));
     statusBar()->showMessage("Ready.");
+
+    disableFloatingForAllDockWidgets();
+
+    QTimer::singleShot(0, this, &MainWindow::updateViewportLayouts);
 }
 
 void MainWindow::onMasterRender()
@@ -670,4 +730,112 @@ void MainWindow::onTestNewViewport()
     // Show it as a separate, top-level window, NOT in the dock manager
     testViewport->resize(800, 600);
     testViewport->show();
+}
+
+void MainWindow::updateViewportLayouts()
+{
+    for (ads::CDockWidget* dock : std::as_const(m_dockContainers))
+    {
+        // The *real* viewport is now the direct child of the dock widget
+        auto* vp = qobject_cast<ViewportWidget*>(dock->widget());
+        if (!vp)                                     // safety guard
+            continue;
+
+        const bool dockVisible = dock->isVisible();
+        const bool dockIsTabbed = !dock->isFloating();
+
+        // Enable painting only when the viewport is actually visible on-screen.
+        // When the dock is hidden or floated we turn updates off to avoid
+        // wasting GPU time (but we do not destroy anything).
+        const bool shouldPaint = dockVisible && dockIsTabbed;
+        vp->setUpdatesEnabled(shouldPaint);
+        vp->setVisible(shouldPaint);
+    }
+}
+
+void MainWindow::addViewport()
+{
+    constexpr int kMaxViewports = 5;
+    if (m_viewports.size() >= kMaxViewports)
+        return;                                    // already at the limit
+
+    // 1. Create a fresh camera so each viewport starts with its own view
+    auto& reg = m_scene->getRegistry();
+    int   idx = m_viewports.size() + 1;        // 1-based, nicer for titles
+    float offsetX = 4.0f * idx;
+    entt::entity camEntity =
+        SceneBuilder::createCamera(reg,
+            { offsetX, 3.0f, 5.0f },
+            { 0.0f,     0.6f, 0.0f });
+
+    // 2. “Real” OpenGL widget lives in the hidden hangar
+    auto* vpReal = new ViewportWidget(m_scene.get(),
+        m_renderingSystem.get(),
+        camEntity,
+        m_viewportHangar);
+    m_viewports.append(vpReal);
+
+    // 3. Placeholder widget that sits in the dock
+    auto* placeholder = new QWidget;
+    m_viewportPlaceholders.append(placeholder);
+
+    // 4. Dock widget wrapper
+    auto* dock = new ads::CDockWidget(
+        QStringLiteral("3D Viewport %1 (Camera %1)").arg(idx));
+    dock->setWidget(placeholder);
+
+    //  ⟵⟵⟵  use the utility we added earlier
+    makeNonFloatable(dock);
+
+    m_dockContainers.append(dock);
+
+    // 5. Insert to the right of the previous viewport (or in the center if first)
+    ads::CDockAreaWidget* anchor =
+        (m_dockContainers.size() > 1)
+        ? m_dockContainers.at(m_dockContainers.size() - 2)->dockAreaWidget()
+        : nullptr;
+
+    if (anchor)
+        m_dockManager->addDockWidget(ads::RightDockWidgetArea, dock, anchor);
+    else
+        m_dockManager->addDockWidget(ads::CenterDockWidgetArea, dock);
+
+    // 6. Keep the auto-hide / move logic in sync
+    connect(dock, &ads::CDockWidget::topLevelChanged,
+        this, &MainWindow::updateViewportLayouts);
+
+    updateViewportLayouts();
+}
+
+
+void MainWindow::removeViewport()
+{
+    // Don’t delete the very last viewport (optional – remove if you want zero)
+    if (m_viewports.size() <= 1)
+        return;
+
+    int idx = m_viewports.size() - 1;
+
+    //----------------------------------------------------------------------
+    // 1. Take the containers out of our bookkeeping lists
+    //----------------------------------------------------------------------
+    ViewportWidget* vpReal = m_viewports.takeAt(idx);
+    QWidget* placeholder = m_viewportPlaceholders.takeAt(idx);
+    ads::CDockWidget* dock = m_dockContainers.takeAt(idx);
+
+    //----------------------------------------------------------------------
+    // 2. Close & delete the dock widget (this also deletes the placeholder)
+    //----------------------------------------------------------------------
+    dock->close();                 // removes it from DockManager layout
+    dock->deleteLater();
+
+    //----------------------------------------------------------------------
+    // 3. Destroy the GL viewport safely
+    //----------------------------------------------------------------------
+    vpReal->deleteLater();
+
+    //----------------------------------------------------------------------
+    // 4. Refresh layouts
+    //----------------------------------------------------------------------
+    updateViewportLayouts();
 }

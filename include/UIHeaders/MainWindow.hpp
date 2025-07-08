@@ -27,10 +27,9 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
-
     void updateVisualizerUI();
 
-
+    void disableFloatingForAllDockWidgets();
 
 protected:
     // No changes needed here
@@ -51,12 +50,19 @@ private:
 
 
     QTimer* m_masterRenderTimer;
-    QList<ViewportWidget*> m_viewports;
 
-    QPushButton* m_testButton;
+    QWidget* m_viewportHangar;                // A hidden parent for our viewports
+    QList<ViewportWidget*> m_viewports;         // A list of the REAL viewports
+    QList<QWidget*> m_viewportPlaceholders;   // A list of the placeholder widgets
+    QList<ads::CDockWidget*> m_dockContainers;
+
+public slots:
+    void addViewport();
+    void removeViewport();
 
 private slots:
     void onTestNewViewport();
+    void updateViewportLayouts();
 
 protected slots:
     void onLoadRobotClicked();

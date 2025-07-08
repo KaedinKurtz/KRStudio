@@ -1,6 +1,10 @@
 #include <QApplication>
 #include <QSurfaceFormat>
 #include <QLoggingCategory>
+#include <QOpenGLVersionFunctionsFactory>
+#include <QOpenGLContext>
+#include "MainWindow.hpp"
+
 
 static void qtMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
@@ -26,38 +30,57 @@ static void qtMessageOutput(QtMsgType type, const QMessageLogContext &context, c
     }
     fflush(stderr);
 }
-#include "MainWindow.hpp"
+
+
+// ---------------------------------------------------------------------
+// 1. Dummy share-root context – lives for the whole program
+// ---------------------------------------------------------------------
+static QOpenGLContext* gShareRoot = nullptr;
+
+static void initShareRoot()
+{
+    if (gShareRoot)                    // idempotent
+        return;
+
+    gShareRoot = new QOpenGLContext;
+    gShareRoot->setFormat(QSurfaceFormat::defaultFormat());
+    gShareRoot->create();              // no surface needed
+}
+
+// ---------------------------------------------------------------------
+// 2. Helper to set exactly one default GL format
+// ---------------------------------------------------------------------
+static QSurfaceFormat createDefaultFormat()
+{
+    QSurfaceFormat fmt;
+    fmt.setRenderableType(QSurfaceFormat::OpenGL);
+    fmt.setVersion(4, 3);
+    fmt.setProfile(QSurfaceFormat::CoreProfile);
+    fmt.setDepthBufferSize(24);
+    fmt.setStencilBufferSize(8);
+    fmt.setSamples(4);
+    fmt.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
+    fmt.setColorSpace(QSurfaceFormat::sRGBColorSpace);
+    // fmt.setOption(QSurfaceFormat::DebugContext); // if you want the debug ctx
+    return fmt;
+}
 
 int main(int argc, char* argv[])
 {
-    // --- CORRECT INITIALIZATION ORDER ---
-
-    // 1. Set up any custom message handlers first.
+    // 1.  message handler, attributes, default format
     qInstallMessageHandler(qtMessageOutput);
-
-    // 2. Set application-wide attributes like context sharing.
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    QSurfaceFormat::setDefaultFormat(createDefaultFormat());
 
-    // 3. Define and set the default OpenGL format for the ENTIRE application.
-    QSurfaceFormat format;
-    format.setDepthBufferSize(24);
-    format.setStencilBufferSize(8);
-    format.setVersion(4, 3);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSamples(4);
-    format.setOption(QSurfaceFormat::DebugContext);
-    format.setColorSpace(QSurfaceFormat::sRGBColorSpace);
-    QSurfaceFormat::setDefaultFormat(format);
-
-    // 4. NOW, create the QApplication object. It will use the settings above.
+    // 2.  *Now* we may create QApplication
     QApplication app(argc, argv);
 
-    // 5. Configure any other app-specific systems like logging.
-    QLoggingCategory::setFilterRules(QStringLiteral("qt.qpa.*=true\nqt.opengl.*=true"));
+    // 3.  Root context must wait until QPA is up
+    initShareRoot();                       // <-- safe here
 
-    // 6. Create and show your main window.
-    MainWindow mainWindow;
-    mainWindow.show();
+    // 4.  Usual startup
+    MainWindow w;
+    w.show();
 
     return app.exec();
 }
