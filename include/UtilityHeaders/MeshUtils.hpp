@@ -3,37 +3,82 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/DefaultLogger.hpp>
+#include <assimp/LogStream.hpp>
 #include <glm/vec3.hpp>  
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
+#include <QDebug>
 
-inline void loadStlIntoRenderable(const std::string& path,
+#ifdef _WIN32
+#    define WIN32_LEAN_AND_MEAN   // optional: slim down <windows.h>
+#    include <windows.h>
+#endif
+#include <cstdio>
+
+inline void earlyLog(const char* msg)
+{
+#ifdef _WIN32
+    ::OutputDebugStringA(msg);
+    ::OutputDebugStringA("\n");
+#endif
+    std::fprintf(stderr, "%s\n", msg);
+    std::fflush(stderr);
+}
+
+inline void loadStlIntoRenderable(QString                qtPath,
     RenderableMeshComponent& meshOut,
-    bool recalcNormals = true)
+    bool                    recalcNormals = true)
 {
     static Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(
-        path,
-        aiProcess_Triangulate |
-        aiProcess_JoinIdenticalVertices |
-        aiProcess_GenSmoothNormals);
 
+    constexpr unsigned Flags =
+        aiProcess_Triangulate
+        | aiProcess_JoinIdenticalVertices
+        | aiProcess_GenSmoothNormals;
+
+    const aiScene* scene = nullptr;
+
+    /* ---- 1) Qt resource ?  --------------------------------------------- */
+    if (qtPath.startsWith(u":/"))               //  »:/external/…« etc.
+    {
+        QFile f(qtPath);
+        if (!f.open(QIODevice::ReadOnly))
+            throw std::runtime_error(
+                "Failed to open Qt resource \"" + qtPath.toStdString() + "\"");
+
+        QByteArray bytes = f.readAll();
+        scene = importer.ReadFileFromMemory(
+            bytes.constData(),
+            static_cast<size_t>(bytes.size()),
+            Flags,
+            "stl");                     // file type hint is mandatory
+    }
+    /* ---- 2) plain file on disk ----------------------------------------- */
+    else
+    {
+        scene = importer.ReadFile(qtPath.toStdString(), Flags);
+    }
+
+    /* ---- error handling ------------------------------------------------- */
     if (!scene || !scene->HasMeshes())
-        throw std::runtime_error("Failed to load " + path);
+    {
+        std::string reason = importer.GetErrorString();
+        if (reason.empty()) reason = "Unknown reason";
+        throw std::runtime_error(
+            "Failed to load STL \"" + qtPath.toStdString() + "\": " + reason);
+    }
 
+    /* ---- copy into your RenderableMeshComponent ------------------------ */
     const aiMesh* m = scene->mMeshes[0];
     meshOut.vertices.resize(m->mNumVertices);
 
     for (unsigned i = 0; i < m->mNumVertices; ++i) {
-        meshOut.vertices[i].position = glm::vec3(      // ← changed
-            m->mVertices[i].x,
-            m->mVertices[i].y,
-            m->mVertices[i].z);
-
-        meshOut.vertices[i].normal = glm::vec3(      // ← changed
-            m->mNormals[i].x,
-            m->mNormals[i].y,
-            m->mNormals[i].z);
+        meshOut.vertices[i].position = {
+            m->mVertices[i].x, m->mVertices[i].y, m->mVertices[i].z };
+        meshOut.vertices[i].normal = {
+            m->mNormals[i].x, m->mNormals[i].y, m->mNormals[i].z };
     }
 
     meshOut.indices.reserve(m->mNumFaces * 3);
@@ -42,13 +87,23 @@ inline void loadStlIntoRenderable(const std::string& path,
             meshOut.indices.push_back(m->mFaces[f].mIndices[k]);
 }
 
-inline void loadStlIntoRenderable(const QString& qPath,
+inline void loadStlIntoRenderable(const std::string& utf8Path,
     RenderableMeshComponent& meshOut,
     bool recalcNormals = true)
 {
-    loadStlIntoRenderable(qPath.toStdString(), meshOut, recalcNormals);
+    loadStlIntoRenderable(QString::fromUtf8(utf8Path.c_str()),
+        meshOut,
+        recalcNormals);
 }
 
+inline void loadStlIntoRenderable(const char* utf8Path,
+    RenderableMeshComponent& meshOut,
+    bool recalcNormals = true)
+{
+    loadStlIntoRenderable(QString::fromUtf8(utf8Path),
+        meshOut,
+        recalcNormals);
+}
 
 inline QString dataDir()
 {

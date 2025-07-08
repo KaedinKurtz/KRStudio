@@ -1,5 +1,12 @@
 #pragma once
+#ifdef _WIN32
+#  ifndef NOMINMAX          // keep <windows.h> from defining min/max macros
+#    define NOMINMAX
+#  endif
+#endif
 
+#include <algorithm>        // std::min / std::max
+#include <cmath>      
 #include <vector>
 #include <map>
 #include <glm/glm.hpp>
