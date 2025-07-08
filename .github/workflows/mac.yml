@@ -1,0 +1,39 @@
+name: macOS Build & Package
+on: { push: { branches: [main] }, pull_request: null }
+
+jobs:
+  mac:
+    runs-on: macos-14   # Apple Silicon runner, universal builds are possible
+    env: { QT_VERSION: '6.9.0', BUILD_TYPE: Release }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{env.QT_VERSION}}
+          host: mac
+          target: desktop
+          arch: clang_64
+          modules: 'qtbase qtshadertools'   # add what you need
+
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+      - name: Build
+        run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel
+
+      - name: macdeployqt & sign (ad-hoc)
+        run: |
+          "${QT_INSTALL_DIR}/bin/macdeployqt" \
+             build/bin/RoboticsSoftware.app \
+             -always-overwrite -verbose=2
+          # Ad-hoc sign so Gatekeeper doesn’t complain when user downloads zip
+          codesign --force --deep --sign - build/bin/RoboticsSoftware.app
+
+      - name: Create DMG
+        run: packaging/create-dmg.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RoboticsStudio-mac
+          path: RoboticsStudio-mac.dmg

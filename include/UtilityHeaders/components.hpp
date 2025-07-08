@@ -24,10 +24,12 @@ struct PulsingSplineTag {};
 
 // --- Material & Texture Components ---
 
+
+
 struct PulsingLightComponent {
     glm::vec3 onColor{ 1.0f, 0.0f, 0.0f };
-    glm::vec3 offColor{ 0.2f, 0.0f, 0.0f };
-    float speed = 5.0f;
+    glm::vec3 offColor{ 0.1f, 0.0f, 0.0f };
+    float speed = 0.50f;
 };
 
 struct Texture {
@@ -274,6 +276,17 @@ struct ParentComponent {
 struct RobotRootComponent {
     std::string name;
 };
+
+inline bool isDescendantOf(const entt::registry& r,
+    entt::entity child,
+    entt::entity ancestor)
+{
+    while (r.any_of<ParentComponent>(child)) {
+        child = r.get<ParentComponent>(child).parent;
+        if (child == ancestor) return true;
+    }
+    return false;
+}
 
 // --- SCENE-WIDE & MISC COMPONENTS ---
 

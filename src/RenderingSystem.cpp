@@ -25,8 +25,23 @@
 // Constructor & Destructor
 //==============================================================================
 
-RenderingSystem::RenderingSystem(QObject* parent) : QObject(parent) {
+RenderingSystem::RenderingSystem(QObject* parent)
+    : QObject(parent)
+{
     qDebug() << "[LIFECYCLE] RenderingSystem created.";
+
+    m_frameTimer.setTimerType(Qt::PreciseTimer);
+    m_frameTimer.setInterval(16);               // as fast as vsync allows
+    connect(&m_frameTimer, &QTimer::timeout, this, [this]()
+        {
+            if (!m_scene) return;               // ← simple null-check
+
+            float dt = m_clock.restart() * 0.001f;
+            updateSceneLogic(dt);
+
+            for (auto* vp : m_targets.keys())
+                vp->update();
+        });
 }
 
 RenderingSystem::~RenderingSystem() {
@@ -50,6 +65,8 @@ void RenderingSystem::initializeResourcesForContext(QOpenGLFunctions_4_3_Core* g
     // 3. ADD a guard to only set the scene pointer once
     if (!m_scene) {
         m_scene = scene;
+        m_clock.start();
+        m_frameTimer.start();
     }
     qDebug() << "[INIT] Initializing resources for new context:" << ctx;
 
@@ -102,6 +119,16 @@ void RenderingSystem::initializeResourcesForContext(QOpenGLFunctions_4_3_Core* g
     qDebug() << "[INIT] RenderingSystem initialization complete for context" << ctx;
 }
 void RenderingSystem::renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_Core* gl, int vpW, int vpH) {
+    
+    static std::chrono::steady_clock::time_point last =
+        std::chrono::steady_clock::now();
+    auto  now = std::chrono::steady_clock::now();
+    float dt = std::chrono::duration<float>(now - last).count();
+    last = now;
+    
+    updateCameraTransforms();                               // copy Camera ➜ TransformComponent
+    ViewportWidget::propagateTransforms(m_scene->getRegistry()); // build WorldTransformComponent
+
     ensureContextIsTracked(viewport);
 
     TargetFBOs& target = m_targets[viewport];
@@ -392,6 +419,20 @@ void RenderingSystem::updateSceneLogic(float deltaTime) {
         float finalBrightness = 0.1f + 0.9f * brightness;
         for (auto entity : pulseView) {
             pulseView.get<SplineComponent>(entity).glowColour.a = 1.0f * finalBrightness;
+        }
+    }
+
+    auto ledView = registry.view<RecordLedTag, MaterialComponent,
+        PulsingLightComponent>();
+    if (!ledView.size_hint() == 0) {
+        for (auto e : ledView) {
+            auto& mat = ledView.get<MaterialComponent>(e);
+            const auto& plc = ledView.get<PulsingLightComponent>(e);
+
+            // Square-wave: 0 or 1 based on sin()
+            float t = (sin(m_elapsedTime * plc.speed) + 1.0f) * 0.5f;     // 0→1
+            mat.albedo = glm::mix(plc.offColor, plc.onColor, t);
+
         }
     }
 }

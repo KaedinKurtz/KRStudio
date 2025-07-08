@@ -1,0 +1,51 @@
+name: Windows Build & Package
+on:
+  push: { branches: [main] }
+  pull_request:
+  # For official releases build only when the tag starts with "v"
+  workflow_dispatch:
+  release: { types: [created] }
+
+jobs:
+  win:
+    runs-on: windows-latest
+    env:
+      BUILD_TYPE: Release
+    steps:
+      - uses: actions/checkout@v4
+
+      # ----- Dependencies ---------------------------------------------------
+      - uses: lukka/setup-vcpkg@v11   # or "conan-io/conan-center-index" if you use Conan
+        with:
+          vcpkgDirectory: '${{github.workspace}}/vcpkg'
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.9.0'            # keep in sync with your dev box
+          host: 'windows'
+          dir: '${{runner.temp}}/Qt'
+
+      # ----- Configure & build ---------------------------------------------
+      - name: Configure
+        run: >
+          cmake -B build -S .
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+          -DCMAKE_TOOLCHAIN_FILE=${{env.VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build
+        run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel
+
+      # ----- Deploy Qt and all DLLs ----------------------------------------
+      - name: Bundle runtime libs
+        run: |
+          set PATH=%PATH%;${{runner.temp}}\Qt\6.9.0\msvc2019_64\bin
+          windeployqt --release --qmldir . ^
+            build\bin\RoboticsSoftware.exe
+          copy README.md build\bin\
+      # ----- Create distributable archive ----------------------------------
+      - name: Build installer
+        run: iscc packaging/InnoSetup.iss
+      - uses: actions/upload-artifact@v4
+        with:
+         name: KRStudio-win64
+         path: dist/installer/*.exe

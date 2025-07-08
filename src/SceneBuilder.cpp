@@ -47,7 +47,7 @@ entt::entity SceneBuilder::createCamera(entt::registry& registry,
     auto& lightPulse = registry.emplace<PulsingLightComponent>(ledE);
     lightPulse.onColor = glm::vec3(1.0f, 0.0f, 0.0f); // Example: Make one camera's light orange
     lightPulse.offColor = glm::vec3(0.3f, 0.0f, 0.0f);
-    lightPulse.speed = 60.0f;
+    lightPulse.speed = 6.0f;
 
     auto& lxf = registry.emplace<TransformComponent>(ledE);
     lxf.translation = { 0.1f, -0.115f, 0.275f };
