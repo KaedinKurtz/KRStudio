@@ -30,26 +30,34 @@ static void qtMessageOutput(QtMsgType type, const QMessageLogContext &context, c
 
 int main(int argc, char* argv[])
 {
+    // --- CORRECT INITIALIZATION ORDER ---
+
+    // 1. Set up any custom message handlers first.
     qInstallMessageHandler(qtMessageOutput);
-    QApplication app(argc, argv);
 
-    // Enable verbose Qt logging for OpenGL and platform issues
-    QLoggingCategory::setFilterRules(QStringLiteral("qt.qpa.*=true\nqt.opengl.*=true"));
+    // 2. Set application-wide attributes like context sharing.
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
-    // --- Set the default OpenGL format for the entire application ---
+    // 3. Define and set the default OpenGL format for the ENTIRE application.
     QSurfaceFormat format;
     format.setDepthBufferSize(24);
     format.setStencilBufferSize(8);
-    format.setVersion(4, 3); // Or your target OpenGL version
+    format.setVersion(4, 3);
     format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSamples(4); // Request a Core Profile context
-    format.setOption(QSurfaceFormat::StereoBuffers, true);
+    format.setSamples(4);
     format.setOption(QSurfaceFormat::DebugContext);
     format.setColorSpace(QSurfaceFormat::sRGBColorSpace);
     QSurfaceFormat::setDefaultFormat(format);
-    // ----------------------------------------------------------------
 
+    // 4. NOW, create the QApplication object. It will use the settings above.
+    QApplication app(argc, argv);
+
+    // 5. Configure any other app-specific systems like logging.
+    QLoggingCategory::setFilterRules(QStringLiteral("qt.qpa.*=true\nqt.opengl.*=true"));
+
+    // 6. Create and show your main window.
     MainWindow mainWindow;
     mainWindow.show();
+
     return app.exec();
 }

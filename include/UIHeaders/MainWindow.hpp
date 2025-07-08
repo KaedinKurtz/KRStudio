@@ -1,6 +1,6 @@
 // include/MainWindow.hpp
 #pragma once
-
+#include <QPushButton>
 #include <QMainWindow>
 #include <QTimer>
 #include <QResizeEvent>
@@ -51,6 +51,12 @@ private:
 
 
     QTimer* m_masterRenderTimer;
+    QList<ViewportWidget*> m_viewports;
+
+    QPushButton* m_testButton;
+
+private slots:
+    void onTestNewViewport();
 
 protected slots:
     void onLoadRobotClicked();

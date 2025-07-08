@@ -1,16 +1,17 @@
 ﻿#pragma once
 
-#include "IRenderPass.hpp" // The new interface
-#include "components.hpp"           // For RenderResourceComponent
+#include "IRenderPass.hpp"
+#include "components.hpp"
 
 #include <QObject>
 #include <QMap>
+#include <QHash> // ADDED
+#include <QSet>  // ADDED
 #include <QOpenGLFunctions_4_3_Core>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -21,8 +22,7 @@ class ViewportWidget;
 class Shader;
 class Scene;
 
-// This struct holds the framebuffer objects for a single viewport.
-// It is managed by the RenderingSystem.
+// This struct holds the framebuffer objects for a single viewport. (No changes needed)
 struct TargetFBOs {
     int w = 0, h = 0;
     GLuint mainFBO = 0, mainColorTexture = 0, mainDepthTexture = 0;
@@ -38,7 +38,8 @@ public:
     ~RenderingSystem();
 
     // --- Lifecycle & Core API ---
-    void initializeSharedResources(QOpenGLFunctions_4_3_Core* gl, Scene* scene);
+    // RENAMED: This function now initializes resources for a specific context.
+    void initializeResourcesForContext(QOpenGLFunctions_4_3_Core* gl, Scene* scene);
     void renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_Core* gl, int vpW, int vpH);
     void shutdown(QOpenGLFunctions_4_3_Core* gl);
     void onViewportResized(ViewportWidget* vp, QOpenGLFunctions_4_3_Core* gl, int fbW, int fbH);
@@ -55,7 +56,9 @@ public:
     const RenderResourceComponent::Buffers& getOrCreateMeshBuffers(
         QOpenGLFunctions_4_3_Core* gl, QOpenGLContext* ctx, entt::entity entity);
     void ensureContextIsTracked(QOpenGLWidget* viewport);
-    QMap<ViewportWidget*, TargetFBOs> m_targets; // Use QMap for pointer keys
+    QMap<ViewportWidget*, TargetFBOs> m_targets;
+
+    bool isContextInitialized(QOpenGLContext* ctx) const;
 
 public slots:
     // --- Lifecycle Management Slot ---
@@ -63,7 +66,6 @@ public slots:
 
 private:
     // --- Private Helpers ---
-    
     void initOrResizeFBOsForTarget(QOpenGLFunctions_4_3_Core* gl, TargetFBOs& target, int width, int height);
     void updateSplineCaches();
 
@@ -77,7 +79,13 @@ private:
     std::vector<std::unique_ptr<IRenderPass>> m_renderPasses;
 
     // --- Resource Management ---
-    QMap<QString, Shader*> m_shaders;
-    
-    std::set<QOpenGLContext*> m_trackedContexts;
+    // FROM: QMap<QString, Shader*> m_shaders;
+    // TO: A map of contexts, each holding its own map of shaders.
+    QHash<QOpenGLContext*, QHash<QString, Shader*>> m_perContextShaders;
+
+    // ADDED: A set to track which contexts we have already loaded resources for.
+    QSet<QOpenGLContext*> m_initializedContexts;
+
+    // This existing set tracks which contexts we are watching for destruction.
+    QSet<QOpenGLContext*> m_trackedContexts; // FROM: std::set TO: QSet for consistency
 };

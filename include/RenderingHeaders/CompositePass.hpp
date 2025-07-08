@@ -23,8 +23,6 @@ private:
     // A helper to create the fullscreen quad VAO for a new context.
     void createCompositeVAOForContext(QOpenGLContext* ctx, QOpenGLFunctions_4_3_Core* gl);
 
-    Shader* m_compositeShader = nullptr;
-
     // Each context gets its own VAO for the fullscreen effect.
     QHash<QOpenGLContext*, GLuint> m_compositeVAOs;
 };

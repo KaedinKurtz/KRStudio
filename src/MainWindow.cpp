@@ -34,6 +34,7 @@
 #include <QSplitter>
 #include "DockSplitter.h" 
 #include <QOpenGLVersionFunctionsFactory>
+#include <QPushButton>
 
 const QString sidePanelStyle = R"(
     /* General Window and Text Styling */
@@ -272,11 +273,11 @@ MainWindow::MainWindow(QWidget* parent)
     this->setCentralWidget(m_centralContainer);
 
     ViewportWidget* viewport1 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity1, this); // Creates the first viewport widget.
+    m_viewports.append(viewport1);
     ads::CDockWidget* viewportDock1 = new ads::CDockWidget("3D Viewport 1 (Camera 1)"); // Creates the first dockable viewport.
     viewportDock1->setWidget(viewport1); // Sets the viewport as the content of the dock widget.
     ads::CDockAreaWidget* viewportArea1 = m_dockManager->addDockWidget(ads::LeftDockWidgetArea, viewportDock1); // Docks the first viewport, creating our first column.
    
-
     m_masterRenderTimer = new QTimer(this);
     connect(m_masterRenderTimer, &QTimer::timeout, this, &MainWindow::onMasterRender);
 
@@ -291,7 +292,7 @@ MainWindow::MainWindow(QWidget* parent)
             // We also need to get the GL function pointer directly.
             auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport1->context());
             if (gl) {
-                m_renderingSystem->initializeSharedResources(gl, m_scene.get());
+                m_renderingSystem->initializeResourcesForContext(gl, m_scene.get());
             }
             else {
                 qFatal("Could not get GL functions to initialize RenderingSystem.");
@@ -306,6 +307,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     // Create the SECONDARY viewport and dock it to the RIGHT of the FIRST one.
     ViewportWidget* viewport2 = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity2, this); // Creates the second viewport widget.
+    m_viewports.append(viewport2);
     ads::CDockWidget* viewportDock2 = new ads::CDockWidget("3D Viewport 2 (Camera 2)"); // Creates the second dockable viewport.
     viewportDock2->setWidget(viewport2); // Sets the viewport as the content of the dock widget.
     ads::CDockAreaWidget* viewportArea2 = m_dockManager->addDockWidget(ads::RightDockWidgetArea, viewportDock2, viewportArea1); // This is key: docks viewport 2 to the right OF viewport 1, creating a horizontal split.
@@ -350,9 +352,40 @@ MainWindow::MainWindow(QWidget* parent)
 
     // --- 6. Other Signal/Slot Connections ---
     connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
-    connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [viewport1](bool isFloating) { /* ... */ });
-    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, [viewport2](bool isFloating) { /* ... */ });
+    connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [viewport1, viewportDock1](bool isFloating) {
+        if (isFloating) {
+            // The widget has just been undocked.
+            // Schedule a hide/show cycle on the dock widget itself to force a full refresh.
+            QTimer::singleShot(10, viewportDock1, [viewportDock1]() {
+                viewportDock1->hide();
+                viewportDock1->show();
+                });
+        }
+        else {
+            // When the widget is redocked...
+            QTimer::singleShot(0, viewport1, [=]() { // Use a default capture [=]
+                viewport1->update();
+                });
+        }
+        });
+
+    // Do the same for the second viewport
+    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, [viewport2, viewportDock2](bool isFloating) {
+        if (isFloating) {
+            QTimer::singleShot(10, viewport2, [viewport2]() {
+                viewport2->hide();
+                viewport2->show();
+                });
+        }
+        else {
+            QTimer::singleShot(0, viewport2, [=]() {
+                viewport2->update();
+                });
+        }
+		});
+
     connect(m_flowVisualizerMenu, &FlowVisualizerMenu::settingsChanged, this, &MainWindow::onFlowVisualizerSettingsChanged);
+    connect(m_flowVisualizerMenu, &FlowVisualizerMenu::testViewportRequested, this, &MainWindow::onTestNewViewport);
 
     updateVisualizerUI();
     onFlowVisualizerSettingsChanged();
@@ -583,9 +616,12 @@ void MainWindow::onFlowVisualizerSettingsChanged()
     }
 
     // Mark the component as dirty so the rendering system knows to update its GPU buffe
-
-
-
+    for (ViewportWidget* viewport : m_viewports)
+    {
+        if (viewport) {
+            viewport->update();
+        }
+    }
 
     visualizer.isGpuDataDirty = true;
     qDebug() << "Flow visualizer settings successfully applied to component.";
@@ -616,4 +652,22 @@ void MainWindow::onFlowVisualizerTransformChanged()
     xf.translation = m_flowVisualizerMenu->getCentre();
     xf.rotation = glm::quat(glm::radians(m_flowVisualizerMenu->getEuler()));
     viz.isGpuDataDirty = true;          // in case centre moved
+}
+
+void MainWindow::onTestNewViewport()
+{
+    qDebug() << "--- Running Isolation Test ---";
+
+    // Use the first camera for the test
+    auto cameraEntity = m_scene->getRegistry().view<CameraComponent>().front();
+
+    // Create a new viewport instance
+    ViewportWidget* testViewport = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cameraEntity, nullptr);
+
+    // IMPORTANT: Make sure the widget is destroyed when its window is closed
+    testViewport->setAttribute(Qt::WA_DeleteOnClose);
+
+    // Show it as a separate, top-level window, NOT in the dock manager
+    testViewport->resize(800, 600);
+    testViewport->show();
 }

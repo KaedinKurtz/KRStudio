@@ -9,13 +9,13 @@
 CompositePass::~CompositePass() { /* ... destructor ... */ }
 
 void CompositePass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl) {
-    m_compositeShader = renderer.getShader("composite");
-    if (!m_compositeShader) {
-        qFatal("CompositePass failed to initialize: Could not find 'composite' shader.");
-    }
+    
 }
 
 void CompositePass::execute(const RenderFrameContext& context) {
+    Shader* compositeShader = context.renderer.getShader("composite");
+    if (!compositeShader) return;
+    
     auto* gl = context.gl;
     auto& target = context.targetFBOs;
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
@@ -35,9 +35,9 @@ void CompositePass::execute(const RenderFrameContext& context) {
     gl->glEnable(GL_FRAMEBUFFER_SRGB); // Enable for correct gamma correction on output.
 
     // 3. Use the composite shader and set its textures.
-    m_compositeShader->use(gl);
-    m_compositeShader->setInt(gl, "sceneTexture", 0);
-    m_compositeShader->setInt(gl, "glowTexture", 1);
+    compositeShader->use(gl);
+    compositeShader->setInt(gl, "sceneTexture", 0);
+    compositeShader->setInt(gl, "glowTexture", 1);
 
     gl->glActiveTexture(GL_TEXTURE0);
     gl->glBindTexture(GL_TEXTURE_2D, target.mainColorTexture); // The result of all opaque/grid/etc. passes.

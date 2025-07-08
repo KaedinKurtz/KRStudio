@@ -159,7 +159,7 @@ void FlowVisualizerMenu::setupConnections()
     connect(ui->resetVisualizerButton, &QToolButton::clicked, this, &FlowVisualizerMenu::onResetVisualizerClicked);
     connect(ui->visualizationTypeInput, &QComboBox::currentIndexChanged, this, &FlowVisualizerMenu::onVisualizationTypeChanged);
     // connect(ui->boundaryTypeComboBox, &QComboBox::currentIndexChanged, this, &FlowVisualizerMenu::onBoundaryTypeChanged); // Assuming you add this combo box
-
+    connect(ui->btn_addStop, &QPushButton::clicked, this, &FlowVisualizerMenu::testViewportRequested);
     // --- Static Arrow Connections ---
     connect(ui->coloringStyleComboBox, &QComboBox::currentIndexChanged, this, &FlowVisualizerMenu::onStaticColoringStyleChanged);
     connect(ui->btn_XPosColor, &QPushButton::clicked, this, &FlowVisualizerMenu::onStaticDirectionalColorClicked);

@@ -12,5 +12,4 @@ public:
     void execute(const RenderFrameContext& context) override;
 
 private:
-    Shader* m_phongShader = nullptr; // Non-owning pointer to the shared shader.
 };

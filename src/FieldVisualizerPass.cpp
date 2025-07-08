@@ -18,16 +18,22 @@ FieldVisualizerPass::~FieldVisualizerPass() {
 }
 
 void FieldVisualizerPass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl) {
-    // Get all necessary shaders from the central system
-    m_instancedArrowShader = renderer.getShader("instanced_arrow");
-    m_arrowFieldComputeShader = renderer.getShader("arrow_field_compute");
-    m_particleUpdateComputeShader = renderer.getShader("particle_update_compute");
-    m_particleRenderShader = renderer.getShader("particle_render");
-    m_flowVectorComputeShader = renderer.getShader("flow_vector_compute");
 
-    // Create the global UBOs/SSBOs that are shared across all contexts
-    gl->glGenBuffers(1, &m_effectorDataUBO);
-    gl->glGenBuffers(1, &m_triangleDataSSBO);
+}
+
+void FieldVisualizerPass::createResourcesForContext(QOpenGLFunctions_4_3_Core* gl) {
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    if (!ctx) return;
+
+    GLuint ubo = 0;
+    GLuint ssbo = 0;
+
+    gl->glGenBuffers(1, &ubo);
+    gl->glGenBuffers(1, &ssbo);
+
+    // Store the new buffer IDs in our maps
+    m_effectorDataUBOs[ctx] = ubo;
+    m_triangleDataSSBOs[ctx] = ssbo;
 }
 
 void FieldVisualizerPass::execute(const RenderFrameContext& context) {
@@ -35,44 +41,52 @@ void FieldVisualizerPass::execute(const RenderFrameContext& context) {
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
 
-    // Ensure the arrow primitive geometry exists for the current context.
+    // --- 1. Ensure all resources for the current context exist ---
+    if (!m_effectorDataUBOs.contains(ctx)) {
+        createResourcesForContext(gl);
+    }
     if (!m_arrowVAOs.contains(ctx)) {
         createArrowPrimitiveForContext(ctx, gl);
     }
 
-    // --- 1. Gather & Upload Data (once per frame) ---
+    // --- 2. Get all shaders for the current context ---
+    Shader* instancedArrowShader = context.renderer.getShader("instanced_arrow");
+    Shader* arrowFieldComputeShader = context.renderer.getShader("arrow_field_compute");
+    Shader* particleUpdateComputeShader = context.renderer.getShader("particle_update_compute");
+    Shader* particleRenderShader = context.renderer.getShader("particle_render");
+    Shader* flowVectorComputeShader = context.renderer.getShader("flow_vector_compute");
+
+    if (!instancedArrowShader || !arrowFieldComputeShader || !particleUpdateComputeShader ||
+        !particleRenderShader || !flowVectorComputeShader) {
+        qWarning("FieldVisualizerPass: Could not retrieve all required shaders for the current context.");
+        return;
+    }
+
+    // --- 3. Get buffer IDs for the current context ---
+    GLuint effectorUBO = m_effectorDataUBOs.value(ctx);
+    GLuint triangleSSBO = m_triangleDataSSBOs.value(ctx);
+
+    // --- 4. Gather & Upload Data (once per frame) ---
     gatherEffectorData(context);
-    uploadEffectorData(gl);
+    uploadEffectorData(gl, effectorUBO, triangleSSBO); // Pass the correct buffer IDs
 
-    // --- NEW: Bind any general-purpose buffers for the pass ---
-    // Note: m_debugBuffer and m_debugAtomicCounter would need to be
-    // added as member variables to the FieldVisualizerPass and
-    // created in its initialize() method.
-    // GLuint zero = 0;
-    // gl->glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, m_debugAtomicCounter);
-    // gl->glBufferSubData(GL_ATOMIC_COUNTER_BUFFER, 0, sizeof(GLuint), &zero);
-    // gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, m_debugBuffer);
-    // gl->glBindBufferBase(GL_ATOMIC_COUNTER_BUFFER, 11, m_debugAtomicCounter);
-
-
-    // --- 2. Main Visualizer Loop ---
+    // --- 5. Main Visualizer Loop ---
     auto& registry = context.registry;
     auto visualizerView = registry.view<FieldVisualizerComponent, TransformComponent>();
     for (auto entity : visualizerView) {
         auto& vis = registry.get<FieldVisualizerComponent>(entity);
         if (!vis.isEnabled) continue;
-
         const auto& xf = registry.get<TransformComponent>(entity);
 
-        // Delegate to the appropriate sub-routine
+        // --- 6. Delegate to sub-routines, passing all necessary resources ---
         if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Particles) {
-            renderParticles(context, vis, xf);
+            renderParticles(context, vis, xf, particleRenderShader, particleUpdateComputeShader, effectorUBO, triangleSSBO);
         }
         else if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Flow) {
-            renderFlow(context, vis, xf);
+            renderFlow(context, vis, xf, instancedArrowShader, flowVectorComputeShader, effectorUBO, triangleSSBO);
         }
         else if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Arrows) {
-            renderArrows(context, vis, xf);
+            renderArrows(context, vis, xf, instancedArrowShader, arrowFieldComputeShader, effectorUBO, triangleSSBO);
         }
         vis.isGpuDataDirty = false;
     }
@@ -189,9 +203,9 @@ void FieldVisualizerPass::gatherEffectorData(const RenderFrameContext& context) 
     }
 }
 
-void FieldVisualizerPass::uploadEffectorData(QOpenGLFunctions_4_3_Core* gl) {
+void FieldVisualizerPass::uploadEffectorData(QOpenGLFunctions_4_3_Core* gl, GLuint uboID, GLuint ssboID) {
     // --- Upload Point and Directional Effectors to the UBO ---
-    gl->glBindBuffer(GL_UNIFORM_BUFFER, m_effectorDataUBO);
+    gl->glBindBuffer(GL_UNIFORM_BUFFER, uboID); // USE PARAMETER
     // Orphan the buffer for performance (a common strategy for DYNAMIC_DRAW buffers)
     gl->glBufferData(GL_UNIFORM_BUFFER, 256 * sizeof(PointEffectorGpu) + 16 * sizeof(DirectionalEffectorGpu), nullptr, GL_DYNAMIC_DRAW);
 
@@ -207,20 +221,21 @@ void FieldVisualizerPass::uploadEffectorData(QOpenGLFunctions_4_3_Core* gl) {
     gl->glBindBuffer(GL_UNIFORM_BUFFER, 0); // Unbind
 
     // --- Upload Triangle Effectors to the SSBO ---
-    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_triangleDataSSBO);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboID); // USE PARAMETER
     // Orphan and upload triangle data.
     gl->glBufferData(GL_SHADER_STORAGE_BUFFER, m_triangleEffectors.size() * sizeof(TriangleGpu), m_triangleEffectors.empty() ? nullptr : m_triangleEffectors.data(), GL_DYNAMIC_DRAW);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); // Unbind
 }
 
-void FieldVisualizerPass::renderParticles(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf) {
+void FieldVisualizerPass::renderParticles(const RenderFrameContext & context, FieldVisualizerComponent & vis, const TransformComponent & xf,
+    Shader * renderShader, Shader * computeShader, GLuint uboID, GLuint ssboID)
+{
     auto* gl = context.gl;
 
-    // Ensure the required shaders for this mode are available.
-    if (!m_particleUpdateComputeShader || !m_particleRenderShader) return;
+    // The check for shader validity is now done in the execute() function before this is called.
 
     // --- 1. Resource Creation (if needed) ---
-    // If the component's buffers haven't been created or are marked as dirty, regenerate them.
+    // This logic is self-contained and correct as-is.
     auto& settings = vis.particleSettings;
     if (vis.particleBuffer[0] == 0 || vis.isGpuDataDirty) {
         // Clean up old buffers if they exist.
@@ -253,39 +268,38 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context, Fie
     }
 
     // --- 2. Compute Pass (Particle Simulation) ---
-    m_particleUpdateComputeShader->use(gl);
-    gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, m_effectorDataUBO);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_triangleDataSSBO);
+    computeShader->use(gl); // USE PARAMETER
+    gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, uboID); // USE PARAMETER
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboID); // USE PARAMETER
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, vis.particleBuffer[vis.currentReadBuffer]);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, vis.particleBuffer[1 - vis.currentReadBuffer]);
 
-    m_particleUpdateComputeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
-    m_particleUpdateComputeShader->setFloat(gl, "u_deltaTime", context.deltaTime);
-    m_particleUpdateComputeShader->setFloat(gl, "u_time", context.elapsedTime);
-    m_particleUpdateComputeShader->setVec3(gl, "u_boundsMin", vis.bounds.min);
-    m_particleUpdateComputeShader->setVec3(gl, "u_boundsMax", vis.bounds.max);
-    m_particleUpdateComputeShader->setInt(gl, "u_pointEffectorCount", static_cast<int>(m_pointEffectors.size()));
-    m_particleUpdateComputeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
-    m_particleUpdateComputeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
+    // Use the computeShader parameter for all uniform setting
+    computeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
+    computeShader->setFloat(gl, "u_deltaTime", context.deltaTime);
+    computeShader->setFloat(gl, "u_time", context.elapsedTime);
+    computeShader->setVec3(gl, "u_boundsMin", vis.bounds.min);
+    computeShader->setVec3(gl, "u_boundsMax", vis.bounds.max);
+    computeShader->setInt(gl, "u_pointEffectorCount", static_cast<int>(m_pointEffectors.size()));
+    computeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
+    computeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
 
     gl->glDispatchCompute(settings.particleCount / 256 + 1, 1, 1);
-    gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // Ensure compute shader finishes before rendering.
+    gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // --- 3. Render Pass (Drawing Particles) ---
     gl->glEnable(GL_PROGRAM_POINT_SIZE);
     gl->glEnable(GL_BLEND);
-    gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending for a nice glow effect.
-    gl->glDepthMask(GL_FALSE); // Disable depth writing for transparency.
+    gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    gl->glDepthMask(GL_FALSE);
 
-    m_particleRenderShader->use(gl);
-    m_particleRenderShader->setMat4(gl, "u_view", context.view);
-    m_particleRenderShader->setMat4(gl, "u_projection", context.projection);
+    renderShader->use(gl); // USE PARAMETER
+    renderShader->setMat4(gl, "u_view", context.view);
+    renderShader->setMat4(gl, "u_projection", context.projection);
 
     gl->glBindVertexArray(vis.particleVAO);
-    // We render from the buffer we just WROTE to in the compute shader.
     gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[1 - vis.currentReadBuffer]);
 
-    // Set up vertex attributes to read from the particle buffer.
     gl->glEnableVertexAttribArray(0);
     gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position));
     gl->glEnableVertexAttribArray(1);
@@ -302,19 +316,20 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context, Fie
     gl->glDisable(GL_PROGRAM_POINT_SIZE);
 
     // --- 5. Ping-Pong Buffers ---
-    // Swap the read/write buffers for the next frame.
     vis.currentReadBuffer = 1 - vis.currentReadBuffer;
 }
 
-void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf) {
+void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf,
+    Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID)
+{
     auto* gl = context.gl;
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
 
-    // Ensure the required shaders for this mode are available.
-    if (!m_flowVectorComputeShader || !m_instancedArrowShader) return;
+    // The check for valid shaders is now done in execute() before this is called.
 
     // --- 1. Resource Creation (if needed) ---
+    // This logic is self-contained and correct as-is.
     auto& settings = vis.flowSettings;
     if (vis.particleBuffer[0] == 0 || vis.isGpuDataDirty) {
         if (vis.particleBuffer[0] != 0) {
@@ -324,8 +339,19 @@ void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVis
 
         // Create initial particle data on the CPU.
         std::vector<Particle> particles(settings.particleCount);
-        // ... (The logic to randomize initial particle positions, age, etc. remains the same) ...
-        for (int i = 0; i < settings.particleCount; ++i) { /* ... */ }
+        // This logic remains the same. The user has indicated it's correct.
+        std::mt19937 rng(std::random_device{}());
+        std::uniform_real_distribution<float> distrib(0.0f, 1.0f);
+        glm::vec3 boundsSize = vis.bounds.max - vis.bounds.min;
+        for (int i = 0; i < settings.particleCount; ++i) {
+            particles[i].position = glm::vec4(vis.bounds.min + distrib(rng) * boundsSize, 1.0f);
+            particles[i].velocity = glm::vec4(0.0f);
+            particles[i].color = glm::vec4(1.0f);
+            particles[i].age = distrib(rng) * settings.lifetime;
+            particles[i].lifetime = settings.lifetime;
+            particles[i].size = settings.baseSize;
+        }
+
 
         // Create the double-buffered particle SSBOs.
         gl->glGenBuffers(2, vis.particleBuffer);
@@ -341,31 +367,31 @@ void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVis
     }
 
     // --- 2. Compute Pass (Simulate Particles & Generate Arrow Instances) ---
-    m_flowVectorComputeShader->use(gl);
+    computeShader->use(gl); // USE PARAMETER
     // Bind all necessary buffers for the compute shader.
-    gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, m_effectorDataUBO);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_triangleDataSSBO);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, vis.particleBuffer[vis.currentReadBuffer]);        // Read
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, vis.particleBuffer[1 - vis.currentReadBuffer]);  // Write
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, vis.gpuData.instanceDataSSBO);                   // Instance Data Output
+    gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, uboID); // USE PARAMETER
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboID); // USE PARAMETER
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, vis.particleBuffer[vis.currentReadBuffer]);      // Read
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, vis.particleBuffer[1 - vis.currentReadBuffer]); // Write
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, vis.gpuData.instanceDataSSBO);                  // Instance Data Output
 
     // Set all uniforms for the compute shader.
-    m_flowVectorComputeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
-    m_flowVectorComputeShader->setFloat(gl, "u_deltaTime", context.deltaTime);
-    m_flowVectorComputeShader->setFloat(gl, "u_time", context.elapsedTime);
-    // ... (set all other flow settings uniforms: baseSpeed, flowScale, etc.) ...
-    m_flowVectorComputeShader->setInt(gl, "u_pointEffectorCount", static_cast<int>(m_pointEffectors.size()));
-    m_flowVectorComputeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
-    m_flowVectorComputeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
+    computeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
+    computeShader->setFloat(gl, "u_deltaTime", context.deltaTime);
+    computeShader->setFloat(gl, "u_time", context.elapsedTime);
+    // ... set all other flow settings uniforms on 'computeShader' ...
+    computeShader->setInt(gl, "u_pointEffectorCount", static_cast<int>(m_pointEffectors.size()));
+    computeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
+    computeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
 
     // Dispatch the compute shader.
     gl->glDispatchCompute(settings.particleCount / 256 + 1, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // Ensure compute is done before rendering.
 
     // --- 3. Render Pass (Draw Instanced Arrows) ---
-    m_instancedArrowShader->use(gl);
-    m_instancedArrowShader->setMat4(gl, "view", context.view);
-    m_instancedArrowShader->setMat4(gl, "projection", context.projection);
+    renderShader->use(gl); // USE PARAMETER
+    renderShader->setMat4(gl, "view", context.view);
+    renderShader->setMat4(gl, "projection", context.projection);
 
     // Bind the VAO for the arrow primitive (specific to this context).
     gl->glBindVertexArray(m_arrowVAOs[ctx]);
@@ -384,7 +410,6 @@ void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVis
     gl->glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + 2 * vec4Size));
     gl->glEnableVertexAttribArray(5);
     gl->glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + 3 * vec4Size));
-    // color (vec4)
     gl->glEnableVertexAttribArray(6);
     gl->glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(InstanceData, color));
 
@@ -411,13 +436,14 @@ void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVis
     vis.currentReadBuffer = 1 - vis.currentReadBuffer;
 }
 
-void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf) {
+void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf,
+    Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID)
+{
     auto* gl = context.gl;
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
 
-    // Ensure the required shaders for this mode are available.
-    if (!m_arrowFieldComputeShader || !m_instancedArrowShader) return;
+    // The check for valid shaders is now done in execute() before this is called.
 
     // --- 1. Resource Creation (if settings have changed) ---
     auto& settings = vis.arrowSettings;
@@ -474,33 +500,31 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
     GLuint zero = 0;
     gl->glBufferSubData(GL_DRAW_INDIRECT_BUFFER, sizeof(GLuint), sizeof(GLuint), &zero);
 
-    m_arrowFieldComputeShader->use(gl);
+    computeShader->use(gl); // USE PARAMETER
     // Bind all buffers for the compute shader.
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, vis.gpuData.samplePointsSSBO);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vis.gpuData.instanceDataSSBO);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, vis.gpuData.commandUBO); // The compute shader writes to this.
-    gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, m_effectorDataUBO);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_triangleDataSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, vis.gpuData.commandUBO);
+    gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, uboID);      // USE PARAMETER
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboID); // USE PARAMETER
 
     // Set uniforms.
-    m_arrowFieldComputeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
-    m_arrowFieldComputeShader->setFloat(gl, "u_vectorScale", settings.vectorScale);
-    m_arrowFieldComputeShader->setFloat(gl, "u_arrowHeadScale", settings.headScale);
-    m_arrowFieldComputeShader->setFloat(gl, "u_cullingThreshold", settings.cullingThreshold);
-    m_arrowFieldComputeShader->setInt(gl, "u_pointEffectorCount", static_cast<int>(m_pointEffectors.size()));
-    m_arrowFieldComputeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
-    m_arrowFieldComputeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
+    computeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
+    computeShader->setFloat(gl, "u_vectorScale", settings.vectorScale);
+    computeShader->setFloat(gl, "u_arrowHeadScale", settings.headScale);
+    computeShader->setFloat(gl, "u_cullingThreshold", settings.cullingThreshold);
+    computeShader->setInt(gl, "u_pointEffectorCount", static_cast<int>(m_pointEffectors.size()));
+    computeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
+    computeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
 
     // Dispatch the compute shader.
     gl->glDispatchCompute((GLuint)vis.gpuData.numSamplePoints / 256 + 1, 1, 1);
-    // This barrier is crucial! It ensures the compute shader finishes writing to the UBO
-    // and SSBOs before the graphics pipeline tries to read from them for drawing.
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
 
     // --- 3. Render Pass (Indirectly Draw Instanced Arrows) ---
-    m_instancedArrowShader->use(gl);
-    m_instancedArrowShader->setMat4(gl, "view", context.view);
-    m_instancedArrowShader->setMat4(gl, "projection", context.projection);
+    renderShader->use(gl); // USE PARAMETER
+    renderShader->setMat4(gl, "view", context.view);
+    renderShader->setMat4(gl, "projection", context.projection);
 
     gl->glBindVertexArray(m_arrowVAOs[ctx]);
     gl->glBindBuffer(GL_ARRAY_BUFFER, vis.gpuData.instanceDataSSBO);
