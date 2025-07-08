@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # ----- Dependencies ---------------------------------------------------
-      - uses: lukka/setup-vcpkg@v11   # or "conan-io/conan-center-index" if you use Conan
+      - uses: lukka/run-vcpkg@v11   # or "conan-io/conan-center-index" if you use Conan
         with:
           vcpkgDirectory: '${{github.workspace}}/vcpkg'
 
