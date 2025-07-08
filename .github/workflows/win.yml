@@ -13,7 +13,11 @@ jobs:
       BUILD_TYPE: Release
     steps:
       - uses: actions/checkout@v4
-
+      - name: Debug vcpkg manifest path
+        run: |
+            echo "Workspace = $GITHUB_WORKSPACE"
+            echo "--- vcpkg.json found by find . -maxdepth 2 ---"
+            find . -maxdepth 2 -name vcpkg.json -print -exec cat {} \;
       # ----- Dependencies ---------------------------------------------------
       - uses: lukka/run-vcpkg@v11   # or "conan-io/conan-center-index" if you use Conan
         with:
