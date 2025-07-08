@@ -12,7 +12,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
 #include <QMessageBox>
-#include <QOpenGLContext>
 
 #include "ViewportWidget.hpp"
 #include "RenderingSystem.hpp"

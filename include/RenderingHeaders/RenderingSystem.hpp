@@ -74,6 +74,7 @@ private:
     QTimer        m_frameTimer;     // drives the simulation
     QElapsedTimer m_clock;
 
+    QString shadersRootDir();
 
     // --- Core Member Variables ---
     bool m_isInitialized = false;

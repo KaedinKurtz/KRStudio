@@ -156,5 +156,69 @@ if (MSVC)
     target_compile_options(RoboticsSoftware PRIVATE /GS /RTC1)
 endif()
 
+# ============================================
+# === Platform-specific application icons  ===
+# ============================================
+
+# ---- Windows -------------------------------------------------------------
+# A one-line resource script lives at icons/app.rc
+#     IDI_ICON1 ICON "app.ico"
+# (path is relative to icons/app.rc itself)
+
+if (MSVC)                                                         # Windows build
+    target_sources(RoboticsSoftware PRIVATE
+        ${CMAKE_SOURCE_DIR}/icons/app.rc)         # compile & link .ico into .exe
+endif()
+
+# ---- macOS ---------------------------------------------------------------
+# Copy app.icns into the bundle and tell macOS it is *the* icon file.
+
+if (APPLE)
+    # 1) place the .icns inside the bundle's Resources/
+    set_source_files_properties(
+        ${CMAKE_SOURCE_DIR}/icons/app.icns
+        PROPERTIES
+            MACOSX_PACKAGE_LOCATION "Resources")
+
+    # 2) mark the target as a bundle and register the icon
+    set_target_properties(RoboticsSoftware PROPERTIES
+        MACOSX_BUNDLE            TRUE          # turn the target into .app
+        MACOSX_BUNDLE_ICON_FILE  app.icns)     #     ^– file name only
+endif()
+
+
+target_compile_definitions(RoboticsSoftware PRIVATE NOMINMAX)
+
 # Finalize the Qt setup
 qt_finalize_executable(RoboticsSoftware)
+
+
+# ============================================================
+# === INSTALL LAYOUT  (everything ends up in <prefix>/app) ===
+# ============================================================
+
+#   bin/
+#     RoboticsSoftware(.exe)
+#   shaders/
+#   icons/
+#   simple_arm.urdf   …
+
+install(TARGETS RoboticsSoftware
+        RUNTIME DESTINATION .          # .exe / ELF goes to prefix root
+        BUNDLE  DESTINATION .)         # macOS bundle goes to prefix root
+
+# shaders
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/shaders"
+        DESTINATION shaders)
+
+# icons (contains kRLogoSquare.png + .ico/.icns – see §3)
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/icons"
+        DESTINATION icons)
+
+# data files
+install(FILES "${CMAKE_SOURCE_DIR}/simple_arm.urdf"
+        DESTINATION .)
+
+# =================================================================
+# === windeployqt / macdeployqt get called *after* install step ===
+# =================================================================

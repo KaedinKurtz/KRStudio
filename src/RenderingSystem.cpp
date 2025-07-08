@@ -26,6 +26,20 @@
 // Constructor & Destructor
 //==============================================================================
 
+QString RenderingSystem::shadersRootDir()
+{
+    // •  Release build:   <app.exe>/shaders
+    // •  Debug   build:   <build-dir>/../shaders  (one level up)
+#ifdef NDEBUG
+    return QCoreApplication::applicationDirPath()
+        + QLatin1String("/shaders/");
+#else
+    //  “…/build/<config>/RoboticsSoftware.exe”  →  “…/shaders/”
+    QDir exeDir{ QCoreApplication::applicationDirPath() };
+    return exeDir.absoluteFilePath(QStringLiteral("../shaders/"));
+#endif
+}
+
 RenderingSystem::RenderingSystem(QObject* parent)
     : QObject(parent)
 {
@@ -74,7 +88,7 @@ void RenderingSystem::initializeResourcesForContext(QOpenGLFunctions_4_3_Core* g
     // --- Load All Shaders into the PER-CONTEXT Shader Map ---
     qDebug() << "[INIT] Loading all shaders for context" << ctx;
     try {
-        const QString shaderDir = dataDir() + "/shaders/";
+        const QString shaderDir = shadersRootDir();
 
         // 4. ADD a line to get the specific shader map for this context
         auto& contextShaders = m_perContextShaders[ctx];
