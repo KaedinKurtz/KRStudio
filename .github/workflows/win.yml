@@ -13,15 +13,16 @@ jobs:
       BUILD_TYPE: Release
     steps:
       - uses: actions/checkout@v4
-      - name: Debug vcpkg manifest path
+      - name: Show where the manifest is (Windows-friendly)
+        shell: pwsh
         run: |
-            echo "Workspace = $GITHUB_WORKSPACE"
-            echo "--- vcpkg.json found by find . -maxdepth 2 ---"
-            find . -maxdepth 2 -name vcpkg.json -print -exec cat {} \;
+         Write-Host "Workspace = $Env:GITHUB_WORKSPACE"
+         Get-ChildItem -Path "$Env:GITHUB_WORKSPACE" -Filter vcpkg.json -Recurse -Depth 2
       # ----- Dependencies ---------------------------------------------------
-      - uses: lukka/run-vcpkg@v11   # or "conan-io/conan-center-index" if you use Conan
+      - uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: '${{github.workspace}}/vcpkg'
+          vcpkgGitCommitId: 'c6f09fc73ebfbfddd769f8fac9f33f95304c77e5' 
 
       - uses: jurplel/install-qt-action@v4
         with:
