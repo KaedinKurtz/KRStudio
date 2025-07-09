@@ -11,50 +11,60 @@ jobs:
     runs-on: windows-latest
     env:
       BUILD_TYPE: Release
+
     steps:
-
-      # 1. Normal checkout (no --recursive needed any more)
-      - uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
         with:
-         fetch-depth: 0 
-
-      # 2. vcpkg – unchanged
-      - uses: lukka/run-vcpkg@v11
+          fetch-depth: 0
+          
+      - name: Cache CMake build directory
+        id: cmake-cache
+        uses: actions/cache@v4
         with:
-          vcpkgDirectory: ${{github.workspace}}/vcpkg
-          vcpkgGitCommitId: c6f09fc73ebfbfddd769f8fac9f33f95304c77e5   # pin you picked
-
-      # 3. Qt – unchanged
-      - uses: jurplel/install-qt-action@v4
+          path: ${{ github.workspace }}/build
+          key: ${{ runner.os }}-${{ env.BUILD_TYPE }}-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.BUILD_TYPE }}-
+            
+      - name: Run vcpkg
+        uses: lukka/run-vcpkg@v11
         with:
-          version: 6.9.0
+          vcpkgDirectory: ${{ github.workspace }}/vcpkg
+          vcpkgGitCommitId: c6f09fc73ebfbfddd769f8fac9f33f95304c77e5
+          vcpkg-cache-key: ${{ runner.os }}-${{ hashFiles('**/vcpkg.json') }}
+          vcpkg-cache-restore-keys: |
+            ${{ runner.os }}-
+            
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.9.0'
           host: windows
-          dir: ${{runner.temp}}/Qt
 
-      # 4. Configure + build – nothing to add;
-      #    FetchContent fetches ADS automatically.
-      - name: Configure
+      - name: Configure CMake
         run: >
           cmake -B build -S .
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
           -DCMAKE_TOOLCHAIN_FILE=${{env.VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake
 
-      - name: Build
+      - name: Build Project
         run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel
-
-    # ─────────────── bundle Qt & runtime DLLs ───────────────
-      - name: Bundle runtime libs
+        
+      - name: Bundle runtime libraries
         run: |
-         set PATH=%PATH%;${{ runner.temp }}\Qt\6.9.0\msvc2019_64\bin
-         windeployqt --release --qmldir . ^
-         build\bin\RoboticsSoftware.exe
-         copy README.md build\bin\
-
-    # ─────────────── build installer / upload artifact ───────────────
-      - name: Build installer
-        run: iscc packaging/InnoSetup.iss
-
-      - uses: actions/upload-artifact@v4
+          set PATH=%PATH%;${{ env.QT_BIN_DIR }}
+          windeployqt --release build/bin/RoboticsSoftware.exe
+          copy README.md build/bin/
+          
+      - name: Build Inno Setup installer
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        uses: Minionguyj/innosetup-action@v1.0.2
+        with:
+          path: packaging/InnoSetup.iss
+          
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: KRStudio-win64
           path: dist/installer/*.exe

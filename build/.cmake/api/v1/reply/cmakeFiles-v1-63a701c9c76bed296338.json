@@ -3,17 +3,11 @@
 	[
 		{
 			"expression" : "D:/RoboticsSoftware/*.qrc",
+			"listDirectories" : true,
 			"paths" : 
 			[
-				"D:/RoboticsSoftware/ads/demo/demo.qrc",
-				"D:/RoboticsSoftware/ads/src/ads.qrc",
-				"D:/RoboticsSoftware/build/_deps/ads-src/demo/demo.qrc",
-				"D:/RoboticsSoftware/build/_deps/ads-src/src/ads.qrc",
-				"D:/RoboticsSoftware/build/_deps/qtads-src/demo/demo.qrc",
-				"D:/RoboticsSoftware/build/_deps/qtads-src/src/ads.qrc",
 				"D:/RoboticsSoftware/resources.qrc"
-			],
-			"recurse" : true
+			]
 		},
 		{
 			"expression" : "D:/RoboticsSoftware/external/pugixml/*.cpp",
@@ -77,11 +71,6 @@
 				"D:/RoboticsSoftware/include/UtilityHeaders/URDFParser.hpp",
 				"D:/RoboticsSoftware/include/UtilityHeaders/components.hpp"
 			],
-			"recurse" : true
-		},
-		{
-			"expression" : "D:/RoboticsSoftware/src/*.[cC][cCxX]",
-			"paths" : [],
 			"recurse" : true
 		},
 		{
@@ -1862,28 +1851,6 @@
 			"isCMake" : true,
 			"isExternal" : true,
 			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FetchContent/CMakeLists.cmake.in"
-		},
-		{
-			"path" : "ads/demo/demo.qrc"
-		},
-		{
-			"path" : "ads/src/ads.qrc"
-		},
-		{
-			"isGenerated" : true,
-			"path" : "build/_deps/ads-src/demo/demo.qrc"
-		},
-		{
-			"isGenerated" : true,
-			"path" : "build/_deps/ads-src/src/ads.qrc"
-		},
-		{
-			"isGenerated" : true,
-			"path" : "build/_deps/qtads-src/demo/demo.qrc"
-		},
-		{
-			"isGenerated" : true,
-			"path" : "build/_deps/qtads-src/src/ads.qrc"
 		},
 		{
 			"path" : "resources.qrc"

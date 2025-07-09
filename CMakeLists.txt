@@ -49,10 +49,17 @@ file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/include/*Headers/*.hpp")
 
 file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.[cC][cCxX]"
-     "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/*.qrc"
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml/*.cpp"
+)
+
+# Find .qrc files ONLY in the project's root directory (NOT recursive)
+file(GLOB ROOT_QRC_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.qrc"
+)
+
+# Add the root .qrc files to the list of sources
+list(APPEND SOURCE_FILES ${ROOT_QRC_FILES})
 
 qt_add_executable(RoboticsSoftware
     MANUAL_FINALIZATION
