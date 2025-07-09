@@ -38,6 +38,7 @@ FetchContent_Declare(
 #  ▸ Disable the internal “git describe” version logic that breaks when
 #    the source is fetched without .git metadata (CI tarballs, shallow clones).
 set(ADS_SKIP_GIT_VERSION ON CACHE BOOL "Skip git-based versioning" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "Disable ADS examples" FORCE)
 
 FetchContent_MakeAvailable(qtads)      # creates the target: QtADS
 
