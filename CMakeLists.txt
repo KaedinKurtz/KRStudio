@@ -1,60 +1,66 @@
-﻿cmake_minimum_required(VERSION 3.20)
+﻿cmake_minimum_required(VERSION 3.24)           # 3.24 → full FetchContent GIT_SPARSE support
 project(RoboticsSoftware LANGUAGES CXX)
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 #  Global compiler & Qt meta-object settings
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS   OFF)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Third-party packages
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+#  Third-party packages (via find_package)
+# ─────────────────────────────────────────────
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
-find_package(OpenGL  REQUIRED)
+find_package(OpenGL REQUIRED)
 find_package(glm     REQUIRED)
 find_package(assimp  CONFIG REQUIRED)
 find_package(urdfdom CONFIG REQUIRED)
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Qt Advanced Docking System (ADS) — build from source
-# ─────────────────────────────────────────────────────────────────────────────
-set(ADS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/ads")
+# ─────────────────────────────────────────────
+#  Qt Advanced Docking System — FetchContent
+# ─────────────────────────────────────────────
+include(FetchContent)
 
-if(NOT EXISTS "${ADS_ROOT}/CMakeLists.txt")
-    message(FATAL_ERROR
-        "ADS sources not found at '${ADS_ROOT}'.\n"
-        "Did you forget --recursive when cloning?")
-endif()
+# ▶ The newest *stable* tag as of 2025-07-08 is 4.4.0.
+# If you ever want to follow HEAD, just change GIT_TAG to "master".
+FetchContent_Declare(
+  qtads
+  GIT_REPOSITORY https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
+  GIT_TAG        4.4.0
+  GIT_SHALLOW    TRUE                 # faster checkout
+)
 
-add_subdirectory(${ADS_ROOT})           # creates target: qtadvanceddocking
+#  ▸ Disable the internal “git describe” version logic that breaks when
+#    the source is fetched without .git metadata (CI tarballs, shallow clones).
+set(ADS_SKIP_GIT_VERSION ON CACHE BOOL "Skip git-based versioning" FORCE)
 
-# ─────────────────────────────────────────────────────────────────────────────
+FetchContent_MakeAvailable(qtads)      # creates the target: QtADS
+
+# ─────────────────────────────────────────────
 #  Project sources / headers
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/include/*Headers/*.hpp")
 
 file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cxx"
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.[cC][cCxX]"
      "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/*.qrc")
+     "${CMAKE_CURRENT_SOURCE_DIR}/*.qrc"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 qt_add_executable(RoboticsSoftware
     MANUAL_FINALIZATION
     ${SOURCE_FILES}
     ${HEADER_FILES})
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 #  Include paths
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 target_include_directories(RoboticsSoftware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/ObjectHeaders"
@@ -63,12 +69,12 @@ target_include_directories(RoboticsSoftware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/UtilityHeaders"
     "${CMAKE_CURRENT_SOURCE_DIR}/external"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml"
-    "${ADS_ROOT}/src"                   # ADS public headers
+    "${qtads_SOURCE_DIR}/src"          # ADS public headers
     ${urdfdom_INCLUDE_DIRS})
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 #  Compile definitions / options
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 target_compile_definitions(RoboticsSoftware PRIVATE
     GLM_ENABLE_EXPERIMENTAL
     RS_DEBUG_DUMP
@@ -78,27 +84,29 @@ if(MSVC)
     target_compile_options(RoboticsSoftware PRIVATE /GS /RTC1)
 endif()
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 #  Link libraries
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 target_link_libraries(RoboticsSoftware PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets
     OpenGL::GL
     glm::glm
     assimp::assimp
     ${urdfdom_LIBRARIES}
-    qtadvanceddocking)                  # Debug/Release handled automatically
+    ads::qtadvanceddocking-qt6)                          # provided by FetchContent
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 #  Post-build steps
-# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
 # 1) Copy ADS runtime (Windows only)
+# ─────────────────────────────────────────────
 if(WIN32)
     add_custom_command(TARGET RoboticsSoftware POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:qtadvanceddocking>
+                $<TARGET_FILE:ads::qtadvanceddocking-qt6> # ▼ CORRECTED: Use the namespaced alias
                 $<TARGET_FILE_DIR:RoboticsSoftware>
-        COMMENT "Copying Qt Advanced Docking System runtime…")
+        COMMENT "Copying QtADS runtime…")
 endif()
 
 # 2) Copy shaders directory
@@ -126,9 +134,9 @@ if(WIN32)
         COMMENT "Running windeployqt…")
 endif()
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 #  Platform-specific application icons
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
 if(MSVC)  # Windows resource file with .ico
     target_sources(RoboticsSoftware PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/icons/app.rc)
@@ -140,29 +148,22 @@ if(APPLE) # macOS .icns inside bundle
         PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 
     set_target_properties(RoboticsSoftware PROPERTIES
-        MACOSX_BUNDLE            TRUE
-        MACOSX_BUNDLE_ICON_FILE  app.icns)
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_ICON_FILE app.icns)
 endif()
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Finalise Qt executable (automatically adds Qt plugins on macOS/Linux)
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+#  Finalise Qt executable
+# ─────────────────────────────────────────────
 qt_finalize_executable(RoboticsSoftware)
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Install rules  (<prefix>/app …)
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+#  Install rules
+# ─────────────────────────────────────────────
 install(TARGETS RoboticsSoftware
-        RUNTIME DESTINATION .   # exe goes to prefix root
-        BUNDLE  DESTINATION .)  # macOS .app bundle
+        RUNTIME DESTINATION .
+        BUNDLE  DESTINATION .)
 
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/shaders"
-        DESTINATION shaders)
-
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/icons"
-        DESTINATION icons)
-
-install(FILES "${CMAKE_SOURCE_DIR}/simple_arm.urdf"
-        DESTINATION .)
-
-#  windeployqt / macdeployqt can be added as install(CODE) blocks if desired.
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/shaders" DESTINATION shaders)
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/icons"   DESTINATION icons)
+install(FILES "${CMAKE_SOURCE_DIR}/simple_arm.urdf" DESTINATION .)

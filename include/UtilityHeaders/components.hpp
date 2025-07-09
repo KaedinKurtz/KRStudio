@@ -103,8 +103,8 @@ struct FieldVisualizerComponent {
         bool scaleByThickness = false;
         float thicknessScaleMultiplier = 1.0f;
         ColoringMode coloringMode = ColoringMode::Intensity;
+        std::vector<ColorStop>           intensityGradient;
         glm::vec4 xPosColor, xNegColor, yPosColor, yNegColor, zPosColor, zNegColor;
-        std::vector<ColorStop> intensityGradient;
     } arrowSettings;
 
     struct FlowSettings {
@@ -124,7 +124,8 @@ struct FieldVisualizerComponent {
         bool scaleByThickness = false;
         float thicknessScaleMultiplier = 1.0f;
         ColoringMode coloringMode = ColoringMode::Intensity;
-        // TODO: Add color and gradient members
+        std::vector<ColorStop>           intensityGradient;     // NEW
+        std::vector<ColorStop>           lifetimeGradient;
     } flowSettings;
 
     struct ParticleSettings {
@@ -142,8 +143,8 @@ struct FieldVisualizerComponent {
         float randomWalkStrength = 0.1f;
         ColoringMode coloringMode = ColoringMode::Intensity;
         glm::vec4 xPosColor, xNegColor, yPosColor, yNegColor, zPosColor, zNegColor;
-        std::vector<ColorStop> intensityGradient;
-        std::vector<ColorStop> lifetimeGradient;
+        std::vector<ColorStop>           intensityGradient;     // NEW
+        std::vector<ColorStop>           lifetimeGradient;
     } particleSettings;
 
     // --- Internal GPU State ---

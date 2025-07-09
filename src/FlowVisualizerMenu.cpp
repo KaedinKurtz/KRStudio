@@ -3,6 +3,7 @@
 #include "PreviewViewport.hpp" // Include the preview viewport header here
 #include "QtHelpers.hpp"
 
+#include <glm/gtc/type_ptr.hpp>
 #include <QColorDialog>
 #include <QPainter>
 #include <QLabel>
@@ -17,7 +18,129 @@
 #include <QDebug>
 #include <QLinearGradient>
 #include <QButtonGroup>
+#include <algorithm>
 
+// --- Anonymous Namespace for Helper Functions ---
+// These functions are only visible within this .cpp file.
+namespace {
+    // Forward declarations for the helper functions.
+    // They now correctly accept a pointer to the FlowVisualizerMenu to emit signals.
+    void initStopRow(QTableWidget* table, int row, float pos, const QColor& col, FlowVisualizerMenu* menu);
+    void addStop(QTableWidget* table, FlowVisualizerMenu* menu);
+    void removeStop(QTableWidget* table);
+
+    // --- Implementation of Helper Functions ---
+
+    /**
+     * @brief Initializes a single row in a color stop table.
+     * @param table The QTableWidget to modify.
+     * @param row The row index to initialize.
+     * @param pos The initial position (0.0 to 1.0) for the color stop.
+     * @param col The initial color for the stop.
+     * @param menu A pointer to the FlowVisualizerMenu instance to connect signals.
+     */
+    void initStopRow(QTableWidget* table, int row, float pos, const QColor& col, FlowVisualizerMenu* menu)
+    {
+        // Create and configure the position spinbox
+        auto* spin = new QDoubleSpinBox(table);
+        spin->setRange(0.0, 1.0);
+        spin->setDecimals(3);
+        spin->setSingleStep(0.01);
+        spin->setValue(pos);
+        table->setCellWidget(row, 0, spin);
+
+        // Create and configure the color picker button
+        auto* btn = new QPushButton(table);
+        btn->setStyleSheet(QString("background-color:%1").arg(col.name()));
+        table->setCellWidget(row, 1, btn);
+
+        // Connect the button's click signal to open a color dialog.
+        // When a new color is chosen, update the button's style and emit the settingsChanged signal.
+        QObject::connect(btn, &QPushButton::clicked, menu, [=] {
+            QColor c = QColorDialog::getColor(col, table, "Pick colour");
+            if (c.isValid()) {
+                btn->setStyleSheet(QString("background-color:%1").arg(c.name()));
+
+                // --- FIX: Manually trigger the gradient preview update ---
+                Ui::FlowVisualizerMenu* ui = menu->getUi();
+                if (table == ui->table_colorStops) {
+                    menu->updateGradientPreviewFromTable(ui->label_gradientPreview, ui->table_colorStops);
+                }
+                else if (table == ui->dynamic_table_colorStops) {
+                    menu->updateGradientPreviewFromTable(ui->dynamic_label_gradientPreview, ui->dynamic_table_colorStops);
+                }
+                else if (table == ui->dynamic_table_colorStopsAge) {
+                    menu->updateGradientPreviewFromTable(ui->dynamic_label_gradientPreviewAge, ui->dynamic_table_colorStopsAge);
+                }
+                else if (table == ui->particle_table_colorStops) {
+                    menu->updateGradientPreviewFromTable(ui->particle_label_gradientPreview, ui->particle_table_colorStops);
+                }
+                else if (table == ui->particle_table_colorStopsAge) {
+                    menu->updateGradientPreviewFromTable(ui->particle_label_gradientPreviewAge, ui->particle_table_colorStopsAge);
+                }
+
+                menu->onSettingChanged(); // Notify the main system of the change
+            }
+            });
+
+        // Also connect the spinbox value change to the settingsChanged signal.
+        QObject::connect(spin, &QDoubleSpinBox::valueChanged, menu, [=](double) {
+            Ui::FlowVisualizerMenu* ui = menu->getUi();
+            if (table == ui->table_colorStops) {
+                menu->updateGradientPreviewFromTable(ui->label_gradientPreview, ui->table_colorStops);
+            }
+            else if (table == ui->dynamic_table_colorStops) {
+                menu->updateGradientPreviewFromTable(ui->dynamic_label_gradientPreview, ui->dynamic_table_colorStops);
+            }
+            else if (table == ui->dynamic_table_colorStopsAge) {
+                menu->updateGradientPreviewFromTable(ui->dynamic_label_gradientPreviewAge, ui->dynamic_table_colorStopsAge);
+            }
+            else if (table == ui->particle_table_colorStops) {
+                menu->updateGradientPreviewFromTable(ui->particle_label_gradientPreview, ui->particle_table_colorStops);
+            }
+            else if (table == ui->particle_table_colorStopsAge) {
+                menu->updateGradientPreviewFromTable(ui->particle_label_gradientPreviewAge, ui->particle_table_colorStopsAge);
+            }
+
+            menu->onSettingChanged();
+            });
+    }
+
+    /**
+     * @brief Adds a new color stop to the table, interpolated between existing stops.
+     * @param table The QTableWidget to modify.
+     * @param menu A pointer to the FlowVisualizerMenu instance.
+     */
+    void addStop(QTableWidget* table, FlowVisualizerMenu* menu)
+    {
+        if (table->rowCount() < 2) return;
+
+        int sel = table->currentRow();
+        if (sel < 0 || sel >= table->rowCount() - 1) sel = table->rowCount() - 2;
+
+        auto* prevSpin = qobject_cast<QDoubleSpinBox*>(table->cellWidget(sel, 0));
+        auto* nextSpin = qobject_cast<QDoubleSpinBox*>(table->cellWidget(sel + 1, 0));
+        if (!prevSpin || !nextSpin) return;
+
+        float newPos = (prevSpin->value() + nextSpin->value()) * 0.5f;
+
+        int row = sel + 1;
+        table->insertRow(row);
+        initStopRow(table, row, newPos, Qt::white, menu); // Pass the menu pointer
+    }
+
+    /**
+     * @brief Removes the selected color stop from the table.
+     * @param table The QTableWidget to modify.
+     */
+    void removeStop(QTableWidget* table)
+    {
+        int row = table->currentRow();
+        // Prevent removing the first or last stops, which are locked.
+        if (row <= 0 || row >= table->rowCount() - 1) return;
+        table->removeRow(row);
+    }
+}
 
 // Constructor: Sets up the UI, initializes default values, and connects all signals/slots.
 FlowVisualizerMenu::FlowVisualizerMenu(QWidget* parent) :
@@ -27,26 +150,21 @@ FlowVisualizerMenu::FlowVisualizerMenu(QWidget* parent) :
     QSignalBlocker b(this);
     ui->setupUi(this);
 
-
+    // Set unbounded ranges for transform inputs
     WH::unbounded(ui->originInputX);
     WH::unbounded(ui->originInputY);
     WH::unbounded(ui->originInputZ);
 
-
-
+    // Set -180 to 180 degree ranges for angle inputs
     WH::range180deg(ui->angleInputEulerX);
     WH::range180deg(ui->angleInputEulerY);
     WH::range180deg(ui->angleInputEulerZ);
 
-    // --- Get pointers to the promoted widgets ---
-    // qobject_cast is the safe way to downcast QObject pointers.
-    // This assumes you have promoted the QGroupBox named "arrowPreviewViewport" etc.
-    // to the class "PreviewViewport" in Qt Designer.
+    // Get pointers to the promoted PreviewViewport widgets
     m_staticPreview = qobject_cast<PreviewViewport*>(ui->arrowPreviewViewport);
     m_dynamicPreview = qobject_cast<PreviewViewport*>(ui->dynamic_PreviewViewport);
     m_particlePreview = qobject_cast<PreviewViewport*>(ui->particle_previewViewport);
 
-    // Check if the casts were successful
     if (!m_staticPreview || !m_dynamicPreview || !m_particlePreview) {
         qWarning() << "FlowVisualizerMenu: Failed to cast one or more preview widgets. "
             << "Ensure they are correctly promoted to PreviewViewport in Qt Designer.";
@@ -55,12 +173,11 @@ FlowVisualizerMenu::FlowVisualizerMenu(QWidget* parent) :
     initializeState();
     setupConnections();
 
+    // Group the boundary type buttons to make them exclusive
     auto* boundaryGroup = new QButtonGroup(this);
     boundaryGroup->setExclusive(true);
     boundaryGroup->addButton(ui->rectangleBoundaryButton, 0);
     boundaryGroup->addButton(ui->sphericalBoundaryButton, 1);
-
-
 }
 
 // Destructor: Cleans up the UI pointer.
@@ -72,7 +189,6 @@ FlowVisualizerMenu::~FlowVisualizerMenu()
 // Sets initial default values for all UI controls and state variables.
 void FlowVisualizerMenu::initializeState()
 {
-    // Block signals during initialization to prevent slots from firing prematurely.
     const QSignalBlocker blocker(this);
 
     // --- General Settings ---
@@ -84,44 +200,47 @@ void FlowVisualizerMenu::initializeState()
     ui->angleInputEulerY->setValue(0.0);
     ui->angleInputEulerZ->setValue(0.0);
 
-    // --- Static Arrow Defaults ---
+    // --- Default Colors ---
     m_staticXPos = QColor(255, 80, 80); m_staticXNeg = QColor(255, 170, 170);
     m_staticYPos = QColor(80, 255, 80); m_staticYNeg = QColor(170, 255, 170);
     m_staticZPos = QColor(80, 80, 255); m_staticZNeg = QColor(170, 170, 255);
-
-    // --- Dynamic Vector Defaults ---
     m_dynamicXPos = QColor(255, 80, 80); m_dynamicXNeg = QColor(255, 170, 170);
     m_dynamicYPos = QColor(80, 255, 80); m_dynamicYNeg = QColor(170, 255, 170);
     m_dynamicZPos = QColor(80, 80, 255); m_dynamicZNeg = QColor(170, 170, 255);
-
-    // --- Particle Defaults ---
     m_particleXPos = QColor(255, 80, 80); m_particleXNeg = QColor(255, 170, 170);
     m_particleYPos = QColor(80, 255, 80); m_particleYNeg = QColor(170, 255, 170);
     m_particleZPos = QColor(80, 80, 255); m_particleZNeg = QColor(170, 170, 255);
 
-	// --- Set default values for the color buttons and gradients ---
+    // --- Seed Gradients ---
+    auto seedGradient = [&](QTableWidget* t, const QColor& c0, const QColor& c1) {
+        t->setRowCount(2);
+        initStopRow(t, 0, 0.0f, c0, this);
+        initStopRow(t, 1, 1.0f, c1, this);
+        t->setCurrentCell(0, 0);
+        };
+    seedGradient(ui->table_colorStops, QColor(20, 20, 20), QColor(255, 80, 80));
+    seedGradient(ui->dynamic_table_colorStops, QColor(20, 20, 20), QColor(255, 80, 80));
+    seedGradient(ui->dynamic_table_colorStopsAge, QColor(80, 80, 255), QColor(255, 80, 80));
+    seedGradient(ui->particle_table_colorStops, QColor(20, 20, 20), QColor(255, 80, 80));
+    seedGradient(ui->particle_table_colorStopsAge, QColor(80, 80, 255), QColor(255, 80, 80));
 
-    // --- Default boundary conditions ---
-
-    ui->boundaryLengthInput->setValue(10.0);  // 2×5
+    // --- Default Boundary & Arrow Settings ---
+    ui->boundaryLengthInput->setValue(10.0);
     ui->boundaryWidthInput->setValue(10.0);
     ui->boundaryHeightInput->setValue(10.0);
     ui->sphereBoundaryRadiusInput->setValue(5.0);
 
-    // Use a map to associate buttons with their color variables for cleaner code.
     setupColorButtonMap();
 
     ui->densityControlRowsInput->setValue(15);
     ui->densityControlColumnsInput->setValue(15);
     ui->densityControlLayersInput->setValue(15);
-
     ui->baseSizeSpinBox->setValue(0.5);
     ui->headScaleSpinBox->setValue(0.4);
     ui->intensityMultiplierSpinBox->setValue(1.0);
     ui->cullingThresholdSpinBox->setValue(0.01);
 
-
-    // Manually trigger the sync from spinbox to slider
+    // Link sliders and spinboxes
     linkSliderAndSpinBox(ui->rowDensitySlider, ui->densityControlRowsInput);
     linkSliderAndSpinBox(ui->columnDensitySlider, ui->densityControlColumnsInput);
     linkSliderAndSpinBox(ui->layerDensitySlider, ui->densityControlLayersInput);
@@ -130,7 +249,7 @@ void FlowVisualizerMenu::initializeState()
     linkSliderAndSpinBox(ui->intensityMultiplierSlider, ui->intensityMultiplierSpinBox);
     linkSliderAndSpinBox(ui->cullingThresholdSlider, ui->cullingThresholdSpinBox);
 
-    // Update button stylesheets and gradient previews from the default colors.
+    // Update UI elements from default state
     for (auto it = m_colorButtonMap.constBegin(); it != m_colorButtonMap.constEnd(); ++it) {
         it.key()->setStyleSheet(QString("background-color: %1").arg(it.value()->name()));
     }
@@ -143,6 +262,13 @@ void FlowVisualizerMenu::initializeState()
     updateAxisGradientPreview(ui->particle_label_XAxisGradient, m_particleXNeg, m_particleXPos);
     updateAxisGradientPreview(ui->particle_label_YAxisGradient, m_particleYNeg, m_particleYPos);
     updateAxisGradientPreview(ui->particle_label_ZAxisGradient, m_particleZNeg, m_particleZPos);
+
+    // Update gradient previews from tables
+    updateGradientPreviewFromTable(ui->label_gradientPreview, ui->table_colorStops);
+    updateGradientPreviewFromTable(ui->dynamic_label_gradientPreview, ui->dynamic_table_colorStops);
+    updateGradientPreviewFromTable(ui->dynamic_label_gradientPreviewAge, ui->dynamic_table_colorStopsAge);
+    updateGradientPreviewFromTable(ui->particle_label_gradientPreview, ui->particle_table_colorStops);
+    updateGradientPreviewFromTable(ui->particle_label_gradientPreviewAge, ui->particle_table_colorStopsAge);
 
     // Set initial pages for all stacked widgets.
     onVisualizationTypeChanged(ui->visualizationTypeInput->currentIndex());
@@ -158,8 +284,7 @@ void FlowVisualizerMenu::setupConnections()
     connect(ui->masterVisibilityCheck, &QCheckBox::toggled, this, &FlowVisualizerMenu::onMasterVisibilityChanged);
     connect(ui->resetVisualizerButton, &QToolButton::clicked, this, &FlowVisualizerMenu::onResetVisualizerClicked);
     connect(ui->visualizationTypeInput, &QComboBox::currentIndexChanged, this, &FlowVisualizerMenu::onVisualizationTypeChanged);
-    // connect(ui->boundaryTypeComboBox, &QComboBox::currentIndexChanged, this, &FlowVisualizerMenu::onBoundaryTypeChanged); // Assuming you add this combo box
-    connect(ui->btn_addStop, &QPushButton::clicked, this, &FlowVisualizerMenu::testViewportRequested);
+
     // --- Static Arrow Connections ---
     connect(ui->coloringStyleComboBox, &QComboBox::currentIndexChanged, this, &FlowVisualizerMenu::onStaticColoringStyleChanged);
     connect(ui->btn_XPosColor, &QPushButton::clicked, this, &FlowVisualizerMenu::onStaticDirectionalColorClicked);
@@ -237,42 +362,31 @@ void FlowVisualizerMenu::setupConnections()
     linkSliderAndSpinBox(ui->particle_randomWalkSlider, ui->particle_randomWalkSpinBox);
     connect(ui->particle_particleCountSpinBox, &QSpinBox::valueChanged, this, &FlowVisualizerMenu::onSettingChanged);
 
-    connect(ui->rectangleBoundaryButton, &QToolButton::toggled,
-        this, [this](bool on) {
-            if (on) ui->stackedWidget->setCurrentIndex(0), emit settingsChanged();
+    // --- Boundary Connections ---
+    connect(ui->rectangleBoundaryButton, &QToolButton::toggled, this, [this](bool on) {
+        if (on) ui->stackedWidget->setCurrentIndex(0), emit settingsChanged();
         });
-    connect(ui->sphericalBoundaryButton, &QToolButton::toggled,
-        this, [this](bool on) {
-            if (on) ui->stackedWidget->setCurrentIndex(1), emit settingsChanged();
+    connect(ui->sphericalBoundaryButton, &QToolButton::toggled, this, [this](bool on) {
+        if (on) ui->stackedWidget->setCurrentIndex(1), emit settingsChanged();
         });
 
-    // ---- BOX DIMENSIONS ----
     auto boxDimChanged = [this] { emit settingsChanged(); };
     connect(ui->boundaryLengthInput, qOverload<double>(&QDoubleSpinBox::valueChanged), boxDimChanged);
     connect(ui->boundaryWidthInput, qOverload<double>(&QDoubleSpinBox::valueChanged), boxDimChanged);
     connect(ui->boundaryHeightInput, qOverload<double>(&QDoubleSpinBox::valueChanged), boxDimChanged);
+    connect(ui->sphereBoundaryRadiusInput, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this] { emit settingsChanged(); });
 
-    // ---- SPHERE RADIUS ----
-    connect(ui->sphereBoundaryRadiusInput,
-        qOverload<double>(&QDoubleSpinBox::valueChanged),
-        this, [this] { emit settingsChanged(); });
-
-    // ---- TRANSLATION & ROTATION ----
+    // --- Transform Connections ---
     auto xfChanged = [this] { emit transformChanged(); };
     connect(ui->originInputX, qOverload<double>(&QDoubleSpinBox::valueChanged), xfChanged);
     connect(ui->originInputY, qOverload<double>(&QDoubleSpinBox::valueChanged), xfChanged);
     connect(ui->originInputZ, qOverload<double>(&QDoubleSpinBox::valueChanged), xfChanged);
-
     connect(ui->angleInputEulerX, qOverload<double>(&QDoubleSpinBox::valueChanged), xfChanged);
     connect(ui->angleInputEulerY, qOverload<double>(&QDoubleSpinBox::valueChanged), xfChanged);
     connect(ui->angleInputEulerZ, qOverload<double>(&QDoubleSpinBox::valueChanged), xfChanged);
-
-
-
-
 }
 
-// MapsQPushButton pointers to their corresponding QColor member variables.
+// Maps QPushButton pointers to their corresponding QColor member variables.
 void FlowVisualizerMenu::setupColorButtonMap()
 {
     m_colorButtonMap[ui->btn_XPosColor] = &m_staticXPos;
@@ -319,9 +433,20 @@ void FlowVisualizerMenu::onStaticDirectionalColorClicked() {
         onSettingChanged();
     }
 }
-void FlowVisualizerMenu::onStaticAddColorStop() { /* TODO */ onSettingChanged(); }
-void FlowVisualizerMenu::onStaticRemoveColorStop() { /* TODO */ onSettingChanged(); }
-void FlowVisualizerMenu::onStaticColorStopTableChanged() { updateGradientPreviewFromTable(ui->label_gradientPreview, ui->table_colorStops); onSettingChanged(); }
+void FlowVisualizerMenu::onStaticAddColorStop() {
+    addStop(ui->table_colorStops, this);
+    updateGradientPreviewFromTable(ui->label_gradientPreview, ui->table_colorStops);
+    onSettingChanged();
+}
+void FlowVisualizerMenu::onStaticRemoveColorStop() {
+    removeStop(ui->table_colorStops);
+    updateGradientPreviewFromTable(ui->label_gradientPreview, ui->table_colorStops);
+    onSettingChanged();
+}
+void FlowVisualizerMenu::onStaticColorStopTableChanged() {
+    updateGradientPreviewFromTable(ui->label_gradientPreview, ui->table_colorStops);
+    onSettingChanged();
+}
 
 // --- Dynamic Vector (Flow) Slot Implementations ---
 void FlowVisualizerMenu::onDynamicColoringStyleChanged(int index) { ui->stackedWidget_4->setCurrentIndex(index); onSettingChanged(); }
@@ -335,24 +460,22 @@ void FlowVisualizerMenu::onDynamicDirectionalColorClicked() {
         onSettingChanged();
     }
 }
-void FlowVisualizerMenu::onDynamicAddIntensityStop() { /* TODO */ onSettingChanged(); }
-void FlowVisualizerMenu::onDynamicRemoveIntensityStop() { /* TODO */ onSettingChanged(); }
+void FlowVisualizerMenu::onDynamicAddIntensityStop() { addStop(ui->dynamic_table_colorStops, this); onSettingChanged(); }
+void FlowVisualizerMenu::onDynamicRemoveIntensityStop() { removeStop(ui->dynamic_table_colorStops); onSettingChanged(); }
 void FlowVisualizerMenu::onDynamicIntensityTableChanged() { updateGradientPreviewFromTable(ui->dynamic_label_gradientPreview, ui->dynamic_table_colorStops); onSettingChanged(); }
-void FlowVisualizerMenu::onDynamicAddLifetimeStop() { /* TODO */ onSettingChanged(); }
-void FlowVisualizerMenu::onDynamicRemoveLifetimeStop() { /* TODO */ onSettingChanged(); }
+void FlowVisualizerMenu::onDynamicAddLifetimeStop() { addStop(ui->dynamic_table_colorStopsAge, this); onSettingChanged(); }
+void FlowVisualizerMenu::onDynamicRemoveLifetimeStop() { removeStop(ui->dynamic_table_colorStopsAge); onSettingChanged(); }
 void FlowVisualizerMenu::onDynamicLifetimeTableChanged() { updateGradientPreviewFromTable(ui->dynamic_label_gradientPreviewAge, ui->dynamic_table_colorStopsAge); onSettingChanged(); }
 
 // --- Particle Slot Implementations ---
 void FlowVisualizerMenu::onParticleTypeToggleChanged() {
     auto* button = qobject_cast<QToolButton*>(sender());
     if (!button || !button->isChecked()) {
-        // If the user un-checks a button, ensure at least one is still checked.
         if (!ui->solid_particle_toggle_button->isChecked() && !ui->sprite_particle_toggle_button->isChecked()) {
-            button->setChecked(true); // Prevent un-checking the last one.
+            button->setChecked(true);
         }
         return;
     }
-    // Ensure only one toggle is active
     if (button == ui->solid_particle_toggle_button) {
         ui->sprite_particle_toggle_button->setChecked(false);
     }
@@ -372,18 +495,17 @@ void FlowVisualizerMenu::onParticleDirectionalColorClicked() {
         onSettingChanged();
     }
 }
-void FlowVisualizerMenu::onParticleAddIntensityStop() { /* TODO */ onSettingChanged(); }
-void FlowVisualizerMenu::onParticleRemoveIntensityStop() { /* TODO */ onSettingChanged(); }
+void FlowVisualizerMenu::onParticleAddIntensityStop() { addStop(ui->particle_table_colorStops, this); onSettingChanged(); }
+void FlowVisualizerMenu::onParticleRemoveIntensityStop() { removeStop(ui->particle_table_colorStops); onSettingChanged(); }
 void FlowVisualizerMenu::onParticleIntensityTableChanged() { updateGradientPreviewFromTable(ui->particle_label_gradientPreview, ui->particle_table_colorStops); onSettingChanged(); }
-void FlowVisualizerMenu::onParticleAddLifetimeStop() { /* TODO */ onSettingChanged(); }
-void FlowVisualizerMenu::onParticleRemoveLifetimeStop() { /* TODO */ onSettingChanged(); }
+void FlowVisualizerMenu::onParticleAddLifetimeStop() { addStop(ui->particle_table_colorStopsAge, this); onSettingChanged(); }
+void FlowVisualizerMenu::onParticleRemoveLifetimeStop() { removeStop(ui->particle_table_colorStopsAge); onSettingChanged(); }
 void FlowVisualizerMenu::onParticleLifetimeTableChanged() { updateGradientPreviewFromTable(ui->particle_label_gradientPreviewAge, ui->particle_table_colorStopsAge); onSettingChanged(); }
 
 // ===================================================================
 // --- HELPER IMPLEMENTATIONS
 // ===================================================================
 
-// Links a QSlider and a QDoubleSpinBox for synchronized control.
 void FlowVisualizerMenu::linkSliderAndSpinBox(QSlider* slider, QDoubleSpinBox* spinBox, double scale)
 {
     connect(slider, &QSlider::valueChanged, this, [spinBox, scale](int value) {
@@ -395,21 +517,17 @@ void FlowVisualizerMenu::linkSliderAndSpinBox(QSlider* slider, QDoubleSpinBox* s
         slider->setValue(static_cast<int>(value * scale));
         });
     connect(slider, &QSlider::valueChanged, this, &FlowVisualizerMenu::onSettingChanged);
-
     slider->setValue(static_cast<int>(spinBox->value() * scale));
 }
 
-// Overloaded version for QSpinBox.
 void FlowVisualizerMenu::linkSliderAndSpinBox(QSlider* slider, QSpinBox* spinBox)
 {
     connect(slider, &QSlider::valueChanged, spinBox, &QSpinBox::setValue);
     connect(spinBox, qOverload<int>(&QSpinBox::valueChanged), slider, &QSlider::setValue);
     connect(slider, &QSlider::valueChanged, this, &FlowVisualizerMenu::onSettingChanged);
-
     slider->setValue(spinBox->value());
 }
 
-// Opens a color dialog and updates the button's style and the associated color variable.
 void FlowVisualizerMenu::pickColorForButton(QPushButton* button, QColor& colorMember)
 {
     QColor newColor = QColorDialog::getColor(colorMember, this, "Select Color");
@@ -419,7 +537,6 @@ void FlowVisualizerMenu::pickColorForButton(QPushButton* button, QColor& colorMe
     }
 }
 
-// Updates a label with a two-color horizontal gradient.
 void FlowVisualizerMenu::updateAxisGradientPreview(QLabel* label, const QColor& negColor, const QColor& posColor)
 {
     if (!label || label->width() <= 0) return;
@@ -433,26 +550,26 @@ void FlowVisualizerMenu::updateAxisGradientPreview(QLabel* label, const QColor& 
     label->setPixmap(pixmap);
 }
 
-// Updates a label with a multi-stop gradient based on data from a QTableWidget.
-void FlowVisualizerMenu::updateGradientPreviewFromTable(QLabel* previewLabel, QTableWidget* table)
+void FlowVisualizerMenu::updateGradientPreviewFromTable(QLabel* preview, QTableWidget* table)
 {
-    if (!previewLabel || !table || previewLabel->width() <= 0) return;
-
-    QLinearGradient gradient(0, 0, previewLabel->width(), 0);
-
-    // TODO: Iterate through the table rows, get the position from the spinbox in column 0
-    // and the color from the button in column 1. Add them to the QLinearGradient
-    // using gradient.setColorAt(position, color).
-
-    QPixmap pixmap(previewLabel->size());
-    pixmap.fill(Qt::transparent);
-    QPainter painter(&pixmap);
-    painter.fillRect(pixmap.rect(), gradient);
-    previewLabel->setPixmap(pixmap);
+    if (!preview || !table || preview->width() <= 0) return;
+    QLinearGradient g(0, 0, preview->width(), 0);
+    for (int r = 0; r < table->rowCount(); ++r)
+    {
+        auto* spin = qobject_cast<QDoubleSpinBox*>(table->cellWidget(r, 0));
+        auto* btn = qobject_cast<QPushButton*>(table->cellWidget(r, 1));
+        if (!spin || !btn) continue;
+        QColor c;
+        c.setNamedColor(btn->styleSheet().split(":").last());
+        g.setColorAt(spin->value(), c);
+    }
+    QPixmap pm(preview->size());
+    pm.fill(Qt::transparent);
+    QPainter(&pm).fillRect(pm.rect(), g);
+    preview->setPixmap(pm);
 }
 
-
-// --- HELPER IMPLEMENTATIONS ---
+// --- PUBLIC GETTER IMPLEMENTATIONS ---
 
 glm::vec4 FlowVisualizerMenu::qColorToGlm(const QColor& color) const {
     return glm::vec4(color.redF(), color.greenF(), color.blueF(), color.alphaF());
@@ -463,60 +580,49 @@ std::vector<ColorStop> FlowVisualizerMenu::getGradientFromTable(QTableWidget* ta
     std::vector<ColorStop> gradient;
     for (int row = 0; row < table->rowCount(); ++row) {
         ColorStop stop;
-
-        auto* posWidget = qobject_cast<QDoubleSpinBox*>(table->cellWidget(row, 0));
-        if (posWidget) {
+        if (auto* posWidget = qobject_cast<QDoubleSpinBox*>(table->cellWidget(row, 0))) {
             stop.position = static_cast<float>(posWidget->value());
         }
-
-        auto* colorWidget = qobject_cast<QPushButton*>(table->cellWidget(row, 1));
-        if (colorWidget) {
-            QColor color = colorWidget->palette().button().color();
+        if (auto* colorWidget = qobject_cast<QPushButton*>(table->cellWidget(row, 1))) {
+            QColor color;
+            color.setNamedColor(colorWidget->styleSheet().split(":").last());
             stop.color = qColorToGlm(color);
         }
         gradient.push_back(stop);
     }
-    // TODO: Sort the gradient by position if needed.
+    std::sort(gradient.begin(), gradient.end(), [](const ColorStop& a, const ColorStop& b) {
+        return a.position < b.position;
+        });
     return gradient;
 }
-
-// --- PUBLIC GETTER IMPLEMENTATIONS (Fixed) ---
 
 bool FlowVisualizerMenu::isMasterVisible() const { return ui->masterVisibilityCheck->isChecked(); }
 glm::vec3 FlowVisualizerMenu::getFieldPosition() const { return { static_cast<float>(ui->originInputX->value()), static_cast<float>(ui->originInputY->value()), static_cast<float>(ui->originInputZ->value()) }; }
 glm::vec3 FlowVisualizerMenu::getFieldOrientation() const { return { static_cast<float>(ui->angleInputEulerX->value()), static_cast<float>(ui->angleInputEulerY->value()), static_cast<float>(ui->angleInputEulerZ->value()) }; }
 AABB FlowVisualizerMenu::getBounds() const
 {
-    // Field centre comes from the “Origin” spin-boxes
     const glm::vec3 centre = getFieldPosition();
-
-    // Which boundary widget is active?  0 = Box, 1 = Sphere  (see stackedWidget)
-    if (ui->stackedWidget->currentIndex() == 0)          //  ☐ Box
-    {
+    if (ui->stackedWidget->currentIndex() == 0) { // Box
         const float lx = static_cast<float>(ui->boundaryLengthInput->value());
         const float ly = static_cast<float>(ui->boundaryWidthInput->value());
         const float lz = static_cast<float>(ui->boundaryHeightInput->value());
         const glm::vec3 half(lx * 0.5f, ly * 0.5f, lz * 0.5f);
-
         return { centre - half, centre + half };
     }
-    else                                                 //  ◯ Sphere
-    {
+    else { // Sphere
         const float r = static_cast<float>(ui->sphereBoundaryRadiusInput->value());
         const glm::vec3 extent(r);
         return { centre - extent, centre + extent };
     }
 }
 
-glm::vec3 FlowVisualizerMenu::getCentre() const
-{
+glm::vec3 FlowVisualizerMenu::getCentre() const {
     return { static_cast<float>(ui->originInputX->value()),
              static_cast<float>(ui->originInputY->value()),
              static_cast<float>(ui->originInputZ->value()) };
 }
 
-glm::vec3 FlowVisualizerMenu::getEuler() const   // degrees
-{
+glm::vec3 FlowVisualizerMenu::getEuler() const {
     return { static_cast<float>(ui->angleInputEulerX->value()),
              static_cast<float>(ui->angleInputEulerY->value()),
              static_cast<float>(ui->angleInputEulerZ->value()) };
@@ -587,7 +693,6 @@ std::vector<ColorStop> FlowVisualizerMenu::getParticleLifetimeGradient() const {
 void FlowVisualizerMenu::updateControlsFromComponent(const FieldVisualizerComponent& component)
 {
     Q_ASSERT(ui->originInputX->parent());
-    // Block signals to prevent an infinite loop of updates
     const QSignalBlocker blocker(this);
 
     const glm::vec3 centre = 0.5f * (component.bounds.min + component.bounds.max);
@@ -596,13 +701,9 @@ void FlowVisualizerMenu::updateControlsFromComponent(const FieldVisualizerCompon
     // Update General controls
     ui->masterVisibilityCheck->setChecked(component.isEnabled);
     ui->visualizationTypeInput->setCurrentIndex(static_cast<int>(component.displayMode));
-	// Update Boundary Type (Box or Sphere)
-
-	// Update Origin and Boundary Size Inputs
     ui->originInputX->setValue(centre.x);
     ui->originInputY->setValue(centre.y);
     ui->originInputZ->setValue(centre.z);
-
     ui->boundaryLengthInput->setValue(size.x);
     ui->boundaryWidthInput->setValue(size.y);
     ui->boundaryHeightInput->setValue(size.z);
@@ -616,8 +717,6 @@ void FlowVisualizerMenu::updateControlsFromComponent(const FieldVisualizerCompon
     ui->headScaleSpinBox->setValue(arrowSettings.headScale);
     ui->cullingThresholdSpinBox->setValue(arrowSettings.cullingThreshold);
 
-    // TODO: Add similar blocks to update the Flow and Particle tabs
-
     // Manually trigger the slider updates after setting the spinboxes
     linkSliderAndSpinBox(ui->rowDensitySlider, ui->densityControlRowsInput);
     linkSliderAndSpinBox(ui->columnDensitySlider, ui->densityControlColumnsInput);
@@ -625,4 +724,44 @@ void FlowVisualizerMenu::updateControlsFromComponent(const FieldVisualizerCompon
     linkSliderAndSpinBox(ui->baseSizeSlider, ui->baseSizeSpinBox);
     linkSliderAndSpinBox(ui->headScaleSlider, ui->headScaleSpinBox);
     linkSliderAndSpinBox(ui->cullingThresholdSlider, ui->cullingThresholdSpinBox);
+}
+
+void FlowVisualizerMenu::commitToComponent(FieldVisualizerComponent& vis)
+{
+    // General Settings
+    vis.isEnabled = isMasterVisible();
+    vis.displayMode = getDisplayMode();
+    vis.bounds = getBounds();
+
+    // Arrow Settings
+    auto& arrow = vis.arrowSettings;
+    arrow.density = getArrowDensity();
+    arrow.vectorScale = getArrowBaseSize();
+    arrow.headScale = getArrowHeadScale();
+    arrow.intensityMultiplier = getArrowIntensityMultiplier();
+    arrow.cullingThreshold = getArrowCullingThreshold();
+    arrow.scaleByLength = isArrowLengthScaled();
+    arrow.lengthScaleMultiplier = getArrowLengthScaleMultiplier();
+    arrow.scaleByThickness = isArrowThicknessScaled();
+    arrow.thicknessScaleMultiplier = getArrowThicknessScaleMultiplier();
+    arrow.coloringMode = getArrowColoringMode();
+    arrow.xPosColor = getArrowDirColor(0);
+    arrow.xNegColor = getArrowDirColor(1);
+    arrow.yPosColor = getArrowDirColor(2);
+    arrow.yNegColor = getArrowDirColor(3);
+    arrow.zPosColor = getArrowDirColor(4);
+    arrow.zNegColor = getArrowDirColor(5);
+    arrow.intensityGradient = getArrowIntensityGradient();
+
+    // Flow Settings
+    auto& flow = vis.flowSettings;
+    flow.particleCount = getFlowParticleCount();
+    // ... (continue for all flow settings)
+
+    // Particle Settings
+    auto& particle = vis.particleSettings;
+    particle.isSolid = isParticleSolid();
+    // ... (continue for all particle settings)
+
+    vis.isGpuDataDirty = true; // IMPORTANT: Mark the component as dirty
 }

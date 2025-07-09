@@ -37,7 +37,7 @@ private:
     void renderArrows(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf,
         Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID);
     // --- END UPDATED SIGNATURES ---
-
+    
     // You have correctly updated these members to be per-context.
     QHash<QOpenGLContext*, GLuint> m_effectorDataUBOs;
     QHash<QOpenGLContext*, GLuint> m_triangleDataSSBOs;
