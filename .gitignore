@@ -8,8 +8,10 @@ cmake_install.cmake
 install_manifest.txt
 compile_commands.json
 /_build/
-/build/
 /build-*/
+/build/               # CMake / Ninja / VS out-of-source build
+/out/                 # if you use CMakePresets out/build/…
+**/build-*/           # CMake-Ninja builds created by QtCreator, VS, etc.
 
 ####################################################################
 ## The rest is your original Visual Studio .gitignore file.
