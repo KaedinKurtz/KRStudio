@@ -63,6 +63,8 @@ uniform float u_peakSizeMultiplier;
 uniform float u_minSize;
 uniform float u_randomWalkStrength;
 uniform int u_coloringMode; // 0=Intensity, 1=Lifetime, 2=Directional
+uniform float u_intensityMax;
+uniform float u_randomWalkScale;
 
 // Gradient uniforms
 uniform int u_stopCount;
@@ -132,14 +134,18 @@ void main()
     }
     
     if (u_randomWalkStrength > 0.0) {
-        vec3 seed = vec3(p.position.xyz + u_time);
-        vec3 turbulence = vec3(random(seed) - 0.5, random(seed.yxz) - 0.5, random(seed.zyx) - 0.5);
-        totalField += normalize(turbulence) * u_randomWalkStrength;
-    }
+    vec3 seed = vec3(p.position.xyz + u_time);
+    vec3 turbulence = vec3(random(seed) - 0.5,
+                           random(seed.yxz) - 0.5,
+                           random(seed.zyx) - 0.5);
+    totalField += normalize(turbulence)
+                * u_randomWalkStrength
+                * u_randomWalkScale;          // << scale by dt
+    }  
 
     // --- Particle Integration ---
     float fieldMag = length(totalField);
-    vec3 fieldDir = fieldMag > 0.001 ? normalize(totalField) : vec3(0,0,0);
+    float intensity_t = smoothstep(0.0, u_intensityMax, fieldMag);
     
     vec3 acceleration = fieldDir * (u_baseSpeed + fieldMag * u_speedIntensityMultiplier);
     p.velocity.xyz += acceleration * u_deltaTime;

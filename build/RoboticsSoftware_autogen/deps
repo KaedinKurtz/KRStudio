@@ -789,15 +789,9 @@ RoboticsSoftware_autogen/timestamp: \
 	C:/Users/kaedi/vcpkg/installed/x64-windows/share/urdfdom_headers/urdfdom_headersExport.cmake \
 	C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake \
 	D:/RoboticsSoftware/CMakeLists.txt \
-	D:/RoboticsSoftware/ads/demo/demo.qrc \
-	D:/RoboticsSoftware/ads/src/ads.qrc \
 	D:/RoboticsSoftware/build/CMakeFiles/3.31.6-msvc6/CMakeCXXCompiler.cmake \
 	D:/RoboticsSoftware/build/CMakeFiles/3.31.6-msvc6/CMakeRCCompiler.cmake \
 	D:/RoboticsSoftware/build/CMakeFiles/3.31.6-msvc6/CMakeSystem.cmake \
-	D:/RoboticsSoftware/build/_deps/ads-src/demo/demo.qrc \
-	D:/RoboticsSoftware/build/_deps/ads-src/src/ads.qrc \
-	D:/RoboticsSoftware/build/_deps/qtads-src/demo/demo.qrc \
-	D:/RoboticsSoftware/build/_deps/qtads-src/src/ads.qrc \
 	D:/RoboticsSoftware/external/entt/config/config.h \
 	D:/RoboticsSoftware/external/entt/config/macro.h \
 	D:/RoboticsSoftware/external/entt/config/version.h \
