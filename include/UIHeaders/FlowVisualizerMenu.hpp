@@ -74,6 +74,8 @@ public:
     float getFlowLengthScaleMultiplier() const;
     bool isFlowThicknessScaled() const;
     float getFlowThicknessScaleMultiplier() const;
+    std::vector<ColorStop> getFlowIntensityGradient() const;
+    std::vector<ColorStop> getFlowLifetimeGradient() const;
     FieldVisualizerComponent::ColoringMode getFlowColoringMode() const;
 
     // Particle Getters
