@@ -1,0 +1,387 @@
+============================================================
+[ 2025-07-05 17:28:42.306 ]   Viewport resized
+    Viewport ptr: 000001F9A8CC81B0  QWidget winId: 0xb0c4a
+    FBOs: (w=759, h=695)
+        mainFBO          : 0x4
+        glowFBO          : 0x5
+        pingpongFBO[0]   : 0x6
+        pingpongFBO[1]   : 0x7
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:28:42.473 ]   Viewport resized
+    Viewport ptr: 000001F9A8CC7030  QWidget winId: 0x180b90
+    FBOs: (w=760, h=695)
+        mainFBO          : 0x8
+        glowFBO          : 0x9
+        pingpongFBO[0]   : 0xa
+        pingpongFBO[1]   : 0xb
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:28:44.158 ]   Viewport resized
+    Viewport ptr: 000001F9A8CC81B0  QWidget winId: 0xb0c4a
+    FBOs: (w=1142, h=695)
+        mainFBO          : 0x4
+        glowFBO          : 0x5
+        pingpongFBO[0]   : 0x6
+        pingpongFBO[1]   : 0x7
+    Context VAOs / VBOs:
+        gridVAO                  : 0x5
+        lineVAO                  : 0x6
+        capVAO                   : 0x7
+        compositeVAO             : 0x9
+        arrowVAO                 : 0x8
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:28:44.248 ]   Viewport resized
+    Viewport ptr: 000001F9A8CC7030  QWidget winId: 0x180b90
+    FBOs: (w=760, h=714)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:28:44.385 ]   Viewport resized
+    Viewport ptr: 000001F9A8CC7030  QWidget winId: 0x180b90
+    FBOs: (w=760, h=675)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:28:46.033 ]   Viewport resized
+    Viewport ptr: 000001F9A8CC7030  QWidget winId: 0x180b90
+    FBOs: (w=571, h=683)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:28:46.076 ]   Viewport resized
+    Viewport ptr: 000001F9A8CC7030  QWidget winId: 0x180b90
+    FBOs: (w=571, h=683)
+        mainFBO          : 0x3
+        glowFBO          : 0x4
+        pingpongFBO[0]   : 0x8
+        pingpongFBO[1]   : 0x9
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:28:46.095 ]   Viewport resized
+    Viewport ptr: 000001F9A8CC7030  QWidget winId: 0x180b90
+    FBOs: (w=1882, h=716)
+        mainFBO          : 0x3
+        glowFBO          : 0x4
+        pingpongFBO[0]   : 0x8
+        pingpongFBO[1]   : 0x9
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:33.944 ]   Viewport resized
+    Viewport ptr: 000001DDCF22D560  QWidget winId: 0x10e0a
+    Context ptr: 000001DDD56C5E50
+    FBOs: (w=759, h=695)
+        mainFBO          : 0x4
+        glowFBO          : 0x5
+        pingpongFBO[0]   : 0x6
+        pingpongFBO[1]   : 0x7
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:34.080 ]   Viewport resized
+    Viewport ptr: 000001DDCF22CA20  QWidget winId: 0x10e72
+    Context ptr: 000001DDD56C4D20
+    FBOs: (w=760, h=695)
+        mainFBO          : 0x8
+        glowFBO          : 0x9
+        pingpongFBO[0]   : 0xa
+        pingpongFBO[1]   : 0xb
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:35.733 ]   Viewport resized
+    Viewport ptr: 000001DDCF22CA20  QWidget winId: 0x10e72
+    Context ptr: 000001DDD56C4D20
+    FBOs: (w=1142, h=695)
+        mainFBO          : 0x8
+        glowFBO          : 0x9
+        pingpongFBO[0]   : 0xa
+        pingpongFBO[1]   : 0xb
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:35.820 ]   Viewport resized
+    Viewport ptr: 000001DDCF22D560  QWidget winId: 0x10e0a
+    Context ptr: 000001DDD56C0540
+    FBOs: (w=759, h=714)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:35.975 ]   Viewport resized
+    Viewport ptr: 000001DDCF22D560  QWidget winId: 0x10e0a
+    Context ptr: 000001DDD56CFE00
+    FBOs: (w=759, h=675)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:38.462 ]   Viewport resized
+    Viewport ptr: 000001DDCF22D560  QWidget winId: 0x10e0a
+    Context ptr: 000001DDD56CFE00
+    FBOs: (w=762, h=685)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:38.502 ]   Viewport resized
+    Viewport ptr: 000001DDCF22D560  QWidget winId: 0x10e0a
+    Context ptr: 000001DDD56D01C0
+    FBOs: (w=762, h=685)
+        mainFBO          : 0xe
+        glowFBO          : 0xf
+        pingpongFBO[0]   : 0x10
+        pingpongFBO[1]   : 0x11
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:38.516 ]   Viewport resized
+    Viewport ptr: 000001DDCF22D560  QWidget winId: 0x10e0a
+    Context ptr: 000001DDD56D01C0
+    FBOs: (w=1968, h=716)
+        mainFBO          : 0xe
+        glowFBO          : 0xf
+        pingpongFBO[0]   : 0x10
+        pingpongFBO[1]   : 0x11
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:41.221 ]   Viewport resized
+    Viewport ptr: 000001DDCF22D560  QWidget winId: 0x10e0a
+    Context ptr: 000001DDD56D01C0
+    FBOs: (w=2203, h=804)
+        mainFBO          : 0xe
+        glowFBO          : 0xf
+        pingpongFBO[0]   : 0x10
+        pingpongFBO[1]   : 0x11
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:41.232 ]   Viewport resized
+    Viewport ptr: 000001DDCF22CA20  QWidget winId: 0x10e72
+    Context ptr: 000001DDD56C4D20
+    FBOs: (w=174, h=804)
+        mainFBO          : 0x8
+        glowFBO          : 0x9
+        pingpongFBO[0]   : 0xa
+        pingpongFBO[1]   : 0xb
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:42.630 ]   Viewport resized
+    Viewport ptr: 000001DDCF22D560  QWidget winId: 0x10e0a
+    Context ptr: 000001DDD56D01C0
+    FBOs: (w=2369, h=804)
+        mainFBO          : 0xe
+        glowFBO          : 0xf
+        pingpongFBO[0]   : 0x10
+        pingpongFBO[1]   : 0x11
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:42.710 ]   Viewport resized
+    Viewport ptr: 000001DDCF22CA20  QWidget winId: 0x10e72
+    Context ptr: 000001DDD56D3190
+    FBOs: (w=174, h=823)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:42.854 ]   Viewport resized
+    Viewport ptr: 000001DDCF22CA20  QWidget winId: 0x10e72
+    Context ptr: 000001DDD56D33C0
+    FBOs: (w=174, h=784)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:36:46.517 ]   Viewport resized
+    Viewport ptr: 000001DDCF22D560  QWidget winId: 0x10e0a
+    Context ptr: 000001DDD56D01C0
+    FBOs: (w=2485, h=804)
+        mainFBO          : 0x3
+        glowFBO          : 0xe
+        pingpongFBO[0]   : 0xf
+        pingpongFBO[1]   : 0x10
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:37:05.491 ]   Viewport resized
+    Viewport ptr: 0000023D0ECF7C60  QWidget winId: 0x670c50
+    Context ptr: 0000023D177B0200
+    FBOs: (w=759, h=695)
+        mainFBO          : 0x4
+        glowFBO          : 0x5
+        pingpongFBO[0]   : 0x6
+        pingpongFBO[1]   : 0x7
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:37:05.626 ]   Viewport resized
+    Viewport ptr: 0000023D0ECF8160  QWidget winId: 0x20e12
+    Context ptr: 0000023D177AFE40
+    FBOs: (w=760, h=695)
+        mainFBO          : 0x8
+        glowFBO          : 0x9
+        pingpongFBO[0]   : 0xa
+        pingpongFBO[1]   : 0xb
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:37:06.992 ]   Viewport resized
+    Viewport ptr: 0000023D0ECF7C60  QWidget winId: 0x670c50
+    Context ptr: 0000023D177B0200
+    FBOs: (w=1142, h=695)
+        mainFBO          : 0x4
+        glowFBO          : 0x5
+        pingpongFBO[0]   : 0x6
+        pingpongFBO[1]   : 0x7
+    Context VAOs / VBOs:
+        gridVAO                  : 0x5
+        lineVAO                  : 0x6
+        capVAO                   : 0x7
+        compositeVAO             : 0x9
+        arrowVAO                 : 0x8
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:37:07.080 ]   Viewport resized
+    Viewport ptr: 0000023D0ECF8160  QWidget winId: 0x20e12
+    Context ptr: 0000023D17EF4660
+    FBOs: (w=760, h=714)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:37:07.224 ]   Viewport resized
+    Viewport ptr: 0000023D0ECF8160  QWidget winId: 0x20e12
+    Context ptr: 0000023D17EF3D00
+    FBOs: (w=760, h=675)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:37:09.441 ]   Viewport resized
+    Viewport ptr: 0000023D0ECF8160  QWidget winId: 0x20e12
+    Context ptr: 0000023D17EF3D00
+    FBOs: (w=571, h=683)
+        mainFBO          : 0x2
+        glowFBO          : 0x3
+        pingpongFBO[0]   : 0x4
+        pingpongFBO[1]   : 0x5
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:37:09.481 ]   Viewport resized
+    Viewport ptr: 0000023D0ECF8160  QWidget winId: 0x20e12
+    Context ptr: 0000023D17EF2EA0
+    FBOs: (w=571, h=683)
+        mainFBO          : 0xe
+        glowFBO          : 0xf
+        pingpongFBO[0]   : 0x10
+        pingpongFBO[1]   : 0x11
+    (context not in m_contextPrimitives)
+    GL: drawFBO=0x0  SRGB=OFF
+============================================================
+[ 2025-07-05 17:37:09.499 ]   Viewport resized
+    Viewport ptr: 0000023D0ECF8160  QWidget winId: 0x20e12
+    Context ptr: 0000023D17EF2EA0
+    FBOs: (w=1882, h=716)
+        mainFBO          : 0xe
+        glowFBO          : 0xf
+        pingpongFBO[0]   : 0x10
+        pingpongFBO[1]   : 0x11
+    Context VAOs / VBOs:
+        gridVAO                  : 0x4
+        lineVAO                  : 0x5
+        capVAO                   : 0x6
+        compositeVAO             : 0x8
+        arrowVAO                 : 0x7
+    GL: drawFBO=0x0  SRGB=OFF
