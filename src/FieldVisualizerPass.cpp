@@ -314,24 +314,19 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
         vis.currentReadBuffer = 0;
 
         /* VAO (attribute layout stored once) */
-        gl->glGenVertexArrays(1, &vis.particleVAO);
         gl->glBindVertexArray(vis.particleVAO);
-        gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[0]);                     // initial source
+        gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[1 - vis.currentReadBuffer]);
 
-        gl->glEnableVertexAttribArray(0);   // position
-        gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE,
-            sizeof(Particle),
-            reinterpret_cast<void*>(offsetof(Particle, position)));
-
-        gl->glEnableVertexAttribArray(1);   // color
-        gl->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE,
-            sizeof(Particle),
-            reinterpret_cast<void*>(offsetof(Particle, color)));
-
-        gl->glEnableVertexAttribArray(2);   // size
-        gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE,
-            sizeof(Particle),
-            reinterpret_cast<void*>(offsetof(Particle, size)));
+        /* ↺ refresh attribute bindings (needed after any slider tweak) */
+        gl->glEnableVertexAttribArray(0);
+        gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle),
+            (void*)offsetof(Particle, position));
+        gl->glEnableVertexAttribArray(1);
+        gl->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle),
+            (void*)offsetof(Particle, color));
+        gl->glEnableVertexAttribArray(2);
+        gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Particle),
+            (void*)offsetof(Particle, size));
 
         gl->glBindVertexArray(0);
     }
