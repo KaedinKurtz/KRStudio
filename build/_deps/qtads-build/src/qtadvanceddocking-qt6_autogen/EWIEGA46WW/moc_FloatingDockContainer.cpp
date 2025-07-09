@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'FloatingDockContainer.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'FloatingDockContainer.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,39 +34,58 @@ namespace {
 struct qt_meta_tag_ZN3ads22CFloatingDockContainerE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CFloatingDockContainer::qt_create_metaobjectdata<qt_meta_tag_ZN3ads22CFloatingDockContainerE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CFloatingDockContainer",
-        "onDockAreasAddedOrRemoved",
-        "",
-        "onDockAreaCurrentChanged",
-        "Index"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Slot 'onDockAreasAddedOrRemoved'
-        QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDockAreaCurrentChanged'
-        QtMocHelpers::SlotData<void(int)>(3, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 4 },
-        }}),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CFloatingDockContainer, qt_meta_tag_ZN3ads22CFloatingDockContainerE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads22CFloatingDockContainerE = QtMocHelpers::stringData(
+    "ads::CFloatingDockContainer",
+    "onDockAreasAddedOrRemoved",
+    "",
+    "onDockAreaCurrentChanged",
+    "Index"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads22CFloatingDockContainerE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       2,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    0,   26,    2, 0x08,    1 /* Private */,
+       3,    1,   27,    2, 0x08,    2 /* Private */,
+
+ // slots: parameters
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Int,    4,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CFloatingDockContainer::staticMetaObject = { {
     QMetaObject::SuperData::link<QWidget::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads22CFloatingDockContainerE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads22CFloatingDockContainerE_t>.data,
+    qt_meta_stringdata_ZN3ads22CFloatingDockContainerE.offsetsAndSizes,
+    qt_meta_data_ZN3ads22CFloatingDockContainerE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads22CFloatingDockContainerE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads22CFloatingDockContainerE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CFloatingDockContainer, std::true_type>,
+        // method 'onDockAreasAddedOrRemoved'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onDockAreaCurrentChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>
+    >,
     nullptr
 } };
 
@@ -90,7 +109,7 @@ const QMetaObject *ads::CFloatingDockContainer::metaObject() const
 void *ads::CFloatingDockContainer::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads22CFloatingDockContainerE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads22CFloatingDockContainerE.stringdata0))
         return static_cast<void*>(this);
     if (!strcmp(_clname, "IFloatingWidget"))
         return static_cast< IFloatingWidget*>(this);

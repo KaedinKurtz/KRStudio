@@ -1,0 +1,130 @@
+{
+  "$schema": "https://raw.githubusercontent.com/spdx/spdx-spec/v2.2.1/schemas/spdx-schema.json",
+  "spdxVersion": "SPDX-2.2",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "documentNamespace": "https://spdx.org/spdxdocs/double-conversion-x64-windows-3.3.0#1-a3339041-f469-4bc5-b65a-eb41c27c2128",
+  "name": "double-conversion:x64-windows@3.3.0#1 b51c1f6ecc8861674529b768811d141f3e6f6924403e4aab1248a08e831cbeef",
+  "creationInfo": {
+    "creators": [
+      "Tool: vcpkg-2025-06-20-ef7c0d541124bbdd334a03467e7edb6c3364d199"
+    ],
+    "created": "2025-07-09T22:54:03Z"
+  },
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "GENERATES",
+      "relatedSpdxElement": "SPDXRef-binary"
+    },
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-file-0"
+    },
+    {
+      "spdxElementId": "SPDXRef-port",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-file-1"
+    },
+    {
+      "spdxElementId": "SPDXRef-binary",
+      "relationshipType": "GENERATED_FROM",
+      "relatedSpdxElement": "SPDXRef-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-file-0",
+      "relationshipType": "CONTAINED_BY",
+      "relatedSpdxElement": "SPDXRef-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-file-1",
+      "relationshipType": "CONTAINED_BY",
+      "relatedSpdxElement": "SPDXRef-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-file-1",
+      "relationshipType": "DEPENDENCY_MANIFEST_OF",
+      "relatedSpdxElement": "SPDXRef-port"
+    }
+  ],
+  "packages": [
+    {
+      "name": "double-conversion",
+      "SPDXID": "SPDXRef-port",
+      "versionInfo": "3.3.0#1",
+      "downloadLocation": "git+https://github.com/Microsoft/vcpkg@aab0be9dfa5d0fe2452be21cfd4c7997e437c05b",
+      "homepage": "https://github.com/google/double-conversion",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "description": "Efficient binary-decimal and decimal-binary conversion routines for IEEE doubles.",
+      "comment": "This is the port (recipe) consumed by vcpkg."
+    },
+    {
+      "name": "double-conversion:x64-windows",
+      "SPDXID": "SPDXRef-binary",
+      "versionInfo": "b51c1f6ecc8861674529b768811d141f3e6f6924403e4aab1248a08e831cbeef",
+      "downloadLocation": "NONE",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "comment": "This is a binary package built by vcpkg."
+    },
+    {
+      "SPDXID": "SPDXRef-resource-0",
+      "name": "google/double-conversion",
+      "downloadLocation": "git+https://github.com/google/double-conversion@v3.3.0",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "51e84eb7a5c407f7bc8f8b8ca19932ece5c9d8ac18aedff7b7620fc67369d9b2aa8c5a6b133e7f8633d7cc5e3788bad6e60b0e48ac08d0a4bc5e4abe7cee1334"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-resource-1",
+      "name": "google-double-conversion-101e1ba89dc41ceb75090831da97c43a76cd2906.patch",
+      "packageFileName": "google-double-conversion-101e1ba89dc41ceb75090831da97c43a76cd2906.patch",
+      "downloadLocation": "https://github.com/google/double-conversion/commit/101e1ba89dc41ceb75090831da97c43a76cd2906.patch?full_index=1",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "a946a1909b10f3ac5262cbe5cd358a74cf018325223403749aaeb81570ef3e2f833ee806afdefcd388e56374629de8ccca0a1cef787afa481c79f9e8f8dcaa13"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "fileName": "./portfile.cmake",
+      "SPDXID": "SPDXRef-file-0",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "5fe9a02e95a62342594cbd5946da3110863a0b0d2e1c04d01440a91c912c1f1d"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./vcpkg.json",
+      "SPDXID": "SPDXRef-file-1",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "fb7493b532798c25f1c253a11b643a71781c62347dedc27c5c28643a5676f7d4"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION"
+    }
+  ]
+}

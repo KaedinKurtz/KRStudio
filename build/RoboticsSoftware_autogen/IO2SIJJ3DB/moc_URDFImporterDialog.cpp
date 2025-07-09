@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'URDFImporterDialog.hpp'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'URDFImporterDialog.hpp' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,33 +34,51 @@ namespace {
 struct qt_meta_tag_ZN18URDFImporterDialogE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto URDFImporterDialog::qt_create_metaobjectdata<qt_meta_tag_ZN18URDFImporterDialogE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "URDFImporterDialog",
-        "onVerifyAndImport",
-        ""
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Slot 'onVerifyAndImport'
-        QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPrivate, QMetaType::Void),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<URDFImporterDialog, qt_meta_tag_ZN18URDFImporterDialogE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN18URDFImporterDialogE = QtMocHelpers::stringData(
+    "URDFImporterDialog",
+    "onVerifyAndImport",
+    ""
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN18URDFImporterDialogE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       1,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    0,   20,    2, 0x08,    1 /* Private */,
+
+ // slots: parameters
+    QMetaType::Void,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject URDFImporterDialog::staticMetaObject = { {
     QMetaObject::SuperData::link<QDialog::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN18URDFImporterDialogE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN18URDFImporterDialogE_t>.data,
+    qt_meta_stringdata_ZN18URDFImporterDialogE.offsetsAndSizes,
+    qt_meta_data_ZN18URDFImporterDialogE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN18URDFImporterDialogE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN18URDFImporterDialogE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<URDFImporterDialog, std::true_type>,
+        // method 'onVerifyAndImport'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>
+    >,
     nullptr
 } };
 
@@ -84,7 +102,7 @@ const QMetaObject *URDFImporterDialog::metaObject() const
 void *URDFImporterDialog::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN18URDFImporterDialogE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN18URDFImporterDialogE.stringdata0))
         return static_cast<void*>(this);
     return QDialog::qt_metacast(_clname);
 }

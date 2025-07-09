@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'PropertiesPanel.hpp'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'PropertiesPanel.hpp' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,44 +34,64 @@ namespace {
 struct qt_meta_tag_ZN15PropertiesPanelE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto PropertiesPanel::qt_create_metaobjectdata<qt_meta_tag_ZN15PropertiesPanelE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "PropertiesPanel",
-        "onGridAdded",
-        "",
-        "entt::registry&",
-        "registry",
-        "entt::entity",
-        "entity",
-        "onGridRemoved"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Slot 'onGridAdded'
-        QtMocHelpers::SlotData<void(entt::registry &, entt::entity)>(1, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { 0x80000000 | 3, 4 }, { 0x80000000 | 5, 6 },
-        }}),
-        // Slot 'onGridRemoved'
-        QtMocHelpers::SlotData<void(entt::registry &, entt::entity)>(7, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { 0x80000000 | 3, 4 }, { 0x80000000 | 5, 6 },
-        }}),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<PropertiesPanel, qt_meta_tag_ZN15PropertiesPanelE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN15PropertiesPanelE = QtMocHelpers::stringData(
+    "PropertiesPanel",
+    "onGridAdded",
+    "",
+    "entt::registry&",
+    "registry",
+    "entt::entity",
+    "entity",
+    "onGridRemoved"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN15PropertiesPanelE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       2,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    2,   26,    2, 0x08,    1 /* Private */,
+       7,    2,   31,    2, 0x08,    4 /* Private */,
+
+ // slots: parameters
+    QMetaType::Void, 0x80000000 | 3, 0x80000000 | 5,    4,    6,
+    QMetaType::Void, 0x80000000 | 3, 0x80000000 | 5,    4,    6,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject PropertiesPanel::staticMetaObject = { {
     QMetaObject::SuperData::link<QWidget::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN15PropertiesPanelE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN15PropertiesPanelE_t>.data,
+    qt_meta_stringdata_ZN15PropertiesPanelE.offsetsAndSizes,
+    qt_meta_data_ZN15PropertiesPanelE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN15PropertiesPanelE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN15PropertiesPanelE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<PropertiesPanel, std::true_type>,
+        // method 'onGridAdded'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<entt::registry &, std::false_type>,
+        QtPrivate::TypeAndForceComplete<entt::entity, std::false_type>,
+        // method 'onGridRemoved'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<entt::registry &, std::false_type>,
+        QtPrivate::TypeAndForceComplete<entt::entity, std::false_type>
+    >,
     nullptr
 } };
 
@@ -95,7 +115,7 @@ const QMetaObject *PropertiesPanel::metaObject() const
 void *PropertiesPanel::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN15PropertiesPanelE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN15PropertiesPanelE.stringdata0))
         return static_cast<void*>(this);
     return QWidget::qt_metacast(_clname);
 }

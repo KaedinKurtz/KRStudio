@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'FlowVisualizerMenu.hpp'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -18,8 +18,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'FlowVisualizerMenu.hpp' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -35,134 +35,208 @@ namespace {
 struct qt_meta_tag_ZN18FlowVisualizerMenuE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto FlowVisualizerMenu::qt_create_metaobjectdata<qt_meta_tag_ZN18FlowVisualizerMenuE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "FlowVisualizerMenu",
-        "settingsChanged",
-        "",
-        "transformChanged",
-        "testViewportRequested",
-        "onSettingChanged",
-        "onMasterVisibilityChanged",
-        "checked",
-        "onResetVisualizerClicked",
-        "onVisualizationTypeChanged",
-        "index",
-        "onBoundaryTypeChanged",
-        "onStaticColoringStyleChanged",
-        "onStaticDirectionalColorClicked",
-        "onStaticAddColorStop",
-        "onStaticRemoveColorStop",
-        "onStaticColorStopTableChanged",
-        "onDynamicColoringStyleChanged",
-        "onDynamicDirectionalColorClicked",
-        "onDynamicAddIntensityStop",
-        "onDynamicRemoveIntensityStop",
-        "onDynamicIntensityTableChanged",
-        "onDynamicAddLifetimeStop",
-        "onDynamicRemoveLifetimeStop",
-        "onDynamicLifetimeTableChanged",
-        "onParticleTypeToggleChanged",
-        "onParticleColoringStyleChanged",
-        "onParticleDirectionalColorClicked",
-        "onParticleAddIntensityStop",
-        "onParticleRemoveIntensityStop",
-        "onParticleIntensityTableChanged",
-        "onParticleAddLifetimeStop",
-        "onParticleRemoveLifetimeStop",
-        "onParticleLifetimeTableChanged"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Signal 'settingsChanged'
-        QtMocHelpers::SignalData<void()>(1, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'transformChanged'
-        QtMocHelpers::SignalData<void()>(3, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'testViewportRequested'
-        QtMocHelpers::SignalData<void()>(4, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'onSettingChanged'
-        QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'onMasterVisibilityChanged'
-        QtMocHelpers::SlotData<void(bool)>(6, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Bool, 7 },
-        }}),
-        // Slot 'onResetVisualizerClicked'
-        QtMocHelpers::SlotData<void()>(8, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onVisualizationTypeChanged'
-        QtMocHelpers::SlotData<void(int)>(9, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 10 },
-        }}),
-        // Slot 'onBoundaryTypeChanged'
-        QtMocHelpers::SlotData<void(int)>(11, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 10 },
-        }}),
-        // Slot 'onStaticColoringStyleChanged'
-        QtMocHelpers::SlotData<void(int)>(12, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 10 },
-        }}),
-        // Slot 'onStaticDirectionalColorClicked'
-        QtMocHelpers::SlotData<void()>(13, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onStaticAddColorStop'
-        QtMocHelpers::SlotData<void()>(14, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onStaticRemoveColorStop'
-        QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onStaticColorStopTableChanged'
-        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicColoringStyleChanged'
-        QtMocHelpers::SlotData<void(int)>(17, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 10 },
-        }}),
-        // Slot 'onDynamicDirectionalColorClicked'
-        QtMocHelpers::SlotData<void()>(18, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicAddIntensityStop'
-        QtMocHelpers::SlotData<void()>(19, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicRemoveIntensityStop'
-        QtMocHelpers::SlotData<void()>(20, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicIntensityTableChanged'
-        QtMocHelpers::SlotData<void()>(21, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicAddLifetimeStop'
-        QtMocHelpers::SlotData<void()>(22, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicRemoveLifetimeStop'
-        QtMocHelpers::SlotData<void()>(23, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicLifetimeTableChanged'
-        QtMocHelpers::SlotData<void()>(24, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleTypeToggleChanged'
-        QtMocHelpers::SlotData<void()>(25, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleColoringStyleChanged'
-        QtMocHelpers::SlotData<void(int)>(26, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 10 },
-        }}),
-        // Slot 'onParticleDirectionalColorClicked'
-        QtMocHelpers::SlotData<void()>(27, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleAddIntensityStop'
-        QtMocHelpers::SlotData<void()>(28, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleRemoveIntensityStop'
-        QtMocHelpers::SlotData<void()>(29, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleIntensityTableChanged'
-        QtMocHelpers::SlotData<void()>(30, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleAddLifetimeStop'
-        QtMocHelpers::SlotData<void()>(31, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleRemoveLifetimeStop'
-        QtMocHelpers::SlotData<void()>(32, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleLifetimeTableChanged'
-        QtMocHelpers::SlotData<void()>(33, 2, QMC::AccessPrivate, QMetaType::Void),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<FlowVisualizerMenu, qt_meta_tag_ZN18FlowVisualizerMenuE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN18FlowVisualizerMenuE = QtMocHelpers::stringData(
+    "FlowVisualizerMenu",
+    "settingsChanged",
+    "",
+    "transformChanged",
+    "testViewportRequested",
+    "onSettingChanged",
+    "onMasterVisibilityChanged",
+    "checked",
+    "onResetVisualizerClicked",
+    "onVisualizationTypeChanged",
+    "index",
+    "onBoundaryTypeChanged",
+    "onStaticColoringStyleChanged",
+    "onStaticDirectionalColorClicked",
+    "onStaticAddColorStop",
+    "onStaticRemoveColorStop",
+    "onStaticColorStopTableChanged",
+    "onDynamicColoringStyleChanged",
+    "onDynamicDirectionalColorClicked",
+    "onDynamicAddIntensityStop",
+    "onDynamicRemoveIntensityStop",
+    "onDynamicIntensityTableChanged",
+    "onDynamicAddLifetimeStop",
+    "onDynamicRemoveLifetimeStop",
+    "onDynamicLifetimeTableChanged",
+    "onParticleTypeToggleChanged",
+    "onParticleColoringStyleChanged",
+    "onParticleDirectionalColorClicked",
+    "onParticleAddIntensityStop",
+    "onParticleRemoveIntensityStop",
+    "onParticleIntensityTableChanged",
+    "onParticleAddLifetimeStop",
+    "onParticleRemoveLifetimeStop",
+    "onParticleLifetimeTableChanged"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN18FlowVisualizerMenuE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+      30,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       3,       // signalCount
+
+ // signals: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    0,  194,    2, 0x06,    1 /* Public */,
+       3,    0,  195,    2, 0x06,    2 /* Public */,
+       4,    0,  196,    2, 0x06,    3 /* Public */,
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+       5,    0,  197,    2, 0x0a,    4 /* Public */,
+       6,    1,  198,    2, 0x08,    5 /* Private */,
+       8,    0,  201,    2, 0x08,    7 /* Private */,
+       9,    1,  202,    2, 0x08,    8 /* Private */,
+      11,    1,  205,    2, 0x08,   10 /* Private */,
+      12,    1,  208,    2, 0x08,   12 /* Private */,
+      13,    0,  211,    2, 0x08,   14 /* Private */,
+      14,    0,  212,    2, 0x08,   15 /* Private */,
+      15,    0,  213,    2, 0x08,   16 /* Private */,
+      16,    0,  214,    2, 0x08,   17 /* Private */,
+      17,    1,  215,    2, 0x08,   18 /* Private */,
+      18,    0,  218,    2, 0x08,   20 /* Private */,
+      19,    0,  219,    2, 0x08,   21 /* Private */,
+      20,    0,  220,    2, 0x08,   22 /* Private */,
+      21,    0,  221,    2, 0x08,   23 /* Private */,
+      22,    0,  222,    2, 0x08,   24 /* Private */,
+      23,    0,  223,    2, 0x08,   25 /* Private */,
+      24,    0,  224,    2, 0x08,   26 /* Private */,
+      25,    0,  225,    2, 0x08,   27 /* Private */,
+      26,    1,  226,    2, 0x08,   28 /* Private */,
+      27,    0,  229,    2, 0x08,   30 /* Private */,
+      28,    0,  230,    2, 0x08,   31 /* Private */,
+      29,    0,  231,    2, 0x08,   32 /* Private */,
+      30,    0,  232,    2, 0x08,   33 /* Private */,
+      31,    0,  233,    2, 0x08,   34 /* Private */,
+      32,    0,  234,    2, 0x08,   35 /* Private */,
+      33,    0,  235,    2, 0x08,   36 /* Private */,
+
+ // signals: parameters
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+
+ // slots: parameters
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Bool,    7,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Int,   10,
+    QMetaType::Void, QMetaType::Int,   10,
+    QMetaType::Void, QMetaType::Int,   10,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Int,   10,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Int,   10,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject FlowVisualizerMenu::staticMetaObject = { {
     QMetaObject::SuperData::link<QWidget::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN18FlowVisualizerMenuE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN18FlowVisualizerMenuE_t>.data,
+    qt_meta_stringdata_ZN18FlowVisualizerMenuE.offsetsAndSizes,
+    qt_meta_data_ZN18FlowVisualizerMenuE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN18FlowVisualizerMenuE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN18FlowVisualizerMenuE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<FlowVisualizerMenu, std::true_type>,
+        // method 'settingsChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'transformChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'testViewportRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onSettingChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onMasterVisibilityChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        // method 'onResetVisualizerClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onVisualizationTypeChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'onBoundaryTypeChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'onStaticColoringStyleChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'onStaticDirectionalColorClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onStaticAddColorStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onStaticRemoveColorStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onStaticColorStopTableChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onDynamicColoringStyleChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'onDynamicDirectionalColorClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onDynamicAddIntensityStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onDynamicRemoveIntensityStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onDynamicIntensityTableChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onDynamicAddLifetimeStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onDynamicRemoveLifetimeStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onDynamicLifetimeTableChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onParticleTypeToggleChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onParticleColoringStyleChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'onParticleDirectionalColorClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onParticleAddIntensityStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onParticleRemoveIntensityStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onParticleIntensityTableChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onParticleAddLifetimeStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onParticleRemoveLifetimeStop'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onParticleLifetimeTableChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>
+    >,
     nullptr
 } };
 
@@ -205,12 +279,28 @@ void FlowVisualizerMenu::qt_static_metacall(QObject *_o, QMetaObject::Call _c, i
         }
     }
     if (_c == QMetaObject::IndexOfMethod) {
-        if (QtMocHelpers::indexOfMethod<void (FlowVisualizerMenu::*)()>(_a, &FlowVisualizerMenu::settingsChanged, 0))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (FlowVisualizerMenu::*)()>(_a, &FlowVisualizerMenu::transformChanged, 1))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (FlowVisualizerMenu::*)()>(_a, &FlowVisualizerMenu::testViewportRequested, 2))
-            return;
+        int *result = reinterpret_cast<int *>(_a[0]);
+        {
+            using _q_method_type = void (FlowVisualizerMenu::*)();
+            if (_q_method_type _q_method = &FlowVisualizerMenu::settingsChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 0;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (FlowVisualizerMenu::*)();
+            if (_q_method_type _q_method = &FlowVisualizerMenu::transformChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 1;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (FlowVisualizerMenu::*)();
+            if (_q_method_type _q_method = &FlowVisualizerMenu::testViewportRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 2;
+                return;
+            }
+        }
     }
 }
 
@@ -222,7 +312,7 @@ const QMetaObject *FlowVisualizerMenu::metaObject() const
 void *FlowVisualizerMenu::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN18FlowVisualizerMenuE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN18FlowVisualizerMenuE.stringdata0))
         return static_cast<void*>(this);
     return QWidget::qt_metacast(_clname);
 }

@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'ResizeHandle.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'ResizeHandle.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,32 +34,47 @@ namespace {
 struct qt_meta_tag_ZN3ads13CResizeHandleE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CResizeHandle::qt_create_metaobjectdata<qt_meta_tag_ZN3ads13CResizeHandleE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CResizeHandle",
-        "opaqueResize"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-    };
-    QtMocHelpers::UintData qt_properties {
-        // property 'opaqueResize'
-        QtMocHelpers::PropertyData<bool>(1, QMetaType::Bool, QMC::DefaultPropertyFlags | QMC::Writable | QMC::StdCppSet),
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CResizeHandle, qt_meta_tag_ZN3ads13CResizeHandleE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads13CResizeHandleE = QtMocHelpers::stringData(
+    "ads::CResizeHandle",
+    "opaqueResize"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads13CResizeHandleE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       0,    0, // methods
+       1,   14, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+ // properties: name, type, flags, notifyId, revision
+       1, QMetaType::Bool, 0x00015103, uint(-1), 0,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CResizeHandle::staticMetaObject = { {
     QMetaObject::SuperData::link<QFrame::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads13CResizeHandleE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads13CResizeHandleE_t>.data,
+    qt_meta_stringdata_ZN3ads13CResizeHandleE.offsetsAndSizes,
+    qt_meta_data_ZN3ads13CResizeHandleE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads13CResizeHandleE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads13CResizeHandleE_t,
+        // property 'opaqueResize'
+        QtPrivate::TypeAndForceComplete<bool, std::true_type>,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CResizeHandle, std::true_type>
+    >,
     nullptr
 } };
 
@@ -69,14 +84,14 @@ void ads::CResizeHandle::qt_static_metacall(QObject *_o, QMetaObject::Call _c, i
     if (_c == QMetaObject::ReadProperty) {
         void *_v = _a[0];
         switch (_id) {
-        case 0: *reinterpret_cast<bool*>(_v) = _t->opaqueResize(); break;
+        case 0: *reinterpret_cast< bool*>(_v) = _t->opaqueResize(); break;
         default: break;
         }
     }
     if (_c == QMetaObject::WriteProperty) {
         void *_v = _a[0];
         switch (_id) {
-        case 0: _t->setOpaqueResize(*reinterpret_cast<bool*>(_v)); break;
+        case 0: _t->setOpaqueResize(*reinterpret_cast< bool*>(_v)); break;
         default: break;
         }
     }
@@ -90,7 +105,7 @@ const QMetaObject *ads::CResizeHandle::metaObject() const
 void *ads::CResizeHandle::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads13CResizeHandleE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads13CResizeHandleE.stringdata0))
         return static_cast<void*>(this);
     return QFrame::qt_metacast(_clname);
 }

@@ -1,0 +1,670 @@
+Package: vcpkg-cmake
+Version: 2024-04-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 983791f932d60de5e4372276ab41a24763c8da47d36e6181e06be4d13d622c92
+Status: install ok installed
+
+Package: zlib
+Version: 1.3.1
+Depends: vcpkg-cmake
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 3076249054cb0f7225dc3ffcd373d1d37c4aac0f205119807da17952aa99ae92
+Description: A compression library
+Status: install ok installed
+
+Package: vcpkg-cmake-config
+Version: 2024-05-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 1fb90c1d7aca1c8e7d12f69169ed88e4b4ea5dd8d7b360c00369d68c77810392
+Status: install ok installed
+
+Package: utfcpp
+Version: 4.0.6
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 1b0f0dcb567531f925ac4c6e94c05b623dcc9a81699d236304000277880c5ab4
+Description: UTF-8 with C++ in a Portable Way
+Status: install ok installed
+
+Package: stb
+Version: 2024-07-29
+Port-Version: 1
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 67e3781586b7010da3695cc3fe31dd72cc7145a7111a10e986ddeb4e9e3ee6db
+Description: public domain header-only libraries
+Status: install ok installed
+
+Package: rapidjson
+Version: 2025-02-26
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: c5b49bdc253fa01aafd00b8c0c2785c816526cb15d56ed7f1a69bac52ca63238
+Description: A fast JSON parser/generator for C++ with both SAX/DOM style API <http://rapidjson.org/>
+Status: install ok installed
+
+Package: pugixml
+Version: 1.15
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: c5acb154d908214621d53b4c10f569ac2bd86fe98d6e247b2af96dc496a89ee4
+Description: Light-weight, simple and fast XML parser for C++ with XPath support
+Status: install ok installed
+
+Package: polyclipping
+Version: 6.4.2
+Port-Version: 13
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 2203594fc2acb8fac5a0d2a9b721251c8a12b1b72259ca21835550c38d45d1c3
+Description: The Clipper library performs clipping and offsetting for both lines and polygons. All four boolean clipping operations are supported - intersection, union, difference and exclusive-or. Polygons can be of any shape including self-intersecting polygons.
+Status: install ok installed
+
+Package: vcpkg-cmake-get-vars
+Version: 2025-05-29
+Depends: vcpkg-cmake
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 3c6205c03ffc7c3b20b838b5a3f4998a31db06a0208a31ba0715a9e37d78d39b
+Status: install ok installed
+
+Package: minizip
+Version: 1.3.1
+Port-Version: 1
+Depends: vcpkg-cmake, vcpkg-cmake-config, vcpkg-cmake-get-vars, zlib
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 0b4937c096309831b5e8bb2af1961828d01dc785b4a9513151733ad78d0fa3fd
+Description: Minizip zip file manipulation library
+Status: install ok installed
+
+Package: kubazip
+Version: 0.3.5
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 43467c697b9bcf51285647ba2ad2c2cc26ade304c1784220046b624031cedf7e
+Description: A portable, simple zip library written in C
+Status: install ok installed
+
+Package: jhasse-poly2tri
+Version: 2023-12-27
+Port-Version: 2
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 4b1adf66c6d067f583972c391b4cf36bcc55f2acf8c48ff6b70419d7df77a7cd
+Description: Sweep-line algorithm for constrained Delaunay triangulation
+Status: install ok installed
+
+Package: draco
+Version: 1.5.7
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: fe5b341f9546ea88aded587d7bed29ca0bea738adee81ad2985cb1cfbff878d4
+Description: A library for compressing and decompressing 3D geometric meshes and point clouds. It is intended to improve the storage and transmission of 3D graphics.
+Status: install ok installed
+
+Package: assimp
+Version: 6.0.2
+Port-Version: 1
+Depends: draco, jhasse-poly2tri, kubazip, minizip, polyclipping, pugixml, rapidjson, stb, utfcpp, vcpkg-cmake, vcpkg-cmake-config, zlib
+Architecture: x64-windows
+Multi-Arch: same
+Abi: e8152a9f5dcb00642f1dfd9642e3dc4b03a8056a4e84a0e838851e34a29f63a2
+Description: The Open Asset import library
+Status: install ok installed
+
+Package: glm
+Version: 1.0.1
+Port-Version: 3
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: ad69f8ab99d3c8cd19c087bad5bbc9575e9bc0b5fee23b98c9e8e537a913852f
+Description: OpenGL Mathematics (GLM)
+Status: install ok installed
+
+Package: zstd
+Version: 1.5.7
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: ca8c21d33d53f13b4194d8d1ab34ba684c189cfd8b0952644ca65eafc4975a1e
+Description: Zstandard - Fast real-time compression algorithm
+Status: install ok installed
+
+Package: sqlite3
+Version: 3.50.2
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 6044b19320bde6e32c8d213220dc61b122b02be357619bc4a810af73ce55d39c
+Description: SQLite is a software library that implements a self-contained, serverless, zero-configuration, transactional SQL database engine.
+Default-Features: json1
+Status: install ok installed
+
+Package: sqlite3
+Feature: json1
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable JSON functionality for sqlite3
+Status: install ok installed
+
+Package: openssl
+Version: 3.5.1
+Depends: vcpkg-cmake, vcpkg-cmake-config, vcpkg-cmake-get-vars
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 92faec13020c6bfa68d4c0748aaa67f4a77566701ab0b5de637d7b4c5d6a3e6b
+Description: OpenSSL is an open source project that provides a robust, commercial-grade, and full-featured toolkit for the Transport Layer Security (TLS) and Secure Sockets Layer (SSL) protocols. It is also a general-purpose cryptography library.
+Status: install ok installed
+
+Package: lz4
+Version: 1.10.0
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 57c6bb553087695bd4ae510f577cd6f2d31206c35a72c23f419bae03c7115355
+Description: Lossless compression algorithm, providing compression speed at 400 MB/s per core.
+Status: install ok installed
+
+Package: vcpkg-tool-meson
+Version: 1.8.2
+Depends: vcpkg-cmake-get-vars
+Architecture: x64-windows
+Multi-Arch: same
+Abi: f638446c40ba0e91a6358c362de668151fb95ab0701c492ebac2376cbb019a60
+Description: Meson build system
+Status: install ok installed
+
+Package: pkgconf
+Version: 2.4.3
+Port-Version: 1
+Depends: vcpkg-tool-meson
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 5611fe1ad57d41e5da67fc6169169be2c7487de6dfbe42a9dd77a3f83d8d0fc9
+Description: pkgconf is a program which helps to configure compiler and linker flags for development libraries. It is similar to pkg-config from freedesktop.org.
+Status: install ok installed
+
+Package: vcpkg-pkgconfig-get-modules
+Version: 2024-04-03
+Depends: pkgconf
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 0a6fce6877615f08388fcf05040454e8648f0ade73ca1ed0f9caac4f9f5f4557
+Status: install ok installed
+
+Package: libpq
+Version: 16.9
+Depends: vcpkg-cmake-get-vars, vcpkg-pkgconfig-get-modules
+Architecture: x64-windows
+Multi-Arch: same
+Abi: baa4dc3d57989559aae717923bb6db76e0651b7dff83cb343d34597662677e15
+Description: The official database access API of postgresql
+Default-Features: lz4, openssl, zlib
+Status: install ok installed
+
+Package: libpq
+Feature: lz4
+Depends: lz4
+Architecture: x64-windows
+Multi-Arch: same
+Description: Use lz4
+Status: install ok installed
+
+Package: libpq
+Feature: openssl
+Depends: openssl
+Architecture: x64-windows
+Multi-Arch: same
+Description: support for encrypted client connections and random number generation on platforms that do not have "/dev/urandom" (except windows)
+Status: install ok installed
+
+Package: libpq
+Feature: zlib
+Depends: zlib
+Architecture: x64-windows
+Multi-Arch: same
+Description: Use zlib
+Status: install ok installed
+
+Package: libpng
+Version: 1.6.48
+Depends: vcpkg-cmake, vcpkg-cmake-config, zlib
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 6db4cbd7d7683e62da2ae5fe83ae85fa36cecd36bc41f5dcb2bdb5b8612106d8
+Description: libpng is a library implementing an interface for reading and writing PNG (Portable Network Graphics) format files
+Status: install ok installed
+
+Package: pcre2
+Version: 10.45
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: b223b4f822a61118c293f32daefee363f4ac971e9b281e1375e0f5210666b4fc
+Description: Regular Expression pattern matching using the same syntax and semantics as Perl 5.
+Default-Features: platform-default-features
+Status: install ok installed
+
+Package: pcre2
+Feature: jit
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable support for Just-In-Time compiling regex matchers
+Status: install ok installed
+
+Package: pcre2
+Feature: platform-default-features
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable default features
+Status: install ok installed
+
+Package: egl-registry
+Version: 2024-01-25
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 59a743fc596e59548eed7ed40f845c4174011dfd6a1e7a9e12a85ed795028f6b
+Description: EGL API and Extension Registry
+Status: install ok installed
+
+Package: opengl-registry
+Version: 2024-02-10
+Port-Version: 1
+Depends: egl-registry
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 90ff48714056cdd775ec6c749ddaaf915ee51c0cd3f59756d6f9e9bc663a161d
+Description: OpenGL, OpenGL ES, and OpenGL ES-SC API and Extension Registry
+Status: install ok installed
+
+Package: opengl
+Version: 2022-12-04
+Port-Version: 3
+Depends: opengl-registry
+Architecture: x64-windows
+Multi-Arch: same
+Abi: b5e0dd9ae2b4fab8d980679e0e05e6d2317d85bfa5d71e38dbeec1a48e85c1bd
+Description: Open Graphics Library (OpenGL)[3][4][5] is a cross-language, cross-platform application programming interface (API) for rendering 2D and 3D vector graphics.
+Status: install ok installed
+
+Package: libjpeg-turbo
+Version: 3.1.0
+Port-Version: 1
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: b46a2f1b624f379c3a79c31d703b829d39700c73222ee5629fecb9f1920588e0
+Description: libjpeg-turbo is a JPEG image codec that uses SIMD instructions (MMX, SSE2, NEON, AltiVec) to accelerate baseline JPEG compression and decompression on x86, x86-64, ARM, and PowerPC systems.
+Status: install ok installed
+
+Package: vcpkg-make
+Version: 2025-06-10
+Depends: vcpkg-cmake-get-vars
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 1cd6468a24555f0515f9d6ae14e032e41a1b4563ddba768ece618205e1a4b4fd
+Status: install ok installed
+
+Package: icu
+Version: 74.2
+Port-Version: 6
+Depends: vcpkg-cmake-get-vars, vcpkg-make
+Architecture: x64-windows
+Multi-Arch: same
+Abi: bbebc0b3ee25a3d5f7903629d3b22760e38f91f014224a2ed2f7835ba5ffc4d8
+Description: Mature and widely used Unicode and localization library.
+Status: install ok installed
+
+Package: icu
+Feature: tools
+Architecture: x64-windows
+Multi-Arch: same
+Description: Build tools
+Status: install ok installed
+
+Package: bzip2
+Version: 1.0.8
+Port-Version: 6
+Depends: vcpkg-cmake
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 2983f064f9d18fa13fe4dfa777af0c2b2a1604919859ab78c4fcf264dde30918
+Description: bzip2 is a freely available, patent free, high-quality data compressor. It typically compresses files to within 10% to 15% of the best available techniques (the PPM family of statistical compressors), whilst being around twice as fast at compression and six times faster at decompression.
+Default-Features: tool
+Status: install ok installed
+
+Package: bzip2
+Feature: tool
+Architecture: x64-windows
+Multi-Arch: same
+Description: Builds bzip2 executable
+Status: install ok installed
+
+Package: brotli
+Version: 1.1.0
+Port-Version: 1
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 4f947e679a974773c7b6ca5b37e51caf645d7fcff0abc4e2654e686e7884bb40
+Description: a generic-purpose lossless compression algorithm that compresses data using a combination of a modern variant of the LZ77 algorithm, Huffman coding and 2nd order context modeling.
+Status: install ok installed
+
+Package: freetype
+Version: 2.13.3
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 5c6f9a3bd4b899fbf2dbc131be68f69263e6f4edd7a410948b0256e6d8cc1043
+Description: A library to render fonts.
+Default-Features: brotli, bzip2, png, zlib
+Status: install ok installed
+
+Package: freetype
+Feature: brotli
+Depends: brotli
+Architecture: x64-windows
+Multi-Arch: same
+Description: Support decompression of WOFF2 streams
+Status: install ok installed
+
+Package: freetype
+Feature: bzip2
+Depends: bzip2
+Architecture: x64-windows
+Multi-Arch: same
+Description: Support bzip2 compressed fonts.
+Status: install ok installed
+
+Package: freetype
+Feature: png
+Depends: libpng
+Architecture: x64-windows
+Multi-Arch: same
+Description: Support PNG compressed OpenType embedded bitmaps.
+Status: install ok installed
+
+Package: freetype
+Feature: zlib
+Depends: zlib
+Architecture: x64-windows
+Multi-Arch: same
+Description: Use zlib instead of internal library for DEFLATE
+Status: install ok installed
+
+Package: harfbuzz
+Version: 11.2.0
+Depends: vcpkg-tool-meson
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 7f4623fde428badd13abb453163166e78734bfe6c5de1ff22fb81d68751a24f7
+Description: HarfBuzz OpenType text shaping engine
+Default-Features: freetype
+Status: install ok installed
+
+Package: harfbuzz
+Feature: freetype
+Depends: freetype
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable FreeType support
+Status: install ok installed
+
+Package: double-conversion
+Version: 3.3.0
+Port-Version: 1
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: b51c1f6ecc8861674529b768811d141f3e6f6924403e4aab1248a08e831cbeef
+Description: Efficient binary-decimal and decimal-binary conversion routines for IEEE doubles.
+Status: install ok installed
+
+Package: expat
+Version: 2.7.1
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: aa0e106d77703b8ccc974662abeb43ec8c454a76cd72371048c31195054c81b9
+Description: XML parser library written in C
+Status: install ok installed
+
+Package: dbus
+Version: 1.16.2
+Port-Version: 1
+Depends: expat, vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 287a223dc17fcfcf25f0021297c205dce757cb76836f0c5fd39204e38a7ec6c1
+Description: D-Bus specification and reference implementation, including libdbus and dbus-daemon
+Status: install ok installed
+
+Package: qtbase
+Version: 6.8.3
+Port-Version: 4
+Depends: pcre2, vcpkg-cmake, vcpkg-cmake-config, zlib
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 112325610f19e143c59db99926ffecae7f6a15b02b3c090fd08a9f42732dbcb2
+Description: Qt Base (Core, Gui, Widgets, Network, ...)
+Default-Features: brotli, concurrent, dbus, dnslookup, doubleconversion, freetype, gui, harfbuzz, icu, jpeg, network, opengl, openssl, pcre2, png, sql, sql-psql, sql-sqlite, testlib, thread, widgets, zstd
+Status: install ok installed
+
+Package: qtbase
+Feature: brotli
+Depends: brotli
+Architecture: x64-windows
+Multi-Arch: same
+Description: Support for downloading and decompressing resources compressed with Brotli through QNetworkAccessManager.
+Status: install ok installed
+
+Package: qtbase
+Feature: concurrent
+Architecture: x64-windows
+Multi-Arch: same
+Description: Provides a high-level multi-threading API. Qt Concurrent
+Status: install ok installed
+
+Package: qtbase
+Feature: dbus
+Depends: dbus
+Architecture: x64-windows
+Multi-Arch: same
+Description: Qt D-Bus
+Status: install ok installed
+
+Package: qtbase
+Feature: dnslookup
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable DNS lookup support
+Status: install ok installed
+
+Package: qtbase
+Feature: doubleconversion
+Depends: double-conversion
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable double conversion support
+Status: install ok installed
+
+Package: qtbase
+Feature: freetype
+Depends: freetype
+Architecture: x64-windows
+Multi-Arch: same
+Description: Supports the FreeType 2 font engine (and its supported font formats).
+Status: install ok installed
+
+Package: qtbase
+Feature: gui
+Depends: opengl
+Architecture: x64-windows
+Multi-Arch: same
+Description: Qt Gui
+Status: install ok installed
+
+Package: qtbase
+Feature: harfbuzz
+Depends: harfbuzz
+Architecture: x64-windows
+Multi-Arch: same
+Description: Use harfbuzz
+Status: install ok installed
+
+Package: qtbase
+Feature: icu
+Depends: icu
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable ICU support
+Status: install ok installed
+
+Package: qtbase
+Feature: jpeg
+Depends: libjpeg-turbo
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable JPEG
+Status: install ok installed
+
+Package: qtbase
+Feature: network
+Architecture: x64-windows
+Multi-Arch: same
+Description: Qt Network
+Status: install ok installed
+
+Package: qtbase
+Feature: opengl
+Depends: opengl
+Architecture: x64-windows
+Multi-Arch: same
+Description: OpenGL
+Status: install ok installed
+
+Package: qtbase
+Feature: openssl
+Depends: openssl
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable OpenSSL
+Status: install ok installed
+
+Package: qtbase
+Feature: pcre2
+Depends: pcre2
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable PCRE2 support
+Status: install ok installed
+
+Package: qtbase
+Feature: png
+Depends: libpng
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable PNG
+Status: install ok installed
+
+Package: qtbase
+Feature: sql
+Architecture: x64-windows
+Multi-Arch: same
+Description: Qt Sql
+Status: install ok installed
+
+Package: qtbase
+Feature: sql-psql
+Depends: libpq
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable SQL Driver psql
+Status: install ok installed
+
+Package: qtbase
+Feature: sql-sqlite
+Depends: sqlite3
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable SQL Driver sqlite
+Status: install ok installed
+
+Package: qtbase
+Feature: testlib
+Architecture: x64-windows
+Multi-Arch: same
+Description: Qt Testlib
+Status: install ok installed
+
+Package: qtbase
+Feature: thread
+Architecture: x64-windows
+Multi-Arch: same
+Description: Thread support; provides QThread and related classes.
+Status: install ok installed
+
+Package: qtbase
+Feature: widgets
+Architecture: x64-windows
+Multi-Arch: same
+Description: Qt Widgets
+Status: install ok installed
+
+Package: qtbase
+Feature: zstd
+Depends: zstd
+Architecture: x64-windows
+Multi-Arch: same
+Description: Zstandard support
+Status: install ok installed
+
+Package: urdfdom-headers
+Version: 1.1.1
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 264bd5f75352eb56979198b668a35f2c815e6b6763ab6fca858facd2aca458b3
+Description: The URDF (U-Robot Description Format) headers provides core data structure headers for URDF.
+Status: install ok installed
+
+Package: tinyxml
+Version: 2.6.2
+Port-Version: 10
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: f0c23fb7dbb2b103f42afb13565c2bdaf8f4940b2724209eb586cae2056dd3bc
+Description: A simple, small, minimal, C++ XML parser that can be easily integrating into other programs.
+Status: install ok installed
+
+Package: console-bridge
+Version: 1.0.2
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: ab68e765024d820902197cd0b9fa0f738553a1e20c17df521abde577c6e3e02e
+Description: A ROS-independent package for logging that seamlessly pipes into rosconsole/rosout for ROS-dependent packages.
+Status: install ok installed
+
+Package: urdfdom
+Version: 3.1.1
+Depends: console-bridge, tinyxml, urdfdom-headers, vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 100f8d18a67be68e7bd6742de0831e008211c7f44c7276f43d125a8f3eb7dd26
+Description: Provides core data structures and a simple XML parsers for populating the class data structures from an URDF file.
+Status: install ok installed
+

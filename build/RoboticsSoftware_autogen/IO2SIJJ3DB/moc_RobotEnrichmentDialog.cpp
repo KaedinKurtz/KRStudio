@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'RobotEnrichmentDialog.hpp'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'RobotEnrichmentDialog.hpp' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,44 +34,66 @@ namespace {
 struct qt_meta_tag_ZN21RobotEnrichmentDialogE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto RobotEnrichmentDialog::qt_create_metaobjectdata<qt_meta_tag_ZN21RobotEnrichmentDialogE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "RobotEnrichmentDialog",
-        "onCurrentTreeItemChanged",
-        "",
-        "QTreeWidgetItem*",
-        "current",
-        "previous",
-        "onPropertiesChanged",
-        "onSave"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Slot 'onCurrentTreeItemChanged'
-        QtMocHelpers::SlotData<void(QTreeWidgetItem *, QTreeWidgetItem *)>(1, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { 0x80000000 | 3, 4 }, { 0x80000000 | 3, 5 },
-        }}),
-        // Slot 'onPropertiesChanged'
-        QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onSave'
-        QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<RobotEnrichmentDialog, qt_meta_tag_ZN21RobotEnrichmentDialogE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN21RobotEnrichmentDialogE = QtMocHelpers::stringData(
+    "RobotEnrichmentDialog",
+    "onCurrentTreeItemChanged",
+    "",
+    "QTreeWidgetItem*",
+    "current",
+    "previous",
+    "onPropertiesChanged",
+    "onSave"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN21RobotEnrichmentDialogE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       3,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    2,   32,    2, 0x08,    1 /* Private */,
+       6,    0,   37,    2, 0x08,    4 /* Private */,
+       7,    0,   38,    2, 0x08,    5 /* Private */,
+
+ // slots: parameters
+    QMetaType::Void, 0x80000000 | 3, 0x80000000 | 3,    4,    5,
+    QMetaType::Void,
+    QMetaType::Void,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject RobotEnrichmentDialog::staticMetaObject = { {
     QMetaObject::SuperData::link<QDialog::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN21RobotEnrichmentDialogE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN21RobotEnrichmentDialogE_t>.data,
+    qt_meta_stringdata_ZN21RobotEnrichmentDialogE.offsetsAndSizes,
+    qt_meta_data_ZN21RobotEnrichmentDialogE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN21RobotEnrichmentDialogE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN21RobotEnrichmentDialogE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<RobotEnrichmentDialog, std::true_type>,
+        // method 'onCurrentTreeItemChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<QTreeWidgetItem *, std::false_type>,
+        QtPrivate::TypeAndForceComplete<QTreeWidgetItem *, std::false_type>,
+        // method 'onPropertiesChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onSave'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>
+    >,
     nullptr
 } };
 
@@ -96,7 +118,7 @@ const QMetaObject *RobotEnrichmentDialog::metaObject() const
 void *RobotEnrichmentDialog::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN21RobotEnrichmentDialogE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN21RobotEnrichmentDialogE.stringdata0))
         return static_cast<void*>(this);
     return QDialog::qt_metacast(_clname);
 }

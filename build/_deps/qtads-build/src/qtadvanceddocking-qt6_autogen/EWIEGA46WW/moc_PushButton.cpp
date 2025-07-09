@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'PushButton.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'PushButton.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,29 +34,41 @@ namespace {
 struct qt_meta_tag_ZN3ads11CPushButtonE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CPushButton::qt_create_metaobjectdata<qt_meta_tag_ZN3ads11CPushButtonE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CPushButton"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CPushButton, qt_meta_tag_ZN3ads11CPushButtonE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads11CPushButtonE = QtMocHelpers::stringData(
+    "ads::CPushButton"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads11CPushButtonE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       0,    0, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CPushButton::staticMetaObject = { {
     QMetaObject::SuperData::link<QPushButton::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads11CPushButtonE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads11CPushButtonE_t>.data,
+    qt_meta_stringdata_ZN3ads11CPushButtonE.offsetsAndSizes,
+    qt_meta_data_ZN3ads11CPushButtonE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads11CPushButtonE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads11CPushButtonE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CPushButton, std::true_type>
+    >,
     nullptr
 } };
 
@@ -77,7 +89,7 @@ const QMetaObject *ads::CPushButton::metaObject() const
 void *ads::CPushButton::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads11CPushButtonE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads11CPushButtonE.stringdata0))
         return static_cast<void*>(this);
     return QPushButton::qt_metacast(_clname);
 }

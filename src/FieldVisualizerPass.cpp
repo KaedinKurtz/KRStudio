@@ -508,17 +508,12 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
 
-    // The check for valid shaders is now done in execute() before this is called.
-
-    // --- 1. Resource Creation (if settings have changed) ---
     auto& settings = vis.arrowSettings;
     if (vis.isGpuDataDirty) {
-        // Clean up old buffers before creating new ones.
         if (vis.gpuData.samplePointsSSBO) gl->glDeleteBuffers(1, &vis.gpuData.samplePointsSSBO);
         if (vis.gpuData.instanceDataSSBO) gl->glDeleteBuffers(1, &vis.gpuData.instanceDataSSBO);
         if (vis.gpuData.commandUBO) gl->glDeleteBuffers(1, &vis.gpuData.commandUBO);
 
-        // Calculate the grid of points where the field will be sampled.
         std::vector<glm::vec4> samplePoints;
         vis.gpuData.numSamplePoints = settings.density.x * settings.density.y * settings.density.z;
 
@@ -537,18 +532,14 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
                     }
                 }
             }
-            // Upload sample points to a new SSBO.
             gl->glGenBuffers(1, &vis.gpuData.samplePointsSSBO);
             gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.samplePointsSSBO);
             gl->glBufferData(GL_SHADER_STORAGE_BUFFER, samplePoints.size() * sizeof(glm::vec4), samplePoints.data(), GL_STATIC_DRAW);
 
-            // Create the output buffer for instance data (to be filled by the compute shader).
             gl->glGenBuffers(1, &vis.gpuData.instanceDataSSBO);
             gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
             gl->glBufferData(GL_SHADER_STORAGE_BUFFER, vis.gpuData.numSamplePoints * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
 
-            // Create the indirect draw command buffer.
-            // The compute shader will update the instanceCount member of this command.
             DrawElementsIndirectCommand cmd = { (GLuint)m_arrowIndexCounts[ctx], 0, 0, 0, 0 };
             gl->glGenBuffers(1, &vis.gpuData.commandUBO);
             gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
@@ -556,48 +547,43 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
         }
     }
 
-    // If there are no points to sample, there's nothing more to do.
     if (vis.gpuData.numSamplePoints == 0) return;
 
-    // --- 2. Compute Pass (Generate Arrow Instance Data) ---
-    // Before running, reset the instance count in the command buffer to zero.
+    // --- Compute Pass ---
     gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
     GLuint zero = 0;
     gl->glBufferSubData(GL_DRAW_INDIRECT_BUFFER, sizeof(GLuint), sizeof(GLuint), &zero);
-
-    computeShader->use(gl); // USE PARAMETER
-    // Bind all buffers for the compute shader.
+    computeShader->use(gl);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, vis.gpuData.samplePointsSSBO);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vis.gpuData.instanceDataSSBO);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, vis.gpuData.commandUBO);
-    gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, uboID);      // USE PARAMETER
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboID); // USE PARAMETER
-
-    // Set uniforms.
+    gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, uboID);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboID);
     computeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
-    computeShader->setFloat(gl, "u_vectorScale", settings.vectorScale * 0.3f);
+    computeShader->setFloat(gl, "u_vectorScale", settings.vectorScale);
     computeShader->setFloat(gl, "u_arrowHeadScale", settings.headScale);
     computeShader->setFloat(gl, "u_cullingThreshold", settings.cullingThreshold);
     computeShader->setInt(gl, "u_pointEffectorCount", static_cast<int>(m_pointEffectors.size()));
     computeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
     computeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
-    
-    // Dispatch the compute shader.
     gl->glDispatchCompute((GLuint)vis.gpuData.numSamplePoints / 256 + 1, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
 
-    // --- 3. Render Pass (Indirectly Draw Instanced Arrows) ---
-    renderShader->use(gl); // USE PARAMETER
+    // --- Render Pass ---
+    renderShader->use(gl);
     renderShader->setMat4(gl, "view", context.view);
     renderShader->setMat4(gl, "projection", context.projection);
 
+    // Set the uniforms that the vertex shader will use to calculate the color
+    renderShader->setInt(gl, "uColoringMode", static_cast<int>(vis.arrowSettings.coloringMode));
     uploadGradientToCurrentProgram(gl, vis.arrowSettings.intensityGradient);
 
     gl->glBindVertexArray(m_arrowVAOs[ctx]);
     gl->glBindBuffer(GL_ARRAY_BUFFER, vis.gpuData.instanceDataSSBO);
     const GLsizei stride = sizeof(InstanceData);
     const GLsizei vec4Size = sizeof(glm::vec4);
-    // modelMatrix (mat4) requires 4 attribute pointers.
+
+    // modelMatrix (mat4) at locations 2, 3, 4, 5 (This part is correct)
     gl->glEnableVertexAttribArray(2);
     gl->glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + 0 * vec4Size));
     gl->glEnableVertexAttribArray(3);
@@ -606,31 +592,37 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
     gl->glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + 2 * vec4Size));
     gl->glEnableVertexAttribArray(5);
     gl->glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, modelMatrix) + 3 * vec4Size));
-    gl->glEnableVertexAttribArray(6);
-    gl->glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(InstanceData, color));
 
-    gl->glVertexAttribDivisor(2, 1); // etc.
+    // --- FIX: Correctly set up attribute pointers for intensity and age ---
+    // The shader expects two separate floats at locations 6 and 7.
+    // We tell OpenGL to read them from the 'color' vec4 in our InstanceData struct.
+    gl->glEnableVertexAttribArray(6); // aIntensity (float) is at the start of the color member
+    gl->glVertexAttribPointer(6, 1, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(InstanceData, color));
+
+    gl->glEnableVertexAttribArray(7); // aAgeNorm (float) is offset by one float from the start of the color member
+    gl->glVertexAttribPointer(7, 1, GL_FLOAT, GL_FALSE, stride, (void*)(offsetof(InstanceData, color) + sizeof(float)));
+
+    // Set all instance attributes to advance once per instance
+    gl->glVertexAttribDivisor(2, 1);
     gl->glVertexAttribDivisor(3, 1);
     gl->glVertexAttribDivisor(4, 1);
     gl->glVertexAttribDivisor(5, 1);
     gl->glVertexAttribDivisor(6, 1);
+    gl->glVertexAttribDivisor(7, 1);
 
-    // Bind the command buffer for the indirect draw.
+    // Perform the indirect draw call
     gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
-
-    // The magic happens here: glDrawElementsIndirect reads all its parameters
-    // (instance count, index count, etc.) directly from the command buffer
-    // that the compute shader just filled.
     gl->glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (void*)0);
 
-    // --- 4. Cleanup and State Reset ---
+    // Cleanup
     gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     gl->glBindVertexArray(0);
 
-    // Reset the attribute divisors back to 0 (per-vertex) for the next pass.
+    // Reset attribute divisors for the next draw call
     gl->glVertexAttribDivisor(2, 0);
     gl->glVertexAttribDivisor(3, 0);
     gl->glVertexAttribDivisor(4, 0);
     gl->glVertexAttribDivisor(5, 0);
     gl->glVertexAttribDivisor(6, 0);
+    gl->glVertexAttribDivisor(7, 0);
 }

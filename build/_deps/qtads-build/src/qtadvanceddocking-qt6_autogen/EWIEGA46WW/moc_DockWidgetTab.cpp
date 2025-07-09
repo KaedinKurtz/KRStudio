@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'DockWidgetTab.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'DockWidgetTab.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,75 +34,116 @@ namespace {
 struct qt_meta_tag_ZN3ads14CDockWidgetTabE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CDockWidgetTab::qt_create_metaobjectdata<qt_meta_tag_ZN3ads14CDockWidgetTabE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CDockWidgetTab",
-        "activeTabChanged",
-        "",
-        "clicked",
-        "closeRequested",
-        "closeOtherTabsRequested",
-        "moved",
-        "GlobalPos",
-        "elidedChanged",
-        "elided",
-        "detachDockWidget",
-        "autoHideDockWidget",
-        "onAutoHideToActionClicked",
-        "setVisible",
-        "visible",
-        "activeTab",
-        "iconSize"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Signal 'activeTabChanged'
-        QtMocHelpers::SignalData<void()>(1, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'clicked'
-        QtMocHelpers::SignalData<void()>(3, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'closeRequested'
-        QtMocHelpers::SignalData<void()>(4, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'closeOtherTabsRequested'
-        QtMocHelpers::SignalData<void()>(5, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'moved'
-        QtMocHelpers::SignalData<void(const QPoint &)>(6, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QPoint, 7 },
-        }}),
-        // Signal 'elidedChanged'
-        QtMocHelpers::SignalData<void(bool)>(8, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 9 },
-        }}),
-        // Slot 'detachDockWidget'
-        QtMocHelpers::SlotData<void()>(10, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'autoHideDockWidget'
-        QtMocHelpers::SlotData<void()>(11, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onAutoHideToActionClicked'
-        QtMocHelpers::SlotData<void()>(12, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'setVisible'
-        QtMocHelpers::SlotData<void(bool)>(13, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 14 },
-        }}),
-    };
-    QtMocHelpers::UintData qt_properties {
-        // property 'activeTab'
-        QtMocHelpers::PropertyData<bool>(15, QMetaType::Bool, QMC::DefaultPropertyFlags | QMC::Writable | QMC::StdCppSet, 0),
-        // property 'iconSize'
-        QtMocHelpers::PropertyData<QSize>(16, QMetaType::QSize, QMC::DefaultPropertyFlags | QMC::Writable | QMC::StdCppSet),
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CDockWidgetTab, qt_meta_tag_ZN3ads14CDockWidgetTabE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads14CDockWidgetTabE = QtMocHelpers::stringData(
+    "ads::CDockWidgetTab",
+    "activeTabChanged",
+    "",
+    "clicked",
+    "closeRequested",
+    "closeOtherTabsRequested",
+    "moved",
+    "GlobalPos",
+    "elidedChanged",
+    "elided",
+    "detachDockWidget",
+    "autoHideDockWidget",
+    "onAutoHideToActionClicked",
+    "setVisible",
+    "visible",
+    "activeTab",
+    "iconSize"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads14CDockWidgetTabE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+      10,   14, // methods
+       2,   90, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       6,       // signalCount
+
+ // signals: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    0,   74,    2, 0x06,    3 /* Public */,
+       3,    0,   75,    2, 0x06,    4 /* Public */,
+       4,    0,   76,    2, 0x06,    5 /* Public */,
+       5,    0,   77,    2, 0x06,    6 /* Public */,
+       6,    1,   78,    2, 0x06,    7 /* Public */,
+       8,    1,   81,    2, 0x06,    9 /* Public */,
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+      10,    0,   84,    2, 0x08,   11 /* Private */,
+      11,    0,   85,    2, 0x08,   12 /* Private */,
+      12,    0,   86,    2, 0x08,   13 /* Private */,
+      13,    1,   87,    2, 0x0a,   14 /* Public */,
+
+ // signals: parameters
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::QPoint,    7,
+    QMetaType::Void, QMetaType::Bool,    9,
+
+ // slots: parameters
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Bool,   14,
+
+ // properties: name, type, flags, notifyId, revision
+      15, QMetaType::Bool, 0x00015103, uint(0), 0,
+      16, QMetaType::QSize, 0x00015103, uint(-1), 0,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CDockWidgetTab::staticMetaObject = { {
     QMetaObject::SuperData::link<QFrame::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads14CDockWidgetTabE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads14CDockWidgetTabE_t>.data,
+    qt_meta_stringdata_ZN3ads14CDockWidgetTabE.offsetsAndSizes,
+    qt_meta_data_ZN3ads14CDockWidgetTabE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads14CDockWidgetTabE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads14CDockWidgetTabE_t,
+        // property 'activeTab'
+        QtPrivate::TypeAndForceComplete<bool, std::true_type>,
+        // property 'iconSize'
+        QtPrivate::TypeAndForceComplete<QSize, std::true_type>,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CDockWidgetTab, std::true_type>,
+        // method 'activeTabChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'clicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'closeRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'closeOtherTabsRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'moved'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QPoint &, std::false_type>,
+        // method 'elidedChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        // method 'detachDockWidget'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'autoHideDockWidget'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onAutoHideToActionClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'setVisible'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>
+    >,
     nullptr
 } };
 
@@ -125,32 +166,63 @@ void ads::CDockWidgetTab::qt_static_metacall(QObject *_o, QMetaObject::Call _c, 
         }
     }
     if (_c == QMetaObject::IndexOfMethod) {
-        if (QtMocHelpers::indexOfMethod<void (CDockWidgetTab::*)()>(_a, &CDockWidgetTab::activeTabChanged, 0))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidgetTab::*)()>(_a, &CDockWidgetTab::clicked, 1))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidgetTab::*)()>(_a, &CDockWidgetTab::closeRequested, 2))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidgetTab::*)()>(_a, &CDockWidgetTab::closeOtherTabsRequested, 3))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidgetTab::*)(const QPoint & )>(_a, &CDockWidgetTab::moved, 4))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidgetTab::*)(bool )>(_a, &CDockWidgetTab::elidedChanged, 5))
-            return;
+        int *result = reinterpret_cast<int *>(_a[0]);
+        {
+            using _q_method_type = void (CDockWidgetTab::*)();
+            if (_q_method_type _q_method = &CDockWidgetTab::activeTabChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 0;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidgetTab::*)();
+            if (_q_method_type _q_method = &CDockWidgetTab::clicked; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 1;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidgetTab::*)();
+            if (_q_method_type _q_method = &CDockWidgetTab::closeRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 2;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidgetTab::*)();
+            if (_q_method_type _q_method = &CDockWidgetTab::closeOtherTabsRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 3;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidgetTab::*)(const QPoint & );
+            if (_q_method_type _q_method = &CDockWidgetTab::moved; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 4;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidgetTab::*)(bool );
+            if (_q_method_type _q_method = &CDockWidgetTab::elidedChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 5;
+                return;
+            }
+        }
     }
     if (_c == QMetaObject::ReadProperty) {
         void *_v = _a[0];
         switch (_id) {
-        case 0: *reinterpret_cast<bool*>(_v) = _t->isActiveTab(); break;
-        case 1: *reinterpret_cast<QSize*>(_v) = _t->iconSize(); break;
+        case 0: *reinterpret_cast< bool*>(_v) = _t->isActiveTab(); break;
+        case 1: *reinterpret_cast< QSize*>(_v) = _t->iconSize(); break;
         default: break;
         }
     }
     if (_c == QMetaObject::WriteProperty) {
         void *_v = _a[0];
         switch (_id) {
-        case 0: _t->setActiveTab(*reinterpret_cast<bool*>(_v)); break;
-        case 1: _t->setIconSize(*reinterpret_cast<QSize*>(_v)); break;
+        case 0: _t->setActiveTab(*reinterpret_cast< bool*>(_v)); break;
+        case 1: _t->setIconSize(*reinterpret_cast< QSize*>(_v)); break;
         default: break;
         }
     }
@@ -164,7 +236,7 @@ const QMetaObject *ads::CDockWidgetTab::metaObject() const
 void *ads::CDockWidgetTab::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads14CDockWidgetTabE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads14CDockWidgetTabE.stringdata0))
         return static_cast<void*>(this);
     return QFrame::qt_metacast(_clname);
 }
@@ -220,12 +292,14 @@ void ads::CDockWidgetTab::closeOtherTabsRequested()
 // SIGNAL 4
 void ads::CDockWidgetTab::moved(const QPoint & _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 4, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 4, _a);
 }
 
 // SIGNAL 5
 void ads::CDockWidgetTab::elidedChanged(bool _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 5, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 5, _a);
 }
 QT_WARNING_POP

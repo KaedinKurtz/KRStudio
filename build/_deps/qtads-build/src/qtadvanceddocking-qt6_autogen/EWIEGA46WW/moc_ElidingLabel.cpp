@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'ElidingLabel.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -18,8 +18,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'ElidingLabel.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -35,42 +35,63 @@ namespace {
 struct qt_meta_tag_ZN3ads13CElidingLabelE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CElidingLabel::qt_create_metaobjectdata<qt_meta_tag_ZN3ads13CElidingLabelE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CElidingLabel",
-        "clicked",
-        "",
-        "doubleClicked",
-        "elidedChanged",
-        "elided"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Signal 'clicked'
-        QtMocHelpers::SignalData<void()>(1, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'doubleClicked'
-        QtMocHelpers::SignalData<void()>(3, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'elidedChanged'
-        QtMocHelpers::SignalData<void(bool)>(4, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 5 },
-        }}),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CElidingLabel, qt_meta_tag_ZN3ads13CElidingLabelE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads13CElidingLabelE = QtMocHelpers::stringData(
+    "ads::CElidingLabel",
+    "clicked",
+    "",
+    "doubleClicked",
+    "elidedChanged",
+    "elided"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads13CElidingLabelE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       3,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       3,       // signalCount
+
+ // signals: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    0,   32,    2, 0x06,    1 /* Public */,
+       3,    0,   33,    2, 0x06,    2 /* Public */,
+       4,    1,   34,    2, 0x06,    3 /* Public */,
+
+ // signals: parameters
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Bool,    5,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CElidingLabel::staticMetaObject = { {
     QMetaObject::SuperData::link<QLabel::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads13CElidingLabelE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads13CElidingLabelE_t>.data,
+    qt_meta_stringdata_ZN3ads13CElidingLabelE.offsetsAndSizes,
+    qt_meta_data_ZN3ads13CElidingLabelE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads13CElidingLabelE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads13CElidingLabelE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CElidingLabel, std::true_type>,
+        // method 'clicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'doubleClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'elidedChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>
+    >,
     nullptr
 } };
 
@@ -86,12 +107,28 @@ void ads::CElidingLabel::qt_static_metacall(QObject *_o, QMetaObject::Call _c, i
         }
     }
     if (_c == QMetaObject::IndexOfMethod) {
-        if (QtMocHelpers::indexOfMethod<void (CElidingLabel::*)()>(_a, &CElidingLabel::clicked, 0))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CElidingLabel::*)()>(_a, &CElidingLabel::doubleClicked, 1))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CElidingLabel::*)(bool )>(_a, &CElidingLabel::elidedChanged, 2))
-            return;
+        int *result = reinterpret_cast<int *>(_a[0]);
+        {
+            using _q_method_type = void (CElidingLabel::*)();
+            if (_q_method_type _q_method = &CElidingLabel::clicked; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 0;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CElidingLabel::*)();
+            if (_q_method_type _q_method = &CElidingLabel::doubleClicked; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 1;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CElidingLabel::*)(bool );
+            if (_q_method_type _q_method = &CElidingLabel::elidedChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 2;
+                return;
+            }
+        }
     }
 }
 
@@ -103,7 +140,7 @@ const QMetaObject *ads::CElidingLabel::metaObject() const
 void *ads::CElidingLabel::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads13CElidingLabelE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads13CElidingLabelE.stringdata0))
         return static_cast<void*>(this);
     return QLabel::qt_metacast(_clname);
 }
@@ -141,6 +178,7 @@ void ads::CElidingLabel::doubleClicked()
 // SIGNAL 2
 void ads::CElidingLabel::elidedChanged(bool _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 2, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 2, _a);
 }
 QT_WARNING_POP

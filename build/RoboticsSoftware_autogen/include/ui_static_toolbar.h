@@ -1,7 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'static_toolbar.ui'
 **
-** Created by: Qt User Interface Compiler version 6.9.0
+** Created by: Qt User Interface Compiler version 6.8.3
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -1267,12 +1267,12 @@ public:
         length_units_label = new QLabel(widget_3);
         length_units_label->setObjectName("length_units_label");
 
-        formLayout->setWidget(3, QFormLayout::ItemRole::LabelRole, length_units_label);
+        formLayout->setWidget(3, QFormLayout::LabelRole, length_units_label);
 
         angle_units_label = new QLabel(widget_3);
         angle_units_label->setObjectName("angle_units_label");
 
-        formLayout->setWidget(1, QFormLayout::ItemRole::LabelRole, angle_units_label);
+        formLayout->setWidget(1, QFormLayout::LabelRole, angle_units_label);
 
         units_angle_input = new QComboBox(widget_3);
         units_angle_input->addItem(QString());
@@ -1280,7 +1280,7 @@ public:
         units_angle_input->setObjectName("units_angle_input");
         units_angle_input->setMinimumSize(QSize(140, 32));
 
-        formLayout->setWidget(1, QFormLayout::ItemRole::FieldRole, units_angle_input);
+        formLayout->setWidget(1, QFormLayout::FieldRole, units_angle_input);
 
         units_length_input = new QComboBox(widget_3);
         units_length_input->addItem(QString());
@@ -1296,7 +1296,7 @@ public:
         units_length_input->setMinimumSize(QSize(140, 32));
         units_length_input->setMaximumSize(QSize(20000, 16777215));
 
-        formLayout->setWidget(3, QFormLayout::ItemRole::FieldRole, units_length_input);
+        formLayout->setWidget(3, QFormLayout::FieldRole, units_length_input);
 
 
         gridLayout_5->addWidget(widget_3, 2, 10, 1, 1);

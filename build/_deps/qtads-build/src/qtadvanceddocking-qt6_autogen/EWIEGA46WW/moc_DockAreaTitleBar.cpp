@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'DockAreaTitleBar.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'DockAreaTitleBar.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,29 +34,41 @@ namespace {
 struct qt_meta_tag_ZN3ads15CTitleBarButtonE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CTitleBarButton::qt_create_metaobjectdata<qt_meta_tag_ZN3ads15CTitleBarButtonE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CTitleBarButton"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CTitleBarButton, qt_meta_tag_ZN3ads15CTitleBarButtonE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads15CTitleBarButtonE = QtMocHelpers::stringData(
+    "ads::CTitleBarButton"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads15CTitleBarButtonE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       0,    0, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CTitleBarButton::staticMetaObject = { {
     QMetaObject::SuperData::link<tTitleBarButton::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads15CTitleBarButtonE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads15CTitleBarButtonE_t>.data,
+    qt_meta_stringdata_ZN3ads15CTitleBarButtonE.offsetsAndSizes,
+    qt_meta_data_ZN3ads15CTitleBarButtonE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads15CTitleBarButtonE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads15CTitleBarButtonE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CTitleBarButton, std::true_type>
+    >,
     nullptr
 } };
 
@@ -77,7 +89,7 @@ const QMetaObject *ads::CTitleBarButton::metaObject() const
 void *ads::CTitleBarButton::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads15CTitleBarButtonE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads15CTitleBarButtonE.stringdata0))
         return static_cast<void*>(this);
     return tTitleBarButton::qt_metacast(_clname);
 }
@@ -91,76 +103,117 @@ namespace {
 struct qt_meta_tag_ZN3ads17CDockAreaTitleBarE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CDockAreaTitleBar::qt_create_metaobjectdata<qt_meta_tag_ZN3ads17CDockAreaTitleBarE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CDockAreaTitleBar",
-        "tabBarClicked",
-        "",
-        "index",
-        "onTabsMenuAboutToShow",
-        "onCloseButtonClicked",
-        "onAutoHideCloseActionTriggered",
-        "minimizeAutoHideContainer",
-        "onUndockButtonClicked",
-        "onTabsMenuActionTriggered",
-        "QAction*",
-        "Action",
-        "onCurrentTabChanged",
-        "Index",
-        "onAutoHideButtonClicked",
-        "onAutoHideDockAreaActionClicked",
-        "onAutoHideToActionClicked",
-        "markTabsMenuOutdated"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Signal 'tabBarClicked'
-        QtMocHelpers::SignalData<void(int)>(1, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Int, 3 },
-        }}),
-        // Slot 'onTabsMenuAboutToShow'
-        QtMocHelpers::SlotData<void()>(4, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onCloseButtonClicked'
-        QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onAutoHideCloseActionTriggered'
-        QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'minimizeAutoHideContainer'
-        QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onUndockButtonClicked'
-        QtMocHelpers::SlotData<void()>(8, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onTabsMenuActionTriggered'
-        QtMocHelpers::SlotData<void(QAction *)>(9, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { 0x80000000 | 10, 11 },
-        }}),
-        // Slot 'onCurrentTabChanged'
-        QtMocHelpers::SlotData<void(int)>(12, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 13 },
-        }}),
-        // Slot 'onAutoHideButtonClicked'
-        QtMocHelpers::SlotData<void()>(14, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onAutoHideDockAreaActionClicked'
-        QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onAutoHideToActionClicked'
-        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'markTabsMenuOutdated'
-        QtMocHelpers::SlotData<void()>(17, 2, QMC::AccessPublic, QMetaType::Void),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CDockAreaTitleBar, qt_meta_tag_ZN3ads17CDockAreaTitleBarE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads17CDockAreaTitleBarE = QtMocHelpers::stringData(
+    "ads::CDockAreaTitleBar",
+    "tabBarClicked",
+    "",
+    "index",
+    "onTabsMenuAboutToShow",
+    "onCloseButtonClicked",
+    "onAutoHideCloseActionTriggered",
+    "minimizeAutoHideContainer",
+    "onUndockButtonClicked",
+    "onTabsMenuActionTriggered",
+    "QAction*",
+    "Action",
+    "onCurrentTabChanged",
+    "Index",
+    "onAutoHideButtonClicked",
+    "onAutoHideDockAreaActionClicked",
+    "onAutoHideToActionClicked",
+    "markTabsMenuOutdated"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads17CDockAreaTitleBarE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+      12,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       1,       // signalCount
+
+ // signals: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    1,   86,    2, 0x06,    1 /* Public */,
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+       4,    0,   89,    2, 0x08,    3 /* Private */,
+       5,    0,   90,    2, 0x08,    4 /* Private */,
+       6,    0,   91,    2, 0x08,    5 /* Private */,
+       7,    0,   92,    2, 0x08,    6 /* Private */,
+       8,    0,   93,    2, 0x08,    7 /* Private */,
+       9,    1,   94,    2, 0x08,    8 /* Private */,
+      12,    1,   97,    2, 0x08,   10 /* Private */,
+      14,    0,  100,    2, 0x08,   12 /* Private */,
+      15,    0,  101,    2, 0x08,   13 /* Private */,
+      16,    0,  102,    2, 0x08,   14 /* Private */,
+      17,    0,  103,    2, 0x0a,   15 /* Public */,
+
+ // signals: parameters
+    QMetaType::Void, QMetaType::Int,    3,
+
+ // slots: parameters
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void, 0x80000000 | 10,   11,
+    QMetaType::Void, QMetaType::Int,   13,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CDockAreaTitleBar::staticMetaObject = { {
     QMetaObject::SuperData::link<QFrame::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads17CDockAreaTitleBarE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads17CDockAreaTitleBarE_t>.data,
+    qt_meta_stringdata_ZN3ads17CDockAreaTitleBarE.offsetsAndSizes,
+    qt_meta_data_ZN3ads17CDockAreaTitleBarE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads17CDockAreaTitleBarE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads17CDockAreaTitleBarE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CDockAreaTitleBar, std::true_type>,
+        // method 'tabBarClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'onTabsMenuAboutToShow'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onCloseButtonClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onAutoHideCloseActionTriggered'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'minimizeAutoHideContainer'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onUndockButtonClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onTabsMenuActionTriggered'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<QAction *, std::false_type>,
+        // method 'onCurrentTabChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'onAutoHideButtonClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onAutoHideDockAreaActionClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onAutoHideToActionClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'markTabsMenuOutdated'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>
+    >,
     nullptr
 } };
 
@@ -197,8 +250,14 @@ void ads::CDockAreaTitleBar::qt_static_metacall(QObject *_o, QMetaObject::Call _
         }
     }
     if (_c == QMetaObject::IndexOfMethod) {
-        if (QtMocHelpers::indexOfMethod<void (CDockAreaTitleBar::*)(int )>(_a, &CDockAreaTitleBar::tabBarClicked, 0))
-            return;
+        int *result = reinterpret_cast<int *>(_a[0]);
+        {
+            using _q_method_type = void (CDockAreaTitleBar::*)(int );
+            if (_q_method_type _q_method = &CDockAreaTitleBar::tabBarClicked; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 0;
+                return;
+            }
+        }
     }
 }
 
@@ -210,7 +269,7 @@ const QMetaObject *ads::CDockAreaTitleBar::metaObject() const
 void *ads::CDockAreaTitleBar::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads17CDockAreaTitleBarE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads17CDockAreaTitleBarE.stringdata0))
         return static_cast<void*>(this);
     return QFrame::qt_metacast(_clname);
 }
@@ -236,6 +295,7 @@ int ads::CDockAreaTitleBar::qt_metacall(QMetaObject::Call _c, int _id, void **_a
 // SIGNAL 0
 void ads::CDockAreaTitleBar::tabBarClicked(int _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 0, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 0, _a);
 }
 QT_WARNING_POP

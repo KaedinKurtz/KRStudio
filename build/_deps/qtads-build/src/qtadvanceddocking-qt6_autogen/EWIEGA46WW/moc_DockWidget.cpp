@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'DockWidget.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'DockWidget.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,127 +34,185 @@ namespace {
 struct qt_meta_tag_ZN3ads11CDockWidgetE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CDockWidget::qt_create_metaobjectdata<qt_meta_tag_ZN3ads11CDockWidgetE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CDockWidget",
-        "viewToggled",
-        "",
-        "Open",
-        "closed",
-        "titleChanged",
-        "Title",
-        "topLevelChanged",
-        "topLevel",
-        "closeRequested",
-        "visibilityChanged",
-        "visible",
-        "featuresChanged",
-        "ads::CDockWidget::DockWidgetFeatures",
-        "features",
-        "setToolbarFloatingStyle",
-        "toggleView",
-        "setAsCurrentTab",
-        "raise",
-        "setFloating",
-        "deleteDockWidget",
-        "closeDockWidget",
-        "requestCloseDockWidget",
-        "showFullScreen",
-        "showNormal",
-        "setAutoHide",
-        "Enable",
-        "SideBarLocation",
-        "Location",
-        "TabIndex",
-        "toggleAutoHide"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Signal 'viewToggled'
-        QtMocHelpers::SignalData<void(bool)>(1, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 3 },
-        }}),
-        // Signal 'closed'
-        QtMocHelpers::SignalData<void()>(4, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'titleChanged'
-        QtMocHelpers::SignalData<void(const QString &)>(5, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QString, 6 },
-        }}),
-        // Signal 'topLevelChanged'
-        QtMocHelpers::SignalData<void(bool)>(7, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 8 },
-        }}),
-        // Signal 'closeRequested'
-        QtMocHelpers::SignalData<void()>(9, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'visibilityChanged'
-        QtMocHelpers::SignalData<void(bool)>(10, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 11 },
-        }}),
-        // Signal 'featuresChanged'
-        QtMocHelpers::SignalData<void(ads::CDockWidget::DockWidgetFeatures)>(12, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 13, 14 },
-        }}),
-        // Slot 'setToolbarFloatingStyle'
-        QtMocHelpers::SlotData<void(bool)>(15, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Bool, 8 },
-        }}),
-        // Slot 'toggleView'
-        QtMocHelpers::SlotData<void(bool)>(16, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 3 },
-        }}),
-        // Slot 'toggleView'
-        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void),
-        // Slot 'setAsCurrentTab'
-        QtMocHelpers::SlotData<void()>(17, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'raise'
-        QtMocHelpers::SlotData<void()>(18, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'setFloating'
-        QtMocHelpers::SlotData<void()>(19, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'deleteDockWidget'
-        QtMocHelpers::SlotData<void()>(20, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'closeDockWidget'
-        QtMocHelpers::SlotData<void()>(21, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'requestCloseDockWidget'
-        QtMocHelpers::SlotData<void()>(22, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'showFullScreen'
-        QtMocHelpers::SlotData<void()>(23, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'showNormal'
-        QtMocHelpers::SlotData<void()>(24, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'setAutoHide'
-        QtMocHelpers::SlotData<void(bool, SideBarLocation, int)>(25, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::Bool, 26 }, { 0x80000000 | 27, 28 }, { QMetaType::Int, 29 },
-        }}),
-        // Slot 'setAutoHide'
-        QtMocHelpers::SlotData<void(bool, SideBarLocation)>(25, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void, {{
-            { QMetaType::Bool, 26 }, { 0x80000000 | 27, 28 },
-        }}),
-        // Slot 'setAutoHide'
-        QtMocHelpers::SlotData<void(bool)>(25, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void, {{
-            { QMetaType::Bool, 26 },
-        }}),
-        // Slot 'toggleAutoHide'
-        QtMocHelpers::SlotData<void(SideBarLocation)>(30, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 27, 28 },
-        }}),
-        // Slot 'toggleAutoHide'
-        QtMocHelpers::SlotData<void()>(30, 2, QMC::AccessPublic | QMC::MethodCloned, QMetaType::Void),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CDockWidget, qt_meta_tag_ZN3ads11CDockWidgetE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads11CDockWidgetE = QtMocHelpers::stringData(
+    "ads::CDockWidget",
+    "viewToggled",
+    "",
+    "Open",
+    "closed",
+    "titleChanged",
+    "Title",
+    "topLevelChanged",
+    "topLevel",
+    "closeRequested",
+    "visibilityChanged",
+    "visible",
+    "featuresChanged",
+    "ads::CDockWidget::DockWidgetFeatures",
+    "features",
+    "setToolbarFloatingStyle",
+    "toggleView",
+    "setAsCurrentTab",
+    "raise",
+    "setFloating",
+    "deleteDockWidget",
+    "closeDockWidget",
+    "requestCloseDockWidget",
+    "showFullScreen",
+    "showNormal",
+    "setAutoHide",
+    "Enable",
+    "SideBarLocation",
+    "Location",
+    "TabIndex",
+    "toggleAutoHide"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads11CDockWidgetE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+      23,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       7,       // signalCount
+
+ // signals: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    1,  152,    2, 0x06,    1 /* Public */,
+       4,    0,  155,    2, 0x06,    3 /* Public */,
+       5,    1,  156,    2, 0x06,    4 /* Public */,
+       7,    1,  159,    2, 0x06,    6 /* Public */,
+       9,    0,  162,    2, 0x06,    8 /* Public */,
+      10,    1,  163,    2, 0x06,    9 /* Public */,
+      12,    1,  166,    2, 0x06,   11 /* Public */,
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+      15,    1,  169,    2, 0x08,   13 /* Private */,
+      16,    1,  172,    2, 0x0a,   15 /* Public */,
+      16,    0,  175,    2, 0x2a,   17 /* Public | MethodCloned */,
+      17,    0,  176,    2, 0x0a,   18 /* Public */,
+      18,    0,  177,    2, 0x0a,   19 /* Public */,
+      19,    0,  178,    2, 0x0a,   20 /* Public */,
+      20,    0,  179,    2, 0x0a,   21 /* Public */,
+      21,    0,  180,    2, 0x0a,   22 /* Public */,
+      22,    0,  181,    2, 0x0a,   23 /* Public */,
+      23,    0,  182,    2, 0x0a,   24 /* Public */,
+      24,    0,  183,    2, 0x0a,   25 /* Public */,
+      25,    3,  184,    2, 0x0a,   26 /* Public */,
+      25,    2,  191,    2, 0x2a,   30 /* Public | MethodCloned */,
+      25,    1,  196,    2, 0x2a,   33 /* Public | MethodCloned */,
+      30,    1,  199,    2, 0x0a,   35 /* Public */,
+      30,    0,  202,    2, 0x2a,   37 /* Public | MethodCloned */,
+
+ // signals: parameters
+    QMetaType::Void, QMetaType::Bool,    3,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::QString,    6,
+    QMetaType::Void, QMetaType::Bool,    8,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Bool,   11,
+    QMetaType::Void, 0x80000000 | 13,   14,
+
+ // slots: parameters
+    QMetaType::Void, QMetaType::Bool,    8,
+    QMetaType::Void, QMetaType::Bool,    3,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Bool, 0x80000000 | 27, QMetaType::Int,   26,   28,   29,
+    QMetaType::Void, QMetaType::Bool, 0x80000000 | 27,   26,   28,
+    QMetaType::Void, QMetaType::Bool,   26,
+    QMetaType::Void, 0x80000000 | 27,   28,
+    QMetaType::Void,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CDockWidget::staticMetaObject = { {
     QMetaObject::SuperData::link<QFrame::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads11CDockWidgetE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads11CDockWidgetE_t>.data,
+    qt_meta_stringdata_ZN3ads11CDockWidgetE.offsetsAndSizes,
+    qt_meta_data_ZN3ads11CDockWidgetE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads11CDockWidgetE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads11CDockWidgetE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CDockWidget, std::true_type>,
+        // method 'viewToggled'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        // method 'closed'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'titleChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
+        // method 'topLevelChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        // method 'closeRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'visibilityChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        // method 'featuresChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<ads::CDockWidget::DockWidgetFeatures, std::false_type>,
+        // method 'setToolbarFloatingStyle'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        // method 'toggleView'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        // method 'toggleView'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'setAsCurrentTab'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'raise'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'setFloating'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'deleteDockWidget'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'closeDockWidget'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'requestCloseDockWidget'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'showFullScreen'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'showNormal'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'setAutoHide'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        QtPrivate::TypeAndForceComplete<SideBarLocation, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'setAutoHide'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        QtPrivate::TypeAndForceComplete<SideBarLocation, std::false_type>,
+        // method 'setAutoHide'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        // method 'toggleAutoHide'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<SideBarLocation, std::false_type>,
+        // method 'toggleAutoHide'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>
+    >,
     nullptr
 } };
 
@@ -190,20 +248,56 @@ void ads::CDockWidget::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int
         }
     }
     if (_c == QMetaObject::IndexOfMethod) {
-        if (QtMocHelpers::indexOfMethod<void (CDockWidget::*)(bool )>(_a, &CDockWidget::viewToggled, 0))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidget::*)()>(_a, &CDockWidget::closed, 1))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidget::*)(const QString & )>(_a, &CDockWidget::titleChanged, 2))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidget::*)(bool )>(_a, &CDockWidget::topLevelChanged, 3))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidget::*)()>(_a, &CDockWidget::closeRequested, 4))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidget::*)(bool )>(_a, &CDockWidget::visibilityChanged, 5))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockWidget::*)(ads::CDockWidget::DockWidgetFeatures )>(_a, &CDockWidget::featuresChanged, 6))
-            return;
+        int *result = reinterpret_cast<int *>(_a[0]);
+        {
+            using _q_method_type = void (CDockWidget::*)(bool );
+            if (_q_method_type _q_method = &CDockWidget::viewToggled; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 0;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidget::*)();
+            if (_q_method_type _q_method = &CDockWidget::closed; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 1;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidget::*)(const QString & );
+            if (_q_method_type _q_method = &CDockWidget::titleChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 2;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidget::*)(bool );
+            if (_q_method_type _q_method = &CDockWidget::topLevelChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 3;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidget::*)();
+            if (_q_method_type _q_method = &CDockWidget::closeRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 4;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidget::*)(bool );
+            if (_q_method_type _q_method = &CDockWidget::visibilityChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 5;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockWidget::*)(ads::CDockWidget::DockWidgetFeatures );
+            if (_q_method_type _q_method = &CDockWidget::featuresChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 6;
+                return;
+            }
+        }
     }
 }
 
@@ -215,7 +309,7 @@ const QMetaObject *ads::CDockWidget::metaObject() const
 void *ads::CDockWidget::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads11CDockWidgetE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads11CDockWidgetE.stringdata0))
         return static_cast<void*>(this);
     return QFrame::qt_metacast(_clname);
 }
@@ -241,7 +335,8 @@ int ads::CDockWidget::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
 // SIGNAL 0
 void ads::CDockWidget::viewToggled(bool _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 0, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 0, _a);
 }
 
 // SIGNAL 1
@@ -253,13 +348,15 @@ void ads::CDockWidget::closed()
 // SIGNAL 2
 void ads::CDockWidget::titleChanged(const QString & _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 2, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 2, _a);
 }
 
 // SIGNAL 3
 void ads::CDockWidget::topLevelChanged(bool _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 3, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 3, _a);
 }
 
 // SIGNAL 4
@@ -271,12 +368,14 @@ void ads::CDockWidget::closeRequested()
 // SIGNAL 5
 void ads::CDockWidget::visibilityChanged(bool _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 5, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 5, _a);
 }
 
 // SIGNAL 6
 void ads::CDockWidget::featuresChanged(ads::CDockWidget::DockWidgetFeatures _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 6, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 6, _a);
 }
 QT_WARNING_POP

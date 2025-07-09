@@ -89,7 +89,10 @@ target_compile_definitions(RoboticsSoftware PRIVATE
     NOMINMAX)
 
 if(MSVC)
-    target_compile_options(RoboticsSoftware PRIVATE /GS /RTC1)
+    target_compile_options(RoboticsSoftware PRIVATE
+        /GS
+        $<$<CONFIG:Debug>:/RTC1>
+    )
 endif()
 
 # ─────────────────────────────────────────────

@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'StaticToolbar.hpp'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'StaticToolbar.hpp' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,33 +34,51 @@ namespace {
 struct qt_meta_tag_ZN13StaticToolbarE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto StaticToolbar::qt_create_metaobjectdata<qt_meta_tag_ZN13StaticToolbarE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "StaticToolbar",
-        "loadRobotClicked",
-        ""
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Signal 'loadRobotClicked'
-        QtMocHelpers::SignalData<void()>(1, 2, QMC::AccessPublic, QMetaType::Void),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<StaticToolbar, qt_meta_tag_ZN13StaticToolbarE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN13StaticToolbarE = QtMocHelpers::stringData(
+    "StaticToolbar",
+    "loadRobotClicked",
+    ""
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN13StaticToolbarE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       1,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       1,       // signalCount
+
+ // signals: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    0,   20,    2, 0x06,    1 /* Public */,
+
+ // signals: parameters
+    QMetaType::Void,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject StaticToolbar::staticMetaObject = { {
     QMetaObject::SuperData::link<QWidget::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN13StaticToolbarE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN13StaticToolbarE_t>.data,
+    qt_meta_stringdata_ZN13StaticToolbarE.offsetsAndSizes,
+    qt_meta_data_ZN13StaticToolbarE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN13StaticToolbarE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN13StaticToolbarE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<StaticToolbar, std::true_type>,
+        // method 'loadRobotClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>
+    >,
     nullptr
 } };
 
@@ -74,8 +92,14 @@ void StaticToolbar::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _i
         }
     }
     if (_c == QMetaObject::IndexOfMethod) {
-        if (QtMocHelpers::indexOfMethod<void (StaticToolbar::*)()>(_a, &StaticToolbar::loadRobotClicked, 0))
-            return;
+        int *result = reinterpret_cast<int *>(_a[0]);
+        {
+            using _q_method_type = void (StaticToolbar::*)();
+            if (_q_method_type _q_method = &StaticToolbar::loadRobotClicked; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 0;
+                return;
+            }
+        }
     }
 }
 
@@ -87,7 +111,7 @@ const QMetaObject *StaticToolbar::metaObject() const
 void *StaticToolbar::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN13StaticToolbarE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN13StaticToolbarE.stringdata0))
         return static_cast<void*>(this);
     return QWidget::qt_metacast(_clname);
 }

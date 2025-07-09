@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'DockManager.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'DockManager.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,111 +34,156 @@ namespace {
 struct qt_meta_tag_ZN3ads12CDockManagerE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CDockManager::qt_create_metaobjectdata<qt_meta_tag_ZN3ads12CDockManagerE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CDockManager",
-        "perspectiveListChanged",
-        "",
-        "perspectiveListLoaded",
-        "perspectivesRemoved",
-        "restoringState",
-        "stateRestored",
-        "openingPerspective",
-        "PerspectiveName",
-        "perspectiveOpened",
-        "floatingWidgetCreated",
-        "ads::CFloatingDockContainer*",
-        "FloatingWidget",
-        "dockAreaCreated",
-        "ads::CDockAreaWidget*",
-        "DockArea",
-        "dockWidgetAdded",
-        "ads::CDockWidget*",
-        "DockWidget",
-        "dockWidgetAboutToBeRemoved",
-        "dockWidgetRemoved",
-        "focusedDockWidgetChanged",
-        "old",
-        "now",
-        "endLeavingMinimizedState",
-        "openPerspective",
-        "setDockWidgetFocused",
-        "CDockWidget*",
-        "hideManagerAndFloatingWidgets"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Signal 'perspectiveListChanged'
-        QtMocHelpers::SignalData<void()>(1, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'perspectiveListLoaded'
-        QtMocHelpers::SignalData<void()>(3, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'perspectivesRemoved'
-        QtMocHelpers::SignalData<void()>(4, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'restoringState'
-        QtMocHelpers::SignalData<void()>(5, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'stateRestored'
-        QtMocHelpers::SignalData<void()>(6, 2, QMC::AccessPublic, QMetaType::Void),
-        // Signal 'openingPerspective'
-        QtMocHelpers::SignalData<void(const QString &)>(7, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QString, 8 },
-        }}),
-        // Signal 'perspectiveOpened'
-        QtMocHelpers::SignalData<void(const QString &)>(9, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QString, 8 },
-        }}),
-        // Signal 'floatingWidgetCreated'
-        QtMocHelpers::SignalData<void(ads::CFloatingDockContainer *)>(10, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 11, 12 },
-        }}),
-        // Signal 'dockAreaCreated'
-        QtMocHelpers::SignalData<void(ads::CDockAreaWidget *)>(13, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 14, 15 },
-        }}),
-        // Signal 'dockWidgetAdded'
-        QtMocHelpers::SignalData<void(ads::CDockWidget *)>(16, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 17, 18 },
-        }}),
-        // Signal 'dockWidgetAboutToBeRemoved'
-        QtMocHelpers::SignalData<void(ads::CDockWidget *)>(19, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 17, 18 },
-        }}),
-        // Signal 'dockWidgetRemoved'
-        QtMocHelpers::SignalData<void(ads::CDockWidget *)>(20, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 17, 18 },
-        }}),
-        // Signal 'focusedDockWidgetChanged'
-        QtMocHelpers::SignalData<void(ads::CDockWidget *, ads::CDockWidget *)>(21, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 17, 22 }, { 0x80000000 | 17, 23 },
-        }}),
-        // Slot 'endLeavingMinimizedState'
-        QtMocHelpers::SlotData<void()>(24, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'openPerspective'
-        QtMocHelpers::SlotData<void(const QString &)>(25, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { QMetaType::QString, 8 },
-        }}),
-        // Slot 'setDockWidgetFocused'
-        QtMocHelpers::SlotData<void(CDockWidget *)>(26, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 27, 18 },
-        }}),
-        // Slot 'hideManagerAndFloatingWidgets'
-        QtMocHelpers::SlotData<void()>(28, 2, QMC::AccessPublic, QMetaType::Void),
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CDockManager, qt_meta_tag_ZN3ads12CDockManagerE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads12CDockManagerE = QtMocHelpers::stringData(
+    "ads::CDockManager",
+    "perspectiveListChanged",
+    "",
+    "perspectiveListLoaded",
+    "perspectivesRemoved",
+    "restoringState",
+    "stateRestored",
+    "openingPerspective",
+    "PerspectiveName",
+    "perspectiveOpened",
+    "floatingWidgetCreated",
+    "ads::CFloatingDockContainer*",
+    "FloatingWidget",
+    "dockAreaCreated",
+    "ads::CDockAreaWidget*",
+    "DockArea",
+    "dockWidgetAdded",
+    "ads::CDockWidget*",
+    "DockWidget",
+    "dockWidgetAboutToBeRemoved",
+    "dockWidgetRemoved",
+    "focusedDockWidgetChanged",
+    "old",
+    "now",
+    "endLeavingMinimizedState",
+    "openPerspective",
+    "setDockWidgetFocused",
+    "CDockWidget*",
+    "hideManagerAndFloatingWidgets"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads12CDockManagerE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+      17,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+      13,       // signalCount
+
+ // signals: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    0,  116,    2, 0x06,    1 /* Public */,
+       3,    0,  117,    2, 0x06,    2 /* Public */,
+       4,    0,  118,    2, 0x06,    3 /* Public */,
+       5,    0,  119,    2, 0x06,    4 /* Public */,
+       6,    0,  120,    2, 0x06,    5 /* Public */,
+       7,    1,  121,    2, 0x06,    6 /* Public */,
+       9,    1,  124,    2, 0x06,    8 /* Public */,
+      10,    1,  127,    2, 0x06,   10 /* Public */,
+      13,    1,  130,    2, 0x06,   12 /* Public */,
+      16,    1,  133,    2, 0x06,   14 /* Public */,
+      19,    1,  136,    2, 0x06,   16 /* Public */,
+      20,    1,  139,    2, 0x06,   18 /* Public */,
+      21,    2,  142,    2, 0x06,   20 /* Public */,
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+      24,    0,  147,    2, 0x0a,   23 /* Public */,
+      25,    1,  148,    2, 0x0a,   24 /* Public */,
+      26,    1,  151,    2, 0x0a,   26 /* Public */,
+      28,    0,  154,    2, 0x0a,   28 /* Public */,
+
+ // signals: parameters
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::QString,    8,
+    QMetaType::Void, QMetaType::QString,    8,
+    QMetaType::Void, 0x80000000 | 11,   12,
+    QMetaType::Void, 0x80000000 | 14,   15,
+    QMetaType::Void, 0x80000000 | 17,   18,
+    QMetaType::Void, 0x80000000 | 17,   18,
+    QMetaType::Void, 0x80000000 | 17,   18,
+    QMetaType::Void, 0x80000000 | 17, 0x80000000 | 17,   22,   23,
+
+ // slots: parameters
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::QString,    8,
+    QMetaType::Void, 0x80000000 | 27,   18,
+    QMetaType::Void,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CDockManager::staticMetaObject = { {
     QMetaObject::SuperData::link<CDockContainerWidget::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads12CDockManagerE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads12CDockManagerE_t>.data,
+    qt_meta_stringdata_ZN3ads12CDockManagerE.offsetsAndSizes,
+    qt_meta_data_ZN3ads12CDockManagerE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads12CDockManagerE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads12CDockManagerE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CDockManager, std::true_type>,
+        // method 'perspectiveListChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'perspectiveListLoaded'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'perspectivesRemoved'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'restoringState'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'stateRestored'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'openingPerspective'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
+        // method 'perspectiveOpened'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
+        // method 'floatingWidgetCreated'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<ads::CFloatingDockContainer *, std::false_type>,
+        // method 'dockAreaCreated'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<ads::CDockAreaWidget *, std::false_type>,
+        // method 'dockWidgetAdded'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<ads::CDockWidget *, std::false_type>,
+        // method 'dockWidgetAboutToBeRemoved'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<ads::CDockWidget *, std::false_type>,
+        // method 'dockWidgetRemoved'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<ads::CDockWidget *, std::false_type>,
+        // method 'focusedDockWidgetChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<ads::CDockWidget *, std::false_type>,
+        QtPrivate::TypeAndForceComplete<ads::CDockWidget *, std::false_type>,
+        // method 'endLeavingMinimizedState'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'openPerspective'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
+        // method 'setDockWidgetFocused'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<CDockWidget *, std::false_type>,
+        // method 'hideManagerAndFloatingWidgets'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>
+    >,
     nullptr
 } };
 
@@ -216,32 +261,98 @@ void ads::CDockManager::qt_static_metacall(QObject *_o, QMetaObject::Call _c, in
         }
     }
     if (_c == QMetaObject::IndexOfMethod) {
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)()>(_a, &CDockManager::perspectiveListChanged, 0))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)()>(_a, &CDockManager::perspectiveListLoaded, 1))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)()>(_a, &CDockManager::perspectivesRemoved, 2))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)()>(_a, &CDockManager::restoringState, 3))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)()>(_a, &CDockManager::stateRestored, 4))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)(const QString & )>(_a, &CDockManager::openingPerspective, 5))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)(const QString & )>(_a, &CDockManager::perspectiveOpened, 6))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)(ads::CFloatingDockContainer * )>(_a, &CDockManager::floatingWidgetCreated, 7))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)(ads::CDockAreaWidget * )>(_a, &CDockManager::dockAreaCreated, 8))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)(ads::CDockWidget * )>(_a, &CDockManager::dockWidgetAdded, 9))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)(ads::CDockWidget * )>(_a, &CDockManager::dockWidgetAboutToBeRemoved, 10))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)(ads::CDockWidget * )>(_a, &CDockManager::dockWidgetRemoved, 11))
-            return;
-        if (QtMocHelpers::indexOfMethod<void (CDockManager::*)(ads::CDockWidget * , ads::CDockWidget * )>(_a, &CDockManager::focusedDockWidgetChanged, 12))
-            return;
+        int *result = reinterpret_cast<int *>(_a[0]);
+        {
+            using _q_method_type = void (CDockManager::*)();
+            if (_q_method_type _q_method = &CDockManager::perspectiveListChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 0;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)();
+            if (_q_method_type _q_method = &CDockManager::perspectiveListLoaded; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 1;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)();
+            if (_q_method_type _q_method = &CDockManager::perspectivesRemoved; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 2;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)();
+            if (_q_method_type _q_method = &CDockManager::restoringState; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 3;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)();
+            if (_q_method_type _q_method = &CDockManager::stateRestored; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 4;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)(const QString & );
+            if (_q_method_type _q_method = &CDockManager::openingPerspective; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 5;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)(const QString & );
+            if (_q_method_type _q_method = &CDockManager::perspectiveOpened; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 6;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)(ads::CFloatingDockContainer * );
+            if (_q_method_type _q_method = &CDockManager::floatingWidgetCreated; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 7;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)(ads::CDockAreaWidget * );
+            if (_q_method_type _q_method = &CDockManager::dockAreaCreated; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 8;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)(ads::CDockWidget * );
+            if (_q_method_type _q_method = &CDockManager::dockWidgetAdded; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 9;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)(ads::CDockWidget * );
+            if (_q_method_type _q_method = &CDockManager::dockWidgetAboutToBeRemoved; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 10;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)(ads::CDockWidget * );
+            if (_q_method_type _q_method = &CDockManager::dockWidgetRemoved; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 11;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (CDockManager::*)(ads::CDockWidget * , ads::CDockWidget * );
+            if (_q_method_type _q_method = &CDockManager::focusedDockWidgetChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 12;
+                return;
+            }
+        }
     }
 }
 
@@ -253,7 +364,7 @@ const QMetaObject *ads::CDockManager::metaObject() const
 void *ads::CDockManager::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads12CDockManagerE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads12CDockManagerE.stringdata0))
         return static_cast<void*>(this);
     return CDockContainerWidget::qt_metacast(_clname);
 }
@@ -309,48 +420,56 @@ void ads::CDockManager::stateRestored()
 // SIGNAL 5
 void ads::CDockManager::openingPerspective(const QString & _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 5, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 5, _a);
 }
 
 // SIGNAL 6
 void ads::CDockManager::perspectiveOpened(const QString & _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 6, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 6, _a);
 }
 
 // SIGNAL 7
 void ads::CDockManager::floatingWidgetCreated(ads::CFloatingDockContainer * _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 7, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 7, _a);
 }
 
 // SIGNAL 8
 void ads::CDockManager::dockAreaCreated(ads::CDockAreaWidget * _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 8, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 8, _a);
 }
 
 // SIGNAL 9
 void ads::CDockManager::dockWidgetAdded(ads::CDockWidget * _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 9, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 9, _a);
 }
 
 // SIGNAL 10
 void ads::CDockManager::dockWidgetAboutToBeRemoved(ads::CDockWidget * _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 10, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 10, _a);
 }
 
 // SIGNAL 11
 void ads::CDockManager::dockWidgetRemoved(ads::CDockWidget * _t1)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 11, nullptr, _t1);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 11, _a);
 }
 
 // SIGNAL 12
 void ads::CDockManager::focusedDockWidgetChanged(ads::CDockWidget * _t1, ads::CDockWidget * _t2)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 12, nullptr, _t1, _t2);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))), const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t2))) };
+    QMetaObject::activate(this, &staticMetaObject, 12, _a);
 }
 QT_WARNING_POP

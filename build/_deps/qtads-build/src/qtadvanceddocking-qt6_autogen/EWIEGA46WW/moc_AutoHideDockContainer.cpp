@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'AutoHideDockContainer.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'AutoHideDockContainer.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,32 +34,47 @@ namespace {
 struct qt_meta_tag_ZN3ads22CAutoHideDockContainerE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CAutoHideDockContainer::qt_create_metaobjectdata<qt_meta_tag_ZN3ads22CAutoHideDockContainerE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CAutoHideDockContainer",
-        "sideBarLocation"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-    };
-    QtMocHelpers::UintData qt_properties {
-        // property 'sideBarLocation'
-        QtMocHelpers::PropertyData<int>(1, QMetaType::Int, QMC::DefaultPropertyFlags),
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CAutoHideDockContainer, qt_meta_tag_ZN3ads22CAutoHideDockContainerE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads22CAutoHideDockContainerE = QtMocHelpers::stringData(
+    "ads::CAutoHideDockContainer",
+    "sideBarLocation"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads22CAutoHideDockContainerE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       0,    0, // methods
+       1,   14, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+ // properties: name, type, flags, notifyId, revision
+       1, QMetaType::Int, 0x00015001, uint(-1), 0,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CAutoHideDockContainer::staticMetaObject = { {
     QMetaObject::SuperData::link<QFrame::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads22CAutoHideDockContainerE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads22CAutoHideDockContainerE_t>.data,
+    qt_meta_stringdata_ZN3ads22CAutoHideDockContainerE.offsetsAndSizes,
+    qt_meta_data_ZN3ads22CAutoHideDockContainerE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads22CAutoHideDockContainerE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads22CAutoHideDockContainerE_t,
+        // property 'sideBarLocation'
+        QtPrivate::TypeAndForceComplete<int, std::true_type>,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CAutoHideDockContainer, std::true_type>
+    >,
     nullptr
 } };
 
@@ -69,7 +84,7 @@ void ads::CAutoHideDockContainer::qt_static_metacall(QObject *_o, QMetaObject::C
     if (_c == QMetaObject::ReadProperty) {
         void *_v = _a[0];
         switch (_id) {
-        case 0: *reinterpret_cast<int*>(_v) = _t->sideBarLocation(); break;
+        case 0: *reinterpret_cast< int*>(_v) = _t->sideBarLocation(); break;
         default: break;
         }
     }
@@ -83,7 +98,7 @@ const QMetaObject *ads::CAutoHideDockContainer::metaObject() const
 void *ads::CAutoHideDockContainer::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads22CAutoHideDockContainerE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads22CAutoHideDockContainerE.stringdata0))
         return static_cast<void*>(this);
     return QFrame::qt_metacast(_clname);
 }

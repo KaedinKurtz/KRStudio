@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'AutoHideTab.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'AutoHideTab.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,58 +34,90 @@ namespace {
 struct qt_meta_tag_ZN3ads12CAutoHideTabE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CAutoHideTab::qt_create_metaobjectdata<qt_meta_tag_ZN3ads12CAutoHideTabE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CAutoHideTab",
-        "onAutoHideToActionClicked",
-        "",
-        "onDragHoverDelayExpired",
-        "setDockWidgetFloating",
-        "unpinDockWidget",
-        "requestCloseDockWidget",
-        "sideBarLocation",
-        "orientation",
-        "Qt::Orientation",
-        "activeTab",
-        "iconOnly"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-        // Slot 'onAutoHideToActionClicked'
-        QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDragHoverDelayExpired'
-        QtMocHelpers::SlotData<void()>(3, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'setDockWidgetFloating'
-        QtMocHelpers::SlotData<void()>(4, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'unpinDockWidget'
-        QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPublic, QMetaType::Void),
-        // Slot 'requestCloseDockWidget'
-        QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPublic, QMetaType::Void),
-    };
-    QtMocHelpers::UintData qt_properties {
-        // property 'sideBarLocation'
-        QtMocHelpers::PropertyData<int>(7, QMetaType::Int, QMC::DefaultPropertyFlags),
-        // property 'orientation'
-        QtMocHelpers::PropertyData<Qt::Orientation>(8, 0x80000000 | 9, QMC::DefaultPropertyFlags | QMC::EnumOrFlag),
-        // property 'activeTab'
-        QtMocHelpers::PropertyData<bool>(10, QMetaType::Bool, QMC::DefaultPropertyFlags),
-        // property 'iconOnly'
-        QtMocHelpers::PropertyData<bool>(11, QMetaType::Bool, QMC::DefaultPropertyFlags),
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CAutoHideTab, qt_meta_tag_ZN3ads12CAutoHideTabE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads12CAutoHideTabE = QtMocHelpers::stringData(
+    "ads::CAutoHideTab",
+    "onAutoHideToActionClicked",
+    "",
+    "onDragHoverDelayExpired",
+    "setDockWidgetFloating",
+    "unpinDockWidget",
+    "requestCloseDockWidget",
+    "sideBarLocation",
+    "orientation",
+    "Qt::Orientation",
+    "activeTab",
+    "iconOnly"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads12CAutoHideTabE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       5,   14, // methods
+       4,   49, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    0,   44,    2, 0x08,    5 /* Private */,
+       3,    0,   45,    2, 0x08,    6 /* Private */,
+       4,    0,   46,    2, 0x0a,    7 /* Public */,
+       5,    0,   47,    2, 0x0a,    8 /* Public */,
+       6,    0,   48,    2, 0x0a,    9 /* Public */,
+
+ // slots: parameters
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+
+ // properties: name, type, flags, notifyId, revision
+       7, QMetaType::Int, 0x00015001, uint(-1), 0,
+       8, 0x80000000 | 9, 0x00015009, uint(-1), 0,
+      10, QMetaType::Bool, 0x00015001, uint(-1), 0,
+      11, QMetaType::Bool, 0x00015001, uint(-1), 0,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CAutoHideTab::staticMetaObject = { {
     QMetaObject::SuperData::link<CPushButton::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads12CAutoHideTabE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads12CAutoHideTabE_t>.data,
+    qt_meta_stringdata_ZN3ads12CAutoHideTabE.offsetsAndSizes,
+    qt_meta_data_ZN3ads12CAutoHideTabE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads12CAutoHideTabE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads12CAutoHideTabE_t,
+        // property 'sideBarLocation'
+        QtPrivate::TypeAndForceComplete<int, std::true_type>,
+        // property 'orientation'
+        QtPrivate::TypeAndForceComplete<Qt::Orientation, std::true_type>,
+        // property 'activeTab'
+        QtPrivate::TypeAndForceComplete<bool, std::true_type>,
+        // property 'iconOnly'
+        QtPrivate::TypeAndForceComplete<bool, std::true_type>,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CAutoHideTab, std::true_type>,
+        // method 'onAutoHideToActionClicked'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onDragHoverDelayExpired'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'setDockWidgetFloating'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'unpinDockWidget'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'requestCloseDockWidget'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>
+    >,
     nullptr
 } };
 
@@ -105,10 +137,10 @@ void ads::CAutoHideTab::qt_static_metacall(QObject *_o, QMetaObject::Call _c, in
     if (_c == QMetaObject::ReadProperty) {
         void *_v = _a[0];
         switch (_id) {
-        case 0: *reinterpret_cast<int*>(_v) = _t->sideBarLocation(); break;
-        case 1: *reinterpret_cast<Qt::Orientation*>(_v) = _t->orientation(); break;
-        case 2: *reinterpret_cast<bool*>(_v) = _t->isActiveTab(); break;
-        case 3: *reinterpret_cast<bool*>(_v) = _t->iconOnly(); break;
+        case 0: *reinterpret_cast< int*>(_v) = _t->sideBarLocation(); break;
+        case 1: *reinterpret_cast< Qt::Orientation*>(_v) = _t->orientation(); break;
+        case 2: *reinterpret_cast< bool*>(_v) = _t->isActiveTab(); break;
+        case 3: *reinterpret_cast< bool*>(_v) = _t->iconOnly(); break;
         default: break;
         }
     }
@@ -122,7 +154,7 @@ const QMetaObject *ads::CAutoHideTab::metaObject() const
 void *ads::CAutoHideTab::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads12CAutoHideTabE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads12CAutoHideTabE.stringdata0))
         return static_cast<void*>(this);
     return CPushButton::qt_metacast(_clname);
 }

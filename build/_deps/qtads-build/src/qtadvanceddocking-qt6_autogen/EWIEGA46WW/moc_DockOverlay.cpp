@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'DockOverlay.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'DockOverlay.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,29 +34,41 @@ namespace {
 struct qt_meta_tag_ZN3ads12CDockOverlayE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CDockOverlay::qt_create_metaobjectdata<qt_meta_tag_ZN3ads12CDockOverlayE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CDockOverlay"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CDockOverlay, qt_meta_tag_ZN3ads12CDockOverlayE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads12CDockOverlayE = QtMocHelpers::stringData(
+    "ads::CDockOverlay"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads12CDockOverlayE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       0,    0, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CDockOverlay::staticMetaObject = { {
     QMetaObject::SuperData::link<QFrame::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads12CDockOverlayE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads12CDockOverlayE_t>.data,
+    qt_meta_stringdata_ZN3ads12CDockOverlayE.offsetsAndSizes,
+    qt_meta_data_ZN3ads12CDockOverlayE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads12CDockOverlayE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads12CDockOverlayE_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CDockOverlay, std::true_type>
+    >,
     nullptr
 } };
 
@@ -77,7 +89,7 @@ const QMetaObject *ads::CDockOverlay::metaObject() const
 void *ads::CDockOverlay::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads12CDockOverlayE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads12CDockOverlayE.stringdata0))
         return static_cast<void*>(this);
     return QFrame::qt_metacast(_clname);
 }
@@ -91,47 +103,67 @@ namespace {
 struct qt_meta_tag_ZN3ads17CDockOverlayCrossE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::CDockOverlayCross::qt_create_metaobjectdata<qt_meta_tag_ZN3ads17CDockOverlayCrossE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads::CDockOverlayCross",
-        "iconColors",
-        "iconFrameColor",
-        "iconBackgroundColor",
-        "iconOverlayColor",
-        "iconArrowColor",
-        "iconShadowColor"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-    };
-    QtMocHelpers::UintData qt_properties {
-        // property 'iconColors'
-        QtMocHelpers::PropertyData<QString>(1, QMetaType::QString, QMC::DefaultPropertyFlags | QMC::Writable | QMC::StdCppSet),
-        // property 'iconFrameColor'
-        QtMocHelpers::PropertyData<QColor>(2, QMetaType::QColor, QMC::DefaultPropertyFlags | QMC::Writable | QMC::StdCppSet),
-        // property 'iconBackgroundColor'
-        QtMocHelpers::PropertyData<QColor>(3, QMetaType::QColor, QMC::DefaultPropertyFlags | QMC::Writable | QMC::StdCppSet),
-        // property 'iconOverlayColor'
-        QtMocHelpers::PropertyData<QColor>(4, QMetaType::QColor, QMC::DefaultPropertyFlags | QMC::Writable | QMC::StdCppSet),
-        // property 'iconArrowColor'
-        QtMocHelpers::PropertyData<QColor>(5, QMetaType::QColor, QMC::DefaultPropertyFlags | QMC::Writable | QMC::StdCppSet),
-        // property 'iconShadowColor'
-        QtMocHelpers::PropertyData<QColor>(6, QMetaType::QColor, QMC::DefaultPropertyFlags | QMC::Writable | QMC::StdCppSet),
-    };
-    QtMocHelpers::UintData qt_enums {
-    };
-    return QtMocHelpers::metaObjectData<CDockOverlayCross, qt_meta_tag_ZN3ads17CDockOverlayCrossE_t>(QMC::MetaObjectFlag{}, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3ads17CDockOverlayCrossE = QtMocHelpers::stringData(
+    "ads::CDockOverlayCross",
+    "iconColors",
+    "iconFrameColor",
+    "iconBackgroundColor",
+    "iconOverlayColor",
+    "iconArrowColor",
+    "iconShadowColor"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
+
+Q_CONSTINIT static const uint qt_meta_data_ZN3ads17CDockOverlayCrossE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       0,    0, // methods
+       6,   14, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+ // properties: name, type, flags, notifyId, revision
+       1, QMetaType::QString, 0x00015103, uint(-1), 0,
+       2, QMetaType::QColor, 0x00015103, uint(-1), 0,
+       3, QMetaType::QColor, 0x00015103, uint(-1), 0,
+       4, QMetaType::QColor, 0x00015103, uint(-1), 0,
+       5, QMetaType::QColor, 0x00015103, uint(-1), 0,
+       6, QMetaType::QColor, 0x00015103, uint(-1), 0,
+
+       0        // eod
+};
+
 Q_CONSTINIT const QMetaObject ads::CDockOverlayCross::staticMetaObject = { {
     QMetaObject::SuperData::link<QWidget::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads17CDockOverlayCrossE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads17CDockOverlayCrossE_t>.data,
+    qt_meta_stringdata_ZN3ads17CDockOverlayCrossE.offsetsAndSizes,
+    qt_meta_data_ZN3ads17CDockOverlayCrossE,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN3ads17CDockOverlayCrossE_t>.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3ads17CDockOverlayCrossE_t,
+        // property 'iconColors'
+        QtPrivate::TypeAndForceComplete<QString, std::true_type>,
+        // property 'iconFrameColor'
+        QtPrivate::TypeAndForceComplete<QColor, std::true_type>,
+        // property 'iconBackgroundColor'
+        QtPrivate::TypeAndForceComplete<QColor, std::true_type>,
+        // property 'iconOverlayColor'
+        QtPrivate::TypeAndForceComplete<QColor, std::true_type>,
+        // property 'iconArrowColor'
+        QtPrivate::TypeAndForceComplete<QColor, std::true_type>,
+        // property 'iconShadowColor'
+        QtPrivate::TypeAndForceComplete<QColor, std::true_type>,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<CDockOverlayCross, std::true_type>
+    >,
     nullptr
 } };
 
@@ -141,24 +173,24 @@ void ads::CDockOverlayCross::qt_static_metacall(QObject *_o, QMetaObject::Call _
     if (_c == QMetaObject::ReadProperty) {
         void *_v = _a[0];
         switch (_id) {
-        case 0: *reinterpret_cast<QString*>(_v) = _t->iconColors(); break;
-        case 1: *reinterpret_cast<QColor*>(_v) = _t->iconColor(); break;
-        case 2: *reinterpret_cast<QColor*>(_v) = _t->iconColor(); break;
-        case 3: *reinterpret_cast<QColor*>(_v) = _t->iconColor(); break;
-        case 4: *reinterpret_cast<QColor*>(_v) = _t->iconColor(); break;
-        case 5: *reinterpret_cast<QColor*>(_v) = _t->iconColor(); break;
+        case 0: *reinterpret_cast< QString*>(_v) = _t->iconColors(); break;
+        case 1: *reinterpret_cast< QColor*>(_v) = _t->iconColor(); break;
+        case 2: *reinterpret_cast< QColor*>(_v) = _t->iconColor(); break;
+        case 3: *reinterpret_cast< QColor*>(_v) = _t->iconColor(); break;
+        case 4: *reinterpret_cast< QColor*>(_v) = _t->iconColor(); break;
+        case 5: *reinterpret_cast< QColor*>(_v) = _t->iconColor(); break;
         default: break;
         }
     }
     if (_c == QMetaObject::WriteProperty) {
         void *_v = _a[0];
         switch (_id) {
-        case 0: _t->setIconColors(*reinterpret_cast<QString*>(_v)); break;
-        case 1: _t->setIconFrameColor(*reinterpret_cast<QColor*>(_v)); break;
-        case 2: _t->setIconBackgroundColor(*reinterpret_cast<QColor*>(_v)); break;
-        case 3: _t->setIconOverlayColor(*reinterpret_cast<QColor*>(_v)); break;
-        case 4: _t->setIconArrowColor(*reinterpret_cast<QColor*>(_v)); break;
-        case 5: _t->setIconShadowColor(*reinterpret_cast<QColor*>(_v)); break;
+        case 0: _t->setIconColors(*reinterpret_cast< QString*>(_v)); break;
+        case 1: _t->setIconFrameColor(*reinterpret_cast< QColor*>(_v)); break;
+        case 2: _t->setIconBackgroundColor(*reinterpret_cast< QColor*>(_v)); break;
+        case 3: _t->setIconOverlayColor(*reinterpret_cast< QColor*>(_v)); break;
+        case 4: _t->setIconArrowColor(*reinterpret_cast< QColor*>(_v)); break;
+        case 5: _t->setIconShadowColor(*reinterpret_cast< QColor*>(_v)); break;
         default: break;
         }
     }
@@ -172,7 +204,7 @@ const QMetaObject *ads::CDockOverlayCross::metaObject() const
 void *ads::CDockOverlayCross::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN3ads17CDockOverlayCrossE_t>.strings))
+    if (!strcmp(_clname, qt_meta_stringdata_ZN3ads17CDockOverlayCrossE.stringdata0))
         return static_cast<void*>(this);
     return QWidget::qt_metacast(_clname);
 }

@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'ads_globals.h'
 **
-** Created by: The Qt Meta Object Compiler version 69 (Qt 6.9.0)
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.8.3)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -17,8 +17,8 @@
 #include <QtCore/qxptype_traits.h>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'ads_globals.h' doesn't include <QObject>."
-#elif Q_MOC_OUTPUT_REVISION != 69
-#error "This file was generated using the moc from 6.9.0. It"
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.8.3. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -34,51 +34,59 @@ namespace {
 struct qt_meta_tag_ZN3adsE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto ads::qt_create_metaobjectdata<qt_meta_tag_ZN3adsE_t>()
-{
-    namespace QMC = QtMocConstants;
-    QtMocHelpers::StringRefStorage qt_stringData {
-        "ads",
-        "SideBarLocation",
-        "SideBarTop",
-        "SideBarLeft",
-        "SideBarRight",
-        "SideBarBottom",
-        "SideBarNone"
-    };
 
-    QtMocHelpers::UintData qt_methods {
-    };
-    QtMocHelpers::UintData qt_properties {
-    };
-    QtMocHelpers::UintData qt_enums {
-        // enum 'SideBarLocation'
-        QtMocHelpers::EnumData<SideBarLocation>(1, 1, QMC::EnumFlags{}).add({
-            {    2, SideBarLocation::SideBarTop },
-            {    3, SideBarLocation::SideBarLeft },
-            {    4, SideBarLocation::SideBarRight },
-            {    5, SideBarLocation::SideBarBottom },
-            {    6, SideBarLocation::SideBarNone },
-        }),
-    };
-    return QtMocHelpers::metaObjectData<void, qt_meta_tag_ZN3adsE_t>(QMC::PropertyAccessInStaticMetaCall, qt_stringData,
-            qt_methods, qt_properties, qt_enums);
-}
+#ifdef QT_MOC_HAS_STRINGDATA
+static constexpr auto qt_meta_stringdata_ZN3adsE = QtMocHelpers::stringData(
+    "ads",
+    "SideBarLocation",
+    "SideBarTop",
+    "SideBarLeft",
+    "SideBarRight",
+    "SideBarBottom",
+    "SideBarNone"
+);
+#else  // !QT_MOC_HAS_STRINGDATA
+#error "qtmochelpers.h not found or too old."
+#endif // !QT_MOC_HAS_STRINGDATA
 
-static constexpr auto qt_staticMetaObjectContent_ZN3adsE =
-    ads::qt_create_metaobjectdata<qt_meta_tag_ZN3adsE_t>();
-static constexpr auto qt_staticMetaObjectStaticContent_ZN3adsE =
-    qt_staticMetaObjectContent_ZN3adsE.staticData;
-static constexpr auto qt_staticMetaObjectRelocatingContent_ZN3adsE =
-    qt_staticMetaObjectContent_ZN3adsE.relocatingData;
+Q_CONSTINIT static const uint qt_meta_data_ZN3adsE[] = {
+
+ // content:
+      12,       // revision
+       0,       // classname
+       0,    0, // classinfo
+       0,    0, // methods
+       0,    0, // properties
+       1,   14, // enums/sets
+       0,    0, // constructors
+       4,       // flags
+       0,       // signalCount
+
+ // enums: name, alias, flags, count, data
+       1,    1, 0x0,    5,   19,
+
+ // enum data: key, value
+       2, uint(ads::SideBarTop),
+       3, uint(ads::SideBarLeft),
+       4, uint(ads::SideBarRight),
+       5, uint(ads::SideBarBottom),
+       6, uint(ads::SideBarNone),
+
+       0        // eod
+};
 
 Q_CONSTINIT const QMetaObject ads::staticMetaObject = { {
     nullptr,
-    qt_staticMetaObjectStaticContent_ZN3adsE.stringdata,
-    qt_staticMetaObjectStaticContent_ZN3adsE.data,
+    qt_meta_stringdata_ZN3adsE.offsetsAndSizes,
+    qt_meta_data_ZN3adsE,
     nullptr,
     nullptr,
-    qt_staticMetaObjectRelocatingContent_ZN3adsE.metaTypes,
+    qt_incomplete_metaTypeArray<qt_meta_tag_ZN3adsE_t,
+        // enum 'SideBarLocation'
+        QtPrivate::TypeAndForceComplete<ads::SideBarLocation, std::true_type>,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<void, std::true_type>
+    >,
     nullptr
 } };
 
