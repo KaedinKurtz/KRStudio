@@ -583,6 +583,7 @@ void MainWindow::onFlowVisualizerSettingsChanged()
         return;
     }
 
+
     auto visualizerEntity = view.front();
     auto& visualizer = view.get<FieldVisualizerComponent>(visualizerEntity);
     auto& transform = view.get<TransformComponent>(visualizerEntity);
@@ -593,7 +594,7 @@ void MainWindow::onFlowVisualizerSettingsChanged()
     visualizer.isEnabled = m_flowVisualizerMenu->isMasterVisible();
     visualizer.displayMode = m_flowVisualizerMenu->getDisplayMode();
     visualizer.bounds = m_flowVisualizerMenu->getBounds();
-
+    m_flowVisualizerMenu->commitToComponent(visualizer);
     // --- FIX: Update the correct nested struct based on the display mode ---
     switch (visualizer.displayMode)
     {

@@ -1,4 +1,4 @@
-#include "FieldVisualizerPass.hpp"
+﻿#include "FieldVisualizerPass.hpp"
 #include "PrimitiveBuilders.hpp" // Your existing file!
 #include "RenderingSystem.hpp"
 #include "Shader.hpp"
@@ -6,8 +6,39 @@
 #include <QOpenGLContext>
 #include <QDebug>
 #include <random>
+#include <glm/gtc/type_ptr.hpp>
 
 // --- Class Implementation ---
+namespace {
+    static void uploadGradientToCurrentProgram(QOpenGLFunctions_4_3_Core* gl,
+        const std::vector<ColorStop>& grad)
+    {
+        GLint prog = 0;
+        gl->glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+        if (!prog) return;
+
+        const GLint count = std::min<int>(grad.size(), 8);
+
+        // ── scalar uniform ────────────────────────────────────────────────────
+        GLint loc = gl->glGetUniformLocation(prog, "uStopCount");
+        if (loc != -1) gl->glUniform1i(loc, count);
+
+        // ── array uniforms: MUST use [0] in the query ─────────────────────────
+        loc = gl->glGetUniformLocation(prog, "uStopPos[0]");
+        if (loc != -1) {
+            std::array<float, 8> pos{};
+            for (int i = 0; i < count; ++i) pos[i] = grad[i].position;
+            gl->glUniform1fv(loc, count, pos.data());
+        }
+
+        loc = gl->glGetUniformLocation(prog, "uStopColor[0]");
+        if (loc != -1) {
+            std::array<glm::vec4, 8> col{};
+            for (int i = 0; i < count; ++i) col[i] = grad[i].color;
+            gl->glUniform4fv(loc, count, glm::value_ptr(col[0]));
+        }
+    }
+}
 
 FieldVisualizerPass::~FieldVisualizerPass() {
     if (!m_arrowVAOs.empty()) {
@@ -510,13 +541,13 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
 
     // Set uniforms.
     computeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
-    computeShader->setFloat(gl, "u_vectorScale", settings.vectorScale);
+    computeShader->setFloat(gl, "u_vectorScale", settings.vectorScale * 0.3f);
     computeShader->setFloat(gl, "u_arrowHeadScale", settings.headScale);
     computeShader->setFloat(gl, "u_cullingThreshold", settings.cullingThreshold);
     computeShader->setInt(gl, "u_pointEffectorCount", static_cast<int>(m_pointEffectors.size()));
     computeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
     computeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
-
+    
     // Dispatch the compute shader.
     gl->glDispatchCompute((GLuint)vis.gpuData.numSamplePoints / 256 + 1, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
@@ -525,6 +556,8 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
     renderShader->use(gl); // USE PARAMETER
     renderShader->setMat4(gl, "view", context.view);
     renderShader->setMat4(gl, "projection", context.projection);
+
+    uploadGradientToCurrentProgram(gl, vis.arrowSettings.intensityGradient);
 
     gl->glBindVertexArray(m_arrowVAOs[ctx]);
     gl->glBindBuffer(GL_ARRAY_BUFFER, vis.gpuData.instanceDataSSBO);

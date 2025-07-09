@@ -1,0 +1,34 @@
+{
+	"backtrace" : 0,
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : 
+		[
+			"build/_deps/qtads-src/examples/autohide/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			}
+		]
+	},
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 0,
+			"id" : "qtadvanceddocking-qt6::@cc6645fabb78eca71e93"
+		}
+	],
+	"id" : "AutoHideExample_autogen_timestamp_deps::@509f5351fe13e0347c91",
+	"isGeneratorProvided" : true,
+	"name" : "AutoHideExample_autogen_timestamp_deps",
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/examples/autohide",
+		"source" : "build/_deps/qtads-src/examples/autohide"
+	},
+	"sources" : [],
+	"type" : "UTILITY"
+}

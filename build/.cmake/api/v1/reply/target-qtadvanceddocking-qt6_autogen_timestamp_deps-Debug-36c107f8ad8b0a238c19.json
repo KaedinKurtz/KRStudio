@@ -1,0 +1,27 @@
+{
+	"backtrace" : 0,
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : 
+		[
+			"build/_deps/qtads-src/src/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			}
+		]
+	},
+	"id" : "qtadvanceddocking-qt6_autogen_timestamp_deps::@cc6645fabb78eca71e93",
+	"isGeneratorProvided" : true,
+	"name" : "qtadvanceddocking-qt6_autogen_timestamp_deps",
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/src",
+		"source" : "build/_deps/qtads-src/src"
+	},
+	"sources" : [],
+	"type" : "UTILITY"
+}

@@ -1,0 +1,34 @@
+{
+	"backtrace" : 0,
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : 
+		[
+			"build/_deps/qtads-src/examples/centralwidget/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			}
+		]
+	},
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 0,
+			"id" : "qtadvanceddocking-qt6::@cc6645fabb78eca71e93"
+		}
+	],
+	"id" : "CentralWidgetExample_autogen_timestamp_deps::@30f2dc9df321ee37833d",
+	"isGeneratorProvided" : true,
+	"name" : "CentralWidgetExample_autogen_timestamp_deps",
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/examples/centralwidget",
+		"source" : "build/_deps/qtads-src/examples/centralwidget"
+	},
+	"sources" : [],
+	"type" : "UTILITY"
+}

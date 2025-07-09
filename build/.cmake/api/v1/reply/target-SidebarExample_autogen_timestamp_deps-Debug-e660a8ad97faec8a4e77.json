@@ -1,0 +1,34 @@
+{
+	"backtrace" : 0,
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : 
+		[
+			"build/_deps/qtads-src/examples/sidebar/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			}
+		]
+	},
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 0,
+			"id" : "qtadvanceddocking-qt6::@cc6645fabb78eca71e93"
+		}
+	],
+	"id" : "SidebarExample_autogen_timestamp_deps::@2a210280b89a129dc5a0",
+	"isGeneratorProvided" : true,
+	"name" : "SidebarExample_autogen_timestamp_deps",
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/examples/sidebar",
+		"source" : "build/_deps/qtads-src/examples/sidebar"
+	},
+	"sources" : [],
+	"type" : "UTILITY"
+}

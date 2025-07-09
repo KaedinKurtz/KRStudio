@@ -1,0 +1,34 @@
+{
+	"backtrace" : 0,
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : 
+		[
+			"build/_deps/qtads-src/examples/hideshow/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			}
+		]
+	},
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 0,
+			"id" : "qtadvanceddocking-qt6::@cc6645fabb78eca71e93"
+		}
+	],
+	"id" : "HideShowExample_autogen_timestamp_deps::@ef30161d67895ee96b4a",
+	"isGeneratorProvided" : true,
+	"name" : "HideShowExample_autogen_timestamp_deps",
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/examples/hideshow",
+		"source" : "build/_deps/qtads-src/examples/hideshow"
+	},
+	"sources" : [],
+	"type" : "UTILITY"
+}

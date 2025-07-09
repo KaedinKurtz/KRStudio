@@ -32,6 +32,8 @@ public:
 
     void updateControlsFromComponent(const FieldVisualizerComponent& component);
 
+    void commitToComponent(FieldVisualizerComponent& vis);        // <-- defined in .cpp
+    std::vector<ColorStop> getGradientFromTable(QTableWidget*) const;
 
     // --- PUBLIC GETTERS FOR MAINWINDOW ---
     bool isMasterVisible() const;
@@ -91,6 +93,11 @@ public:
     glm::vec4 getParticleDirColor(int index) const;
     std::vector<ColorStop> getParticleIntensityGradient() const;
     std::vector<ColorStop> getParticleLifetimeGradient() const;
+    Ui::FlowVisualizerMenu* getUi() { return ui; }
+    void updateGradientPreviewFromTable(QLabel* previewLabel, QTableWidget* table);
+
+public slots:
+    void onSettingChanged();
 
 Q_SIGNALS:
     void settingsChanged();
@@ -124,7 +131,7 @@ private slots:
     void onParticleAddLifetimeStop();
     void onParticleRemoveLifetimeStop();
     void onParticleLifetimeTableChanged();
-    void onSettingChanged();
+    
 
 private:
     void initializeState();
@@ -133,9 +140,8 @@ private:
     void linkSliderAndSpinBox(QSlider* slider, QSpinBox* spinBox);
     void pickColorForButton(QPushButton* button, QColor& colorMember);
     void updateAxisGradientPreview(QLabel* label, const QColor& negColor, const QColor& posColor);
-    void updateGradientPreviewFromTable(QLabel* previewLabel, QTableWidget* table);
+    
     void setupColorButtonMap();
-    std::vector<ColorStop> getGradientFromTable(QTableWidget* table) const;
     glm::vec4 qColorToGlm(const QColor& color) const;
 
     Ui::FlowVisualizerMenu* ui;

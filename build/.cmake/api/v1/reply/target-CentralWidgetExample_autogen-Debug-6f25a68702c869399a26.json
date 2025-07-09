@@ -1,0 +1,71 @@
+{
+	"backtrace" : 0,
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : 
+		[
+			"build/_deps/qtads-src/examples/centralwidget/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			}
+		]
+	},
+	"dependencies" : 
+	[
+		{
+			"id" : "CentralWidgetExample_autogen_timestamp_deps::@30f2dc9df321ee37833d"
+		}
+	],
+	"id" : "CentralWidgetExample_autogen::@30f2dc9df321ee37833d",
+	"isGeneratorProvided" : true,
+	"name" : "CentralWidgetExample_autogen",
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/examples/centralwidget",
+		"source" : "build/_deps/qtads-src/examples/centralwidget"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "",
+			"sourceIndexes" : 
+			[
+				0
+			]
+		},
+		{
+			"name" : "CMake Rules",
+			"sourceIndexes" : 
+			[
+				1,
+				2
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-build/examples/centralwidget/CMakeFiles/CentralWidgetExample_autogen",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-build/examples/centralwidget/CMakeFiles/CentralWidgetExample_autogen.rule",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-build/examples/centralwidget/CentralWidgetExample_autogen/timestamp.rule",
+			"sourceGroupIndex" : 1
+		}
+	],
+	"type" : "UTILITY"
+}

@@ -17,6 +17,10 @@ RoboticsSoftware_autogen/timestamp: \
 	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/CMakeCommonCompilerMacros.cmake \
 	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/MSVC-CXX.cmake \
 	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/MSVC.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/ExternalProject/shared_internal_commands.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FetchContent.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FetchContent/CMakeLists.cmake.in \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindGit.cmake \
 	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindOpenGL.cmake \
 	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageHandleStandardArgs.cmake \
 	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageMessage.cmake \
@@ -790,6 +794,10 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/build/CMakeFiles/3.31.6-msvc6/CMakeCXXCompiler.cmake \
 	D:/RoboticsSoftware/build/CMakeFiles/3.31.6-msvc6/CMakeRCCompiler.cmake \
 	D:/RoboticsSoftware/build/CMakeFiles/3.31.6-msvc6/CMakeSystem.cmake \
+	D:/RoboticsSoftware/build/_deps/ads-src/demo/demo.qrc \
+	D:/RoboticsSoftware/build/_deps/ads-src/src/ads.qrc \
+	D:/RoboticsSoftware/build/_deps/qtads-src/demo/demo.qrc \
+	D:/RoboticsSoftware/build/_deps/qtads-src/src/ads.qrc \
 	D:/RoboticsSoftware/external/entt/config/config.h \
 	D:/RoboticsSoftware/external/entt/config/macro.h \
 	D:/RoboticsSoftware/external/entt/config/version.h \

@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/examples/emptydockarea",
+		"source" : "build/_deps/qtads-src/examples/emptydockarea"
+	}
+}

@@ -3723,8 +3723,8 @@ unsigned char qResourceFeatureZlib();
 }
 #endif
 
-int QT_RCC_MANGLE_NAMESPACE(qInitResources_ads)();
-int QT_RCC_MANGLE_NAMESPACE(qInitResources_ads)()
+int QT_RCC_MANGLE_NAMESPACE(qInitResources_ads_FRB2KP2J3R)();
+int QT_RCC_MANGLE_NAMESPACE(qInitResources_ads_FRB2KP2J3R)()
 {
     int version = 3;
     QT_RCC_PREPEND_NAMESPACE(qRegisterResourceData)
@@ -3732,8 +3732,8 @@ int QT_RCC_MANGLE_NAMESPACE(qInitResources_ads)()
     return 1;
 }
 
-int QT_RCC_MANGLE_NAMESPACE(qCleanupResources_ads)();
-int QT_RCC_MANGLE_NAMESPACE(qCleanupResources_ads)()
+int QT_RCC_MANGLE_NAMESPACE(qCleanupResources_ads_FRB2KP2J3R)();
+int QT_RCC_MANGLE_NAMESPACE(qCleanupResources_ads_FRB2KP2J3R)()
 {
     int version = 3;
     version += QT_RCC_PREPEND_NAMESPACE(qResourceFeatureZlib());
@@ -3749,8 +3749,8 @@ int QT_RCC_MANGLE_NAMESPACE(qCleanupResources_ads)()
 
 namespace {
    struct initializer {
-       initializer() { QT_RCC_MANGLE_NAMESPACE(qInitResources_ads)(); }
-       ~initializer() { QT_RCC_MANGLE_NAMESPACE(qCleanupResources_ads)(); }
+       initializer() { QT_RCC_MANGLE_NAMESPACE(qInitResources_ads_FRB2KP2J3R)(); }
+       ~initializer() { QT_RCC_MANGLE_NAMESPACE(qCleanupResources_ads_FRB2KP2J3R)(); }
    } dummy;
 }
 

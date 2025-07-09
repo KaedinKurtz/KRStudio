@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/examples/autohide",
+		"source" : "build/_deps/qtads-src/examples/autohide"
+	}
+}

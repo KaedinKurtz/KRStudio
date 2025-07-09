@@ -1,47 +1,76 @@
-/*
+﻿/*
 ================================================================================
 |                           instanced_arrow_vert.glsl                          |
 ================================================================================
 */
 #version 430 core
+#define MAX_STOPS 8                         // hard upper-bound for UI
 
-// Per-vertex attributes (for the base arrow mesh)
-layout (location = 0) in vec3 aPos;    // The position of a vertex in the arrow model.
-layout (location = 1) in vec3 aNormal; // The normal of a vertex in the arrow model.
+// ── per-vertex data for the arrow mesh ───────────────────────────────────────
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;       // (kept for possible lighting)
 
-/*
- * Per-instance attributes.
- * A mat4 attribute consumes 4 consecutive locations. We explicitly define each
- * column to ensure maximum compatibility across different graphics drivers.
- * This now perfectly matches the setup in RenderingSystem.cpp.
-*/
-layout (location = 2) in vec4 aInstanceMatCol0; // Column 0 of the model matrix.
-layout (location = 3) in vec4 aInstanceMatCol1; // Column 1 of the model matrix.
-layout (location = 4) in vec4 aInstanceMatCol2; // Column 2 of the model matrix.
-layout (location = 5) in vec4 aInstanceMatCol3; // Column 3 of the model matrix.
-layout (location = 6) in vec4 aInstanceColor;   // The unique color for this instance.
+// ── per-instance transformation matrix ───────────────────────────────────────
+layout(location = 2) in vec4 aInstanceMatCol0;
+layout(location = 3) in vec4 aInstanceMatCol1;
+layout(location = 4) in vec4 aInstanceMatCol2;
+layout(location = 5) in vec4 aInstanceMatCol3;
 
-// Uniforms (constant for the entire draw call)
-uniform mat4 view;       // The camera's view matrix.
-uniform mat4 projection; // The camera's projection matrix.
+// ── extra per-instance parameters ────────────────────────────────────────────
+layout(location = 6) in float aIntensity;   // 0‥1 magnitude at the arrow tip
+layout(location = 7) in float aAgeNorm;     // 0‥1 normalised lifetime
 
-// Output variable to pass the final color to the fragment shader.
+// ── global uniforms ──────────────────────────────────────────────────────────
+uniform mat4 view;
+uniform mat4 projection;
+
+/*  uColoringMode: 0 = Intensity-based colouring
+ *                 1 = Lifetime-based colouring           (expand if needed)
+ */
+uniform int   uColoringMode;
+
+/*  Gradient description (shared by both vertex & fragment stages if desired) */
+uniform int   uStopCount;                   // 2 … MAX_STOPS (0 & 1 required)
+uniform vec4  uStopColor[MAX_STOPS];
+uniform float uStopPos  [MAX_STOPS];
+
+// ── varyings ─────────────────────────────────────────────────────────────────
 out vec4 vs_color;
 
+// ── helper: fetch colour at t (0‥1) ─────────────────────────────────────────
+vec4 sampleGradient(float t)
+{
+    t = clamp(t, 0.0, 1.0);
+    for (int i = 0; i < uStopCount - 1; ++i)
+    {
+        float a = uStopPos[i];
+        float b = uStopPos[i + 1];
+        if (t >= a && t <= b)
+        {
+            float f = (t - a) / (b - a);
+            return mix(uStopColor[i], uStopColor[i + 1], f);
+        }
+    }
+    return uStopColor[uStopCount - 1];      // safety fallback
+}
+
+// ── main ─────────────────────────────────────────────────────────────────────
 void main()
 {
-    // Reconstruct the full model matrix from its individual column vectors.
+    // Assemble full model matrix
     mat4 modelMatrix = mat4(
-        aInstanceMatCol0, 
-        aInstanceMatCol1, 
-        aInstanceMatCol2, 
+        aInstanceMatCol0,
+        aInstanceMatCol1,
+        aInstanceMatCol2,
         aInstanceMatCol3
     );
-    
-    // Transform the vertex position into clip space.
-    // The order of multiplication (Projection * View * Model * Position) is crucial.
+
+    // Transform vertex to clip space
     gl_Position = projection * view * modelMatrix * vec4(aPos, 1.0);
-    
-    // Pass the instance's color directly to the fragment shader.
-    vs_color = aInstanceColor;
+
+    // Choose parameter for the gradient
+    float param = (uColoringMode == 0) ? aIntensity : aAgeNorm;
+
+    // Compute final vertex colour
+    vs_color = sampleGradient(param);
 }

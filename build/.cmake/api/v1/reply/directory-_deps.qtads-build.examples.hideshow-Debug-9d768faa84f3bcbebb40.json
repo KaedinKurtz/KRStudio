@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/examples/hideshow",
+		"source" : "build/_deps/qtads-src/examples/hideshow"
+	}
+}

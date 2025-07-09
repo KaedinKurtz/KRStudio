@@ -1,0 +1,34 @@
+{
+	"backtrace" : 0,
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : 
+		[
+			"build/_deps/qtads-src/examples/autohidedragndrop/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			}
+		]
+	},
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 0,
+			"id" : "qtadvanceddocking-qt6::@cc6645fabb78eca71e93"
+		}
+	],
+	"id" : "AutoHideDragNDropExample_autogen_timestamp_deps::@bb99f31bb249278ebd90",
+	"isGeneratorProvided" : true,
+	"name" : "AutoHideDragNDropExample_autogen_timestamp_deps",
+	"paths" : 
+	{
+		"build" : "_deps/qtads-build/examples/autohidedragndrop",
+		"source" : "build/_deps/qtads-src/examples/autohidedragndrop"
+	},
+	"sources" : [],
+	"type" : "UTILITY"
+}

@@ -44,6 +44,7 @@ template <> constexpr inline auto FlowVisualizerMenu::qt_create_metaobjectdata<q
         "",
         "transformChanged",
         "testViewportRequested",
+        "onSettingChanged",
         "onMasterVisibilityChanged",
         "checked",
         "onResetVisualizerClicked",
@@ -71,8 +72,7 @@ template <> constexpr inline auto FlowVisualizerMenu::qt_create_metaobjectdata<q
         "onParticleIntensityTableChanged",
         "onParticleAddLifetimeStop",
         "onParticleRemoveLifetimeStop",
-        "onParticleLifetimeTableChanged",
-        "onSettingChanged"
+        "onParticleLifetimeTableChanged"
     };
 
     QtMocHelpers::UintData qt_methods {
@@ -82,71 +82,71 @@ template <> constexpr inline auto FlowVisualizerMenu::qt_create_metaobjectdata<q
         QtMocHelpers::SignalData<void()>(3, 2, QMC::AccessPublic, QMetaType::Void),
         // Signal 'testViewportRequested'
         QtMocHelpers::SignalData<void()>(4, 2, QMC::AccessPublic, QMetaType::Void),
+        // Slot 'onSettingChanged'
+        QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'onMasterVisibilityChanged'
-        QtMocHelpers::SlotData<void(bool)>(5, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Bool, 6 },
+        QtMocHelpers::SlotData<void(bool)>(6, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Bool, 7 },
         }}),
         // Slot 'onResetVisualizerClicked'
-        QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(8, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onVisualizationTypeChanged'
-        QtMocHelpers::SlotData<void(int)>(8, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 9 },
+        QtMocHelpers::SlotData<void(int)>(9, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Int, 10 },
         }}),
         // Slot 'onBoundaryTypeChanged'
-        QtMocHelpers::SlotData<void(int)>(10, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 9 },
+        QtMocHelpers::SlotData<void(int)>(11, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Int, 10 },
         }}),
         // Slot 'onStaticColoringStyleChanged'
-        QtMocHelpers::SlotData<void(int)>(11, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 9 },
+        QtMocHelpers::SlotData<void(int)>(12, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Int, 10 },
         }}),
         // Slot 'onStaticDirectionalColorClicked'
-        QtMocHelpers::SlotData<void()>(12, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onStaticAddColorStop'
         QtMocHelpers::SlotData<void()>(13, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onStaticRemoveColorStop'
+        // Slot 'onStaticAddColorStop'
         QtMocHelpers::SlotData<void()>(14, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onStaticColorStopTableChanged'
+        // Slot 'onStaticRemoveColorStop'
         QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onStaticColorStopTableChanged'
+        QtMocHelpers::SlotData<void()>(16, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onDynamicColoringStyleChanged'
-        QtMocHelpers::SlotData<void(int)>(16, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 9 },
+        QtMocHelpers::SlotData<void(int)>(17, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Int, 10 },
         }}),
         // Slot 'onDynamicDirectionalColorClicked'
-        QtMocHelpers::SlotData<void()>(17, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicAddIntensityStop'
         QtMocHelpers::SlotData<void()>(18, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicRemoveIntensityStop'
+        // Slot 'onDynamicAddIntensityStop'
         QtMocHelpers::SlotData<void()>(19, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicIntensityTableChanged'
+        // Slot 'onDynamicRemoveIntensityStop'
         QtMocHelpers::SlotData<void()>(20, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicAddLifetimeStop'
+        // Slot 'onDynamicIntensityTableChanged'
         QtMocHelpers::SlotData<void()>(21, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicRemoveLifetimeStop'
+        // Slot 'onDynamicAddLifetimeStop'
         QtMocHelpers::SlotData<void()>(22, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onDynamicLifetimeTableChanged'
+        // Slot 'onDynamicRemoveLifetimeStop'
         QtMocHelpers::SlotData<void()>(23, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleTypeToggleChanged'
+        // Slot 'onDynamicLifetimeTableChanged'
         QtMocHelpers::SlotData<void()>(24, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'onParticleTypeToggleChanged'
+        QtMocHelpers::SlotData<void()>(25, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onParticleColoringStyleChanged'
-        QtMocHelpers::SlotData<void(int)>(25, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 9 },
+        QtMocHelpers::SlotData<void(int)>(26, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Int, 10 },
         }}),
         // Slot 'onParticleDirectionalColorClicked'
-        QtMocHelpers::SlotData<void()>(26, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleAddIntensityStop'
         QtMocHelpers::SlotData<void()>(27, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleRemoveIntensityStop'
+        // Slot 'onParticleAddIntensityStop'
         QtMocHelpers::SlotData<void()>(28, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleIntensityTableChanged'
+        // Slot 'onParticleRemoveIntensityStop'
         QtMocHelpers::SlotData<void()>(29, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleAddLifetimeStop'
+        // Slot 'onParticleIntensityTableChanged'
         QtMocHelpers::SlotData<void()>(30, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleRemoveLifetimeStop'
+        // Slot 'onParticleAddLifetimeStop'
         QtMocHelpers::SlotData<void()>(31, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onParticleLifetimeTableChanged'
+        // Slot 'onParticleRemoveLifetimeStop'
         QtMocHelpers::SlotData<void()>(32, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onSettingChanged'
+        // Slot 'onParticleLifetimeTableChanged'
         QtMocHelpers::SlotData<void()>(33, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
@@ -174,33 +174,33 @@ void FlowVisualizerMenu::qt_static_metacall(QObject *_o, QMetaObject::Call _c, i
         case 0: _t->settingsChanged(); break;
         case 1: _t->transformChanged(); break;
         case 2: _t->testViewportRequested(); break;
-        case 3: _t->onMasterVisibilityChanged((*reinterpret_cast< std::add_pointer_t<bool>>(_a[1]))); break;
-        case 4: _t->onResetVisualizerClicked(); break;
-        case 5: _t->onVisualizationTypeChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 6: _t->onBoundaryTypeChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 7: _t->onStaticColoringStyleChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 8: _t->onStaticDirectionalColorClicked(); break;
-        case 9: _t->onStaticAddColorStop(); break;
-        case 10: _t->onStaticRemoveColorStop(); break;
-        case 11: _t->onStaticColorStopTableChanged(); break;
-        case 12: _t->onDynamicColoringStyleChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 13: _t->onDynamicDirectionalColorClicked(); break;
-        case 14: _t->onDynamicAddIntensityStop(); break;
-        case 15: _t->onDynamicRemoveIntensityStop(); break;
-        case 16: _t->onDynamicIntensityTableChanged(); break;
-        case 17: _t->onDynamicAddLifetimeStop(); break;
-        case 18: _t->onDynamicRemoveLifetimeStop(); break;
-        case 19: _t->onDynamicLifetimeTableChanged(); break;
-        case 20: _t->onParticleTypeToggleChanged(); break;
-        case 21: _t->onParticleColoringStyleChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 22: _t->onParticleDirectionalColorClicked(); break;
-        case 23: _t->onParticleAddIntensityStop(); break;
-        case 24: _t->onParticleRemoveIntensityStop(); break;
-        case 25: _t->onParticleIntensityTableChanged(); break;
-        case 26: _t->onParticleAddLifetimeStop(); break;
-        case 27: _t->onParticleRemoveLifetimeStop(); break;
-        case 28: _t->onParticleLifetimeTableChanged(); break;
-        case 29: _t->onSettingChanged(); break;
+        case 3: _t->onSettingChanged(); break;
+        case 4: _t->onMasterVisibilityChanged((*reinterpret_cast< std::add_pointer_t<bool>>(_a[1]))); break;
+        case 5: _t->onResetVisualizerClicked(); break;
+        case 6: _t->onVisualizationTypeChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
+        case 7: _t->onBoundaryTypeChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
+        case 8: _t->onStaticColoringStyleChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
+        case 9: _t->onStaticDirectionalColorClicked(); break;
+        case 10: _t->onStaticAddColorStop(); break;
+        case 11: _t->onStaticRemoveColorStop(); break;
+        case 12: _t->onStaticColorStopTableChanged(); break;
+        case 13: _t->onDynamicColoringStyleChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
+        case 14: _t->onDynamicDirectionalColorClicked(); break;
+        case 15: _t->onDynamicAddIntensityStop(); break;
+        case 16: _t->onDynamicRemoveIntensityStop(); break;
+        case 17: _t->onDynamicIntensityTableChanged(); break;
+        case 18: _t->onDynamicAddLifetimeStop(); break;
+        case 19: _t->onDynamicRemoveLifetimeStop(); break;
+        case 20: _t->onDynamicLifetimeTableChanged(); break;
+        case 21: _t->onParticleTypeToggleChanged(); break;
+        case 22: _t->onParticleColoringStyleChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
+        case 23: _t->onParticleDirectionalColorClicked(); break;
+        case 24: _t->onParticleAddIntensityStop(); break;
+        case 25: _t->onParticleRemoveIntensityStop(); break;
+        case 26: _t->onParticleIntensityTableChanged(); break;
+        case 27: _t->onParticleAddLifetimeStop(); break;
+        case 28: _t->onParticleRemoveLifetimeStop(); break;
+        case 29: _t->onParticleLifetimeTableChanged(); break;
         default: ;
         }
     }
