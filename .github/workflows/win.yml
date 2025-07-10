@@ -53,10 +53,20 @@ jobs:
       - name: Bundle runtime libs
         shell: cmd
         run: |
-          set PATH=%PATH%;${{ runner.temp }}\Qt\6.9.0\msvc2019_64\bin
-          windeployqt --release --qmldir . build\%BUILD_TYPE%\RoboticsSoftware.exe
+          set PATH=%PATH%;%QT_BIN_DIR%
+          windeployqt --release build\%BUILD_TYPE%\RoboticsSoftware.exe
           copy README.md build\%BUILD_TYPE%
-          
+
+      - name: Copy non-Qt DLLs
+        shell: cmd
+        run: |
+          copy vcpkg_installed\x64-windows\bin\assimp-vc143-mt.dll build\%BUILD_TYPE%
+          copy vcpkg_installed\x64-windows\bin\qtadvanceddocking-qt6.dll build\%BUILD_TYPE%
+          REM Add other copy commands here for any other DLLs you need
+
+      - name: Setup Inno Setup
+        uses: ammaraskar/setup-inno@v2
+        
       - name: Build installer
         run: iscc packaging/InnoSetup.iss
         
