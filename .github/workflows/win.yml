@@ -56,17 +56,20 @@ jobs:
           set PATH=%PATH%;%QT_BIN_DIR%
           windeployqt --release build\%BUILD_TYPE%\RoboticsSoftware.exe
           copy README.md build\%BUILD_TYPE%
-
-      - name: Copy non-Qt DLLs
-        shell: cmd
-        run: |
-          copy vcpkg_installed\x64-windows\bin\assimp-vc143-mt.dll build\%BUILD_TYPE%
-          copy vcpkg_installed\x64-windows\bin\qtadvanceddocking-qt6.dll build\%BUILD_TYPE%
-          REM Add other copy commands here for any other DLLs you need
-
+      
       - name: Setup Inno Setup
-        uses: ammaraskar/setup-inno@v3
-        
+        run: |
+          $inno_url = "https://files.jrsoftware.org/is/6/innosetup-6.2.2.exe"
+          $inno_installer = "${{ runner.temp }}\innosetup-installer.exe"
+          Write-Host "Downloading Inno Setup..."
+          Invoke-WebRequest -Uri $inno_url -OutFile $inno_installer
+          
+          Write-Host "Installing Inno Setup..."
+          Start-Process -FilePath $inno_installer -ArgumentList "/SILENT /NOCANCEL /SUPPRESSMSGBOXES" -Wait
+          
+          $inno_path = "C:\Program Files (x86)\Inno Setup 6"
+          echo $inno_path >> $env:GITHUB_PATH
+          
       - name: Build installer
         run: iscc packaging/InnoSetup.iss
         
