@@ -76,4 +76,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: KRStudio-win64
-          path: dist/installer/*.exe
+          path: packaging/dist/installer/*.exe
