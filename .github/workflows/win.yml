@@ -51,6 +51,7 @@ jobs:
         run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel
         
       - name: Bundle runtime libs
+        shell: cmd
         run: |
           set PATH=%PATH%;${{ runner.temp }}\Qt\6.9.0\msvc2019_64\bin
           windeployqt --release --qmldir . ^
