@@ -51,11 +51,11 @@ jobs:
         run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel
         
       - name: Bundle runtime libs
+        shell: cmd
         run: |
           set PATH=%PATH%;${{ runner.temp }}\Qt\6.9.0\msvc2019_64\bin
-          windeployqt --release --qmldir . ^
-          build\bin\RoboticsSoftware.exe
-          copy README.md build\bin\
+          windeployqt --release --qmldir . build\%BUILD_TYPE%\RoboticsSoftware.exe
+          copy README.md build\%BUILD_TYPE%
           
       - name: Build installer
         run: iscc packaging/InnoSetup.iss
