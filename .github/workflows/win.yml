@@ -65,7 +65,7 @@ jobs:
           REM Add other copy commands here for any other DLLs you need
 
       - name: Setup Inno Setup
-        uses: ammaraskar/setup-inno@v2
+        uses: ammaraskar/setup-inno@v3
         
       - name: Build installer
         run: iscc packaging/InnoSetup.iss
