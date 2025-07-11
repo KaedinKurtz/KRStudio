@@ -32,7 +32,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ${{ github.workspace }}/build
-        key: cmake-build-macos-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**') }}
+        key: cmake-build-macos-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**', 'shaders/**') }}
         restore-keys: cmake-build-macos-
 
     # 4. Homebrew deps (add ninja, drop explicit make/gmake)
