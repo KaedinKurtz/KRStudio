@@ -45,7 +45,7 @@ jobs:
       with:
        vcpkgDirectory: vcpkg            # ← was ${{ github.workspace }}/vcpkg
        vcpkgGitCommitId: 4f719951ca65909c91d16afdced2805c3ea2d5f7
-
+       doNotCheckoutSubmodules: true 
     # 6. Qt (unchanged, still via Homebrew)
     - name: Install Qt via Homebrew
       run: brew install qt@6
