@@ -43,8 +43,8 @@ jobs:
     - name: Run vcpkg
       uses: lukka/run-vcpkg@v11
       with:
-         vcpkgDirectory: vcpkg
-         vcpkgGitCommitId: 4f719951ca65909c91d16afdced2805c3ea2d5f7
+       vcpkgDirectory: vcpkg            # ← was ${{ github.workspace }}/vcpkg
+       vcpkgGitCommitId: 4f719951ca65909c91d16afdced2805c3ea2d5f7
 
     # 6. Qt (unchanged, still via Homebrew)
     - name: Install Qt via Homebrew
