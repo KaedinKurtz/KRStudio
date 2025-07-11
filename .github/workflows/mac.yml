@@ -56,8 +56,8 @@ jobs:
           target: desktop
           # Corrected architecture for Apple Silicon runners (macos-14)
           arch: clang_arm64
-          # qtbase is installed by default; only list extra modules.
-          modules: "qtshadertools qtsvg"
+          # Corrected module names for aqtinstall. qtbase is installed by default.
+          modules: "shadertools svg"
 
       # 5. Configure & build
       - name: Configure
