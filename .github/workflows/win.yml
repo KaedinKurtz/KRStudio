@@ -54,7 +54,7 @@ jobs:
         shell: cmd
         run: |
           set PATH=%PATH%;%QT_BIN_DIR%
-          windeployqt --release build\%BUILD_TYPE%\RoboticsSoftware.exe
+          windeployqt --release build\%BUILD_TYPE%\KRStudio.exe
           copy README.md build\%BUILD_TYPE%
       
       - name: Setup Inno Setup
