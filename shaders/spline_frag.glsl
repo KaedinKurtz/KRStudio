@@ -6,5 +6,5 @@ void main()
 {
     FragColor = u_colour;
     if (u_emissive)
-        FragColor.rgb *= 3.5;           // cheap “glow” – let bloom do the rest
+        FragColor.rgb *= 3.5;           // cheap glow let bloom do the rest
 }

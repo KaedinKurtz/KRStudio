@@ -1,9 +1,8 @@
-﻿cmake_minimum_required(VERSION 3.24)           # 3.24 → full FetchContent GIT_SPARSE support
+﻿cmake_minimum_required(VERSION 3.24)           # 3.24  full FetchContent GIT_SPARSE support
 project(RoboticsSoftware LANGUAGES CXX)
 
-# ─────────────────────────────────────────────
-#  Global compiler & Qt meta-object settings
-# ─────────────────────────────────────────────
+#   Global compiler & Qt meta-object settings
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -12,22 +11,20 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-# ─────────────────────────────────────────────
 #  Third-party packages (via find_package)
-# ─────────────────────────────────────────────
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
 find_package(OpenGL REQUIRED)
 find_package(glm     REQUIRED)
 find_package(assimp  CONFIG REQUIRED)
 find_package(urdfdom CONFIG REQUIRED)
 
-# ─────────────────────────────────────────────
-#  Qt Advanced Docking System — FetchContent
-# ─────────────────────────────────────────────
+#  Qt Advanced Docking System  FetchContent
+
 include(FetchContent)
 
-# ▶ The newest *stable* tag as of 2025-07-08 is 4.4.0.
-# If you ever want to follow HEAD, just change GIT_TAG to "master".
+# The newest *stable* tag as of 2025-07-08 is 4.4.0.
+# If you ever want to follow HEAD, just change GIT_TAG to "master".
 FetchContent_Declare(
   qtads
   GIT_REPOSITORY https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
@@ -35,16 +32,15 @@ FetchContent_Declare(
   GIT_SHALLOW    TRUE                 # faster checkout
 )
 
-#  ▸ Disable the internal “git describe” version logic that breaks when
+#   Disable the internal git describe version logic that breaks when
 #    the source is fetched without .git metadata (CI tarballs, shallow clones).
 set(ADS_SKIP_GIT_VERSION ON CACHE BOOL "Skip git-based versioning" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "Disable ADS examples" FORCE)
 
 FetchContent_MakeAvailable(qtads)      # creates the target: QtADS
 
-# ─────────────────────────────────────────────
 #  Project sources / headers
-# ─────────────────────────────────────────────
+
 file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/include/*Headers/*.hpp")
 
@@ -66,9 +62,8 @@ qt_add_executable(RoboticsSoftware
     ${SOURCE_FILES}
     ${HEADER_FILES})
 
-# ─────────────────────────────────────────────
 #  Include paths
-# ─────────────────────────────────────────────
+
 target_include_directories(RoboticsSoftware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/ObjectHeaders"
@@ -80,9 +75,8 @@ target_include_directories(RoboticsSoftware PRIVATE
     "${qtads_SOURCE_DIR}/src"          # ADS public headers
     ${urdfdom_INCLUDE_DIRS})
 
-# ─────────────────────────────────────────────
 #  Compile definitions / options
-# ─────────────────────────────────────────────
+
 target_compile_definitions(RoboticsSoftware PRIVATE
     GLM_ENABLE_EXPERIMENTAL
     RS_DEBUG_DUMP
@@ -95,9 +89,8 @@ if(MSVC)
     )
 endif()
 
-# ─────────────────────────────────────────────
 #  Link libraries
-# ─────────────────────────────────────────────
+
 target_link_libraries(RoboticsSoftware PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets
     OpenGL::GL
@@ -106,18 +99,16 @@ target_link_libraries(RoboticsSoftware PRIVATE
     ${urdfdom_LIBRARIES}
     ads::qtadvanceddocking-qt6)                          # provided by FetchContent
 
-# ─────────────────────────────────────────────
 #  Post-build steps
 
-# ─────────────────────────────────────────────
 # 1) Copy ADS runtime (Windows only)
-# ─────────────────────────────────────────────
+
 if(WIN32)
     add_custom_command(TARGET RoboticsSoftware POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:ads::qtadvanceddocking-qt6> # ▼ CORRECTED: Use the namespaced alias
+                $<TARGET_FILE:ads::qtadvanceddocking-qt6> #  CORRECTED: Use the namespaced alias
                 $<TARGET_FILE_DIR:RoboticsSoftware>
-        COMMENT "Copying QtADS runtime…")
+        COMMENT "Copying QtADS runtime")
 endif()
 
 # 2) Copy shaders directory
@@ -125,14 +116,14 @@ add_custom_command(TARGET RoboticsSoftware POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
             "$<TARGET_FILE_DIR:RoboticsSoftware>/shaders"
-    COMMENT "Copying shaders → output directory…")
+    COMMENT "Copying shaders to output directory")
 
 # 3) Copy example URDF
 add_custom_command(TARGET RoboticsSoftware POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/simple_arm.urdf"
             "$<TARGET_FILE_DIR:RoboticsSoftware>/simple_arm.urdf"
-    COMMENT "Copying simple_arm.urdf → output directory…")
+    COMMENT "Copying simple_arm.urdf to output directory…")
 
 # 4) Run windeployqt (Windows) after build
 if(WIN32)
@@ -142,12 +133,11 @@ if(WIN32)
                 $<$<CONFIG:Release>:--release>
                 --dir "$<TARGET_FILE_DIR:RoboticsSoftware>"
                 "$<TARGET_FILE:RoboticsSoftware>"
-        COMMENT "Running windeployqt…")
+        COMMENT "Running windeployqt")
 endif()
 
-# ─────────────────────────────────────────────
 #  Platform-specific application icons
-# ─────────────────────────────────────────────
+
 if(MSVC)  # Windows resource file with .ico
     target_sources(RoboticsSoftware PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/icons/app.rc)
@@ -163,14 +153,12 @@ if(APPLE) # macOS .icns inside bundle
         MACOSX_BUNDLE_ICON_FILE app.icns)
 endif()
 
-# ─────────────────────────────────────────────
 #  Finalise Qt executable
-# ─────────────────────────────────────────────
+
 qt_finalize_executable(RoboticsSoftware)
 
-# ─────────────────────────────────────────────
 #  Install rules
-# ─────────────────────────────────────────────
+
 install(TARGETS RoboticsSoftware
         RUNTIME DESTINATION .
         BUNDLE  DESTINATION .)

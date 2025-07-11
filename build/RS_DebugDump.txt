@@ -78,3 +78,33 @@
         pingpongFBO[0] : 0x1d
         pingpongFBO[1] : 0x1e
     GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-10 20:20:08.102 ]  Resize
+    Viewport ptr: 0x290fe9daf10  QWidget winId: 0x30ea8
+    Context ptr : 0x29081870200
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-10 20:20:08.237 ]  Resize
+    Viewport ptr: 0x290fe2586f0  QWidget winId: 0x30eba
+    Context ptr : 0x2908187aa70
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-10 20:20:08.283 ]  Resize
+    Viewport ptr: 0x290fe258830  QWidget winId: 0x20e7a
+    Context ptr : 0x2908187d770
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF

@@ -10,7 +10,7 @@ compile_commands.json
 /_build/
 /build-*/
 /build/               # CMake / Ninja / VS out-of-source build
-/out/                 # if you use CMakePresets out/build/…
+/out/                 # if you use CMakePresets out/build/
 **/build-*/           # CMake-Ninja builds created by QtCreator, VS, etc.
 
 ####################################################################

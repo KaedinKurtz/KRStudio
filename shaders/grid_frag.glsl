@@ -58,26 +58,26 @@ float getLineStrength(
         float camDistToGridForAACutoff)
 {
     // ------------------------------------------------------------------
-    // 1. distance from fragment to nearest grid line – **in pixels**
+    // 1. distance from fragment to nearest grid line  **in pixels**
     // ------------------------------------------------------------------
     float distToLineCenter_world = abs(fract(planeCoord / spacing + 0.5) - 0.5) * spacing;
     float distToLineCenter_px    = distToLineCenter_world / worldUnitsPerPixelForAxis;
 
     // ------------------------------------------------------------------
-    // 2. core / AA widths – also **in pixels**
+    // 2. core / AA widths  also **in pixels**
     // ------------------------------------------------------------------
     float coreHalf_px  = desiredCorePixelWidth * 0.5;
     float aaExt_px     = mix(MIN_AA_EXTENSION_PIXELS,
                              DEFAULT_AA_EXTENSION_PIXELS,
                              pow(levelVisibilityFactor, 2.5));
 
-    // 3 · fade AA away when spacing tiny & camera very close  (unchanged)
+    // 3  fade AA away when spacing tiny & camera very close  (unchanged)
     if (spacing < 0.5) {
         float aaCut = smoothstep(7.0, 6.0, camDistToGridForAACutoff);
         aaExt_px *= aaCut;
     }
 
-    // 4 · edge positions **in pixels**, then convert back to world units once
+    // 4  edge positions **in pixels**, then convert back to world units once
     float solidEdge_px = coreHalf_px;
     float outerEdge_px = coreHalf_px + aaExt_px;
 

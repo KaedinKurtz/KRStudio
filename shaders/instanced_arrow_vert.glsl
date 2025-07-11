@@ -6,21 +6,21 @@
 #version 430 core
 #define MAX_STOPS 8                         // hard upper-bound for UI
 
-// ── per-vertex data for the arrow mesh ───────────────────────────────────────
+// per-vertex data for the arrow mesh 
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;       // (kept for possible lighting)
 
-// ── per-instance transformation matrix ───────────────────────────────────────
+//  per-instance transformation matrix 
 layout(location = 2) in vec4 aInstanceMatCol0;
 layout(location = 3) in vec4 aInstanceMatCol1;
 layout(location = 4) in vec4 aInstanceMatCol2;
 layout(location = 5) in vec4 aInstanceMatCol3;
 
-// ── extra per-instance parameters ────────────────────────────────────────────
-layout(location = 6) in float aIntensity;   // 0‥1 magnitude at the arrow tip
-layout(location = 7) in float aAgeNorm;     // 0‥1 normalised lifetime
+//  extra per-instance parameters 
+layout(location = 6) in float aIntensity;   // 0 1 magnitude at the arrow tip
+layout(location = 7) in float aAgeNorm;     // 0 1 normalised lifetime
 
-// ── global uniforms ──────────────────────────────────────────────────────────
+//  global uniforms 
 uniform mat4 view;
 uniform mat4 projection;
 
@@ -30,14 +30,14 @@ uniform mat4 projection;
 uniform int   uColoringMode;
 
 /*  Gradient description (shared by both vertex & fragment stages if desired) */
-uniform int   uStopCount;                   // 2 … MAX_STOPS (0 & 1 required)
+uniform int   uStopCount;                   // 2  MAX_STOPS (0 & 1 required)
 uniform vec4  uStopColor[MAX_STOPS];
 uniform float uStopPos  [MAX_STOPS];
 
-// ── varyings ─────────────────────────────────────────────────────────────────
+// varyings 
 out vec4 vs_color;
 
-// ── helper: fetch colour at t (0‥1) ─────────────────────────────────────────
+//  helper: fetch colour at t (0 1) 
 vec4 sampleGradient(float t)
 {
     t = clamp(t, 0.0, 1.0);
@@ -54,7 +54,7 @@ vec4 sampleGradient(float t)
     return uStopColor[uStopCount - 1];      // safety fallback
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
+//  main 
 void main()
 {
     // Assemble full model matrix

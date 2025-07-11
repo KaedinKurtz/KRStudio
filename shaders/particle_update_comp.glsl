@@ -1,13 +1,13 @@
 ﻿#version 430 core
 layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-/*────────────────────────  GPU-side structs  ───────────────────────*/
+/*  GPU-side structs */
 struct PointEffectorGpu      { vec4 position; vec4 normal;   float strength; float radius; int falloffType; float pad; };
 struct DirectionalEffectorGpu{ vec4 direction; float strength; float p1,p2,p3; };
 struct TriangleGpu           { vec4 v0; vec4 v1; vec4 v2; vec4 normal; };
 struct Particle              { vec4 position; vec4 velocity; vec4 color; float age; float lifetime; float size; float pad; };
 
-/*────────────────────────  buffer bindings  ───────────────────────*/
+/*  buffer bindings */
 layout(std140, binding = 3) uniform EffectorDataUbo {
     PointEffectorGpu      pointEffectors[256];
     DirectionalEffectorGpu directionalEffectors[16];
@@ -17,7 +17,7 @@ layout(std430,  binding = 4) readonly  buffer TriangleEffectorBuffer { TriangleG
 layout(std430,  binding = 5) readonly  buffer ParticleInputBuffer    { Particle     particlesIn[];      };
 layout(std430,  binding = 6) writeonly buffer ParticleOutputBuffer   { Particle     particlesOut[];     };
 
-/*──────────────────────────  uniforms  ────────────────────────────*/
+/* uniforms  */
 uniform mat4  u_visualizerModelMatrix;
 uniform float u_deltaTime;
 uniform float u_time;
@@ -44,7 +44,7 @@ uniform int   u_stopCount;
 uniform float u_stopPos[8];
 uniform vec4  u_stopColor[8];
 
-/*──────────────────────────  helpers  ─────────────────────────────*/
+/*  helpers */
 float random(vec3 p)
 {
     p  = fract(p * 0.1031);
@@ -66,7 +66,7 @@ vec3 getColorFromGradient(float t)
     return u_stopColor[u_stopCount-1].rgb;
 }
 
-/*──────────────────────────  main  ────────────────────────────────*/
+/*  main */
 void main()
 {
     uint gid = gl_GlobalInvocationID.x;
@@ -76,7 +76,7 @@ void main()
     vec3     wPos   = p.position.xyz;
     vec3     field  = vec3(0.0);
 
-    /*────────────  accumulate point & directional effectors  ───────────*/
+    /*  accumulate point & directional effectors  */
     for (int i = 0; i < u_pointEffectorCount; ++i) {
         vec3 diff = wPos - pointEffectors[i].position.xyz;
         float d   = length(diff);
@@ -88,7 +88,7 @@ void main()
     for (int i = 0; i < u_directionalEffectorCount; ++i)
         field += directionalEffectors[i].direction.xyz * directionalEffectors[i].strength;
 
-    /*────────────  optional random-walk noise  ────────────*/
+    /*  optional random-walk noise */
     if (u_randomWalkStrength > 0.0) {
         vec3 seed = wPos + vec3(u_time);
         vec3 turb = vec3( random(seed)      - 0.5,
@@ -97,7 +97,7 @@ void main()
         field += normalize(turb) * u_randomWalkStrength * u_randomWalkScale;
     }
 
-    /*────────────  integrate motion  ────────────*/
+    /*  integrate motion */
     float fieldMag  = length(field);
     vec3  fieldDir  = (fieldMag > 0.001) ? normalize(field) : vec3(0.0);
 
@@ -106,7 +106,7 @@ void main()
     p.position.xyz += p.velocity.xyz * u_deltaTime;
     p.velocity.xyz *= 0.98;   /* damp */
 
-    /*────────────  lifetime / respawn  ────────────*/
+    /*  lifetime / respawn  */
     p.age += u_deltaTime;
     if (p.age > u_lifetime) {
         vec3 seed = vec3(gid, u_time, gid * 17.0 + u_time);
@@ -118,7 +118,7 @@ void main()
         p.age        = 0.0;
     }
 
-    /*────────────  size & colour  ────────────*/
+    /*  size & colour  */
     float age_t       = p.age / u_lifetime;
     float intensity_t = smoothstep(0.0, u_intensityMax, fieldMag);   /* 0-1 */
 
