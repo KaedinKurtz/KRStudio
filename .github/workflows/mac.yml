@@ -9,12 +9,11 @@ jobs:
   mac:
     runs-on: macos-14       # Apple-Silicon runner
     env:
-      BUILD_TYPE: Release
-      # vcpkg binary cache – unchanged
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-cache,readwrite"
-      # Tell *both* vcpkg and the top-level CMake to use Ninja
-      CMAKE_GENERATOR: Ninja
-      VCPKG_FORCE_NINJA: 1   # <- vcpkg switch; avoids searching for make
+     BUILD_TYPE: Release
+     VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-cache,readwrite"
+     VCPKG_ROOT: ${{ github.workspace }}/vcpkg     # <- add this
+     CMAKE_GENERATOR: Ninja
+     VCPKG_FORCE_NINJA: 1
 
     steps:
     # 1. Checkout
@@ -44,8 +43,8 @@ jobs:
     - name: Run vcpkg
       uses: lukka/run-vcpkg@v11
       with:
-        vcpkgDirectory: ${{ github.workspace }}/vcpkg
-        vcpkgGitCommitId: 4f719951ca65909c91d16afdced2805c3ea2d5f7  # 2025-06-28
+         vcpkgDirectory: vcpkg
+         vcpkgGitCommitId: 4f719951ca65909c91d16afdced2805c3ea2d5f7
 
     # 6. Qt (unchanged, still via Homebrew)
     - name: Install Qt via Homebrew
