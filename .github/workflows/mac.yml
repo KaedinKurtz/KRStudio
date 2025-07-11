@@ -1,4 +1,4 @@
-﻿name: macOS Build & Package
+name: macOS Build & Package
 
 on:
   push:
@@ -10,77 +10,77 @@ on:
 
 jobs:
   mac:
-    runs-on: macos-14     # Apple-Silicon runner
+    runs-on: macos-14 # Apple-Silicon runner
 
     # ──────────────── global env ────────────────
     env:
       BUILD_TYPE: Release
       QT_VERSION: 6.9.0
-      
-      VCPKG_NUGET_CACHE: ${{ github.workspace }}/vcpkg-cache
-      
-      VCPKG_BINARY_SOURCES: >-
-        clear;
-        nuget,https://vcpkg-cache.azureedge.net/,read;
-        nuget,${{ github.workspace }}/vcpkg-cache,write
+      # Use the same simple file-based cache as the Windows workflow for consistency and reliability.
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-cache,readwrite"
 
     steps:
-    # ─────────────── checkout ───────────────
-    - uses: actions/checkout@v4
+      # 1. Checkout
+      - uses: actions/checkout@v4
 
-    # ─────── restore caches *before* run-vcpkg ───────
-    - name: Cache vcpkg tree
-      uses: actions/cache@v4
-      with:
-        path: ${{ github.workspace }}/vcpkg
-        key:  vcpkg-tree-macos-${{ hashFiles('vcpkg.json') }}
-        restore-keys: vcpkg-tree-macos-
+      # 2. Cache vcpkg binaries
+      # This single step now handles the compiled dependency cache.
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: vcpkg-bins-macos-${{ hashFiles('**/vcpkg.json') }}
+          restore-keys: vcpkg-bins-macos-
 
-    - name: Cache vcpkg binary packages
-      uses: actions/cache@v4
-      with:
-        path: ${{ env.VCPKG_NUGET_CACHE }}
-        key:  vcpkg-bins-macos-${{ hashFiles('vcpkg.json') }}
-        restore-keys: vcpkg-bins-macos-
+      # 3. Cache the project's own build directory
+      # Added this step for faster subsequent builds of your own code.
+      - name: Cache CMake build directory
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/build
+          key: cmake-build-macos-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**') }}
+          restore-keys: cmake-build-macos-
 
-    # ─────────────── dependencies ───────────────
-    - uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgDirectory: ${{ github.workspace }}/vcpkg
-        # pin vcpkg to the same commit you used on Windows
-        vcpkgGitCommitId: c6f09fc73ebfbfddd769f8fac9f33f95304c77e5
+      # 4. Dependencies
+      - name: Run vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: ${{ github.workspace }}/vcpkg
+          vcpkgGitCommitId: c6f09fc73ebfbfddd769f8fac9f33f95304c77e5
 
-    - uses: jurplel/install-qt-action@v4
-      with:
-        version: ${{ env.QT_VERSION }}
-        host: mac
-        target: desktop
-        arch: clang_64
-        modules: "qtbase qtshadertools"   # add / remove Qt modules as needed
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: mac
+          target: desktop
+          arch: clang_64
+          # Added qtsvg which is used by the project.
+          modules: "qtbase qtshadertools qtsvg"
 
-    # ─────────────── configure & build ───────────────
-    - name: Configure
-      run: |
-        cmake -B build -S . \
-              -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-              -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+      # 5. Configure & build
+      - name: Configure
+        run: |
+          cmake -B build -S . \
+                -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+                -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
 
-    - name: Build
-      run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
 
-    # ─────────────── bundle & ad-hoc sign ───────────────
-    - name: macdeployqt (plus ad-hoc codesign)
-      run: |
-        # the install-qt action puts Qt tools on PATH, so plain `macdeployqt` works
-        macdeployqt build/bin/RoboticsSoftware.app -always-overwrite -verbose=2
-        # ad-hoc sign so Gatekeeper is satisfied when the DMG is downloaded
-        codesign --force --deep --sign - build/bin/RoboticsSoftware.app
+      # 6. Bundle & ad-hoc sign
+      - name: macdeployqt (plus ad-hoc codesign)
+        run: |
+          # Corrected the path: The .app bundle is typically in the root of the build directory.
+          macdeployqt build/RoboticsSoftware.app -always-overwrite -verbose=2
+          # ad-hoc sign so Gatekeeper is satisfied when the DMG is downloaded
+          codesign --force --deep --sign - build/RoboticsSoftware.app
 
-    # ─────────────── create DMG & upload ───────────────
-    - name: Create DMG
-      run: packaging/create-dmg.sh
+      # 7. Create DMG & upload
+      - name: Create DMG
+        run: packaging/create-dmg.sh
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: RoboticsStudio-mac
-        path: RoboticsStudio-mac.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RoboticsStudio-mac
+          path: RoboticsStudio-mac.dmg
