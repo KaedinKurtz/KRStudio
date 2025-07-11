@@ -54,8 +54,8 @@ jobs:
           version: ${{ env.QT_VERSION }}
           host: mac
           target: desktop
-          # Corrected architecture for Apple Silicon runners (macos-14)
-          arch: clang_arm64
+          # Corrected architecture for Apple Silicon runners to what aqtinstall expects.
+          arch: "arm64"
           # Corrected module names for aqtinstall. qtbase is installed by default.
           modules: "shadertools svg"
 
