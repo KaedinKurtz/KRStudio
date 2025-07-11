@@ -155,7 +155,7 @@ endif()
 
 #  Finalise Qt executable
 
-qt_finalize_executable(RoboticsSoftware)
+qt_finalize_executable(KRStudio)
 
 #  Install rules
 
