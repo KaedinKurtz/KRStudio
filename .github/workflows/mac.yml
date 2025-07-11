@@ -41,6 +41,10 @@ jobs:
           restore-keys: cmake-build-macos-
 
       # 4. Dependencies
+      # Install build tools required by vcpkg packages like libpq
+      - name: Install build tools via Homebrew
+        run: brew install autoconf automake
+
       - name: Run vcpkg
         uses: lukka/run-vcpkg@v11
         with:
