@@ -41,7 +41,7 @@ jobs:
 
     # 5. vcpkg – bump to a recent commit that has ICU patches
     - name: Run vcpkg
-      uses: lukka/run-vcpkg@v11
+      uses: lukka/run-vcpkg@v12
       with:
        vcpkgDirectory: vcpkg            # ← was ${{ github.workspace }}/vcpkg
        vcpkgGitCommitId: 4f719951ca65909c91d16afdced2805c3ea2d5f7
