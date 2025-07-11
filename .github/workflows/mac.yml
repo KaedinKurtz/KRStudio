@@ -54,9 +54,10 @@ jobs:
           version: ${{ env.QT_VERSION }}
           host: mac
           target: desktop
-          arch: clang_64
-          # Added qtsvg which is used by the project.
-          modules: "qtbase qtshadertools qtsvg"
+          # Corrected architecture for Apple Silicon runners (macos-14)
+          arch: clang_arm64
+          # qtbase is installed by default; only list extra modules.
+          modules: "qtshadertools qtsvg"
 
       # 5. Configure & build
       - name: Configure
@@ -82,5 +83,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RoboticsStudio-mac
-          path: RoboticsStudio-mac.dmg
+          name: KRStudio-mac
+          path: KRStudio-mac.dmg
