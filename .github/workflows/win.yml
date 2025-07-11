@@ -21,7 +21,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/build
-          key: ${{ runner.os }}-${{ env.BUILD_TYPE }}-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**') }}
+          key: ${{ runner.os }}-${{ env.BUILD_TYPE }}-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**', 'shaders/**') }}
           restore-keys: |
             ${{ runner.os }}-${{ env.BUILD_TYPE }}-
             
