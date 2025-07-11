@@ -61,6 +61,8 @@ qt_add_executable(RoboticsSoftware
     MANUAL_FINALIZATION
     ${SOURCE_FILES}
     ${HEADER_FILES})
+    
+set_target_properties(RoboticsSoftware PROPERTIES OUTPUT_NAME "KRStudio")
 
 #  Include paths
 
@@ -155,7 +157,7 @@ endif()
 
 #  Finalise Qt executable
 
-qt_finalize_executable(KRStudio)
+qt_finalize_executable(RoboticsSoftware)
 
 #  Install rules
 
