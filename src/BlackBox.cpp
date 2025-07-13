@@ -74,5 +74,24 @@ void BlackBox::dumpState(const QString& tag,
     out << "    GL: drawFBO=" << fmt(drawFBO)
         << "  SRGB=" << (sRGB ? "ON" : "OFF") << '\n';
 
+    // --- START OF NEW INSTRUMENTATION ---
+    // Query the driver directly for the current state of critical variables.
+    GLint readFBO = 0;
+    GLboolean depthMask = GL_TRUE, blendEnabled = GL_FALSE, cullEnabled = GL_FALSE;
+
+    gl->glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFBO);
+    gl->glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFBO);
+    gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+    gl->glGetBooleanv(GL_BLEND, &blendEnabled);
+    gl->glGetBooleanv(GL_CULL_FACE, &cullEnabled);
+
+    out << "    LIVE GL STATE:\n"
+        << "        Draw FBO Bound: " << fmt(drawFBO) << '\n'
+        << "        Read FBO Bound: " << fmt(readFBO) << '\n'
+        << "        Depth Mask On : " << (depthMask ? "YES" : "NO") << " <--- CRITICAL: Should be YES for opaque drawing.\n"
+        << "        Blend On      : " << (blendEnabled ? "YES" : "NO") << " <--- CRITICAL: Should be NO for opaque drawing.\n"
+        << "        Cull Face On  : " << (cullEnabled ? "YES" : "NO") << '\n';
+    // --- END OF NEW
+
     out.flush();
 }

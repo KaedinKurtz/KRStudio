@@ -36,6 +36,7 @@
 #include <QOpenGLVersionFunctionsFactory>
 #include <QPushButton>
 
+
 const QString sidePanelStyle = R"(
     /* General Window and Text Styling */
     QWidget {
