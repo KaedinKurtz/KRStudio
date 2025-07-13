@@ -69,4 +69,5 @@ protected slots:
     void onMasterRender();
     void onFlowVisualizerTransformChanged();
     void onFlowVisualizerSettingsChanged();
+    void onSceneReloadRequested(const QString& sceneName);
 };
