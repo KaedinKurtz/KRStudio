@@ -56,7 +56,7 @@ build CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen\mocs_compilation.
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\external\pugixml\pugixml.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\external\pugixml\pugixml.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -65,7 +65,7 @@ build CMakeFiles\RoboticsSoftware.dir\external\pugixml\pugixml.cpp.obj: CXX_COMP
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\external\pugixml
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\BlackBox.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\BlackBox.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -74,7 +74,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\BlackBox.cpp.obj: CXX_COMPILER__Roboti
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\Camera.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Camera.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -83,7 +83,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\Camera.cpp.obj: CXX_COMPILER__Robotics
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\CompositePass.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\CompositePass.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -92,7 +92,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\CompositePass.cpp.obj: CXX_COMPILER__R
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\DiagnosticsPanel.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\DiagnosticsPanel.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -101,7 +101,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\DiagnosticsPanel.cpp.obj: CXX_COMPILER
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\FieldSolver.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\FieldSolver.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -110,7 +110,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\FieldSolver.cpp.obj: CXX_COMPILER__Rob
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\FieldVisualizerPass.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\FieldVisualizerPass.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -119,7 +119,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\FieldVisualizerPass.cpp.obj: CXX_COMPI
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\FlowVisualizerMenu.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\FlowVisualizerMenu.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -128,7 +128,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\FlowVisualizerMenu.cpp.obj: CXX_COMPIL
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\GridPass.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\GridPass.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -137,7 +137,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\GridPass.cpp.obj: CXX_COMPILER__Roboti
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\IntersectionSystem.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\IntersectionSystem.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -146,7 +146,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\IntersectionSystem.cpp.obj: CXX_COMPIL
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\JointPropertiesWidget.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\JointPropertiesWidget.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -155,7 +155,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\JointPropertiesWidget.cpp.obj: CXX_COM
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\KRobotParser.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\KRobotParser.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -164,7 +164,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\KRobotParser.cpp.obj: CXX_COMPILER__Ro
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\KRobotWriter.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\KRobotWriter.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -173,7 +173,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\KRobotWriter.cpp.obj: CXX_COMPILER__Ro
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\LinkPropertiesWidget.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\LinkPropertiesWidget.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -182,7 +182,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\LinkPropertiesWidget.cpp.obj: CXX_COMP
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\MainWindow.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\MainWindow.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -191,7 +191,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\MainWindow.cpp.obj: CXX_COMPILER__Robo
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\Mesh.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Mesh.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -200,7 +200,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\Mesh.cpp.obj: CXX_COMPILER__RoboticsSo
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\OpaquePass.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\OpaquePass.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -209,7 +209,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\OpaquePass.cpp.obj: CXX_COMPILER__Robo
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\PreviewViewport.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\PreviewViewport.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -218,7 +218,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\PreviewViewport.cpp.obj: CXX_COMPILER_
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\PropertiesPanel.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\PropertiesPanel.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -227,7 +227,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\PropertiesPanel.cpp.obj: CXX_COMPILER_
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\RenderingSystem.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\RenderingSystem.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -236,7 +236,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\RenderingSystem.cpp.obj: CXX_COMPILER_
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\Robot.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Robot.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -245,7 +245,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\Robot.cpp.obj: CXX_COMPILER__RoboticsS
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\RobotEnrichmentDialog.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\RobotEnrichmentDialog.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -254,7 +254,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\RobotEnrichmentDialog.cpp.obj: CXX_COM
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\SDFParser.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\SDFParser.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -263,7 +263,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\SDFParser.cpp.obj: CXX_COMPILER__Robot
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\Scene.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Scene.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -272,7 +272,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\Scene.cpp.obj: CXX_COMPILER__RoboticsS
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\SceneBuilder.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\SceneBuilder.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -281,7 +281,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\SceneBuilder.cpp.obj: CXX_COMPILER__Ro
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\SelectionGlowPass.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\SelectionGlowPass.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -290,7 +290,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\SelectionGlowPass.cpp.obj: CXX_COMPILE
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\Shader.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -299,7 +299,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj: CXX_COMPILER__Robotics
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\SplinePass.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\SplinePass.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -308,7 +308,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\SplinePass.cpp.obj: CXX_COMPILER__Robo
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\StaticToolbar.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\StaticToolbar.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -317,7 +317,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\StaticToolbar.cpp.obj: CXX_COMPILER__R
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\URDFImporterDialog.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\URDFImporterDialog.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -326,7 +326,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\URDFImporterDialog.cpp.obj: CXX_COMPIL
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\URDFParser.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\URDFParser.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -335,7 +335,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\URDFParser.cpp.obj: CXX_COMPILER__Robo
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\ViewportWidget.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\ViewportWidget.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -344,7 +344,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\ViewportWidget.cpp.obj: CXX_COMPILER__
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\gridPropertiesWidget.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\gridPropertiesWidget.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -353,7 +353,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\gridPropertiesWidget.cpp.obj: CXX_COMP
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\src\main.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\src\main.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -362,7 +362,7 @@ build CMakeFiles\RoboticsSoftware.dir\src\main.cpp.obj: CXX_COMPILER__RoboticsSo
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\icons\app.rc.res: RC_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\icons\app.rc || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -372,7 +372,7 @@ build CMakeFiles\RoboticsSoftware.dir\icons\app.rc.res: RC_COMPILER__RoboticsSof
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\icons
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 build CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen\EWIEGA46WW\qrc_resources.cpp.obj: CXX_COMPILER__RoboticsSoftware_unscanned_Debug D$:\RoboticsSoftware\build\RoboticsSoftware_autogen\EWIEGA46WW\qrc_resources.cpp || cmake_object_order_depends_target_RoboticsSoftware
   DEFINES = -DGLM_ENABLE_EXPERIMENTAL -DNOMINMAX -DQT_CORE_LIB -DQT_GUI_LIB -DQT_OPENGLWIDGETS_LIB -DQT_OPENGL_LIB -DQT_WIDGETS_LIB -DRS_DEBUG_DUMP -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64
@@ -381,7 +381,7 @@ build CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen\EWIEGA46WW\qrc_re
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
   OBJECT_FILE_DIR = CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen\EWIEGA46WW
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_PDB = KRStudio.pdb
 
 
 # =============================================================================
@@ -389,19 +389,19 @@ build CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen\EWIEGA46WW\qrc_re
 
 
 #############################################
-# Link the executable RoboticsSoftware.exe
+# Link the executable KRStudio.exe
 
-build RoboticsSoftware.exe: CXX_EXECUTABLE_LINKER__RoboticsSoftware_Debug CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen\mocs_compilation.cpp.obj CMakeFiles\RoboticsSoftware.dir\external\pugixml\pugixml.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\BlackBox.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Camera.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\CompositePass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\DiagnosticsPanel.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\FieldSolver.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\FieldVisualizerPass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\FlowVisualizerMenu.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\GridPass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\IntersectionSystem.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\JointPropertiesWidget.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\KRobotParser.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\KRobotWriter.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\LinkPropertiesWidget.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\MainWindow.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Mesh.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\OpaquePass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\PreviewViewport.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\PropertiesPanel.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\RenderingSystem.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Robot.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\RobotEnrichmentDialog.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\SDFParser.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Scene.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\SceneBuilder.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\SelectionGlowPass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\SplinePass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\StaticToolbar.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\URDFImporterDialog.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\URDFParser.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\ViewportWidget.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\gridPropertiesWidget.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\main.cpp.obj CMakeFiles\RoboticsSoftware.dir\icons\app.rc.res CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen\EWIEGA46WW\qrc_resources.cpp.obj | vcpkg_installed\x64-windows\debug\lib\Qt6OpenGLWidgetsd.lib vcpkg_installed\x64-windows\debug\lib\glm.lib vcpkg_installed\x64-windows\debug\lib\assimp-vc143-mtd.lib vcpkg_installed\x64-windows\debug\lib\urdfdom_world.lib vcpkg_installed\x64-windows\debug\lib\urdfdom_sensor.lib vcpkg_installed\x64-windows\debug\lib\urdfdom_model_state.lib x64\lib\qtadvanceddocking-qt6d.lib vcpkg_installed\x64-windows\debug\lib\Qt6OpenGLd.lib vcpkg_installed\x64-windows\debug\lib\urdfdom_model.lib vcpkg_installed\x64-windows\debug\lib\console_bridge.lib vcpkg_installed\x64-windows\debug\lib\tinyxml.lib vcpkg_installed\x64-windows\debug\lib\Qt6Widgetsd.lib vcpkg_installed\x64-windows\debug\lib\Qt6Guid.lib vcpkg_installed\x64-windows\debug\lib\Qt6Cored.lib || RoboticsSoftware_autogen RoboticsSoftware_autogen_timestamp_deps x64\bin\qtadvanceddocking-qt6d.dll
+build KRStudio.exe: CXX_EXECUTABLE_LINKER__RoboticsSoftware_Debug CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen\mocs_compilation.cpp.obj CMakeFiles\RoboticsSoftware.dir\external\pugixml\pugixml.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\BlackBox.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Camera.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\CompositePass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\DiagnosticsPanel.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\FieldSolver.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\FieldVisualizerPass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\FlowVisualizerMenu.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\GridPass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\IntersectionSystem.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\JointPropertiesWidget.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\KRobotParser.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\KRobotWriter.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\LinkPropertiesWidget.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\MainWindow.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Mesh.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\OpaquePass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\PreviewViewport.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\PropertiesPanel.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\RenderingSystem.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Robot.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\RobotEnrichmentDialog.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\SDFParser.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Scene.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\SceneBuilder.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\SelectionGlowPass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\Shader.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\SplinePass.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\StaticToolbar.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\URDFImporterDialog.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\URDFParser.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\ViewportWidget.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\gridPropertiesWidget.cpp.obj CMakeFiles\RoboticsSoftware.dir\src\main.cpp.obj CMakeFiles\RoboticsSoftware.dir\icons\app.rc.res CMakeFiles\RoboticsSoftware.dir\RoboticsSoftware_autogen\EWIEGA46WW\qrc_resources.cpp.obj | vcpkg_installed\x64-windows\debug\lib\Qt6OpenGLWidgetsd.lib vcpkg_installed\x64-windows\debug\lib\glm.lib vcpkg_installed\x64-windows\debug\lib\assimp-vc143-mtd.lib vcpkg_installed\x64-windows\debug\lib\urdfdom_world.lib vcpkg_installed\x64-windows\debug\lib\urdfdom_sensor.lib vcpkg_installed\x64-windows\debug\lib\urdfdom_model_state.lib x64\lib\qtadvanceddocking-qt6d.lib vcpkg_installed\x64-windows\debug\lib\Qt6OpenGLd.lib vcpkg_installed\x64-windows\debug\lib\urdfdom_model.lib vcpkg_installed\x64-windows\debug\lib\console_bridge.lib vcpkg_installed\x64-windows\debug\lib\tinyxml.lib vcpkg_installed\x64-windows\debug\lib\Qt6Widgetsd.lib vcpkg_installed\x64-windows\debug\lib\Qt6Guid.lib vcpkg_installed\x64-windows\debug\lib\Qt6Cored.lib || RoboticsSoftware_autogen RoboticsSoftware_autogen_timestamp_deps x64\bin\qtadvanceddocking-qt6d.dll
   FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -MDd
   LINK_FLAGS = /machine:x64 /debug /INCREMENTAL /subsystem:console
   LINK_LIBRARIES = vcpkg_installed\x64-windows\debug\lib\Qt6OpenGLWidgetsd.lib  opengl32.lib  vcpkg_installed\x64-windows\debug\lib\glm.lib  vcpkg_installed\x64-windows\debug\lib\assimp-vc143-mtd.lib  vcpkg_installed\x64-windows\debug\lib\urdfdom_world.lib  vcpkg_installed\x64-windows\debug\lib\urdfdom_sensor.lib  vcpkg_installed\x64-windows\debug\lib\urdfdom_model_state.lib  x64\lib\qtadvanceddocking-qt6d.lib  vcpkg_installed\x64-windows\debug\lib\Qt6OpenGLd.lib  vcpkg_installed\x64-windows\debug\lib\urdfdom_model.lib  vcpkg_installed\x64-windows\debug\lib\console_bridge.lib  vcpkg_installed\x64-windows\debug\lib\tinyxml.lib  vcpkg_installed\x64-windows\debug\lib\Qt6Widgetsd.lib  vcpkg_installed\x64-windows\debug\lib\Qt6Guid.lib  vcpkg_installed\x64-windows\debug\lib\Qt6Cored.lib  mpr.lib  userenv.lib  d3d11.lib  dxgi.lib  dxguid.lib  d3d12.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
   OBJECT_DIR = CMakeFiles\RoboticsSoftware.dir
-  POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D D:\RoboticsSoftware\build && C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -noprofile -executionpolicy Bypass -file C:/Users/kaedi/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary D:/RoboticsSoftware/build/RoboticsSoftware.exe -installedDir D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/debug/bin -OutVariable out && cd /D D:\RoboticsSoftware\build && "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E copy_if_different D:/RoboticsSoftware/build/x64/bin/qtadvanceddocking-qt6d.dll D:/RoboticsSoftware/build && cd /D D:\RoboticsSoftware\build && "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E copy_directory D:/RoboticsSoftware/shaders D:/RoboticsSoftware/build/shaders && cd /D D:\RoboticsSoftware\build && "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E copy_if_different D:/RoboticsSoftware/simple_arm.urdf D:/RoboticsSoftware/build/simple_arm.urdf && cd /D D:\RoboticsSoftware\build && D:\RoboticsSoftware\build\vcpkg_installed\x64-windows\tools\Qt6\bin\windeployqt.debug.bat --debug  --dir D:/RoboticsSoftware/build D:/RoboticsSoftware/build/RoboticsSoftware.exe"
+  POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D D:\RoboticsSoftware\build && C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -noprofile -executionpolicy Bypass -file C:/Users/kaedi/vcpkg/scripts/buildsystems/msbuild/applocal.ps1 -targetBinary D:/RoboticsSoftware/build/KRStudio.exe -installedDir D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/debug/bin -OutVariable out && cd /D D:\RoboticsSoftware\build && "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E copy_if_different D:/RoboticsSoftware/build/x64/bin/qtadvanceddocking-qt6d.dll D:/RoboticsSoftware/build && cd /D D:\RoboticsSoftware\build && "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E copy_directory D:/RoboticsSoftware/shaders D:/RoboticsSoftware/build/shaders && cd /D D:\RoboticsSoftware\build && "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E copy_if_different D:/RoboticsSoftware/simple_arm.urdf D:/RoboticsSoftware/build/simple_arm.urdf && cd /D D:\RoboticsSoftware\build && D:\RoboticsSoftware\build\vcpkg_installed\x64-windows\tools\Qt6\bin\windeployqt.debug.bat --debug  --dir D:/RoboticsSoftware/build D:/RoboticsSoftware/build/KRStudio.exe"
   PRE_LINK = cd .
   TARGET_COMPILE_PDB = CMakeFiles\RoboticsSoftware.dir\
-  TARGET_FILE = RoboticsSoftware.exe
-  TARGET_IMPLIB = RoboticsSoftware.lib
-  TARGET_PDB = RoboticsSoftware.pdb
+  TARGET_FILE = KRStudio.exe
+  TARGET_IMPLIB = KRStudio.lib
+  TARGET_PDB = KRStudio.pdb
 
 
 #############################################
@@ -897,7 +897,7 @@ build _deps\qtads-build\src\CMakeFiles\qtadvanceddocking-qt6_autogen | ${cmake_n
 # =============================================================================
 # Target aliases.
 
-build RoboticsSoftware: phony RoboticsSoftware.exe
+build RoboticsSoftware: phony KRStudio.exe
 
 build qtadvanceddocking-qt6: phony x64\bin\qtadvanceddocking-qt6d.dll
 
@@ -915,7 +915,7 @@ build qtadvanceddocking-qt6d.dll: phony x64\bin\qtadvanceddocking-qt6d.dll
 #############################################
 # Folder: D:/RoboticsSoftware/build
 
-build all: phony RoboticsSoftware.exe _deps\qtads-build\all
+build all: phony KRStudio.exe _deps\qtads-build\all
 
 # =============================================================================
 

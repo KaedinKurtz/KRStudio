@@ -13,12 +13,14 @@ set(CMAKE_AUTORCC ON)
 
 #  Third-party packages (via find_package)
 
+list(APPEND CMAKE_PREFIX_PATH "C:/Users/kaedi/downloads/sentry-native/install")
+
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
 find_package(OpenGL REQUIRED)
 find_package(glm     REQUIRED)
 find_package(assimp  CONFIG REQUIRED)
 find_package(urdfdom CONFIG REQUIRED)
-
 #  Qt Advanced Docking System  FetchContent
 
 include(FetchContent)
@@ -99,7 +101,8 @@ target_link_libraries(RoboticsSoftware PRIVATE
     glm::glm
     assimp::assimp
     ${urdfdom_LIBRARIES}
-    ads::qtadvanceddocking-qt6)                          # provided by FetchContent
+    ads::qtadvanceddocking-qt6
+)                          # provided by FetchContent
 
 #  Post-build steps
 

@@ -1,0 +1,1768 @@
+{
+	"globsDependent" : 
+	[
+		{
+			"expression" : "D:/RoboticsSoftware/*.qrc",
+			"listDirectories" : true,
+			"paths" : 
+			[
+				"D:/RoboticsSoftware/resources.qrc"
+			]
+		},
+		{
+			"expression" : "D:/RoboticsSoftware/external/pugixml/*.cpp",
+			"paths" : 
+			[
+				"D:/RoboticsSoftware/external/pugixml/pugixml.cpp"
+			],
+			"recurse" : true
+		},
+		{
+			"expression" : "D:/RoboticsSoftware/include/*Headers/*.hpp",
+			"paths" : 
+			[
+				"D:/RoboticsSoftware/include/ObjectHeaders/Camera.hpp",
+				"D:/RoboticsSoftware/include/ObjectHeaders/Grid.hpp",
+				"D:/RoboticsSoftware/include/ObjectHeaders/GridLevel.hpp",
+				"D:/RoboticsSoftware/include/ObjectHeaders/Mesh.hpp",
+				"D:/RoboticsSoftware/include/ObjectHeaders/Robot.hpp",
+				"D:/RoboticsSoftware/include/ObjectHeaders/RobotDescription.hpp",
+				"D:/RoboticsSoftware/include/ObjectHeaders/Scene.hpp",
+				"D:/RoboticsSoftware/include/ObjectHeaders/SceneBuilder.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/CompositePass.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/FieldVisualizerPass.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/GridPass.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/IRenderPass.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/MeshRenderPass.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/OpaquePass.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/RenderingSystem.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/SelectionGlowPass.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/Shader.hpp",
+				"D:/RoboticsSoftware/include/RenderingHeaders/SplinePass.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/DiagnosticsPanel.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/FlowVisualizerMenu.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/JointPropertiesWidget.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/LinkPropertiesWidget.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/MainWindow.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/PreviewViewport.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/PropertiesPanel.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/QtHelpers.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/RobotEnrichmentDialog.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/StaticToolbar.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/UIManager.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/URDFImporterDialog.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/ViewportWidget.hpp",
+				"D:/RoboticsSoftware/include/UIHeaders/gridPropertiesWidget.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/AppPaths.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/BlackBox.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/DebugHelpers.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/FieldSolver.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/GLContextGuard.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/GpuResources.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/GpuTypes.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/Helpers.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/IntersectionSystem.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/KRobotParser.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/KRobotWriter.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/LedTweakDialog.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/MeshUtils.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/PrimitiveBuilders.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/SDFParser.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/SplineUtils.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/URDFParser.hpp",
+				"D:/RoboticsSoftware/include/UtilityHeaders/components.hpp"
+			],
+			"recurse" : true
+		},
+		{
+			"expression" : "D:/RoboticsSoftware/src/*.cpp",
+			"paths" : 
+			[
+				"D:/RoboticsSoftware/src/BlackBox.cpp",
+				"D:/RoboticsSoftware/src/Camera.cpp",
+				"D:/RoboticsSoftware/src/CompositePass.cpp",
+				"D:/RoboticsSoftware/src/DiagnosticsPanel.cpp",
+				"D:/RoboticsSoftware/src/FieldSolver.cpp",
+				"D:/RoboticsSoftware/src/FieldVisualizerPass.cpp",
+				"D:/RoboticsSoftware/src/FlowVisualizerMenu.cpp",
+				"D:/RoboticsSoftware/src/GridPass.cpp",
+				"D:/RoboticsSoftware/src/IntersectionSystem.cpp",
+				"D:/RoboticsSoftware/src/JointPropertiesWidget.cpp",
+				"D:/RoboticsSoftware/src/KRobotParser.cpp",
+				"D:/RoboticsSoftware/src/KRobotWriter.cpp",
+				"D:/RoboticsSoftware/src/LinkPropertiesWidget.cpp",
+				"D:/RoboticsSoftware/src/MainWindow.cpp",
+				"D:/RoboticsSoftware/src/Mesh.cpp",
+				"D:/RoboticsSoftware/src/OpaquePass.cpp",
+				"D:/RoboticsSoftware/src/PreviewViewport.cpp",
+				"D:/RoboticsSoftware/src/PropertiesPanel.cpp",
+				"D:/RoboticsSoftware/src/RenderingSystem.cpp",
+				"D:/RoboticsSoftware/src/Robot.cpp",
+				"D:/RoboticsSoftware/src/RobotEnrichmentDialog.cpp",
+				"D:/RoboticsSoftware/src/SDFParser.cpp",
+				"D:/RoboticsSoftware/src/Scene.cpp",
+				"D:/RoboticsSoftware/src/SceneBuilder.cpp",
+				"D:/RoboticsSoftware/src/SelectionGlowPass.cpp",
+				"D:/RoboticsSoftware/src/Shader.cpp",
+				"D:/RoboticsSoftware/src/SplinePass.cpp",
+				"D:/RoboticsSoftware/src/StaticToolbar.cpp",
+				"D:/RoboticsSoftware/src/URDFImporterDialog.cpp",
+				"D:/RoboticsSoftware/src/URDFParser.cpp",
+				"D:/RoboticsSoftware/src/ViewportWidget.cpp",
+				"D:/RoboticsSoftware/src/gridPropertiesWidget.cpp",
+				"D:/RoboticsSoftware/src/main.cpp"
+			],
+			"recurse" : true
+		}
+	],
+	"inputs" : 
+	[
+		{
+			"path" : "CMakeLists.txt"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/CMakeFiles/3.31.6-msvc6/CMakeSystem.cmake"
+		},
+		{
+			"isExternal" : true,
+			"path" : "C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeDependentOption.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeSystemSpecificInitialize.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows-Initialize.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/CMakeFiles/3.31.6-msvc6/CMakeCXXCompiler.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeSystemSpecificInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeGenericSystem.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeInitializeConfigs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/WindowsPaths.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeCXXInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeLanguageInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/MSVC-CXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/MSVC.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/CMakeCommonCompilerMacros.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows-MSVC-CXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows-MSVC.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/CMakeFiles/3.31.6-msvc6/CMakeRCCompiler.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeRCInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeCommonLanguageInclude.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CMakeCXXLinkerInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CMakeCommonLinkerInformation.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Linker/Windows-MSVC-CXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Linker/Windows-MSVC.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6Config.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigExtras.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeVersionHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtInstallPaths.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6Targets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6VersionlessAliasTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtFeature.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckCXXCompilerFlag.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CheckCompilerFlag.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CheckFlagCommonConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CheckSourceCompiles.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeCheckCompilerFlagCommonPatterns.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckCXXSourceCompiles.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CheckSourceCompiles.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtFeatureCommon.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicAppleHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeVersionHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicDependencyHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicExternalProjectHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFinalizerHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFindPackageHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicGitHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicPluginHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomAttributionHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomCpeHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomDepHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomFileHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomGenerationHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomLicenseHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomOpsHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPurlHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPythonHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomQtEntityHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomSystemDepHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTargetHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTestHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicToolHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicWalkLibsHelpers.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6Dependencies.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindThreads.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckLibraryExists.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckIncludeFileCXX.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckCXXSourceCompiles.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageHandleStandardArgs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageMessage.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/FindWrapAtomic.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckCXXSourceCompiles.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageHandleStandardArgs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageMessage.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsVersionlessTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateVersionlessAliasTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreMacros.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreConfigExtras.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/GNUInstallDirs.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreVersionlessAliasTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsVersionlessTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsVersionlessTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiPlugins.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiVersionlessAliasTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsVersionlessTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsVersionlessTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsVersionlessTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsVersionlessTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsMacros.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsPlugins.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsVersionlessAliasTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLVersionlessAliasTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsDependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsAdditionalTargetInfo.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsVersionlessAliasTargets.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindOpenGL.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageHandleStandardArgs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageMessage.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/glm/glmConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/glm/glmConfig.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/glm/glmConfig-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/glm/glmConfig-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/assimp/assimpConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/assimp/assimpConfig.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/assimp/assimpTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/assimp/assimpTargets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/assimp/assimpTargets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/urdfdom/urdfdom-config.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-config-version.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-config.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-targets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-targets-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-targets-release.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/urdfdom_headers/urdfdom_headers-config-version.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/urdfdom_headers/urdfdom_headers-config.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/urdfdom_headers/urdfdom_headersExport.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/urdfdom/urdfdomExport.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/urdfdom/urdfdomExport-debug.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/urdfdom/urdfdomExport-release.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FetchContent.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/ExternalProject/shared_internal_commands.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindGit.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageHandleStandardArgs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageMessage.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FetchContent/CMakeLists.cmake.in"
+		},
+		{
+			"path" : "vcpkg.json"
+		},
+		{
+			"path" : "resources.qrc"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-src/CMakeLists.txt"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-src/cmake/modules/GetGitRevisionDescription.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindGit.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageHandleStandardArgs.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageMessage.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-src/.git/HEAD"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-src/cmake/modules/GetGitRevisionDescription.cmake.in"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-build/CMakeFiles/git-data/grabRef.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-src/.git/HEAD"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-src/src/CMakeLists.txt"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/GNUInstallDirs.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6Config.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigExtras.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeVersionHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtInstallPaths.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6Targets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6VersionlessAliasTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtFeature.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckCXXCompilerFlag.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtFeatureCommon.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicAppleHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeVersionHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicDependencyHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicExternalProjectHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFinalizerHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFindPackageHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicGitHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicPluginHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomAttributionHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomCpeHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomDepHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomFileHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomGenerationHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomLicenseHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomOpsHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPurlHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPythonHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomQtEntityHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomSystemDepHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTargetHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTestHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicToolHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicWalkLibsHelpers.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6Dependencies.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersion.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersionImpl.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6Config.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigExtras.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeVersionHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtInstallPaths.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6Targets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6VersionlessAliasTargets.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtFeature.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckCXXCompilerFlag.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtFeatureCommon.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicAppleHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeVersionHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicDependencyHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicExternalProjectHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFinalizerHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFindPackageHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicGitHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicPluginHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomAttributionHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomCpeHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomDepHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomFileHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomGenerationHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomLicenseHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomOpsHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPurlHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPythonHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomQtEntityHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomSystemDepHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTargetHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTestHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicToolHelpers.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/QtPublicWalkLibsHelpers.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/vcpkg_installed/x64-windows/share/Qt6/Qt6Dependencies.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakePackageConfigHelpers.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/WriteBasicConfigVersionFile.cmake"
+		},
+		{
+			"isCMake" : true,
+			"isExternal" : true,
+			"path" : "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/BasicConfigVersion-SameMajorVersion.cmake.in"
+		},
+		{
+			"isGenerated" : true,
+			"path" : "build/_deps/qtads-src/src/ads.qrc"
+		}
+	],
+	"kind" : "cmakeFiles",
+	"paths" : 
+	{
+		"build" : "D:/RoboticsSoftware/build",
+		"source" : "D:/RoboticsSoftware"
+	},
+	"version" : 
+	{
+		"major" : 1,
+		"minor" : 1
+	}
+}

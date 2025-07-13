@@ -812,6 +812,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/include/UtilityHeaders/FieldSolver.hpp \
 	D:/RoboticsSoftware/include/UtilityHeaders/GLContextGuard.hpp \
 	D:/RoboticsSoftware/include/UtilityHeaders/GpuResources.hpp \
+	D:/RoboticsSoftware/include/UtilityHeaders/GpuTypes.hpp \
 	D:/RoboticsSoftware/include/UtilityHeaders/Helpers.hpp \
 	D:/RoboticsSoftware/include/UtilityHeaders/IntersectionSystem.hpp \
 	D:/RoboticsSoftware/include/UtilityHeaders/KRobotParser.hpp \

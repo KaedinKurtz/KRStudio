@@ -239,6 +239,11 @@ MainWindow::MainWindow(QWidget* parent)
                     firstComponent<FieldVisualizerComponent>(registry));
             });
         // Set properties on the correct sub-struct
+        auto& arrowSettings = visualizer.arrowSettings;
+        arrowSettings.coloringMode = FieldVisualizerComponent::ColoringMode::Intensity;
+        arrowSettings.intensityGradient.push_back({ 0.0f, glm::vec4(0.1f, 0.1f, 0.8f, 1.0f) }); // Dark Blue
+        arrowSettings.intensityGradient.push_back({ 1.0f, glm::vec4(1.0f, 0.2f, 0.2f, 1.0f) }); // Bright Red
+
 
         visualizer.arrowSettings.density = { 15, 5, 15 };
         visualizer.arrowSettings.vectorScale = 0.5f;

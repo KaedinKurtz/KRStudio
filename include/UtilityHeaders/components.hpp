@@ -71,13 +71,6 @@ struct AABB {
     glm::vec3 max;
 };
 
-struct InstanceData {
-    glm::mat4 modelMatrix;
-    glm::vec4 color;
-    glm::vec4 padding;
-};
-
-
 struct FieldVisualizerComponent {
     // --- FIX: Define enums inside the component for clear scope ---
     enum class DisplayMode { Arrows, Particles, Flow };

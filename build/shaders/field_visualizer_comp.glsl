@@ -137,30 +137,66 @@ void main()
     vec3 worldPos = (u_visualizerModelMatrix * samplePoints[gid]).xyz;
     vec3 totalField = vec3(0.0);
 
-    // --- Field Calculation (This part is correct and remains unchanged) ---
-    for (int i = 0; i < u_pointEffectorCount; ++i) { /* ... */ }
-    for (int i = 0; i < u_triangleEffectorCount; ++i) { /* ... */ }
-    for (int i = 0; i < u_directionalEffectorCount; ++i) { /* ... */ }
+    // Point and Spline Proxy Effectors
+    for (int i = 0; i < u_pointEffectorCount; ++i) {
+        vec3 diff = worldPos - pointEffectors[i].position.xyz;
+        float dist = length(diff);
+        if (dist < pointEffectors[i].radius && dist > 0.001) {
+            float strength = pointEffectors[i].strength;
+            vec3 forceDir;
+            if (pointEffectors[i].falloffType == 1) {
+                strength *= (1.0 - dist / pointEffectors[i].radius);
+            }
+            if (length(pointEffectors[i].normal.xyz) > 0.1) {
+                forceDir = normalize(pointEffectors[i].normal.xyz);
+            } else {
+                forceDir = normalize(diff);
+            }
+            totalField += forceDir * strength;
+        }
+    }
+
+    // Triangle Mesh Effectors
+    for (int i = 0; i < u_triangleEffectorCount; ++i) {
+        TriangleGpu tri = triangleEffectors[i];
+        vec3 closestPoint = closestPointOnTriangle(worldPos, tri.v0.xyz, tri.v1.xyz, tri.v2.xyz);
+        vec3 diff = worldPos - closestPoint;
+        float dist = length(diff);
+        float radius = tri.normal.w;
+        if (dist > 0.001 && dist < radius) {
+            float strength = tri.v0.w;
+            strength *= (1.0 - dist / radius);
+            totalField += normalize(diff) * strength;
+        }
+    }
+
+    // Directional Effectors
+    for (int i = 0; i < u_directionalEffectorCount; ++i) {
+        totalField += directionalEffectors[i].direction.xyz * directionalEffectors[i].strength;
+    }
 
     // --- Build Arrow Instance ---
     float magnitude = length(totalField);
     if (magnitude > u_cullingThreshold) {
         uint instanceIndex = atomicAdd(drawCommand.instanceCount, 1);
         
-        // Transformation logic remains the same
-        mat4 trans = mat4(1.0);
-        trans[3] = vec4(worldPos, 1.0);
-        mat4 rot = rotationBetweenVectors(vec3(0.0, 0.0, -1.0), normalize(-totalField));
+        // 1. Create component matrices
         mat4 scale = mat4(1.0);
         scale[0][0] = u_arrowHeadScale;
         scale[1][1] = u_arrowHeadScale;
         scale[2][2] = magnitude * u_vectorScale;
-        
-        instanceData[instanceIndex].modelMatrix = trans * rot * scale;
 
-        // --- FIX: Store the normalized magnitude (intensity) in the instance data. ---
-        // The vertex shader will now use this value to sample the gradient from your UI.
+        mat4 trans = mat4(1.0);
+        trans[3] = vec4(worldPos, 1.0);
+        
+        // The arrow mesh points down the +Z axis. Rotate it to align with the field.
+        mat4 rot = rotationBetweenVectors(vec3(0.0, 0.0, 1.0), normalize(totalField));
+
+        // 2. Compose final matrix in the correct T * R * S order.
+        instanceData[instanceIndex].modelMatrix = trans * rot * scale;
+        
+        // 3. Store intensity in .x (to be read by attribute 6) and age in .y (for attribute 7)
         float normMag = clamp(abs(magnitude) / 5.0, 0.0, 1.0);
-        instanceData[instanceIndex].color = vec4(normMag, 0.0, 0.0, 0.0); // Store intensity in .x
+        instanceData[instanceIndex].color = vec4(normMag, 0.0, 0.0, 1.0); 
     }
 }

@@ -108,3 +108,1053 @@
         pingpongFBO[0] : 0x11
         pingpongFBO[1] : 0x12
     GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 16:31:36.013 ]  Resize
+    Viewport ptr: 0x20dd30fd9a0  QWidget winId: 0x10c1e
+    Context ptr : 0x20dd40514f0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 16:31:36.226 ]  Resize
+    Viewport ptr: 0x20dd427e3b0  QWidget winId: 0x10c6a
+    Context ptr : 0x20dd510a250
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 16:31:36.495 ]  Resize
+    Viewport ptr: 0x20dd427e270  QWidget winId: 0x10c7a
+    Context ptr : 0x20dd510e440
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 16:46:12.028 ]  Resize
+    Viewport ptr: 0x2261f72b7c0  QWidget winId: 0x40c56
+    Context ptr : 0x2261ea36ac0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 16:46:12.096 ]  Resize
+    Viewport ptr: 0x2261f5e92a0  QWidget winId: 0x20c3a
+    Context ptr : 0x22622bc3070
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 16:46:12.133 ]  Resize
+    Viewport ptr: 0x2261f5e9160  QWidget winId: 0x20c72
+    Context ptr : 0x22622bc4f60
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:08:53.909 ]  Resize
+    Viewport ptr: 0x15af2016860  QWidget winId: 0x70b4e
+    Context ptr : 0x15aef24c0b0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:08:53.976 ]  Resize
+    Viewport ptr: 0x15af1b9f090  QWidget winId: 0xe50ade
+    Context ptr : 0x15af32bd3e0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:08:54.013 ]  Resize
+    Viewport ptr: 0x15af1ba0d50  QWidget winId: 0x60bb2
+    Context ptr : 0x15af32bf1e0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:08:55.369 ]  Resize
+    Viewport ptr: 0x15af1ba0d50  QWidget winId: 0x60bb2
+    Context ptr : 0x15af32bf1e0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:08:55.375 ]  Resize
+    Viewport ptr: 0x15af1b9f090  QWidget winId: 0xe50ade
+    Context ptr : 0x15af32bd3e0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:08:55.506 ]  Resize
+    Viewport ptr: 0x15af1ba0d50  QWidget winId: 0x60bb2
+    Context ptr : 0x15af32bf1e0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:08:55.513 ]  Resize
+    Viewport ptr: 0x15af1b9f090  QWidget winId: 0xe50ade
+    Context ptr : 0x15af32bd3e0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:17:29.286 ]  Resize
+    Viewport ptr: 0x20139f2c080  QWidget winId: 0x40c0e
+    Context ptr : 0x2013ca220e0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:17:29.355 ]  Resize
+    Viewport ptr: 0x20139de3920  QWidget winId: 0x40c7e
+    Context ptr : 0x2013d3e0fd0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:17:29.394 ]  Resize
+    Viewport ptr: 0x20139de3f60  QWidget winId: 0xb0be0
+    Context ptr : 0x2013d3e4220
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:18:19.312 ]  Resize
+    Viewport ptr: 0x1c6b8493dc0  QWidget winId: 0x60bfc
+    Context ptr : 0x1c6b8a2a8a0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:18:19.377 ]  Resize
+    Viewport ptr: 0x1c6b83519e0  QWidget winId: 0x50c78
+    Context ptr : 0x1c6b8a35e80
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:18:19.410 ]  Resize
+    Viewport ptr: 0x1c6b8350d60  QWidget winId: 0x60c02
+    Context ptr : 0x1c6b8a36f10
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:20:49.527 ]  Resize
+    Viewport ptr: 0x1ffddf50d60  QWidget winId: 0x90c40
+    Context ptr : 0x1ffdde41930
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:20:49.597 ]  Resize
+    Viewport ptr: 0x1ffdd38e0e0  QWidget winId: 0x90c04
+    Context ptr : 0x1ffe12f4c70
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:20:49.634 ]  Resize
+    Viewport ptr: 0x1ffdd38f9e0  QWidget winId: 0x90bc2
+    Context ptr : 0x1ffe12f75b0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:26:08.387 ]  Resize
+    Viewport ptr: 0x1b48958e7e0  QWidget winId: 0x20d36
+    Context ptr : 0x1b489652660
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:26:08.472 ]  Resize
+    Viewport ptr: 0x1b4ff99db70  QWidget winId: 0x30d22
+    Context ptr : 0x1b48a6d4850
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:26:08.518 ]  Resize
+    Viewport ptr: 0x1b4ff99ea70  QWidget winId: 0x40d14
+    Context ptr : 0x1b48a6d8130
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:56.709 ]  Resize
+    Viewport ptr: 0x1849294cc60  QWidget winId: 0x50d14
+    Context ptr : 0x18492c9ee80
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:56.777 ]  Resize
+    Viewport ptr: 0x1848fdf7b70  QWidget winId: 0x4d0bde
+    Context ptr : 0x18493cb4ee0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:56.812 ]  Resize
+    Viewport ptr: 0x1848fdf8a70  QWidget winId: 0xc0c7a
+    Context ptr : 0x18493cb7050
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:58.918 ]  Resize
+    Viewport ptr: 0x1848fdf8a70  QWidget winId: 0xc0c7a
+    Context ptr : 0x18493cb7050
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:58.925 ]  Resize
+    Viewport ptr: 0x1848fdf7b70  QWidget winId: 0x4d0bde
+    Context ptr : 0x18493cb4ee0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:59.060 ]  Resize
+    Viewport ptr: 0x1848fdf8a70  QWidget winId: 0xc0c7a
+    Context ptr : 0x18493cb7050
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:59.068 ]  Resize
+    Viewport ptr: 0x1848fdf7b70  QWidget winId: 0x4d0bde
+    Context ptr : 0x18493cb4ee0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:59.602 ]  Resize
+    Viewport ptr: 0x1848fdf8a70  QWidget winId: 0xc0c7a
+    Context ptr : 0x18493cb7050
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:59.612 ]  Resize
+    Viewport ptr: 0x1848fdf7b70  QWidget winId: 0x4d0bde
+    Context ptr : 0x18493cb4ee0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:59.755 ]  Resize
+    Viewport ptr: 0x1848fdf8a70  QWidget winId: 0xc0c7a
+    Context ptr : 0x18493cb7050
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:30:59.763 ]  Resize
+    Viewport ptr: 0x1848fdf7b70  QWidget winId: 0x4d0bde
+    Context ptr : 0x18493cb4ee0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:33:53.185 ]  Resize
+    Viewport ptr: 0x194c016e130  QWidget winId: 0x40d38
+    Context ptr : 0x194bf336f00
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:33:53.253 ]  Resize
+    Viewport ptr: 0x194bf3bdda0  QWidget winId: 0xb0c62
+    Context ptr : 0x194c33d8f00
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:33:53.292 ]  Resize
+    Viewport ptr: 0x194bf3bd260  QWidget winId: 0xc0c08
+    Context ptr : 0x194c33daee0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:35:51.479 ]  Resize
+    Viewport ptr: 0x21893b52590  QWidget winId: 0x690bec
+    Context ptr : 0x21892e37550
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:35:51.551 ]  Resize
+    Viewport ptr: 0x2189362f110  QWidget winId: 0x130bc4
+    Context ptr : 0x21896f5e0a0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:35:51.588 ]  Resize
+    Viewport ptr: 0x2189362e210  QWidget winId: 0x90d04
+    Context ptr : 0x21896f606c0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:37:45.482 ]  Resize
+    Viewport ptr: 0x21dc650d2b0  QWidget winId: 0x1b0b9a
+    Context ptr : 0x21dc57f08c0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:37:45.549 ]  Resize
+    Viewport ptr: 0x21dc632c520  QWidget winId: 0x500bde
+    Context ptr : 0x21dc9961da0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:37:45.584 ]  Resize
+    Viewport ptr: 0x21dc632b620  QWidget winId: 0xc0d08
+    Context ptr : 0x21dc9963c90
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:41:17.105 ]  Resize
+    Viewport ptr: 0x1a18e9e5830  QWidget winId: 0x90cc0
+    Context ptr : 0x1a18dcd85f0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:41:17.172 ]  Resize
+    Viewport ptr: 0x1a18e808d20  QWidget winId: 0xe0c62
+    Context ptr : 0x1a191e31d90
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:41:17.207 ]  Resize
+    Viewport ptr: 0x1a18e808960  QWidget winId: 0x100b4a
+    Context ptr : 0x1a191e342c0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:41:29.281 ]  Resize
+    Viewport ptr: 0x2710e9648d0  QWidget winId: 0x110bb4
+    Context ptr : 0x2710ebd60f0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:41:29.349 ]  Resize
+    Viewport ptr: 0x2710e035530  QWidget winId: 0x110c76
+    Context ptr : 0x27111d2c690
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:41:29.383 ]  Resize
+    Viewport ptr: 0x2710e036930  QWidget winId: 0x110c66
+    Context ptr : 0x27111d30060
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:42:32.321 ]  Resize
+    Viewport ptr: 0x188b0d9c560  QWidget winId: 0x170bc4
+    Context ptr : 0x188adfdf060
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:42:32.390 ]  Resize
+    Viewport ptr: 0x188b0c48880  QWidget winId: 0x280c1e
+    Context ptr : 0x188b21c0380
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:42:32.424 ]  Resize
+    Viewport ptr: 0x188b0c48740  QWidget winId: 0x150b4e
+    Context ptr : 0x188b21c2c70
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:47:08.015 ]  Resize
+    Viewport ptr: 0x20e187e52b0  QWidget winId: 0xd0ca6
+    Context ptr : 0x20e18b3e6f0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:47:08.081 ]  Resize
+    Viewport ptr: 0x20e186a6e70  QWidget winId: 0xd0d1a
+    Context ptr : 0x20e1bc18da0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:47:08.115 ]  Resize
+    Viewport ptr: 0x20e186a7370  QWidget winId: 0xa0d38
+    Context ptr : 0x20e1bc1add0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:47:12.442 ]  Resize
+    Viewport ptr: 0x20e186a7370  QWidget winId: 0xa0d38
+    Context ptr : 0x20e1bc1add0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:47:12.451 ]  Resize
+    Viewport ptr: 0x20e186a6e70  QWidget winId: 0xd0d1a
+    Context ptr : 0x20e1bc18da0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:47:12.469 ]  Resize
+    Viewport ptr: 0x20e187e52b0  QWidget winId: 0xd0ca6
+    Context ptr : 0x20e18b3e6f0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:50:18.220 ]  Resize
+    Viewport ptr: 0x184af65e690  QWidget winId: 0xb0d38
+    Context ptr : 0x184b1e3a960
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:50:18.297 ]  Resize
+    Viewport ptr: 0x184af2fa230  QWidget winId: 0xc0d26
+    Context ptr : 0x184b1e44e60
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:50:18.334 ]  Resize
+    Viewport ptr: 0x184af2fad70  QWidget winId: 0xd0d32
+    Context ptr : 0x184b1e475c0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:50:34.942 ]  Resize
+    Viewport ptr: 0x184af2fad70  QWidget winId: 0xd0d32
+    Context ptr : 0x184b1e475c0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:50:34.949 ]  Resize
+    Viewport ptr: 0x184af2fa230  QWidget winId: 0xc0d26
+    Context ptr : 0x184b1e44e60
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:50:34.965 ]  Resize
+    Viewport ptr: 0x184af65e690  QWidget winId: 0xb0d38
+    Context ptr : 0x184b1e3a960
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:52:08.264 ]  Resize
+    Viewport ptr: 0x1f8781a0be0  QWidget winId: 0xf0cea
+    Context ptr : 0x1f8783641b0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:52:08.336 ]  Resize
+    Viewport ptr: 0x1f87576ce10  QWidget winId: 0x360c56
+    Context ptr : 0x1f87836e480
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:52:08.375 ]  Resize
+    Viewport ptr: 0x1f87576c910  QWidget winId: 0x150c42
+    Context ptr : 0x1f8783718b0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:58:17.677 ]  Resize
+    Viewport ptr: 0x231ca281c60  QWidget winId: 0xf0d1c
+    Context ptr : 0x231ca4b5a20
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:58:17.751 ]  Resize
+    Viewport ptr: 0x231c9986e90  QWidget winId: 0x180b52
+    Context ptr : 0x231cd6ec2d0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 19:58:17.787 ]  Resize
+    Viewport ptr: 0x231c9986710  QWidget winId: 0x1b0c0c
+    Context ptr : 0x231cd6ef750
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:01:21.254 ]  Resize
+    Viewport ptr: 0x21bfe0ee940  QWidget winId: 0x50d48
+    Context ptr : 0x21bfe16beb0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:01:21.332 ]  Resize
+    Viewport ptr: 0x21bfd5cc330  QWidget winId: 0x570afe
+    Context ptr : 0x21b812b2230
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:01:21.375 ]  Resize
+    Viewport ptr: 0x21bfd5cdd70  QWidget winId: 0x580bde
+    Context ptr : 0x21b812b5c00
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:05:33.804 ]  Resize
+    Viewport ptr: 0x2d49b9792e0  QWidget winId: 0x200c52
+    Context ptr : 0x2d498dcc8d0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:05:33.870 ]  Resize
+    Viewport ptr: 0x2d49b83e360  QWidget winId: 0x900be6
+    Context ptr : 0x2d49cd4f8c0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:05:33.906 ]  Resize
+    Viewport ptr: 0x2d49b83fda0  QWidget winId: 0x200b4c
+    Context ptr : 0x2d49cd52660
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:09:39.524 ]  Resize
+    Viewport ptr: 0x1a531ae26b0  QWidget winId: 0x1e0c80
+    Context ptr : 0x1a52ed39360
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:09:39.601 ]  Resize
+    Viewport ptr: 0x1a53145bd50  QWidget winId: 0x80d56
+    Context ptr : 0x1a532e97890
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:09:39.639 ]  Resize
+    Viewport ptr: 0x1a53145b0d0  QWidget winId: 0x120d10
+    Context ptr : 0x1a532e9c070
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:16:58.781 ]  Resize
+    Viewport ptr: 0x23445608670  QWidget winId: 0x1c0b52
+    Context ptr : 0x23445bfef90
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:16:58.849 ]  Resize
+    Viewport ptr: 0x2344550e000  QWidget winId: 0x920be6
+    Context ptr : 0x23445c0b3d0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:16:58.886 ]  Resize
+    Viewport ptr: 0x2344550c980  QWidget winId: 0x190d0c
+    Context ptr : 0x23445c0d3b0
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:18:45.428 ]  Resize
+    Viewport ptr: 0x201ee3fcae0  QWidget winId: 0x2e0afa
+    Context ptr : 0x201edccb590
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:18:45.495 ]  Resize
+    Viewport ptr: 0x201edacb3b0  QWidget winId: 0x140d2e
+    Context ptr : 0x201f18617e0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:18:45.532 ]  Resize
+    Viewport ptr: 0x201edacaff0  QWidget winId: 0x120d0e
+    Context ptr : 0x201f1865200
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:20:35.205 ]  Resize
+    Viewport ptr: 0x1ec00767a40  QWidget winId: 0x230c52
+    Context ptr : 0x1ec7f4d6bb0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:20:35.274 ]  Resize
+    Viewport ptr: 0x1ec00623140  QWidget winId: 0x5a08a4
+    Context ptr : 0x1ec034599c0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:20:35.311 ]  Resize
+    Viewport ptr: 0x1ec00623000  QWidget winId: 0x2a08a8
+    Context ptr : 0x1ec0345cc10
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:20:37.745 ]  Resize
+    Viewport ptr: 0x1ec00623000  QWidget winId: 0x2a08a8
+    Context ptr : 0x1ec0345cc10
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:20:37.755 ]  Resize
+    Viewport ptr: 0x1ec00623140  QWidget winId: 0x5a08a4
+    Context ptr : 0x1ec034599c0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:20:37.774 ]  Resize
+    Viewport ptr: 0x1ec00767a40  QWidget winId: 0x230c52
+    Context ptr : 0x1ec7f4d6bb0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:20:50.438 ]  Resize
+    Viewport ptr: 0x1fc85edc950  QWidget winId: 0x340b9a
+    Context ptr : 0x1fc868306e0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:20:50.507 ]  Resize
+    Viewport ptr: 0x1fc85d32900  QWidget winId: 0x5e0bde
+    Context ptr : 0x1fc8683b810
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:20:50.543 ]  Resize
+    Viewport ptr: 0x1fc85d313c0  QWidget winId: 0x44086c
+    Context ptr : 0x1fc8683e830
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:22:59.634 ]  Resize
+    Viewport ptr: 0x22af21b4690  QWidget winId: 0xd0d46
+    Context ptr : 0x22af14c8340
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:22:59.700 ]  Resize
+    Viewport ptr: 0x22af2074770  QWidget winId: 0x220c42
+    Context ptr : 0x22af553afc0
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:22:59.738 ]  Resize
+    Viewport ptr: 0x22af2074b30  QWidget winId: 0x2a0c30
+    Context ptr : 0x22af553d180
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:26:54.834 ]  Resize
+    Viewport ptr: 0x2bf8e9c3730  QWidget winId: 0x1b0caa
+    Context ptr : 0x2bf8dc653e0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:26:54.918 ]  Resize
+    Viewport ptr: 0x2bf8e34e200  QWidget winId: 0x440d06
+    Context ptr : 0x2bf91e29d20
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:26:54.955 ]  Resize
+    Viewport ptr: 0x2bf8e34eac0  QWidget winId: 0x3e0a34
+    Context ptr : 0x2bf91e2c110
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:26:58.478 ]  Resize
+    Viewport ptr: 0x2bf8e34eac0  QWidget winId: 0x3e0a34
+    Context ptr : 0x2bf91e2c110
+    FBOs:
+        mainFBO        : 0xf
+        glowFBO        : 0x10
+        pingpongFBO[0] : 0x11
+        pingpongFBO[1] : 0x12
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:26:58.495 ]  Resize
+    Viewport ptr: 0x2bf8e34e200  QWidget winId: 0x440d06
+    Context ptr : 0x2bf91e29d20
+    FBOs:
+        mainFBO        : 0x9
+        glowFBO        : 0xa
+        pingpongFBO[0] : 0xb
+        pingpongFBO[1] : 0xc
+    GL: drawFBO=null  SRGB=OFF
+============================================================
+[ 2025-07-12 20:26:58.513 ]  Resize
+    Viewport ptr: 0x2bf8e9c3730  QWidget winId: 0x1b0caa
+    Context ptr : 0x2bf8dc653e0
+    FBOs:
+        mainFBO        : 0x3
+        glowFBO        : 0x4
+        pingpongFBO[0] : 0x5
+        pingpongFBO[1] : 0x6
+    GL: drawFBO=null  SRGB=OFF

@@ -4,6 +4,9 @@
 #include <QOpenGLVersionFunctionsFactory>
 #include <QOpenGLContext>
 #include "MainWindow.hpp"
+#include <QtWidgets>
+
+
 
 
 static void qtMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
@@ -67,7 +70,7 @@ static QSurfaceFormat createDefaultFormat()
 
 int main(int argc, char* argv[])
 {
-    // 1.  message handler, attributes, default format
+        // 1.  message handler, attributes, default format
     qInstallMessageHandler(qtMessageOutput);
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
     QSurfaceFormat::setDefaultFormat(createDefaultFormat());
