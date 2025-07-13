@@ -496,7 +496,7 @@ glm::vec3 FlowVisualizerMenu::getCentre() const { return { static_cast<float>(ui
 glm::vec3 FlowVisualizerMenu::getEuler() const { return { static_cast<float>(ui->angleInputEulerX->value()), static_cast<float>(ui->angleInputEulerY->value()), static_cast<float>(ui->angleInputEulerZ->value()) }; }
 FieldVisualizerComponent::DisplayMode FlowVisualizerMenu::getDisplayMode() const { return static_cast<FieldVisualizerComponent::DisplayMode>(ui->visualizationTypeInput->currentIndex()); }
 glm::ivec3 FlowVisualizerMenu::getArrowDensity() const { return { ui->densityControlRowsInput->value(), ui->densityControlColumnsInput->value(), ui->densityControlLayersInput->value() }; }
-float FlowVisualizerMenu::getArrowBaseSize() const { return ui->baseSizeSpinBox->value(); }
+float FlowVisualizerMenu::getArrowBaseSize() const { return ui->baseSizeSpinBox->value()*0.3f; }
 float FlowVisualizerMenu::getArrowHeadScale() const { return ui->headScaleSpinBox->value(); }
 float FlowVisualizerMenu::getArrowIntensityMultiplier() const { return ui->intensityMultiplierSpinBox->value(); }
 float FlowVisualizerMenu::getArrowCullingThreshold() const { return ui->cullingThresholdSpinBox->value(); }
