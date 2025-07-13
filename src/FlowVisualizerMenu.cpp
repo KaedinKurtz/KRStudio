@@ -107,10 +107,9 @@ namespace {
     }
 }
 
-FlowVisualizerMenu::FlowVisualizerMenu(Scene* scene, QWidget* parent) :
+FlowVisualizerMenu::FlowVisualizerMenu(QWidget* parent) :
     QWidget(parent),
-    ui(new Ui::FlowVisualizerMenu),
-    m_scene(scene)
+    ui(new Ui::FlowVisualizerMenu)
 {
     QSignalBlocker b(this);
     ui->setupUi(this);
@@ -311,22 +310,7 @@ void FlowVisualizerMenu::setupConnections()
     linkSliderAndSpinBox(ui->particle_spritePeakIntensitySlider, ui->particle_spritePeakIntensitySpinBox);
     linkSliderAndSpinBox(ui->particle_spriteMinSizeSlider, ui->particle_spriteMinSizeSpinBox);
     linkSliderAndSpinBox(ui->particle_randomWalkSlider, ui->particle_randomWalkSpinBox);
-    connect(ui->particle_particleCountSpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [this]() {
-        // When the particle count changes, we need to do two things.
-
-        // a) Emit the normal signal so MainWindow updates all other settings via updateComponentState.
-        emit settingsChanged();
-
-        // b) Manually find the component and set its dirty flag to force a buffer reset.
-        if (m_scene) { // Check if we have a valid pointer to the scene.
-            auto& registry = m_scene->getRegistry(); // Get the scene's registry.
-            auto view = registry.view<FieldVisualizerComponent>(); // Find the visualizer component.
-            if (!view.empty()) { // If it exists...
-                // ...set its dirty flag to true.
-                registry.get<FieldVisualizerComponent>(view.front()).isGpuDataDirty = true;
-            }
-        }
-        });
+    connect(ui->particle_particleCountSpinBox, &QSpinBox::valueChanged, this, &FlowVisualizerMenu::onSettingChanged);
     connect(ui->rectangleBoundaryButton, &QToolButton::toggled, this, [this](bool on) { if (on) ui->stackedWidget->setCurrentIndex(0), emit settingsChanged(); });
     connect(ui->sphericalBoundaryButton, &QToolButton::toggled, this, [this](bool on) { if (on) ui->stackedWidget->setCurrentIndex(1), emit settingsChanged(); });
     auto boxDimChanged = [this] { emit settingsChanged(); };
@@ -439,24 +423,10 @@ void FlowVisualizerMenu::onParticleRemoveLifetimeStop() { removeStop(ui->particl
 void FlowVisualizerMenu::onParticleLifetimeTableChanged() { updateGradientPreviewFromTable(ui->particle_label_gradientPreviewAge, ui->particle_table_colorStopsAge); onSettingChanged(); }
 
 void FlowVisualizerMenu::linkSliderAndSpinBox(QSlider* slider, QDoubleSpinBox* spinBox, double scale) {
-    // 1. Connect the signals first. This is good practice.
-    connect(slider, &QSlider::valueChanged, this, [spinBox, scale](int value) {
-        const QSignalBlocker b(spinBox); // Block signals on the spinbox to prevent loops
-        spinBox->setValue(static_cast<double>(value) / scale);
-        });
-    connect(spinBox, &QDoubleSpinBox::valueChanged, this, [slider, scale](double value) {
-        const QSignalBlocker b(slider); // Block signals on the slider to prevent loops
-        slider->setValue(static_cast<int>(value * scale));
-        });
+    connect(slider, &QSlider::valueChanged, this, [spinBox, scale](int value) { const QSignalBlocker b(spinBox); spinBox->setValue(static_cast<double>(value) / scale); });
+    connect(spinBox, &QDoubleSpinBox::valueChanged, this, [slider, scale](double value) { const QSignalBlocker b(slider); slider->setValue(static_cast<int>(value * scale)); });
     connect(slider, &QSlider::valueChanged, this, &FlowVisualizerMenu::onSettingChanged);
-
-    // --- THE FIX ---
-    // 2. Block signals on the slider *before* setting its initial value.
-    // This prevents it from emitting valueChanged and overwriting the spinbox.
-    {
-        const QSignalBlocker b(slider);
-        slider->setValue(static_cast<int>(spinBox->value() * scale));
-    }
+    slider->setValue(static_cast<int>(spinBox->value() * scale));
 }
 void FlowVisualizerMenu::linkSliderAndSpinBox(QSlider* slider, QSpinBox* spinBox) {
     connect(slider, &QSlider::valueChanged, spinBox, &QSpinBox::setValue);
@@ -527,7 +497,7 @@ glm::vec3 FlowVisualizerMenu::getCentre() const { return { static_cast<float>(ui
 glm::vec3 FlowVisualizerMenu::getEuler() const { return { static_cast<float>(ui->angleInputEulerX->value()), static_cast<float>(ui->angleInputEulerY->value()), static_cast<float>(ui->angleInputEulerZ->value()) }; }
 FieldVisualizerComponent::DisplayMode FlowVisualizerMenu::getDisplayMode() const { return static_cast<FieldVisualizerComponent::DisplayMode>(ui->visualizationTypeInput->currentIndex()); }
 glm::ivec3 FlowVisualizerMenu::getArrowDensity() const { return { ui->densityControlRowsInput->value(), ui->densityControlColumnsInput->value(), ui->densityControlLayersInput->value() }; }
-float FlowVisualizerMenu::getArrowBaseSize() const { return ui->baseSizeSpinBox->value()*0.3f; }
+float FlowVisualizerMenu::getArrowBaseSize() const { return ui->baseSizeSpinBox->value(); }
 float FlowVisualizerMenu::getArrowHeadScale() const { return ui->headScaleSpinBox->value(); }
 float FlowVisualizerMenu::getArrowIntensityMultiplier() const { return ui->intensityMultiplierSpinBox->value(); }
 float FlowVisualizerMenu::getArrowCullingThreshold() const { return ui->cullingThresholdSpinBox->value(); }
@@ -582,10 +552,6 @@ std::vector<ColorStop> FlowVisualizerMenu::getParticleLifetimeGradient() const {
 
 void FlowVisualizerMenu::updateControlsFromComponent(const FieldVisualizerComponent& component)
 {
-    qDebug() << "[DEBUG] updateControlsFromComponent: Reading lifetime from component, value is"
-        << component.particleSettings.lifetime;
-
-
     Q_ASSERT(ui->originInputX->parent());
     const QSignalBlocker blocker(this);
     const glm::vec3 centre = 0.5f * (component.bounds.min + component.bounds.max);
@@ -613,11 +579,24 @@ void FlowVisualizerMenu::updateControlsFromComponent(const FieldVisualizerCompon
     linkSliderAndSpinBox(ui->cullingThresholdSlider, ui->cullingThresholdSpinBox);
 }
 
+void FlowVisualizerMenu::updateControlsFromScene(const Scene& scene)
+{
+    // Find the first FieldVisualizerComponent in the scene and update controls from it
+    auto& registry = scene.getRegistry();
+    auto view = registry.view<const FieldVisualizerComponent>();
+    
+    if (view.size() > 0) {
+        // Update from the first field visualizer component found
+        const auto& component = view.get<const FieldVisualizerComponent>(view.front());
+        updateControlsFromComponent(component);
+    } else {
+        // If no field visualizer component exists, reset to default state
+        initializeState();
+    }
+}
+
 void FlowVisualizerMenu::commitToComponent(FieldVisualizerComponent& vis)
 {
-    qDebug() << "[DEBUG] commitToComponent: Reading lifetime from UI spinbox, value is"
-        << ui->particle_particleLifetimeSpinBox->value();
-
     vis.isEnabled = isMasterVisible();
     vis.displayMode = getDisplayMode();
     vis.bounds = getBounds();
@@ -679,75 +658,4 @@ void FlowVisualizerMenu::commitToComponent(FieldVisualizerComponent& vis)
     particle.lifetimeGradient = getParticleLifetimeGradient();
 
     vis.isGpuDataDirty = true;
-}
-
-
-void FlowVisualizerMenu::updateComponentState(FieldVisualizerComponent& vis)
-{
-    // This function is the new central point for updating the data component
-    // from the UI's current state. It doesn't emit signals or set dirty flags.
-
-    // --- General Settings ---
-    vis.isEnabled = isMasterVisible();
-    vis.displayMode = getDisplayMode();
-    vis.bounds = getBounds();
-
-    // --- Arrow Settings ---
-    auto& arrow = vis.arrowSettings;
-    arrow.density = getArrowDensity();
-    arrow.vectorScale = getArrowBaseSize();
-    arrow.headScale = getArrowHeadScale();
-    arrow.intensityMultiplier = getArrowIntensityMultiplier();
-    arrow.cullingThreshold = getArrowCullingThreshold();
-    arrow.scaleByLength = isArrowLengthScaled();
-    arrow.lengthScaleMultiplier = getArrowLengthScaleMultiplier();
-    arrow.scaleByThickness = isArrowThicknessScaled();
-    arrow.thicknessScaleMultiplier = getArrowThicknessScaleMultiplier();
-    arrow.coloringMode = getArrowColoringMode();
-    arrow.xPosColor = getArrowDirColor(0);
-    arrow.xNegColor = getArrowDirColor(1);
-    arrow.yPosColor = getArrowDirColor(2);
-    arrow.yNegColor = getArrowDirColor(3);
-    arrow.zPosColor = getArrowDirColor(4);
-    arrow.zNegColor = getArrowDirColor(5);
-    arrow.intensityGradient = getArrowIntensityGradient();
-
-    // --- Flow (Dynamic Arrows) Settings ---
-    auto& flow = vis.flowSettings;
-    flow.particleCount = getFlowParticleCount();
-    flow.lifetime = getFlowLifetime();
-    flow.baseSpeed = getFlowBaseSpeed();
-    flow.speedIntensityMultiplier = getFlowSpeedIntensityMult();
-    flow.baseSize = getFlowBaseSize();
-    flow.headScale = getFlowHeadScale();
-    flow.peakSizeMultiplier = getFlowPeakSizeMult();
-    flow.minSize = getFlowMinSize();
-    flow.growthPercentage = getFlowGrowthPercent();
-    flow.shrinkPercentage = getFlowShrinkPercent();
-    flow.randomWalkStrength = getFlowRandomWalk();
-    flow.scaleByLength = isFlowLengthScaled();
-    flow.lengthScaleMultiplier = getFlowLengthScaleMultiplier();
-    flow.scaleByThickness = isFlowThicknessScaled();
-    flow.thicknessScaleMultiplier = getFlowThicknessScaleMultiplier();
-    flow.coloringMode = getFlowColoringMode();
-    flow.intensityGradient = getFlowIntensityGradient();
-    flow.lifetimeGradient = getFlowLifetimeGradient();
-
-    // --- Particle Settings ---
-    auto& particle = vis.particleSettings;
-    particle.isSolid = isParticleSolid();
-    particle.particleCount = getParticleCount();
-    particle.lifetime = getParticleLifetime();
-    particle.baseSpeed = getParticleBaseSpeed();
-    particle.speedIntensityMultiplier = getParticleSpeedIntensityMult();
-    particle.baseSize = getParticleBaseSize();
-    particle.peakSizeMultiplier = getParticlePeakSizeMult();
-    particle.minSize = getParticleMinSize();
-    particle.baseGlowSize = getParticleBaseGlow();
-    particle.peakGlowMultiplier = getParticlePeakGlowMult();
-    particle.minGlowSize = getParticleMinGlow();
-    particle.randomWalkStrength = getParticleRandomWalk();
-    particle.coloringMode = getParticleColoringMode();
-    particle.intensityGradient = getParticleIntensityGradient();
-    particle.lifetimeGradient = getParticleLifetimeGradient();
 }

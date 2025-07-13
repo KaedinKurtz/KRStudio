@@ -80,3 +80,13 @@ void PropertiesPanel::addGridEditor(entt::entity entity)
     m_gridLayout->addWidget(widget);
     m_entityWidgetMap[entity] = widget;
 }
+
+void PropertiesPanel::clearAllGrids()
+{
+    // Remove all grid widgets from the layout and delete them
+    for (auto& [entity, widget] : m_entityWidgetMap) {
+        m_gridLayout->removeWidget(widget);
+        widget->deleteLater();
+    }
+    m_entityWidgetMap.clear();
+}
