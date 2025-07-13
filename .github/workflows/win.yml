@@ -1,7 +1,7 @@
-﻿name: Windows Build & Package
+name: Windows Build & Package
 
 on:
-  push: { branches: [main] }
+  push:
   pull_request:
   workflow_dispatch:
   release: { types: [created] }
