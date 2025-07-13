@@ -1,6 +1,7 @@
 #pragma once
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include "ViewportWidget.hpp"
 
 // Forward declarations for decoupling
 class RenderingSystem;
@@ -22,6 +23,7 @@ struct RenderFrameContext {
     int                          viewportHeight;
     float                        deltaTime;
     float                        elapsedTime;
+    ViewportWidget*              viewport;
 };
 
 // The interface that all render pass classes must implement.

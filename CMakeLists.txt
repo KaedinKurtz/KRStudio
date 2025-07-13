@@ -40,7 +40,6 @@ set(ADS_SKIP_GIT_VERSION ON CACHE BOOL "Skip git-based versioning" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "Disable ADS examples" FORCE)
 
 FetchContent_MakeAvailable(qtads)      # creates the target: QtADS
-
 #  Project sources / headers
 
 file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
@@ -77,7 +76,9 @@ target_include_directories(RoboticsSoftware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml"
     "${qtads_SOURCE_DIR}/src"          # ADS public headers
-    ${urdfdom_INCLUDE_DIRS})
+    ${urdfdom_INCLUDE_DIRS}
+)
+
 
 #  Compile definitions / options
 

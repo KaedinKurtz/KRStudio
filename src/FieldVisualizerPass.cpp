@@ -14,16 +14,17 @@ struct GLStateSaver {
     GLStateSaver(QOpenGLFunctions_4_3_Core* funcs) : gl(funcs) {
         gl->glGetBooleanv(GL_BLEND, &blendEnabled);
         gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMaskEnabled);
-        gl->glGetBooleanv(GL_CULL_FACE, &cullFaceEnabled);
+        gl->glGetBooleanv(GL_PROGRAM_POINT_SIZE, &pointSizeEnabled);
     }
     ~GLStateSaver() {
         if (blendEnabled) gl->glEnable(GL_BLEND); else gl->glDisable(GL_BLEND);
         gl->glDepthMask(depthMaskEnabled);
-        if (cullFaceEnabled) gl->glEnable(GL_CULL_FACE); else gl->glDisable(GL_CULL_FACE);
+        if (pointSizeEnabled) gl->glEnable(GL_PROGRAM_POINT_SIZE); else gl->glDisable(GL_PROGRAM_POINT_SIZE);
     }
     QOpenGLFunctions_4_3_Core* gl;
-    GLboolean blendEnabled, depthMaskEnabled, cullFaceEnabled;
+    GLboolean blendEnabled, depthMaskEnabled, pointSizeEnabled;
 };
+
 
 // --- Class Implementation ---
 namespace {
@@ -305,6 +306,8 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     auto* gl = context.gl;
     auto& settings = vis.particleSettings;
 
+    GLStateSaver stateSaver(gl);
+
     /* ───────────────────────  create or rebuild GPU resources  ─────────────────────── */
     const bool needInit = (vis.particleBuffer[0] == 0) || vis.isGpuDataDirty;
     if (needInit)
@@ -461,9 +464,9 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     gl->glDrawArrays(GL_POINTS, 0, settings.particleCount);
 
     gl->glBindVertexArray(0);
-    gl->glDepthMask(GL_TRUE);
-    gl->glDisable(GL_BLEND);
-    gl->glDisable(GL_PROGRAM_POINT_SIZE);
+    gl->glDepthMask(GL_TRUE); // <<< RESTORE STATE
+    gl->glDisable(GL_BLEND); // <<< RESTORE STATE
+    gl->glDisable(GL_PROGRAM_POINT_SIZE); // <<< RESTORE STATE
 
     // Swap buffers for the next frame
     vis.currentReadBuffer = 1 - vis.currentReadBuffer;

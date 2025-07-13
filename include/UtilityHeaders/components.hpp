@@ -9,6 +9,7 @@
 #include <QOpenGLContext>
 #include <qopengl.h>
 #include <unordered_map>
+#include <Eigen/Dense> 
 
 #include "GridLevel.hpp"
 #include "Camera.hpp"
@@ -325,4 +326,99 @@ struct GridComponent
     glm::vec3 xAxisColor = { 1.0f, 0.2f, 0.2f };
     glm::vec3 zAxisColor = { 0.2f, 0.2f, 1.0f };
     float axisLineWidthPixels = 1.4f;
+};
+
+
+// --- SLAM & SENSOR FUSION COMPONENTS ---
+
+/**
+ * @brief A tag to identify an entity as a SLAM Keyframe.
+ * A Keyframe has a TransformComponent representing its optimized pose.
+ */
+struct KeyframeTag {};
+
+/**
+ * @brief Intrinsic parameters of the camera used for SLAM.
+ * This is distinct from the rendering camera component.
+ */
+struct SlamCameraIntrinsics {
+    double fx = 0.0, fy = 0.0;             // Focal length in pixels
+    double cx = 0.0, cy = 0.0;             // Principal point in pixels
+    std::vector<float> distortion_coeffs;  // Brown-Conrady, etc.
+};
+
+/**
+ * @brief Calibration and noise model for the Inertial Measurement Unit.
+ * Biases can be updated online by the backend optimizer.
+ */
+struct ImuCalibration {
+    // Noise spectral density (continuous-time)
+    float noise_gyro_density = 0.0;
+    float noise_accel_density = 0.0;
+
+    // Bias random walk (continuous-time)
+    float walk_gyro = 0.0;
+    float walk_accel = 0.0;
+
+    // Current bias estimates (to be updated by the optimizer)
+    glm::vec3 bias_gyro = { 0.0f, 0.0f, 0.0f };
+    glm::vec3 bias_accel = { 0.0f, 0.0f, 0.0f };
+};
+
+/**
+ * @brief Static extrinsic transformations between sensors on the robot rig.
+ * Defines how sensors are mounted relative to the robot's base link.
+ */
+struct SensorExtrinsics {
+    glm::mat4 T_base_imu = glm::mat4(1.0f);    // Transform from base to IMU
+    glm::mat4 T_base_camera = glm::mat4(1.0f); // Transform from base to Camera
+    glm::mat4 T_base_lidar = glm::mat4(1.0f);  // Transform from base to LiDAR
+};
+
+/**
+ * @brief A single data point from the IMU sensor.
+ */
+struct ImuDataPoint {
+    double timestamp = 0.0;
+    glm::vec3 angular_velocity = { 0.0f, 0.0f, 0.0f };
+    glm::vec3 linear_acceleration = { 0.0f, 0.0f, 0.0f };
+};
+
+/**
+ * @brief A buffer of IMU measurements captured between two consecutive Keyframes.
+ */
+struct ImuBuffer {
+    std::vector<ImuDataPoint> measurements;
+};
+
+/**
+ * @brief The raw 3D point cloud from a LiDAR scan for a given Keyframe.
+ * Points are stored in the LiDAR's local sensor frame.
+ */
+struct LidarPointCloud {
+    std::vector<glm::vec3> points;
+};
+
+/**
+ * @brief Holds extracted visual keypoints and descriptors from a Keyframe's image.
+ */
+struct VisualFeatureData {
+    std::vector<glm::vec2> keypoints; // Keypoint locations in pixels
+
+    // Eigen is ideal for descriptor matrix operations, even if poses use GLM.
+    Eigen::MatrixXf descriptors;
+};
+
+/**
+ * @brief A compact representation of a Keyframe's point cloud for fast loop closure matching.
+ */
+struct LidarDescriptor {
+    Eigen::MatrixXf descriptor;
+};
+
+/**
+ * @brief Associates a Keyframe entity with its corresponding vertex ID in a backend graph solver.
+ */
+struct GraphNodeID {
+    uint64_t id = 0;
 };

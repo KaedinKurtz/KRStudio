@@ -4,6 +4,8 @@
 #include "Scene.hpp"
 #include "components.hpp"
 #include "Camera.hpp"
+#include "BlackBox.hpp"
+#include "ViewportWidget.hpp" 
 
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_4_3_Core>
@@ -28,7 +30,12 @@ void OpaquePass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core
 }
 
 void OpaquePass::execute(const RenderFrameContext& context) {
-    GLStateSaver stateSaver(context.gl);
+    
+#ifdef ENABLE_BLACKBOX_LOGGING
+    dbg::BlackBox::instance().dumpState("OpaquePass - START", context.renderer, static_cast<QOpenGLWidget*>(context.viewport), context.gl);
+#endif
+
+
     Shader* phongShader = context.renderer.getShader("phong");
     if (!phongShader) {
         // If there's no shader for this context, we can't do anything.
@@ -86,4 +93,8 @@ void OpaquePass::execute(const RenderFrameContext& context) {
         gl->glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.indices.size()), GL_UNSIGNED_INT, nullptr);
     }
     gl->glBindVertexArray(0);
+
+#ifdef ENABLE_BLACKBOX_LOGGING
+    dbg::BlackBox::instance().dumpState("OpaquePass - END", context.renderer, static_cast<QOpenGLWidget*>(context.viewport), context.gl);
+#endif
 }

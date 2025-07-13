@@ -58,25 +58,23 @@ void RenderingSystem::onMasterUpdate()
 {
     if (!m_scene) return;
 
-    // 1. Calculate deltaTime ONCE at the start of the frame.
-    float dt = m_clock.restart() * 0.001f;
+    // 1. Calculate deltaTime ONCE per frame.
+    const float dt = m_clock.restart() * 0.001f;
     m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime = dt;
 
-    // 2. Update all scene logic using this single, correct deltaTime.
-    updateCameraTransforms();                     // Copies Camera state to TransformComponent
-    ViewportWidget::propagateTransforms(m_scene->getRegistry()); // Builds WorldTransformComponent
-    updateSceneLogic(dt);                         // Updates splines, physics, animations, etc.
+    // 2. Run ALL scene logic ONCE per frame.
+    updateCameraTransforms();
+    ViewportWidget::propagateTransforms(m_scene->getRegistry());
+    updateSceneLogic(dt); // Pass the correct delta time
 
-
-    // 3. Trigger a repaint for all tracked viewports.
-    //    Each viewport's paintGL will now use the results of the logic
-    //    we just calculated.
+    // 3. Trigger a repaint for ALL viewports.
     for (auto* vp : m_targets.keys()) {
         if (vp) {
             vp->update();
         }
     }
 }
+
 
 //==============================================================================
 // Public API & Lifecycle Management
@@ -148,13 +146,12 @@ void RenderingSystem::initializeResourcesForContext(QOpenGLFunctions_4_3_Core* g
     m_isInitialized = true; // Mark that the system is ready in at least one context
     qDebug() << "[INIT] RenderingSystem initialization complete for context" << ctx;
 }
-void RenderingSystem::renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_Core* gl, int vpW, int vpH, float frameDeltaTime) {
 
-    // The per-frame logic (like deltaTime calculation and transform propagation)
-    // is now handled outside this function, once per frame.
+void RenderingSystem::renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_Core* gl, int vpW, int vpH, float frameDeltaTime)
+{
+    // REMOVE updateCameraTransforms() and propagateTransforms() from the start of this function.
 
     ensureContextIsTracked(viewport);
-
     TargetFBOs& target = m_targets[viewport];
     if (target.mainFBO == 0 || vpW > target.w || vpH > target.h) {
         onViewportResized(viewport, gl, vpW, vpH);
@@ -164,9 +161,7 @@ void RenderingSystem::renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_
     const auto& camera = m_scene->getRegistry().get<CameraComponent>(m_currentCamera).camera;
     const float aspect = (vpH > 0) ? static_cast<float>(vpW) / vpH : 1.0f;
 
-    // --- THE FIX ---
-    // The RenderFrameContext now receives the correct, consistent deltaTime for this frame.
-    // NOTE: You must add 'float deltaTime;' to the RenderFrameContext struct definition.
+    // Create the context using the deltaTime calculated by the master loop.
     RenderFrameContext frameContext = {
         gl,
         m_scene->getRegistry(),
@@ -177,11 +172,11 @@ void RenderingSystem::renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_
         target,
         vpW,
         vpH,
-        frameDeltaTime, // Use the deltaTime passed into the function
-        m_elapsedTime
+        frameDeltaTime,
+        m_elapsedTime,
+        viewport
     };
 
-    // The rest of the function remains the same.
     gl->glBindFramebuffer(GL_FRAMEBUFFER, target.mainFBO);
     gl->glViewport(0, 0, target.w, target.h);
 
@@ -189,11 +184,11 @@ void RenderingSystem::renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_
     gl->glClearColor(props.backgroundColor.r, props.backgroundColor.g, props.backgroundColor.b, props.backgroundColor.a);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
+    // Execute the render passes. This part is correct.
     for (const auto& pass : m_renderPasses) {
         pass->execute(frameContext);
     }
 }
-
 
 void RenderingSystem::shutdown(QOpenGLFunctions_4_3_Core* gl) {
     if (!m_isInitialized || !gl) return;
@@ -427,6 +422,7 @@ void RenderingSystem::updateCameraTransforms() {
 
 void RenderingSystem::updateSceneLogic(float deltaTime) {
     m_elapsedTime += deltaTime;
+
     auto& registry = m_scene->getRegistry();
 
     updateSplineCaches();

@@ -131,29 +131,23 @@ void ViewportWidget::shutdown()
 
 void ViewportWidget::paintGL()
 {
-    qDebug() << "~~~~~~~~~~~~~~ PAINTGL CALLED FOR WIDGET:" << this << "~~~~~~~~~~~~~~";
+    if (!m_renderingSystem || !m_scene) return;
 
-    if (!m_renderingSystem) return;
-
-    // Get the GL functions for the current, active context
     auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(context());
     if (!gl) {
         qCritical("paintGL: Could not get GL functions for current context!");
         return;
     }
 
-    // This is the key: We ensure resources for this context exist
-    // at the beginning of every paint call. The function has its own
-    // internal guard, so it will only do heavy work once per new context.
     m_renderingSystem->initializeResourcesForContext(gl, m_scene);
 
-    // The rest of the function proceeds as normal...
     const int fbW = static_cast<int>(width() * devicePixelRatioF());
     const int fbH = static_cast<int>(height() * devicePixelRatioF());
 
+    // Get the single, authoritative deltaTime for this frame from the scene.
     const float frameDeltaTime = m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime;
 
-
+    // Pass it to the renderView function.
     m_renderingSystem->renderView(this, gl, fbW, fbH, frameDeltaTime);
 }
 

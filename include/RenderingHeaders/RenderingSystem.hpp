@@ -17,6 +17,8 @@
 #include <QElapsedTimer>
 #include <QTimer>
 
+#define ENABLE_BLACKBOX_LOGGING
+
 // Forward declarations to keep this header light
 class QOpenGLContext;
 class QOpenGLWidget;
