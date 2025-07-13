@@ -21,6 +21,9 @@ class PropertiesPanel : public QWidget
 public:
     explicit PropertiesPanel(Scene* scene, QWidget* parent = nullptr);
     ~PropertiesPanel();
+    
+    // Public method to clear all grid widgets (used for scene reload)
+    void clearAllGrids();
 
 private slots:
     void onGridAdded(entt::registry& registry, entt::entity entity);
