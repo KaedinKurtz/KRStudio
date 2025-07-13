@@ -16,7 +16,8 @@
 #include "IntersectionSystem.hpp" 
 #include "RenderingSystem.hpp"
 #include "FlowVisualizerMenu.hpp"
-#include "Helpers.hpp"   
+#include "Helpers.hpp"
+#include "DatabasePanel.hpp"   
 
 #include <QVBoxLayout>
 #include <QFileDialog>
@@ -35,7 +36,6 @@
 #include "DockSplitter.h" 
 #include <QOpenGLVersionFunctionsFactory>
 #include <QPushButton>
-
 
 const QString sidePanelStyle = R"(
     /* General Window and Text Styling */
@@ -236,29 +236,10 @@ MainWindow::MainWindow(QWidget* parent)
         QTimer::singleShot(0, this, [this, &registry] {
             auto view = registry.view<FieldVisualizerComponent>();
             if (!view.empty())
-            {
-                // --- THE FIX ---
-                // Get the first entity from the view, then get its component.
-                entt::entity entity = view.front();
                 m_flowVisualizerMenu->updateControlsFromComponent(
-                    view.get<FieldVisualizerComponent>(entity)
-                );
-            }
+                    firstComponent<FieldVisualizerComponent>(registry));
             });
         // Set properties on the correct sub-struct
-        auto& arrowSettings = visualizer.arrowSettings;
-        arrowSettings.coloringMode = FieldVisualizerComponent::ColoringMode::Intensity;
-        arrowSettings.intensityGradient.push_back({ 0.0f, glm::vec4(0.1f, 0.1f, 0.8f, 1.0f) }); // Dark Blue
-        arrowSettings.intensityGradient.push_back({ 1.0f, glm::vec4(1.0f, 0.2f, 0.2f, 1.0f) }); // Bright Red
-
-        auto& particleSettings = visualizer.particleSettings;
-        particleSettings.particleCount = 10000;
-        particleSettings.lifetime = 4.0; // The correct, sensible lifetime
-        particleSettings.baseSpeed = 0.5;
-        particleSettings.speedIntensityMultiplier = 2.0;
-        particleSettings.baseSize = 10.0;
-        particleSettings.peakSizeMultiplier = 2.0;
-        particleSettings.minSize = 1.0;
 
         visualizer.arrowSettings.density = { 15, 5, 15 };
         visualizer.arrowSettings.vectorScale = 0.5f;
@@ -369,6 +350,16 @@ MainWindow::MainWindow(QWidget* parent)
     propertiesDock->setStyleSheet(sidePanelStyle); // Applies your custom style.
     ads::CDockAreaWidget* propertiesArea = m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock, viewportArea2); // Docks the properties panel to the right OF viewport 2, creating our third column.
 
+    // Create the database panel and dock it to the right
+    DatabasePanel* databasePanel = new DatabasePanel(m_scene.get(), this);
+    ads::CDockWidget* databaseDock = new ads::CDockWidget("Database");
+    databaseDock->setWidget(databasePanel);
+    databaseDock->setStyleSheet(sidePanelStyle);
+    m_dockManager->addDockWidget(ads::RightDockWidgetArea, databaseDock, propertiesArea);
+    
+    // Connect the database panel's scene reload signal
+    connect(databasePanel, &DatabasePanel::requestSceneReload, this, &MainWindow::onSceneReloadRequested);
+
     // --- Set Proportions for the three main dock areas ---
 
     ads::CDockSplitter* mainSplitter = viewportArea1->parentSplitter(); // Gets the custom splitter containing our dock areas.
@@ -379,7 +370,7 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     // Create the flow visualizer menu and add it as a TAB to the properties area.
-    m_flowVisualizerMenu = new FlowVisualizerMenu(m_scene.get(), this); // Creates the flow visualizer menu widget.
+    m_flowVisualizerMenu = new FlowVisualizerMenu(this); // Creates the flow visualizer menu widget.
     ads::CDockWidget* flowMenuDock = new ads::CDockWidget("Field Visualizer"); // Creates the flow visualizer dock widget.
     m_flowVisualizerMenu->setMinimumWidth(650); // Sets the minimum width for this widget as well.
     flowMenuDock->setWidget(m_flowVisualizerMenu); // Sets the menu as the content of the dock widget.
@@ -704,6 +695,7 @@ void MainWindow::onFlowVisualizerSettingsChanged()
         }
     }
 
+    visualizer.isGpuDataDirty = true;
     qDebug() << "Flow visualizer settings successfully applied to component.";
 }
 
@@ -858,4 +850,57 @@ void MainWindow::removeViewport()
     // 4. Refresh layouts
     //----------------------------------------------------------------------
     updateViewportLayouts();
+}
+
+void MainWindow::onSceneReloadRequested(const QString& sceneName)
+{
+    qDebug() << "Scene reload requested for:" << sceneName;
+    
+    // Show status message
+    statusBar()->showMessage(QString("Scene '%1' reloaded from database.").arg(sceneName), 5000);
+    
+    // Refresh all UI components that display scene data
+    
+    // 1. Refresh PropertiesPanel - it needs to rebuild its grid widgets
+    // Find the PropertiesPanel in the dock manager
+    for (ads::CDockWidget* dockWidget : m_dockManager->dockWidgetsMap()) {
+        if (auto* propertiesPanel = qobject_cast<PropertiesPanel*>(dockWidget->widget())) {
+            // Clear existing grid widgets and rebuild them
+            propertiesPanel->clearAllGrids();
+            
+            // Re-add all existing grids
+            auto& registry = m_scene->getRegistry();
+            auto initialGridsView = registry.view<GridComponent>();
+            for (auto entity : initialGridsView) {
+                propertiesPanel->onGridAdded(registry, entity);
+            }
+            break;
+        }
+    }
+    
+    // 2. Refresh all ViewportWidgets - force a repaint
+    for (ads::CDockWidget* dockWidget : m_dockManager->dockWidgetsMap()) {
+        if (auto* viewport = qobject_cast<ViewportWidget*>(dockWidget->widget())) {
+            viewport->update();
+        }
+    }
+    
+    // 3. Refresh FlowVisualizerMenu if it exists
+    if (m_flowVisualizerMenu) {
+        m_flowVisualizerMenu->updateControlsFromScene(*m_scene);
+    }
+    
+    // 4. Force a full render update
+    if (m_renderingSystem && m_renderingSystem->isInitialized()) {
+        // Trigger a render update
+        QTimer::singleShot(0, this, [this]() {
+            for (ads::CDockWidget* dockWidget : m_dockManager->dockWidgetsMap()) {
+                if (auto* viewport = qobject_cast<ViewportWidget*>(dockWidget->widget())) {
+                    viewport->renderNow();
+                }
+            }
+        });
+    }
+    
+    qDebug() << "UI refresh completed for scene:" << sceneName;
 }
