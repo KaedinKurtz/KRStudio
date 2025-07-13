@@ -1,4 +1,4 @@
-﻿#version 430 core
+#version 430 core
 #define MAX_STOPS 8
 
 // --- Per-Vertex & Per-Instance Attributes ---
