@@ -235,8 +235,14 @@ MainWindow::MainWindow(QWidget* parent)
         QTimer::singleShot(0, this, [this, &registry] {
             auto view = registry.view<FieldVisualizerComponent>();
             if (!view.empty())
+            {
+                // --- THE FIX ---
+                // Get the first entity from the view, then get its component.
+                entt::entity entity = view.front();
                 m_flowVisualizerMenu->updateControlsFromComponent(
-                    firstComponent<FieldVisualizerComponent>(registry));
+                    view.get<FieldVisualizerComponent>(entity)
+                );
+            }
             });
         // Set properties on the correct sub-struct
         auto& arrowSettings = visualizer.arrowSettings;
@@ -244,6 +250,14 @@ MainWindow::MainWindow(QWidget* parent)
         arrowSettings.intensityGradient.push_back({ 0.0f, glm::vec4(0.1f, 0.1f, 0.8f, 1.0f) }); // Dark Blue
         arrowSettings.intensityGradient.push_back({ 1.0f, glm::vec4(1.0f, 0.2f, 0.2f, 1.0f) }); // Bright Red
 
+        auto& particleSettings = visualizer.particleSettings;
+        particleSettings.particleCount = 10000;
+        particleSettings.lifetime = 4.0; // The correct, sensible lifetime
+        particleSettings.baseSpeed = 0.5;
+        particleSettings.speedIntensityMultiplier = 2.0;
+        particleSettings.baseSize = 10.0;
+        particleSettings.peakSizeMultiplier = 2.0;
+        particleSettings.minSize = 1.0;
 
         visualizer.arrowSettings.density = { 15, 5, 15 };
         visualizer.arrowSettings.vectorScale = 0.5f;
@@ -364,7 +378,7 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     // Create the flow visualizer menu and add it as a TAB to the properties area.
-    m_flowVisualizerMenu = new FlowVisualizerMenu(this); // Creates the flow visualizer menu widget.
+    m_flowVisualizerMenu = new FlowVisualizerMenu(m_scene.get(), this); // Creates the flow visualizer menu widget.
     ads::CDockWidget* flowMenuDock = new ads::CDockWidget("Field Visualizer"); // Creates the flow visualizer dock widget.
     m_flowVisualizerMenu->setMinimumWidth(650); // Sets the minimum width for this widget as well.
     flowMenuDock->setWidget(m_flowVisualizerMenu); // Sets the menu as the content of the dock widget.
@@ -689,7 +703,6 @@ void MainWindow::onFlowVisualizerSettingsChanged()
         }
     }
 
-    visualizer.isGpuDataDirty = true;
     qDebug() << "Flow visualizer settings successfully applied to component.";
 }
 

@@ -47,20 +47,35 @@ RenderingSystem::RenderingSystem(QObject* parent)
 
     m_frameTimer.setTimerType(Qt::PreciseTimer);
     m_frameTimer.setInterval(16);               // as fast as vsync allows
-    connect(&m_frameTimer, &QTimer::timeout, this, [this]()
-        {
-            if (!m_scene) return;               // ← simple null-check
-
-            float dt = m_clock.restart() * 0.001f;
-            updateSceneLogic(dt);
-
-            for (auto* vp : m_targets.keys())
-                vp->update();
-        });
+    connect(&m_frameTimer, &QTimer::timeout, this, &RenderingSystem::onMasterUpdate);
 }
 
 RenderingSystem::~RenderingSystem() {
     qDebug() << "[LIFECYCLE] RenderingSystem destroyed.";
+}
+
+void RenderingSystem::onMasterUpdate()
+{
+    if (!m_scene) return;
+
+    // 1. Calculate deltaTime ONCE at the start of the frame.
+    float dt = m_clock.restart() * 0.001f;
+    m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime = dt;
+
+    // 2. Update all scene logic using this single, correct deltaTime.
+    updateCameraTransforms();                     // Copies Camera state to TransformComponent
+    ViewportWidget::propagateTransforms(m_scene->getRegistry()); // Builds WorldTransformComponent
+    updateSceneLogic(dt);                         // Updates splines, physics, animations, etc.
+
+
+    // 3. Trigger a repaint for all tracked viewports.
+    //    Each viewport's paintGL will now use the results of the logic
+    //    we just calculated.
+    for (auto* vp : m_targets.keys()) {
+        if (vp) {
+            vp->update();
+        }
+    }
 }
 
 //==============================================================================
@@ -133,16 +148,10 @@ void RenderingSystem::initializeResourcesForContext(QOpenGLFunctions_4_3_Core* g
     m_isInitialized = true; // Mark that the system is ready in at least one context
     qDebug() << "[INIT] RenderingSystem initialization complete for context" << ctx;
 }
-void RenderingSystem::renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_Core* gl, int vpW, int vpH) {
-    
-    static std::chrono::steady_clock::time_point last =
-        std::chrono::steady_clock::now();
-    auto  now = std::chrono::steady_clock::now();
-    float dt = std::chrono::duration<float>(now - last).count();
-    last = now;
-    
-    updateCameraTransforms();                               // copy Camera ➜ TransformComponent
-    ViewportWidget::propagateTransforms(m_scene->getRegistry()); // build WorldTransformComponent
+void RenderingSystem::renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_Core* gl, int vpW, int vpH, float frameDeltaTime) {
+
+    // The per-frame logic (like deltaTime calculation and transform propagation)
+    // is now handled outside this function, once per frame.
 
     ensureContextIsTracked(viewport);
 
@@ -155,20 +164,24 @@ void RenderingSystem::renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_
     const auto& camera = m_scene->getRegistry().get<CameraComponent>(m_currentCamera).camera;
     const float aspect = (vpH > 0) ? static_cast<float>(vpW) / vpH : 1.0f;
 
+    // --- THE FIX ---
+    // The RenderFrameContext now receives the correct, consistent deltaTime for this frame.
+    // NOTE: You must add 'float deltaTime;' to the RenderFrameContext struct definition.
     RenderFrameContext frameContext = {
-    gl,
-    m_scene->getRegistry(),
-    *this,
-    camera,
-    camera.getViewMatrix(),
-    camera.getProjectionMatrix(aspect),
-    target,
-    vpW,
-    vpH,
-    1.0f / 60.0f, // Or from a proper timer
-    m_elapsedTime
+        gl,
+        m_scene->getRegistry(),
+        *this,
+        camera,
+        camera.getViewMatrix(),
+        camera.getProjectionMatrix(aspect),
+        target,
+        vpW,
+        vpH,
+        frameDeltaTime, // Use the deltaTime passed into the function
+        m_elapsedTime
     };
 
+    // The rest of the function remains the same.
     gl->glBindFramebuffer(GL_FRAMEBUFFER, target.mainFBO);
     gl->glViewport(0, 0, target.w, target.h);
 

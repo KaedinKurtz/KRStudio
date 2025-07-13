@@ -42,10 +42,10 @@ public:
     // --- Lifecycle & Core API ---
     // RENAMED: This function now initializes resources for a specific context.
     void initializeResourcesForContext(QOpenGLFunctions_4_3_Core* gl, Scene* scene);
-    void renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_Core* gl, int vpW, int vpH);
+    void renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_Core* gl, int vpW, int vpH, float frameDeltaTime);
     void shutdown(QOpenGLFunctions_4_3_Core* gl);
     void onViewportResized(ViewportWidget* vp, QOpenGLFunctions_4_3_Core* gl, int fbW, int fbH);
-
+    void onMasterUpdate();
     // --- Scene Logic Updaters ---
     void updateSceneLogic(float deltaTime);
     void updateCameraTransforms();

@@ -151,7 +151,10 @@ void ViewportWidget::paintGL()
     const int fbW = static_cast<int>(width() * devicePixelRatioF());
     const int fbH = static_cast<int>(height() * devicePixelRatioF());
 
-    m_renderingSystem->renderView(this, gl, fbW, fbH);
+    const float frameDeltaTime = m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime;
+
+
+    m_renderingSystem->renderView(this, gl, fbW, fbH, frameDeltaTime);
 }
 
 void ViewportWidget::renderNow()

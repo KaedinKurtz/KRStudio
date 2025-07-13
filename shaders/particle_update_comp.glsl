@@ -66,6 +66,48 @@ vec3 getColorFromGradient(float t)
     return u_stopColor[u_stopCount-1].rgb;
 }
 
+vec3 closestPointOnTriangle(vec3 p, vec3 a, vec3 b, vec3 c) {
+    vec3 ab = b - a;
+    vec3 ac = c - a;
+    vec3 ap = p - a;
+    float d1 = dot(ab, ap);
+    float d2 = dot(ac, ap);
+    if (d1 <= 0.0 && d2 <= 0.0) return a;
+
+    vec3 bp = p - b;
+    float d3 = dot(ab, bp);
+    float d4 = dot(ac, bp);
+    if (d3 >= 0.0 && d4 <= d3) return b;
+
+    float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0) {
+        float v = d1 / (d1 - d3);
+        return a + v * ab;
+    }
+
+    vec3 cp = p - c;
+    float d5 = dot(ab, cp);
+    float d6 = dot(ac, cp);
+    if (d6 >= 0.0 && d5 <= d6) return c;
+
+    float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0) {
+        float w = d2 / (d2 - d6);
+        return a + w * ac;
+    }
+
+    float va = d3 * d6 - d5 * d4;
+    if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0) {
+        float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return b + w * (c - b);
+    }
+
+    float denom = 1.0 / (va + vb + vc);
+    float v = vb * denom;
+    float w = vc * denom;
+    return a + ab * v + ac * w;
+}
+
 /*  main */
 void main()
 {
@@ -88,6 +130,22 @@ void main()
     for (int i = 0; i < u_directionalEffectorCount; ++i)
         field += directionalEffectors[i].direction.xyz * directionalEffectors[i].strength;
 
+    // 2. Accumulate Triangle Mesh Effectors
+    for (int i = 0; i < u_triangleEffectorCount; ++i) {
+        // This logic was missing. It's similar to the C++ FieldSolver.
+        TriangleGpu tri = triangleEffectors[i];
+        // The closestPointOnTriangle helper function already exists in your shader
+        vec3 closestPoint = closestPointOnTriangle(wPos, tri.v0.xyz, tri.v1.xyz, tri.v2.xyz);
+        vec3 diff = wPos - closestPoint;
+        float dist = length(diff);
+        float radius = tri.normal.w; // Radius is stored in normal.w
+        if (dist > 0.001 && dist < radius) {
+            float strength = tri.v0.w; // Strength is stored in v0.w
+            strength *= (1.0 - dist / radius);
+            field += normalize(diff) * strength;
+        }
+    }
+
     /*  optional random-walk noise */
     if (u_randomWalkStrength > 0.0) {
         vec3 seed = wPos + vec3(u_time);
@@ -109,13 +167,22 @@ void main()
     /*  lifetime / respawn  */
     p.age += u_deltaTime;
     if (p.age > u_lifetime) {
-        vec3 seed = vec3(gid, u_time, gid * 17.0 + u_time);
-        p.position.x = mix(u_boundsMin.x, u_boundsMax.x, random(seed      ));
-        p.position.y = mix(u_boundsMin.y, u_boundsMax.y, random(seed.yxz));
-        p.position.z = mix(u_boundsMin.z, u_boundsMax.z, random(seed.zyx));
-        p.position   = u_visualizerModelMatrix * p.position;
-        p.velocity   = vec4(0.0);
-        p.age        = 0.0;
+        // --- START OF FIX #2: IMPROVED RANDOM RESPAWNING ---
+        // Use different offsets for each component's seed to get more varied random numbers.
+        vec3 seedX = vec3(gid, u_time, gid * 17.0 + u_time);
+        vec3 seedY = vec3(gid * 3.0, u_time * 0.9, gid * 23.0 + u_time);
+        vec3 seedZ = vec3(gid * 5.0, u_time * 1.1, gid * 29.0 + u_time);
+
+        p.position.x = mix(u_boundsMin.x, u_boundsMax.x, random(seedX));
+        p.position.y = mix(u_boundsMin.y, u_boundsMax.y, random(seedY));
+        p.position.z = mix(u_boundsMin.z, u_boundsMax.z, random(seedZ));
+
+        // Transform the newly spawned particle by the visualizer's model matrix
+        p.position = u_visualizerModelMatrix * p.position;
+        // --- END OF FIX #2 ---
+
+        p.velocity = vec4(0.0);
+        p.age      = 0.0;
     }
 
     /*  size & colour  */

@@ -10,6 +10,21 @@
 #include <random>
 #include <glm/gtc/type_ptr.hpp>
 
+struct GLStateSaver {
+    GLStateSaver(QOpenGLFunctions_4_3_Core* funcs) : gl(funcs) {
+        gl->glGetBooleanv(GL_BLEND, &blendEnabled);
+        gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMaskEnabled);
+        gl->glGetBooleanv(GL_CULL_FACE, &cullFaceEnabled);
+    }
+    ~GLStateSaver() {
+        if (blendEnabled) gl->glEnable(GL_BLEND); else gl->glDisable(GL_BLEND);
+        gl->glDepthMask(depthMaskEnabled);
+        if (cullFaceEnabled) gl->glEnable(GL_CULL_FACE); else gl->glDisable(GL_CULL_FACE);
+    }
+    QOpenGLFunctions_4_3_Core* gl;
+    GLboolean blendEnabled, depthMaskEnabled, cullFaceEnabled;
+};
+
 // --- Class Implementation ---
 namespace {
     static void uploadGradientToCurrentProgram(QOpenGLFunctions_4_3_Core* gl,
@@ -295,10 +310,9 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     if (needInit)
     {
         /* clean up old buffers / VAO if they exist */
-        if (vis.particleBuffer[0] != 0)
-        {
+        if (vis.particleBuffer[0] != 0) {
             gl->glDeleteBuffers(2, vis.particleBuffer);
-            gl->glDeleteVertexArrays(1, &vis.particleVAO);
+            gl->glDeleteVertexArrays(2, vis.particleVAO); // Delete both old VAOs
         }
 
         /* CPU-side bootstrap */
@@ -331,25 +345,30 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
             particles.size() * sizeof(Particle),
             nullptr,
             GL_DYNAMIC_DRAW);
+        gl->glGenVertexArrays(2, vis.particleVAO);
 
+        // Configure VAO 0 to read from Buffer 0
+        gl->glBindVertexArray(vis.particleVAO[0]);
+        gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[0]);
+        gl->glEnableVertexAttribArray(0); // a_position
+        gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position));
+        gl->glEnableVertexAttribArray(1); // a_color
+        gl->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, color));
+        gl->glEnableVertexAttribArray(2); // a_size
+        gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, size));
+
+        // Configure VAO 1 to read from Buffer 1
+        gl->glBindVertexArray(vis.particleVAO[1]);
+        gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[1]);
+        gl->glEnableVertexAttribArray(0); // a_position
+        gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position));
+        gl->glEnableVertexAttribArray(1); // a_color
+        gl->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, color));
+        gl->glEnableVertexAttribArray(2); // a_size
+        gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, size));
+
+        gl->glBindVertexArray(0); // Unbind the VAO when done.
         vis.currentReadBuffer = 0;
-
-        /* VAO (attribute layout stored once) */
-        gl->glBindVertexArray(vis.particleVAO);
-        gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[1 - vis.currentReadBuffer]);
-
-        /* ↺ refresh attribute bindings (needed after any slider tweak) */
-        gl->glEnableVertexAttribArray(0);
-        gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle),
-            (void*)offsetof(Particle, position));
-        gl->glEnableVertexAttribArray(1);
-        gl->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle),
-            (void*)offsetof(Particle, color));
-        gl->glEnableVertexAttribArray(2);
-        gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Particle),
-            (void*)offsetof(Particle, size));
-
-        gl->glBindVertexArray(0);
     }
 
     /* ─────────────────────────  compute pass  ───────────────────────── */
@@ -360,6 +379,7 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, vis.particleBuffer[vis.currentReadBuffer]);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, vis.particleBuffer[1 - vis.currentReadBuffer]);
 
+    // --- THE FIX: Set ALL uniforms the compute shader expects, every frame ---
     computeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
     computeShader->setFloat(gl, "u_deltaTime", context.deltaTime);
     computeShader->setFloat(gl, "u_time", context.elapsedTime);
@@ -370,6 +390,7 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     computeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
     computeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
 
+    // Set uniforms from the component's settings struct
     computeShader->setFloat(gl, "u_lifetime", settings.lifetime);
     computeShader->setFloat(gl, "u_baseSpeed", settings.baseSpeed);
     computeShader->setFloat(gl, "u_speedIntensityMultiplier", settings.speedIntensityMultiplier);
@@ -377,6 +398,10 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     computeShader->setFloat(gl, "u_peakSizeMultiplier", settings.peakSizeMultiplier);
     computeShader->setFloat(gl, "u_minSize", settings.minSize);
     computeShader->setFloat(gl, "u_randomWalkStrength", settings.randomWalkStrength);
+
+    // These uniforms were missing and are critical for the simulation
+    computeShader->setFloat(gl, "u_randomWalkScale", context.deltaTime);
+    computeShader->setFloat(gl, "u_intensityMax", 5.0f); // A reasonable default for normalizing field strength
     computeShader->setInt(gl, "u_coloringMode", static_cast<int>(settings.coloringMode));
 
     if (settings.coloringMode == FieldVisualizerComponent::ColoringMode::Intensity)
@@ -384,8 +409,43 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     else if (settings.coloringMode == FieldVisualizerComponent::ColoringMode::Lifetime)
         uploadGradientToCurrentProgram(gl, settings.lifetimeGradient);
 
+    // ========================================================================
+    // --- DEBUG_READBACK (PRE-COMPUTE) ---
+    // Log the most important uniforms being sent to the compute shader.
+    // ========================================================================
+    qDebug() << "--- [DEBUG] Uniforms Sent to Particle Compute Shader ---";
+    qDebug() << "  - DeltaTime:" << context.deltaTime << "ElapsedTime:" << context.elapsedTime;
+    qDebug() << "  - Bounds Min:" << vis.bounds.min.x << vis.bounds.min.y << vis.bounds.min.z;
+    qDebug() << "  - Effector Counts (P/D/T):" << m_pointEffectors.size()
+        << "/" << m_directionalEffectors.size() << "/" << m_triangleEffectors.size();
+    qDebug() << "----------------------------------------------------";
+
+
     gl->glDispatchCompute(settings.particleCount / 256 + 1, 1, 1);
-    gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    gl->glMemoryBarrier(GL_ALL_BARRIER_BITS);
+
+    // ========================================================================
+   // --- DEBUG_READBACK: START ---
+   // This block reads the output of the compute shader for inspection.
+   // ========================================================================
+    {
+        GLuint outputBuffer = vis.particleBuffer[1 - vis.currentReadBuffer];
+        Particle p = {};
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, outputBuffer);
+        gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle), &p);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+        qDebug() << "--- [DEBUG] Particle 0 State After Compute ---";
+        qDebug() << "  - Position:" << p.position.x << p.position.y << p.position.z;
+        qDebug() << "  - Velocity:" << p.velocity.x << p.velocity.y << p.velocity.z;
+        qDebug() << "  - Color:" << p.color.r << p.color.g << p.color.b << p.color.a;
+        qDebug() << "  - Age:" << p.age << "Lifetime:" << p.lifetime;
+        qDebug() << "  - Size:" << p.size;
+        qDebug() << "--------------------------------------------";
+    }
+    // ========================================================================
+    // --- DEBUG_READBACK: END ---
+    // 
 
     /* ─────────────────────────  render pass  ───────────────────────── */
     gl->glEnable(GL_PROGRAM_POINT_SIZE);
@@ -397,17 +457,7 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     renderShader->setMat4(gl, "u_view", context.view);
     renderShader->setMat4(gl, "u_projection", context.projection);
 
-    gl->glBindVertexArray(vis.particleVAO);
-
-    /* ↺ re-point VAO attribute bindings to *current write buffer* */
-    gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[1 - vis.currentReadBuffer]);
-    gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle),
-        reinterpret_cast<void*>(offsetof(Particle, position)));
-    gl->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle),
-        reinterpret_cast<void*>(offsetof(Particle, color)));
-    gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Particle),
-        reinterpret_cast<void*>(offsetof(Particle, size)));
-
+    gl->glBindVertexArray(vis.particleVAO[1 - vis.currentReadBuffer]);
     gl->glDrawArrays(GL_POINTS, 0, settings.particleCount);
 
     gl->glBindVertexArray(0);
@@ -415,7 +465,7 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     gl->glDisable(GL_BLEND);
     gl->glDisable(GL_PROGRAM_POINT_SIZE);
 
-    /* swap read/write for next frame */
+    // Swap buffers for the next frame
     vis.currentReadBuffer = 1 - vis.currentReadBuffer;
 }
 

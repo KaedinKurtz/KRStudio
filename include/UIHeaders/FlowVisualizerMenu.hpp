@@ -17,6 +17,7 @@
 #include <QButtonGroup>
 
 class PreviewViewport;
+class Scene;
 
 namespace Ui {
     class FlowVisualizerMenu;
@@ -27,7 +28,7 @@ class FlowVisualizerMenu : public QWidget
     Q_OBJECT
 
 public:
-    explicit FlowVisualizerMenu(QWidget* parent = nullptr);
+    explicit FlowVisualizerMenu(Scene* scene, QWidget* parent = nullptr);
     ~FlowVisualizerMenu();
 
     void updateControlsFromComponent(const FieldVisualizerComponent& component);
@@ -97,6 +98,7 @@ public:
     std::vector<ColorStop> getParticleLifetimeGradient() const;
     Ui::FlowVisualizerMenu* getUi() { return ui; }
     void updateGradientPreviewFromTable(QLabel* previewLabel, QTableWidget* table);
+    void updateComponentState(FieldVisualizerComponent& vis);
 
 public slots:
     void onSettingChanged();
@@ -147,6 +149,7 @@ private:
     glm::vec4 qColorToGlm(const QColor& color) const;
 
     Ui::FlowVisualizerMenu* ui;
+    Scene* m_scene;
     QMap<QPushButton*, QColor*> m_colorButtonMap;
     QColor m_staticXPos, m_staticXNeg, m_staticYPos, m_staticYNeg, m_staticZPos, m_staticZNeg;
     QColor m_dynamicXPos, m_dynamicXNeg, m_dynamicYPos, m_dynamicYNeg, m_dynamicZPos, m_dynamicZNeg;
