@@ -8,12 +8,27 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_4_3_Core>
 
+struct GLStateSaver {
+    GLStateSaver(QOpenGLFunctions_4_3_Core* funcs) : gl(funcs) {
+        gl->glGetBooleanv(GL_BLEND, &blendEnabled);
+        gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMaskEnabled);
+        gl->glGetBooleanv(GL_CULL_FACE, &cullFaceEnabled);
+    }
+    ~GLStateSaver() {
+        if (blendEnabled) gl->glEnable(GL_BLEND); else gl->glDisable(GL_BLEND);
+        gl->glDepthMask(depthMaskEnabled);
+        if (cullFaceEnabled) gl->glEnable(GL_CULL_FACE); else gl->glDisable(GL_CULL_FACE);
+    }
+    QOpenGLFunctions_4_3_Core* gl;
+    GLboolean blendEnabled, depthMaskEnabled, cullFaceEnabled;
+};
+
 void OpaquePass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl) {
 
 }
 
 void OpaquePass::execute(const RenderFrameContext& context) {
-    
+    GLStateSaver stateSaver(context.gl);
     Shader* phongShader = context.renderer.getShader("phong");
     if (!phongShader) {
         // If there's no shader for this context, we can't do anything.

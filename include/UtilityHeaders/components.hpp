@@ -144,7 +144,7 @@ struct FieldVisualizerComponent {
     bool isGpuDataDirty = true;
     FieldVisGpuData gpuData;
     GLuint particleBuffer[2] = { 0, 0 };
-    GLuint particleVAO = 0;
+    GLuint particleVAO[2] = { 0, 0 };
     int currentReadBuffer = 0;
 };
 
@@ -291,6 +291,7 @@ struct SceneProperties
     glm::vec3 fogColor = { 0.1f, 0.1f, 0.1f };
     float fogStartDistance = 10.0f;
     float fogEndDistance = 75.0f;
+    float deltaTime = 0.016f;
 };
 
 enum class SplineType { Linear, CatmullRom, Bezier, Parametric };

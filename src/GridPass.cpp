@@ -9,6 +9,21 @@
 #include <QOpenGLFunctions_4_3_Core>
 #include <QDebug>
 
+struct GLStateSaver {
+    GLStateSaver(QOpenGLFunctions_4_3_Core* funcs) : gl(funcs) {
+        gl->glGetBooleanv(GL_BLEND, &blendEnabled);
+        gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMaskEnabled);
+        gl->glGetBooleanv(GL_CULL_FACE, &cullFaceEnabled);
+    }
+    ~GLStateSaver() {
+        if (blendEnabled) gl->glEnable(GL_BLEND); else gl->glDisable(GL_BLEND);
+        gl->glDepthMask(depthMaskEnabled);
+        if (cullFaceEnabled) gl->glEnable(GL_CULL_FACE); else gl->glDisable(GL_CULL_FACE);
+    }
+    QOpenGLFunctions_4_3_Core* gl;
+    GLboolean blendEnabled, depthMaskEnabled, cullFaceEnabled;
+};
+
 GridPass::~GridPass() {
     if (!m_gridVAOs.isEmpty()) { // Use isEmpty() for QHash
         qWarning() << "GridPass destroyed, but" << m_gridVAOs.size() << "VAOs still exist. This might be a resource leak.";
