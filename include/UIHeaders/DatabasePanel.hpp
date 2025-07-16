@@ -36,6 +36,18 @@ private slots:
     void onRunQuery();
     void onShowEntities();
     void onShowComponents();
+    // Index management slots
+    void onListIndexes();
+    void onCreateIndex();
+    void onDropIndex();
+    void onRebuildIndex();
+    void onAnalyzeIndex();
+    void onValidateIndex();
+    // Replication management slots
+    void onEnableReplication();
+    void onDisableReplication();
+    void onSyncReplication();
+    void onShowReplicationStatus();
 
 private:
     void setupUI();
@@ -43,6 +55,22 @@ private:
     void refreshEntityList(const QString& sceneName);
     void refreshComponentList(const QString& sceneName, qint64 entityId);
     void showStatus(const QString& message, bool error = false);
+    // Index management UI
+    QPushButton* m_listIndexesButton;
+    QPushButton* m_createIndexButton;
+    QPushButton* m_dropIndexButton;
+    QPushButton* m_rebuildIndexButton;
+    QPushButton* m_analyzeIndexButton;
+    QPushButton* m_validateIndexButton;
+    QLineEdit* m_indexNameEdit;
+    QLineEdit* m_indexTableEdit;
+    QLineEdit* m_indexColumnsEdit;
+    // Replication management UI
+    QPushButton* m_enableReplicationButton;
+    QPushButton* m_disableReplicationButton;
+    QPushButton* m_syncReplicationButton;
+    QPushButton* m_showReplicationStatusButton;
+    QLineEdit* m_replicationMasterEdit;
 
     QComboBox* m_sceneCombo;
     QPushButton* m_refreshButton;
