@@ -6,11 +6,12 @@
   "dependencies": [
     {
       "name": "qtbase",
-      "features": [ "opengl", "gui", "widgets" ]
+      "features": [ "opengl", "gui", "widgets", "sql"]
     },
     "assimp",
     "glm",
-    "urdfdom"
+    "urdfdom",
+    "sqlite3"
   ]
 
 }

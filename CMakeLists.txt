@@ -13,14 +13,19 @@ set(CMAKE_AUTORCC ON)
 
 #  Third-party packages (via find_package)
 
-list(APPEND CMAKE_PREFIX_PATH "C:/Users/kaedi/downloads/sentry-native/install")
+find_package(Qt6 COMPONENTS Core Gui Widgets Sql REQUIRED)
+# or for Qt5:
+# find_package(Qt5 COMPONENTS Core Gui Widgets Sql REQUIRED)
 
-
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
 find_package(OpenGL REQUIRED)
 find_package(glm     REQUIRED)
 find_package(assimp  CONFIG REQUIRED)
 find_package(urdfdom CONFIG REQUIRED)
+find_package(SQLite3 REQUIRED)
+find_package(Qt6OpenGL REQUIRED)
+find_package(Qt6Widgets REQUIRED)
+find_package(Qt6Sql REQUIRED)
+
 #  Qt Advanced Docking System  FetchContent
 
 include(FetchContent)
@@ -40,6 +45,7 @@ set(ADS_SKIP_GIT_VERSION ON CACHE BOOL "Skip git-based versioning" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "Disable ADS examples" FORCE)
 
 FetchContent_MakeAvailable(qtads)      # creates the target: QtADS
+
 #  Project sources / headers
 
 file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
@@ -76,9 +82,7 @@ target_include_directories(RoboticsSoftware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/external"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml"
     "${qtads_SOURCE_DIR}/src"          # ADS public headers
-    ${urdfdom_INCLUDE_DIRS}
-)
-
+    ${urdfdom_INCLUDE_DIRS})
 
 #  Compile definitions / options
 
@@ -96,14 +100,10 @@ endif()
 
 #  Link libraries
 
-target_link_libraries(RoboticsSoftware PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets
-    OpenGL::GL
-    glm::glm
-    assimp::assimp
-    ${urdfdom_LIBRARIES}
-    ads::qtadvanceddocking-qt6
-)                          # provided by FetchContent
+find_package(Qt6Sql REQUIRED)
+target_link_libraries(RoboticsSoftware PRIVATE Qt6::Sql)
+find_package(Qt6Gui REQUIRED)
+target_link_libraries(RoboticsSoftware PRIVATE Qt6::Gui)
 
 #  Post-build steps
 
