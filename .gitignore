@@ -242,6 +242,10 @@ _pkginfo.txt
 *.appxbundle
 *.appxupload
 
+
+#large debug file
+RS_DebugDump.txt
+
 # Visual Studio cache files
 # files ending in .cache can be ignored
 *.[Cc]ache

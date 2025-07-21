@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "krstudio",
   "version-string": "0.1.0",
   "builtin-baseline": "c6f09fc73ebfbfddd769f8fac9f33f95304c77e5",
@@ -8,7 +8,11 @@
       "name": "qtbase",
       "features": [ "opengl", "gui", "widgets", "sql"]
     },
+    "opencv4",
     "assimp",
+    {
+      "name": "realsense2"
+    },
     "glm",
     "urdfdom",
     "sqlite3"

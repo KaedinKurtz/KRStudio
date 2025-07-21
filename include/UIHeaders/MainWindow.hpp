@@ -5,6 +5,10 @@
 #include <QTimer>
 #include <QResizeEvent>
 #include <memory> // Required for std::unique_ptr
+#include <entt/entt.hpp> 
+#include <DockWidget.h>   
+#include <librealsense2/rs.hpp>
+
 
 // Forward declarations
 class QWidget;
@@ -14,11 +18,19 @@ class Scene;
 class RenderingSystem;
 class QTimer;
 class FlowVisualizerMenu; // Forward-declare our new menu
+class SlamManager; // Forward-declare SlamManager
+class RealSenseManager; // Forward-declare RealSenseManager
 
 namespace ads {
     class CDockManager;
     class CDockWidget;
 }
+
+namespace QtNodes {
+    class BasicGraphicsScene;
+    class GraphicsView;
+}
+
 
 class MainWindow : public QMainWindow
 {
@@ -28,26 +40,38 @@ public:
     MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
     void updateVisualizerUI();
-
+    entt::entity cameraEntity() const { return m_cameraEntity; }
     void disableFloatingForAllDockWidgets();
-
+    void updateAllDockStyles();
 protected:
     // No changes needed here
+    void setDockManagerBaseStyle();
+    void applyCameraColorToDock(ads::CDockWidget* dock, entt::entity camEntity);
 
 private:
     // --- Member variables updated for the new layout ---
     QWidget* m_centralContainer;
     StaticToolbar* m_fixedTopToolbar;
     ads::CDockManager* m_dockManager;
-
+    QString generateCameraColourCss(ads::CDockWidget* dock,
+        entt::entity      camEntity,
+        const QString& objectName);
     // The MainWindow now owns the single, shared scene.
     std::unique_ptr<Scene> m_scene;
 
     std::unique_ptr<RenderingSystem> m_renderingSystem;
 
     // A pointer to our menu widget
-    FlowVisualizerMenu* m_flowVisualizerMenu;
+    SlamManager* m_slamManager;
 
+
+
+    FlowVisualizerMenu* m_flowVisualizerMenu;
+    QTimer* m_rsPollTimer;
+    std::unique_ptr<RealSenseManager> m_realSenseManager;
+    std::unique_ptr<rs2::pointcloud> m_pointCloud;
+
+    entt::entity m_cameraEntity;
 
     QTimer* m_masterRenderTimer;
 
@@ -55,6 +79,9 @@ private:
     QList<ViewportWidget*> m_viewports;         // A list of the REAL viewports
     QList<QWidget*> m_viewportPlaceholders;   // A list of the placeholder widgets
     QList<ads::CDockWidget*> m_dockContainers;
+
+    QtNodes::BasicGraphicsScene* m_nodeScene; // Owned by GraphicsView
+    QtNodes::GraphicsView* m_nodeView;
 
 public slots:
     void addViewport();

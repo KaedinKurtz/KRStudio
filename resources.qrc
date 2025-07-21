@@ -177,6 +177,7 @@
         <file>icons/kRLogoSquare.png</file>
         <file>icons/icons8-check-mark-48.png</file>
         <file>external/miniViewportCamera.stl</file>
+        <file>icons/Realsense Logo.png</file>
     </qresource>
     <qresource prefix="/styles">
         <file>dark_style.qss</file>

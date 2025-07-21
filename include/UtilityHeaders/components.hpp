@@ -10,6 +10,7 @@
 #include <qopengl.h>
 #include <unordered_map>
 #include <Eigen/Dense> 
+#include <any>
 
 #include "GridLevel.hpp"
 #include "Camera.hpp"
@@ -23,9 +24,20 @@ struct CameraGizmoTag {};
 struct RecordLedTag {};
 struct PulsingSplineTag {};
 
+
+/**
+ * @brief A structure that wraps any published value with profiling and tracing information.
+ * This is the fundamental data packet within the ObservableDataManager.
+ */
+template<typename T>
+struct ProfiledData {
+    T value;
+    double publication_timestamp;
+    float processing_time_ms;
+    std::map<std::string, std::shared_ptr<const std::any>> dependencies;
+};
+
 // --- Material & Texture Components ---
-
-
 
 struct PulsingLightComponent {
     glm::vec3 onColor{ 1.0f, 0.0f, 0.0f };
@@ -231,6 +243,7 @@ struct CameraComponent
 {
     Camera camera;
     bool isPrimary = true;
+	glm::vec3 tint = { 0.0f, 0.0f, 0.0f }; // Color tint applied to the camera's view
 };
 
 // --- RENDER-RELATED COMPONENTS ---
@@ -531,6 +544,11 @@ struct TriangleMeshCollider {
     PhysicsMaterial material;
 };
 
+struct Pose6D                // or using Pose6D = glm::mat4;
+{
+    glm::vec3 position{ 0.0f };
+    glm::quat orientation{ 1,0,0,0 };
+};
 /**
  * @brief A request to generate a motion plan for a robot or mechanism.
  * This is a "command" component; a system will see it, generate a plan,
@@ -560,16 +578,6 @@ struct Trajectory {
     double totalDuration;
 };
 
-/**
- * @brief Defines the operational limits for a single joint.
- * Essential for any realistic motion planning or control.
- */
-struct JointLimits {
-    double minPosition = 0.0;
-    double maxPosition = 0.0;
-    double maxVelocity = 0.0;
-    double maxEffort = 0.0; // Max torque or force
-};
 
 /**
  * @brief Defines the parameters for a PID (Proportional-Integral-Derivative) controller.

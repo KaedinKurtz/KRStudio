@@ -1,7 +1,8 @@
-﻿#pragma once
+#pragma once
 
 #include "IRenderPass.hpp"
 #include "components.hpp"
+#include <librealsense2/rs.hpp> // ADDED: For RealSense point cloud support
 
 #include <QObject>
 #include <QMap>
@@ -25,6 +26,7 @@ class QOpenGLWidget;
 class ViewportWidget;
 class Shader;
 class Scene;
+class PointCloudPass;
 
 // This struct holds the framebuffer objects for a single viewport. (No changes needed)
 struct TargetFBOs {
@@ -51,6 +53,10 @@ public:
     // --- Scene Logic Updaters ---
     void updateSceneLogic(float deltaTime);
     void updateCameraTransforms();
+
+    void updatePointCloud(const rs2::points& points, const rs2::video_frame& colorFrame, const glm::mat4& pose);
+
+
 
     // --- Public Helpers & Getters (for Render Passes) ---
     bool isInitialized() const { return m_isInitialized; }
@@ -97,4 +103,6 @@ private:
 
     // This existing set tracks which contexts we are watching for destruction.
     QSet<QOpenGLContext*> m_trackedContexts; // FROM: std::set TO: QSet for consistency
+
+    PointCloudPass* m_pointCloudPass = nullptr;
 };
