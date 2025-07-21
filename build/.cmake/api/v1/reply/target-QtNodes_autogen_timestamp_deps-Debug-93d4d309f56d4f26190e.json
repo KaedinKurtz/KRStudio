@@ -1,0 +1,27 @@
+{
+	"backtrace" : 0,
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : 
+		[
+			"build/_deps/qtnodes-src/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			}
+		]
+	},
+	"id" : "QtNodes_autogen_timestamp_deps::@58fa5ca1759e8f8b8fd3",
+	"isGeneratorProvided" : true,
+	"name" : "QtNodes_autogen_timestamp_deps",
+	"paths" : 
+	{
+		"build" : "_deps/qtnodes-build",
+		"source" : "build/_deps/qtnodes-src"
+	},
+	"sources" : [],
+	"type" : "UTILITY"
+}

@@ -1,0 +1,74 @@
+QtNodes_autogen/timestamp: \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakePackageConfigHelpers.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckCXXCompilerFlag.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/GNUInstallDirs.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/WriteBasicConfigVersionFile.cmake \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/CMakeLists.txt \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/cmake/QtNodesConfig.cmake.in \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/resources/resources.qrc \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/AbstractGraphModel.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/AbstractNodeGeometry.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/BasicGraphicsScene.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/ConnectionGraphicsObject.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/ConnectionPainter.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/ConnectionPainter.hpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/ConnectionState.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/ConnectionStyle.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/DataFlowGraphModel.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/DataFlowGraphicsScene.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/DefaultHorizontalNodeGeometry.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/DefaultHorizontalNodeGeometry.hpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/DefaultNodePainter.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/DefaultVerticalNodeGeometry.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/DefaultVerticalNodeGeometry.hpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/Definitions.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/GraphicsView.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/GraphicsViewStyle.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/NodeConnectionInteraction.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/NodeConnectionInteraction.hpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/NodeDelegateModel.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/NodeDelegateModelRegistry.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/NodeGraphicsObject.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/NodeState.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/NodeStyle.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/StyleCollection.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/UndoCommands.cpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/UndoCommands.hpp \
+	D:/RoboticsSoftware/build/_deps/qtnodes-src/src/locateNode.cpp \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6Config.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigExtras.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6Dependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6Targets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6VersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtFeature.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtFeatureCommon.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtInstallPaths.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicAppleHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeVersionHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicDependencyHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicExternalProjectHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFinalizerHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFindPackageHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicGitHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicPluginHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomAttributionHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomCpeHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomDepHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomFileHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomGenerationHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomLicenseHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomOpsHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPurlHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPythonHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomQtEntityHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomSystemDepHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTargetHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTestHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicToolHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicWalkLibsHelpers.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe

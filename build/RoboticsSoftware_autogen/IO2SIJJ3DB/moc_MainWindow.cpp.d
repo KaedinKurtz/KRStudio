@@ -1,10 +1,15 @@
 D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_MainWindow.cpp: D:/RoboticsSoftware/include/UIHeaders/MainWindow.hpp \
+  D:/RoboticsSoftware/build/_deps/qtads-src/src/DockWidget.h \
+  D:/RoboticsSoftware/build/_deps/qtads-src/src/ads_globals.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QDebug \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QList \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QObject \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QPair \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QRect \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QSize \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QSizeF \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QTimer \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QtGlobal \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/q20functional.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/q20iterator.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/q20memory.h \
@@ -138,6 +143,8 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_MainWindow.cpp
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qversiontagging.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qxptype_traits.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qyieldcpu.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/QMouseEvent \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/QPixmap \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/QResizeEvent \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/QTransform \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qaction.h \
@@ -176,14 +183,115 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_MainWindow.cpp
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qvectornd.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qwindowdefs.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qwindowdefs_win.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QFrame \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QMainWindow \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QPushButton \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QStyle \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QWidget \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qabstractbutton.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qframe.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qmainwindow.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qpushbutton.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qsizepolicy.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qstyle.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtabwidget.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgets-config.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgetsexports.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgetsglobal.h \
-  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qwidget.h
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qwidget.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_config.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_context.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_device.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_frame.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_option.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_pipeline.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_processing.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_record_playback.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_sensor.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/h/rs_types.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/hpp/rs_context.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/hpp/rs_device.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/hpp/rs_frame.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/hpp/rs_options.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/hpp/rs_pipeline.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/hpp/rs_processing.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/hpp/rs_record_playback.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/hpp/rs_sensor.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/hpp/rs_types.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/rs.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/rs.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/rsutil.h \
+  D:/RoboticsSoftware/external/entt/config/config.h \
+  D:/RoboticsSoftware/external/entt/config/macro.h \
+  D:/RoboticsSoftware/external/entt/config/version.h \
+  D:/RoboticsSoftware/external/entt/container/dense_map.hpp \
+  D:/RoboticsSoftware/external/entt/container/dense_set.hpp \
+  D:/RoboticsSoftware/external/entt/container/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/container/table.hpp \
+  D:/RoboticsSoftware/external/entt/core/algorithm.hpp \
+  D:/RoboticsSoftware/external/entt/core/any.hpp \
+  D:/RoboticsSoftware/external/entt/core/attribute.h \
+  D:/RoboticsSoftware/external/entt/core/bit.hpp \
+  D:/RoboticsSoftware/external/entt/core/compressed_pair.hpp \
+  D:/RoboticsSoftware/external/entt/core/enum.hpp \
+  D:/RoboticsSoftware/external/entt/core/family.hpp \
+  D:/RoboticsSoftware/external/entt/core/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/core/hashed_string.hpp \
+  D:/RoboticsSoftware/external/entt/core/ident.hpp \
+  D:/RoboticsSoftware/external/entt/core/iterator.hpp \
+  D:/RoboticsSoftware/external/entt/core/memory.hpp \
+  D:/RoboticsSoftware/external/entt/core/monostate.hpp \
+  D:/RoboticsSoftware/external/entt/core/ranges.hpp \
+  D:/RoboticsSoftware/external/entt/core/tuple.hpp \
+  D:/RoboticsSoftware/external/entt/core/type_info.hpp \
+  D:/RoboticsSoftware/external/entt/core/type_traits.hpp \
+  D:/RoboticsSoftware/external/entt/core/utility.hpp \
+  D:/RoboticsSoftware/external/entt/entity/component.hpp \
+  D:/RoboticsSoftware/external/entt/entity/entity.hpp \
+  D:/RoboticsSoftware/external/entt/entity/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/entity/group.hpp \
+  D:/RoboticsSoftware/external/entt/entity/handle.hpp \
+  D:/RoboticsSoftware/external/entt/entity/helper.hpp \
+  D:/RoboticsSoftware/external/entt/entity/mixin.hpp \
+  D:/RoboticsSoftware/external/entt/entity/organizer.hpp \
+  D:/RoboticsSoftware/external/entt/entity/ranges.hpp \
+  D:/RoboticsSoftware/external/entt/entity/registry.hpp \
+  D:/RoboticsSoftware/external/entt/entity/runtime_view.hpp \
+  D:/RoboticsSoftware/external/entt/entity/snapshot.hpp \
+  D:/RoboticsSoftware/external/entt/entity/sparse_set.hpp \
+  D:/RoboticsSoftware/external/entt/entity/storage.hpp \
+  D:/RoboticsSoftware/external/entt/entity/view.hpp \
+  D:/RoboticsSoftware/external/entt/entt.hpp \
+  D:/RoboticsSoftware/external/entt/graph/adjacency_matrix.hpp \
+  D:/RoboticsSoftware/external/entt/graph/dot.hpp \
+  D:/RoboticsSoftware/external/entt/graph/flow.hpp \
+  D:/RoboticsSoftware/external/entt/graph/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/locator/locator.hpp \
+  D:/RoboticsSoftware/external/entt/meta/adl_pointer.hpp \
+  D:/RoboticsSoftware/external/entt/meta/container.hpp \
+  D:/RoboticsSoftware/external/entt/meta/context.hpp \
+  D:/RoboticsSoftware/external/entt/meta/factory.hpp \
+  D:/RoboticsSoftware/external/entt/meta/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/meta/meta.hpp \
+  D:/RoboticsSoftware/external/entt/meta/node.hpp \
+  D:/RoboticsSoftware/external/entt/meta/pointer.hpp \
+  D:/RoboticsSoftware/external/entt/meta/policy.hpp \
+  D:/RoboticsSoftware/external/entt/meta/range.hpp \
+  D:/RoboticsSoftware/external/entt/meta/resolve.hpp \
+  D:/RoboticsSoftware/external/entt/meta/template.hpp \
+  D:/RoboticsSoftware/external/entt/meta/type_traits.hpp \
+  D:/RoboticsSoftware/external/entt/meta/utility.hpp \
+  D:/RoboticsSoftware/external/entt/poly/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/poly/poly.hpp \
+  D:/RoboticsSoftware/external/entt/process/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/process/process.hpp \
+  D:/RoboticsSoftware/external/entt/process/scheduler.hpp \
+  D:/RoboticsSoftware/external/entt/resource/cache.hpp \
+  D:/RoboticsSoftware/external/entt/resource/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/resource/loader.hpp \
+  D:/RoboticsSoftware/external/entt/resource/resource.hpp \
+  D:/RoboticsSoftware/external/entt/signal/delegate.hpp \
+  D:/RoboticsSoftware/external/entt/signal/dispatcher.hpp \
+  D:/RoboticsSoftware/external/entt/signal/emitter.hpp \
+  D:/RoboticsSoftware/external/entt/signal/fwd.hpp \
+  D:/RoboticsSoftware/external/entt/signal/sigh.hpp

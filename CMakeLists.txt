@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.24)           # 3.24  full FetchContent GIT_SPARSE support
+cmake_minimum_required(VERSION 3.24)           # 3.24  full FetchContent GIT_SPARSE support
 project(RoboticsSoftware LANGUAGES CXX)
 
 #   Global compiler & Qt meta-object settings
@@ -13,19 +13,16 @@ set(CMAKE_AUTORCC ON)
 
 #  Third-party packages (via find_package)
 
-find_package(Qt6 COMPONENTS Core Gui Widgets Sql REQUIRED)
-# or for Qt5:
-# find_package(Qt5 COMPONENTS Core Gui Widgets Sql REQUIRED)
-
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
 find_package(OpenGL REQUIRED)
 find_package(glm     REQUIRED)
 find_package(assimp  CONFIG REQUIRED)
 find_package(urdfdom CONFIG REQUIRED)
-find_package(SQLite3 REQUIRED)
-find_package(Qt6OpenGL REQUIRED)
-find_package(Qt6Widgets REQUIRED)
-find_package(Qt6Sql REQUIRED)
 
+set(realsense2_DIR "C:/Users/kaedi/vcpkg/installed/x64-windows/share/realsense2")
+
+find_package(realsense2 REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc features2d calib3d)
 #  Qt Advanced Docking System  FetchContent
 
 include(FetchContent)
@@ -48,11 +45,29 @@ FetchContent_MakeAvailable(qtads)      # creates the target: QtADS
 
 #  Project sources / headers
 
+#   Node Editor
+# The newest stable tag as of 2025-07-18 is 3.0.11.
+FetchContent_Declare(
+  QtNodes
+  GIT_REPOSITORY https://github.com/paceholder/nodeeditor.git
+  GIT_TAG        3.0.11                # CORRECTED: Removed the 'v' from the tag name.
+  GIT_SHALLOW    TRUE                 # faster checkout
+)
+set(QTNODES_BUILD_EXAMPLES OFF CACHE BOOL "Disable node editor examples" FORCE) # Disables building the library's example projects.
+FetchContent_MakeAvailable(QtNodes)      # Downloads and prepares the library, creating the QtNodes target.
+
+
 file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/include/*Headers/*.hpp")
 
 file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Nodes/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Object/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Rendering/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/SLAM/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/UI/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Utility/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml/*.cpp"
 )
 
@@ -79,10 +94,15 @@ target_include_directories(RoboticsSoftware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/RenderingHeaders"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/UIHeaders"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/UtilityHeaders"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/SLAMHeaders"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/NodeHeaders"
     "${CMAKE_CURRENT_SOURCE_DIR}/external"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml"
     "${qtads_SOURCE_DIR}/src"          # ADS public headers
-    ${urdfdom_INCLUDE_DIRS})
+    ${urdfdom_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
+)
+
 
 #  Compile definitions / options
 
@@ -100,10 +120,17 @@ endif()
 
 #  Link libraries
 
-find_package(Qt6Sql REQUIRED)
-target_link_libraries(RoboticsSoftware PRIVATE Qt6::Sql)
-find_package(Qt6Gui REQUIRED)
-target_link_libraries(RoboticsSoftware PRIVATE Qt6::Gui)
+target_link_libraries(RoboticsSoftware PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets
+    OpenGL::GL
+    glm::glm
+    assimp::assimp
+    ${urdfdom_LIBRARIES}
+    ads::qtadvanceddocking-qt6
+    QtNodes
+    realsense2::realsense2
+    ${OpenCV_LIBS} 
+)                          # provided by FetchContent
 
 #  Post-build steps
 
@@ -115,6 +142,15 @@ if(WIN32)
                 $<TARGET_FILE:ads::qtadvanceddocking-qt6> #  CORRECTED: Use the namespaced alias
                 $<TARGET_FILE_DIR:RoboticsSoftware>
         COMMENT "Copying QtADS runtime")
+endif()
+
+# NEW: Copy QtNodes runtime (Windows only)
+if(WIN32)
+    add_custom_command(TARGET RoboticsSoftware POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:QtNodes> # The target for the node editor library.
+                $<TARGET_FILE_DIR:RoboticsSoftware>
+        COMMENT "Copying QtNodes runtime")
 endif()
 
 # 2) Copy shaders directory
@@ -129,7 +165,7 @@ add_custom_command(TARGET RoboticsSoftware POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/simple_arm.urdf"
             "$<TARGET_FILE_DIR:RoboticsSoftware>/simple_arm.urdf"
-    COMMENT "Copying simple_arm.urdf to output directory…")
+    COMMENT "Copying simple_arm.urdf to output directory�")
 
 # 4) Run windeployqt (Windows) after build
 if(WIN32)
