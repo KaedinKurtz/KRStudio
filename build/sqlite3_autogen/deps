@@ -1,0 +1,303 @@
+sqlite3_autogen/timestamp: \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeCXXInformation.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeCheckCompilerFlagCommonPatterns.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeCommonLanguageInclude.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeDependentOption.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeFindDependencyMacro.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeGenericSystem.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeInitializeConfigs.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeLanguageInformation.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeRCInformation.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeSystemSpecificInformation.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CMakeSystemSpecificInitialize.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckCXXCompilerFlag.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckCXXSourceCompiles.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckIncludeFileCXX.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/CheckLibraryExists.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/CMakeCommonCompilerMacros.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/MSVC-CXX.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Compiler/MSVC.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/ExternalProject/shared_internal_commands.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FetchContent.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FetchContent/CMakeLists.cmake.in \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindGit.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindOpenGL.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageHandleStandardArgs.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindPackageMessage.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindTIFF.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/FindThreads.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/GNUInstallDirs.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CMakeCXXLinkerInformation.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CMakeCommonLinkerInformation.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CheckCompilerFlag.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CheckFlagCommonConfig.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Internal/CheckSourceCompiles.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Linker/Windows-MSVC-CXX.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Linker/Windows-MSVC.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows-Initialize.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows-MSVC-CXX.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows-MSVC.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/Windows.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/Platform/WindowsPaths.cmake \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/share/cmake-3.31/Modules/SelectLibraryConfigurations.cmake \
+	C:/Users/kaedi/vcpkg/installed/x64-windows/share/realsense2/realsense2Config.cmake \
+	C:/Users/kaedi/vcpkg/installed/x64-windows/share/realsense2/realsense2ConfigVersion.cmake \
+	C:/Users/kaedi/vcpkg/installed/x64-windows/share/realsense2/realsense2Targets-debug.cmake \
+	C:/Users/kaedi/vcpkg/installed/x64-windows/share/realsense2/realsense2Targets-release.cmake \
+	C:/Users/kaedi/vcpkg/installed/x64-windows/share/realsense2/realsense2Targets.cmake \
+	C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake \
+	D:/RoboticsSoftware/CMakeLists.txt \
+	D:/RoboticsSoftware/build/CMakeFiles/3.31.6-msvc6/CMakeCXXCompiler.cmake \
+	D:/RoboticsSoftware/build/CMakeFiles/3.31.6-msvc6/CMakeRCCompiler.cmake \
+	D:/RoboticsSoftware/build/CMakeFiles/3.31.6-msvc6/CMakeSystem.cmake \
+	D:/RoboticsSoftware/build/_deps/sqlite_official_src-src/sqlite3.c \
+	D:/RoboticsSoftware/build/_deps/sqlite_official_src-src/sqlite3.h \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/FindWrapAtomic.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6Config.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigExtras.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6ConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6Dependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6Targets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/Qt6VersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtFeature.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtFeatureCommon.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtInstallPaths.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicAppleHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicCMakeVersionHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicDependencyHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicExternalProjectHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFinalizerHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicFindPackageHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicGitHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicPluginHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomAttributionHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomCpeHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomDepHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomFileHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomGenerationHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomLicenseHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomOpsHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPurlHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomPythonHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomQtEntityHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicSbomSystemDepHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTargetHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicTestHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicToolHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6/QtPublicWalkLibsHelpers.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Concurrent/Qt6ConcurrentAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Concurrent/Qt6ConcurrentConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Concurrent/Qt6ConcurrentConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Concurrent/Qt6ConcurrentConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Concurrent/Qt6ConcurrentDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Concurrent/Qt6ConcurrentTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Concurrent/Qt6ConcurrentTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Concurrent/Qt6ConcurrentTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Concurrent/Qt6ConcurrentVersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreConfigExtras.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreMacros.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Core/Qt6CoreVersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6CoreTools/Qt6CoreToolsVersionlessTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6EntryPointPrivate/Qt6EntryPointPrivateVersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiPlugins.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6GuiVersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QGifPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QICOPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QJpegPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QMinimalIntegrationPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QOffscreenIntegrationPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QTuioTouchPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsDirect2DIntegrationPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Gui/Qt6QWindowsIntegrationPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6GuiTools/Qt6GuiToolsVersionlessTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGL/Qt6OpenGLVersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6OpenGLWidgets/Qt6OpenGLWidgetsVersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QPSQLDriverPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QPSQLDriverPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QPSQLDriverPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QPSQLDriverPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QPSQLDriverPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QSQLiteDriverPluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QSQLiteDriverPluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QSQLiteDriverPluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QSQLiteDriverPluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6QSQLiteDriverPluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlPlugins.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Sql/Qt6SqlVersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6QModernWindowsStylePluginTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsMacros.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsPlugins.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6Widgets/Qt6WidgetsVersionlessAliasTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsAdditionalTargetInfo.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsConfigVersionImpl.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsDependencies.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/Qt6WidgetsTools/Qt6WidgetsToolsVersionlessTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/absl/abslConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/absl/abslConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/absl/abslTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/absl/abslTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/absl/abslTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/assimp/assimpConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/assimp/assimpConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/assimp/assimpTargets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/assimp/assimpTargets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/assimp/assimpTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-config-version.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-config.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-targets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-targets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/console_bridge/console_bridge-targets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/glm/glmConfig-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/glm/glmConfig-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/glm/glmConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/glm/glmConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/nlohmann_json/nlohmann_jsonConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/nlohmann_json/nlohmann_jsonConfigVersion.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/nlohmann_json/nlohmann_jsonTargets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/opencv4/OpenCVConfig-version.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/opencv4/OpenCVConfig.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/opencv4/OpenCVModules-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/opencv4/OpenCVModules-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/opencv4/OpenCVModules.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/protobuf/protobuf-config-version.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/protobuf/protobuf-config.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/protobuf/protobuf-generate.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/protobuf/protobuf-module.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/protobuf/protobuf-options.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/protobuf/protobuf-targets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/protobuf/protobuf-targets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/protobuf/protobuf-targets.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/protobuf/vcpkg-cmake-wrapper.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/quirc/quirc-config-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/quirc/quirc-config-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/quirc/quirc-config.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/tiff/vcpkg-cmake-wrapper.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/urdfdom/urdfdom-config.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/urdfdom/urdfdomExport-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/urdfdom/urdfdomExport-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/urdfdom/urdfdomExport.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/urdfdom_headers/urdfdom_headers-config-version.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/urdfdom_headers/urdfdom_headers-config.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/urdfdom_headers/urdfdom_headersExport.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/utf8_range/utf8_range-config.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/utf8_range/utf8_range-targets-debug.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/utf8_range/utf8_range-targets-release.cmake \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/share/utf8_range/utf8_range-targets.cmake \
+	D:/RoboticsSoftware/resources.qrc \
+	D:/RoboticsSoftware/vcpkg.json \
+	C:/Program\ Files/Microsoft\ Visual\ Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe

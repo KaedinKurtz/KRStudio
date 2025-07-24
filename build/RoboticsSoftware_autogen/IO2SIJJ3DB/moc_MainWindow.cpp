@@ -46,7 +46,9 @@ static constexpr auto qt_meta_stringdata_ZN10MainWindowE = QtMocHelpers::stringD
     "onLoadRobotClicked",
     "onMasterRender",
     "onFlowVisualizerTransformChanged",
-    "onFlowVisualizerSettingsChanged"
+    "onFlowVisualizerSettingsChanged",
+    "onSceneReloadRequested",
+    "sceneName"
 );
 #else  // !QT_MOC_HAS_STRINGDATA
 #error "qtmochelpers.h not found or too old."
@@ -58,7 +60,7 @@ Q_CONSTINIT static const uint qt_meta_data_ZN10MainWindowE[] = {
       12,       // revision
        0,       // classname
        0,    0, // classinfo
-       8,   14, // methods
+       9,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
@@ -66,14 +68,15 @@ Q_CONSTINIT static const uint qt_meta_data_ZN10MainWindowE[] = {
        0,       // signalCount
 
  // slots: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    0,   62,    2, 0x0a,    1 /* Public */,
-       3,    0,   63,    2, 0x0a,    2 /* Public */,
-       4,    0,   64,    2, 0x08,    3 /* Private */,
-       5,    0,   65,    2, 0x08,    4 /* Private */,
-       6,    0,   66,    2, 0x09,    5 /* Protected */,
-       7,    0,   67,    2, 0x09,    6 /* Protected */,
-       8,    0,   68,    2, 0x09,    7 /* Protected */,
-       9,    0,   69,    2, 0x09,    8 /* Protected */,
+       1,    0,   68,    2, 0x0a,    1 /* Public */,
+       3,    0,   69,    2, 0x0a,    2 /* Public */,
+       4,    0,   70,    2, 0x08,    3 /* Private */,
+       5,    0,   71,    2, 0x08,    4 /* Private */,
+       6,    0,   72,    2, 0x09,    5 /* Protected */,
+       7,    0,   73,    2, 0x09,    6 /* Protected */,
+       8,    0,   74,    2, 0x09,    7 /* Protected */,
+       9,    0,   75,    2, 0x09,    8 /* Protected */,
+      10,    1,   76,    2, 0x09,    9 /* Protected */,
 
  // slots: parameters
     QMetaType::Void,
@@ -84,6 +87,7 @@ Q_CONSTINIT static const uint qt_meta_data_ZN10MainWindowE[] = {
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
+    QMetaType::Void, QMetaType::QString,   11,
 
        0        // eod
 };
@@ -112,7 +116,10 @@ Q_CONSTINIT const QMetaObject MainWindow::staticMetaObject = { {
         // method 'onFlowVisualizerTransformChanged'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'onFlowVisualizerSettingsChanged'
-        QtPrivate::TypeAndForceComplete<void, std::false_type>
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onSceneReloadRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QString &, std::false_type>
     >,
     nullptr
 } };
@@ -130,10 +137,10 @@ void MainWindow::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, 
         case 5: _t->onMasterRender(); break;
         case 6: _t->onFlowVisualizerTransformChanged(); break;
         case 7: _t->onFlowVisualizerSettingsChanged(); break;
+        case 8: _t->onSceneReloadRequested((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
         default: ;
         }
     }
-    (void)_a;
 }
 
 const QMetaObject *MainWindow::metaObject() const
@@ -155,14 +162,14 @@ int MainWindow::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 8)
+        if (_id < 9)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 8;
+        _id -= 9;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 8)
+        if (_id < 9)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 8;
+        _id -= 9;
     }
     return _id;
 }

@@ -22,6 +22,7 @@
 #include "SlamManager.hpp"
 #include "CustomDataFlowScene.hpp"
 #include "ExecutionControlWidget.hpp"
+#include "DatabasePanel.hpp"
 
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/DataFlowGraphModel>

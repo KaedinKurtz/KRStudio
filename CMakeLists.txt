@@ -13,7 +13,7 @@ set(CMAKE_AUTORCC ON)
 
 #  Third-party packages (via find_package)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets Sql Concurrent)
 find_package(OpenGL REQUIRED)
 find_package(glm     REQUIRED)
 find_package(assimp  CONFIG REQUIRED)
@@ -43,8 +43,6 @@ set(BUILD_EXAMPLES OFF CACHE BOOL "Disable ADS examples" FORCE)
 
 FetchContent_MakeAvailable(qtads)      # creates the target: QtADS
 
-#  Project sources / headers
-
 #   Node Editor
 # The newest stable tag as of 2025-07-18 is 3.0.11.
 FetchContent_Declare(
@@ -55,6 +53,28 @@ FetchContent_Declare(
 )
 set(QTNODES_BUILD_EXAMPLES OFF CACHE BOOL "Disable node editor examples" FORCE) # Disables building the library's example projects.
 FetchContent_MakeAvailable(QtNodes)      # Downloads and prepares the library, creating the QtNodes target.
+
+
+#  SQLite3 (from official source)
+#  Downloads the official release amalgamation which includes sqlite3.c and sqlite3.h.
+include(FetchContent)
+
+FetchContent_Declare(
+  sqlite_official_src
+  URL        https://www.sqlite.org/2024/sqlite-amalgamation-3460000.zip
+  URL_HASH   SHA256=712a7d09d2a22652fb06a49af516e051979a3984adb067da86760e60ed51a7f5
+)
+
+# Downloads and extracts the source.
+FetchContent_Populate(sqlite_official_src)
+
+add_library(sqlite3 STATIC
+  "${sqlite_official_src_SOURCE_DIR}/sqlite3.c"
+)
+
+target_include_directories(sqlite3 PUBLIC
+  "${sqlite_official_src_SOURCE_DIR}"
+)
 
 
 file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
@@ -121,7 +141,7 @@ endif()
 #  Link libraries
 
 target_link_libraries(RoboticsSoftware PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Sql Qt6::Concurrent
     OpenGL::GL
     glm::glm
     assimp::assimp
@@ -130,6 +150,7 @@ target_link_libraries(RoboticsSoftware PRIVATE
     QtNodes
     realsense2::realsense2
     ${OpenCV_LIBS} 
+    sqlite3
 )                          # provided by FetchContent
 
 #  Post-build steps

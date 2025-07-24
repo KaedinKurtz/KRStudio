@@ -16,6 +16,7 @@
 #include <QLinearGradient>
 #include <QButtonGroup>
 
+class Scene;
 class PreviewViewport;
 
 namespace Ui {

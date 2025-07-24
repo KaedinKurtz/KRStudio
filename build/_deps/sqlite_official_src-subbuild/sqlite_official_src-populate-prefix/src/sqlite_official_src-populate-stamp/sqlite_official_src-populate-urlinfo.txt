@@ -1,0 +1,12 @@
+# This is a generated file and its contents are an internal implementation detail.
+# The download step will be re-executed if anything in this file changes.
+# No other meaning or use of this file is supported.
+
+method=url
+command=C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;D:/RoboticsSoftware/build/_deps/sqlite_official_src-subbuild/sqlite_official_src-populate-prefix/src/sqlite_official_src-populate-stamp/download-sqlite_official_src-populate.cmake;COMMAND;C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;D:/RoboticsSoftware/build/_deps/sqlite_official_src-subbuild/sqlite_official_src-populate-prefix/src/sqlite_official_src-populate-stamp/verify-sqlite_official_src-populate.cmake;COMMAND;C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;D:/RoboticsSoftware/build/_deps/sqlite_official_src-subbuild/sqlite_official_src-populate-prefix/src/sqlite_official_src-populate-stamp/extract-sqlite_official_src-populate.cmake
+source_dir=D:/RoboticsSoftware/build/_deps/sqlite_official_src-src
+work_dir=D:/RoboticsSoftware/build/_deps
+url(s)=https://www.sqlite.org/2024/sqlite-amalgamation-3460000.zip
+hash=SHA256=712a7d09d2a22652fb06a49af516e051979a3984adb067da86760e60ed51a7f5
+      no_extract=
+
