@@ -41,7 +41,7 @@ public:
     bool analyzeAllIndexes();
     bool validateIndex(const QString& indexName);
     bool validateAllIndexes();
-    bool indexExists(const QString& indexName) const;
+    bool indexExists(const QString& indexName);
     QList<IndexInfo> listIndexes(const QString& table = QString());
 
     // Async operations

@@ -40,9 +40,9 @@ public:
     // Replication operations
     bool enableReplication(const QString& masterUrl);
     bool disableReplication();
-    bool isReplicationEnabled() const;
+    bool isReplicationEnabled();
     bool syncWithMaster();
-    ReplicationStatus getStatus() const;
+    ReplicationStatus getStatus();
     void setConfig(const ReplicationConfig& config);
     ReplicationConfig getConfig() const { return m_config; }
 

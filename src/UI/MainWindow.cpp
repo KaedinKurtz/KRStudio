@@ -1203,3 +1203,10 @@ void MainWindow::applyCameraColorToDock(ads::CDockWidget* dock,
 {
   
 }
+
+void MainWindow::onSceneReloadRequested(const QString& sceneName)
+{
+    // TODO: Implement the logic to reload your 3D scene here
+    // For now, a log message is fine.
+    qDebug() << "Main window received request to reload scene:" << sceneName;
+}

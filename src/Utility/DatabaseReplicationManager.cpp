@@ -39,7 +39,7 @@ bool DatabaseReplicationManager::disableReplication() {
     return true;
 }
 
-bool DatabaseReplicationManager::isReplicationEnabled() const {
+bool DatabaseReplicationManager::isReplicationEnabled(){
     QMutexLocker locker(&m_mutex);
     return m_config.enabled;
 }
@@ -71,7 +71,7 @@ bool DatabaseReplicationManager::syncWithMaster() {
     return true;
 }
 
-ReplicationStatus DatabaseReplicationManager::getStatus() const {
+ReplicationStatus DatabaseReplicationManager::getStatus(){
     QMutexLocker locker(&m_mutex);
     return m_status;
 }

@@ -13,8 +13,11 @@
 #include <memory>
 #include "Scene.hpp"
 
+class Scene;
+
 namespace db {
     class DatabaseManager;
+    
 }
 
 class DatabasePanel : public QWidget {
@@ -89,5 +92,5 @@ private:
     std::unique_ptr<QSqlTableModel> m_model;
     QString m_currentScene;
     qint64 m_currentEntityId = -1;
-    Scene* m_scene = nullptr;
+    std::unique_ptr<Scene> m_scene;
 }; 

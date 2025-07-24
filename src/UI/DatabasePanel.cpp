@@ -10,6 +10,7 @@
 #include <QSqlQuery>
 #include <QDebug>
 #include <QInputDialog>
+#include "Scene.hpp"
 
 using namespace db;
 
@@ -171,36 +172,35 @@ void DatabasePanel::refreshComponentList(const QString& sceneName, qint64 entity
 }
 
 void DatabasePanel::onSaveScene() {
-    if (!m_scene) {
-        showStatus("No live scene available.", true);
-        return;
+    if (!m_scene) return; // Can't save a null scene
+
+    // Pass the scene object by dereferencing the pointer
+    if (db::DatabaseManager::instance().saveScene(*m_scene, "current")) {
+        showStatus("Scene saved successfully.");
     }
-    auto& dbm = db::DatabaseManager::instance();
-    QString name = m_currentScene.isEmpty() ? "current" : m_currentScene;
-    if (dbm.saveScene(*m_scene, name)) {
-        showStatus(QString("Scene '%1' saved to database.").arg(name));
-        refreshSceneList();
-    } else {
+    else {
         showStatus("Failed to save scene.", true);
     }
 }
 
+
 void DatabasePanel::onLoadScene() {
-    if (!m_scene) {
-        showStatus("No live scene available.", true);
-        return;
+    if (m_sceneCombo->count() == 0) return;
+    QString sceneName = m_sceneCombo->currentText();
+
+    // CORRECTED: Move the returned scene into the panel's scene pointer
+    m_scene = std::move(db::DatabaseManager::instance().loadScene(sceneName));
+
+    if (m_scene) {
+        emit requestSceneReload(sceneName);
+        showStatus("Scene loaded successfully.");
     }
-    auto& dbm = db::DatabaseManager::instance();
-    QString name = m_currentScene.isEmpty() ? "current" : m_currentScene;
-    std::unique_ptr<Scene> loaded = dbm.loadScene(name);
-    if (loaded) {
-        *m_scene = std::move(*loaded); // Overwrite the live scene
-        showStatus(QString("Scene '%1' loaded from database.").arg(name));
-        emit requestSceneReload(name);
-    } else {
+    else {
         showStatus("Failed to load scene.", true);
     }
 }
+
+
 
 void DatabasePanel::onBackup() {
     showStatus("Backup not implemented in this panel.", true);
