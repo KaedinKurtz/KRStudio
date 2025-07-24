@@ -24,17 +24,18 @@
 #include <optional>
 #include <variant>
 #include <entt/entt.hpp>
+#include "Scene.hpp" 
+
+
+namespace db {
 
 // Forward declarations
-class Scene;
 class DatabaseTransaction;
 class DatabaseBackupManager;
 class DatabaseMigrationManager;
 class DatabaseQueryOptimizer;
 class DatabaseIndexManager;
 class DatabaseReplicationManager;
-
-namespace db {
 
 // Database configuration
 struct DatabaseConfig {
@@ -269,6 +270,8 @@ private slots:
     void onRestoreCompleted();
     void onOptimizationCompleted();
     void onReplicationSync();
+    void onMigrationCompleted();
+    void onSlowQueryDetected();
 
 private:
     DatabaseManager();
@@ -347,7 +350,7 @@ bool DatabaseManager::saveComponent(entt::entity entity, const Component& compon
     
     query.addBindValue(sceneName);
     query.addBindValue(static_cast<qint64>(entity));
-    query.addBindValue(QString::fromStdString(entt::type_name<Component>().name()));
+    query.addBindValue(QString::fromStdString(std::string(entt::type_name<Component>::value())));
     query.addBindValue(serializeComponent(QVariant::fromValue(component)));
     query.addBindValue(QDateTime::currentDateTime());
     query.addBindValue(QDateTime::currentDateTime());

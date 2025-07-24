@@ -113,11 +113,11 @@ bool DatabaseManager::initialize(const DatabaseConfig& config) {
     }
     
     // Create specialized managers
-    m_backupManager = std::make_unique<DatabaseBackupManager>(this);
-    m_migrationManager = std::make_unique<DatabaseMigrationManager>(this);
-    m_queryOptimizer = std::make_unique<DatabaseQueryOptimizer>(this);
-    m_indexManager = std::make_unique<DatabaseIndexManager>(this);
-    m_replicationManager = std::make_unique<DatabaseReplicationManager>(this);
+    m_backupManager = std::make_unique<db::DatabaseBackupManager>(this);
+    m_migrationManager = std::make_unique<db::DatabaseMigrationManager>(this);
+    m_queryOptimizer = std::make_unique<db::DatabaseQueryOptimizer>(this);
+    m_indexManager = std::make_unique<db::DatabaseIndexManager>(this);
+    m_replicationManager = std::make_unique<db::DatabaseReplicationManager>(this);
     
     // Connect signals
     connect(m_backupManager.get(), &DatabaseBackupManager::backupCompleted,
@@ -790,7 +790,7 @@ bool DatabaseManager::saveEntity(entt::entity entity, const entt::registry& regi
     query.addBindValue(static_cast<qint64>(entity));
     
     QString tag;
-    if (registry.has<TagComponent>(entity)) {
+    if (registry.all_of<TagComponent>(entity)) {
         tag = QString::fromStdString(registry.get<TagComponent>(entity).tag);
     }
     query.addBindValue(tag);
@@ -807,7 +807,7 @@ bool DatabaseManager::saveEntity(entt::entity entity, const entt::registry& regi
     // you would iterate through all component types systematically.
     
     // Save TransformComponent
-    if (registry.has<TransformComponent>(entity)) {
+    if (registry.all_of<TransformComponent>(entity)) {
         if (!saveComponent(entity, registry.get<TransformComponent>(entity), sceneName)) {
             releaseConnection(connection);
             return false;
@@ -815,7 +815,7 @@ bool DatabaseManager::saveEntity(entt::entity entity, const entt::registry& regi
     }
     
     // Save CameraComponent
-    if (registry.has<CameraComponent>(entity)) {
+    if (registry.all_of<CameraComponent>(entity)) {
         if (!saveComponent(entity, registry.get<CameraComponent>(entity), sceneName)) {
             releaseConnection(connection);
             return false;
@@ -823,7 +823,7 @@ bool DatabaseManager::saveEntity(entt::entity entity, const entt::registry& regi
     }
     
     // Save RenderableMeshComponent
-    if (registry.has<RenderableMeshComponent>(entity)) {
+    if (registry.all_of<RenderableMeshComponent>(entity)) {
         if (!saveComponent(entity, registry.get<RenderableMeshComponent>(entity), sceneName)) {
             releaseConnection(connection);
             return false;
@@ -831,7 +831,7 @@ bool DatabaseManager::saveEntity(entt::entity entity, const entt::registry& regi
     }
     
     // Save MaterialComponent
-    if (registry.has<MaterialComponent>(entity)) {
+    if (registry.all_of<MaterialComponent>(entity)) {
         if (!saveComponent(entity, registry.get<MaterialComponent>(entity), sceneName)) {
             releaseConnection(connection);
             return false;
@@ -839,7 +839,7 @@ bool DatabaseManager::saveEntity(entt::entity entity, const entt::registry& regi
     }
     
     // Save GridComponent
-    if (registry.has<GridComponent>(entity)) {
+    if (registry.all_of<GridComponent>(entity)) {
         if (!saveComponent(entity, registry.get<GridComponent>(entity), sceneName)) {
             releaseConnection(connection);
             return false;
@@ -847,7 +847,7 @@ bool DatabaseManager::saveEntity(entt::entity entity, const entt::registry& regi
     }
     
     // Save SplineComponent
-    if (registry.has<SplineComponent>(entity)) {
+    if (registry.all_of<SplineComponent>(entity)) {
         if (!saveComponent(entity, registry.get<SplineComponent>(entity), sceneName)) {
             releaseConnection(connection);
             return false;
@@ -910,8 +910,8 @@ QString DatabaseManager::serializeComponent(const QVariant& component) {
             QJsonObject l;
             l["spacing"] = level.spacing;
             l["color"] = QJsonArray{level.color.x, level.color.y, level.color.z};
-            l["startDistance"] = level.startDistance;
-            l["endDistance"] = level.endDistance;
+            l["startDistance"] = level.fadeInCameraDistanceStart;
+            l["endDistance"] = level.fadeInCameraDistanceEnd;
             levels.append(l);
         }
         json["levels"] = levels;
@@ -1047,7 +1047,7 @@ QVariant DatabaseManager::deserializeComponent(const QString& data, const QStrin
             auto levels = json["levels"].toArray();
             for (const auto& level : levels) {
                 auto obj = level.toObject();
-                GridLevel gridLevel;
+                GridLevel gridLevel{};
                 if (obj.contains("spacing")) {
                     gridLevel.spacing = obj["spacing"].toDouble();
                 }
@@ -1058,10 +1058,10 @@ QVariant DatabaseManager::deserializeComponent(const QString& data, const QStrin
                     }
                 }
                 if (obj.contains("startDistance")) {
-                    gridLevel.startDistance = obj["startDistance"].toDouble();
+                    gridLevel.fadeInCameraDistanceStart = obj["startDistance"].toDouble();
                 }
                 if (obj.contains("endDistance")) {
-                    gridLevel.endDistance = obj["endDistance"].toDouble();
+                    gridLevel.fadeInCameraDistanceEnd = obj["endDistance"].toDouble();
                 }
                 grid.levels.push_back(gridLevel);
             }
@@ -1295,9 +1295,15 @@ void DatabaseManager::clearErrors() {}
 void DatabaseManager::resetStats() {}
 void DatabaseManager::exportStats(const QString& filePath) {}
 
-// Private slot implementations
-void DatabaseManager::onQueryCompleted() {}
-void DatabaseManager::onBackupCompleted() {}
-void DatabaseManager::onRestoreCompleted() {}
-void DatabaseManager::onOptimizationCompleted() {}
-void DatabaseManager::onReplicationSync() {} 
+void db::DatabaseManager::onMigrationCompleted() {
+    // Stub implementation
+}
+
+void db::DatabaseManager::onSlowQueryDetected() {
+    // Stub implementation
+}
+
+QStringList db::DatabaseManager::listScenes() {
+    // Stub implementation - you can fill this in later
+    return QStringList();
+}

@@ -147,7 +147,7 @@ bool DatabaseIndexManager::validateAllIndexes() {
     return allValid;
 }
 
-bool DatabaseIndexManager::indexExists(const QString& indexName) const {
+bool DatabaseIndexManager::indexExists(const QString& indexName){
     QMutexLocker locker(&m_mutex);
     if (indexName.isEmpty()) return false;
     QSqlDatabase db = QSqlDatabase::database();

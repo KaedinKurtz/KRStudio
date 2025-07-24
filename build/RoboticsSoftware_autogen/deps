@@ -1445,8 +1445,11 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/src/UI/gridPropertiesWidget.cpp \
 	D:/RoboticsSoftware/src/Utility/BlackBox.cpp \
 	D:/RoboticsSoftware/src/Utility/ControlSystems.cpp \
+	D:/RoboticsSoftware/src/Utility/DatabaseBackupManager.cpp \
 	D:/RoboticsSoftware/src/Utility/DatabaseIndexManager.cpp \
 	D:/RoboticsSoftware/src/Utility/DatabaseManager.cpp \
+	D:/RoboticsSoftware/src/Utility/DatabaseMigrationManager.cpp \
+	D:/RoboticsSoftware/src/Utility/DatabaseQueryOptimizer.cpp \
 	D:/RoboticsSoftware/src/Utility/DatabaseReplicationManager.cpp \
 	D:/RoboticsSoftware/src/Utility/FieldSolver.cpp \
 	D:/RoboticsSoftware/src/Utility/GraphAnalysisEngine.cpp \

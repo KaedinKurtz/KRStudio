@@ -60,7 +60,9 @@ static constexpr auto qt_meta_stringdata_ZN2db15DatabaseManagerE = QtMocHelpers:
     "onBackupCompleted",
     "onRestoreCompleted",
     "onOptimizationCompleted",
-    "onReplicationSync"
+    "onReplicationSync",
+    "onMigrationCompleted",
+    "onSlowQueryDetected"
 );
 #else  // !QT_MOC_HAS_STRINGDATA
 #error "qtmochelpers.h not found or too old."
@@ -72,7 +74,7 @@ Q_CONSTINIT static const uint qt_meta_data_ZN2db15DatabaseManagerE[] = {
       12,       // revision
        0,       // classname
        0,    0, // classinfo
-      14,   14, // methods
+      16,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
@@ -80,22 +82,24 @@ Q_CONSTINIT static const uint qt_meta_data_ZN2db15DatabaseManagerE[] = {
        9,       // signalCount
 
  // signals: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    1,   98,    2, 0x06,    1 /* Public */,
-       5,    1,  101,    2, 0x06,    3 /* Public */,
-       8,    2,  104,    2, 0x06,    5 /* Public */,
-      11,    2,  109,    2, 0x06,    8 /* Public */,
-      12,    1,  114,    2, 0x06,   11 /* Public */,
-      13,    1,  117,    2, 0x06,   13 /* Public */,
-      15,    1,  120,    2, 0x06,   15 /* Public */,
-      17,    1,  123,    2, 0x06,   17 /* Public */,
-      18,    1,  126,    2, 0x06,   19 /* Public */,
+       1,    1,  110,    2, 0x06,    1 /* Public */,
+       5,    1,  113,    2, 0x06,    3 /* Public */,
+       8,    2,  116,    2, 0x06,    5 /* Public */,
+      11,    2,  121,    2, 0x06,    8 /* Public */,
+      12,    1,  126,    2, 0x06,   11 /* Public */,
+      13,    1,  129,    2, 0x06,   13 /* Public */,
+      15,    1,  132,    2, 0x06,   15 /* Public */,
+      17,    1,  135,    2, 0x06,   17 /* Public */,
+      18,    1,  138,    2, 0x06,   19 /* Public */,
 
  // slots: name, argc, parameters, tag, flags, initial metatype offsets
-      19,    0,  129,    2, 0x08,   21 /* Private */,
-      20,    0,  130,    2, 0x08,   22 /* Private */,
-      21,    0,  131,    2, 0x08,   23 /* Private */,
-      22,    0,  132,    2, 0x08,   24 /* Private */,
-      23,    0,  133,    2, 0x08,   25 /* Private */,
+      19,    0,  141,    2, 0x08,   21 /* Private */,
+      20,    0,  142,    2, 0x08,   22 /* Private */,
+      21,    0,  143,    2, 0x08,   23 /* Private */,
+      22,    0,  144,    2, 0x08,   24 /* Private */,
+      23,    0,  145,    2, 0x08,   25 /* Private */,
+      24,    0,  146,    2, 0x08,   26 /* Private */,
+      25,    0,  147,    2, 0x08,   27 /* Private */,
 
  // signals: parameters
     QMetaType::Void, 0x80000000 | 3,    4,
@@ -109,6 +113,8 @@ Q_CONSTINIT static const uint qt_meta_data_ZN2db15DatabaseManagerE[] = {
     QMetaType::Void, QMetaType::QString,   18,
 
  // slots: parameters
+    QMetaType::Void,
+    QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
@@ -165,6 +171,10 @@ Q_CONSTINIT const QMetaObject db::DatabaseManager::staticMetaObject = { {
         // method 'onOptimizationCompleted'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'onReplicationSync'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onMigrationCompleted'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onSlowQueryDetected'
         QtPrivate::TypeAndForceComplete<void, std::false_type>
     >,
     nullptr
@@ -189,6 +199,8 @@ void db::DatabaseManager::qt_static_metacall(QObject *_o, QMetaObject::Call _c, 
         case 11: _t->onRestoreCompleted(); break;
         case 12: _t->onOptimizationCompleted(); break;
         case 13: _t->onReplicationSync(); break;
+        case 14: _t->onMigrationCompleted(); break;
+        case 15: _t->onSlowQueryDetected(); break;
         default: ;
         }
     }
@@ -279,14 +291,14 @@ int db::DatabaseManager::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 14)
+        if (_id < 16)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 14;
+        _id -= 16;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 14)
+        if (_id < 16)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 14;
+        _id -= 16;
     }
     return _id;
 }
