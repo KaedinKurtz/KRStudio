@@ -30,6 +30,7 @@ namespace NodeLibrary {
 
     class LowPassFilterNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         LowPassFilterNode();
         void compute() override;
     private:

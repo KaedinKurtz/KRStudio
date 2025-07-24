@@ -4,6 +4,8 @@
 #include <iostream>
 #include <cmath>
 #include <memory> // Required for std::make_unique
+#include <QFormLayout>
+#include <QDoubleSpinBox>
 
 namespace NodeLibrary {
 
@@ -52,6 +54,36 @@ namespace NodeLibrary {
         if (input) {
             setOutput("Output", applyLowPassFilter(*input, m_filterState));
         }
+    }
+
+    QWidget* LowPassFilterNode::createCustomWidget()
+    {
+        auto* widget = new QWidget();
+        auto* layout = new QFormLayout(widget);
+        layout->setContentsMargins(4, 4, 4, 4); // Add some padding
+
+        auto* alphaSpinBox = new QDoubleSpinBox();
+        alphaSpinBox->setRange(0.0, 1.0);
+        alphaSpinBox->setDecimals(3);
+        alphaSpinBox->setSingleStep(0.01);
+        alphaSpinBox->setValue(m_filterState.alpha); // Set initial value from backend
+
+        // Connect the UI control back to the node's logic
+        QObject::connect(alphaSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            [this](double value) {
+                this->m_filterState.alpha = value;
+
+                // Trigger a re-computation when the value changes
+                this->process();
+
+                // You will likely need to add a signal here in your Node base class
+                // that the NodeDelegate can connect to, in order to emit dataUpdated().
+                // For example: Q_EMIT backendStateChanged();
+            });
+
+        layout->addRow("Alpha:", alphaSpinBox);
+        widget->setLayout(layout);
+        return widget;
     }
 
     namespace {

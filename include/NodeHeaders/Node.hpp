@@ -7,6 +7,9 @@
 #include <optional>
 #include <chrono>
 #include "components.hpp"
+#include <QWidget>
+#include <glm/glm.hpp> // For glm::vec3, etc.
+
 
 // Forward declaration
 class Node;
@@ -53,6 +56,8 @@ public:
     enum class TriggerEdge { Rising, Falling, Both };
 
     virtual ~Node() = default;
+
+    virtual QWidget* createCustomWidget() { return nullptr; }
 
     // --- Core Execution Logic (remains the same) ---
     void process() {

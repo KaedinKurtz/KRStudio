@@ -8,8 +8,39 @@
 #include <QVariant>
 #include <QtNodes/NodeStyle>
 #include <QDebug>
+#include <QVBoxLayout>
+#include <QWidget>
+#include <QLabel>
+#include <QPushButton>
+#include <QLineEdit>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QSpinBox>
+#include <QDoubleSpinBox>
 
 // AnyNodeData class remains the same...
+
+void addCommonNodeControls(QVBoxLayout* layout, Node* backendNode) {
+    if (!backendNode || !backendNode->needsExecutionControls()) {
+        return;
+    }
+
+    auto* controlWidget = new ExecutionControlWidget();
+    controlWidget->setInitialState(backendNode->getUpdatePolicy(), backendNode->getTriggerEdge());
+
+    // Connect signals from the widget to the backend node
+    QObject::connect(controlWidget, &ExecutionControlWidget::updatePolicyChanged,
+        [backendNode](Node::UpdatePolicy policy) {
+            backendNode->setUpdatePolicy(policy);
+        });
+
+    QObject::connect(controlWidget, &ExecutionControlWidget::triggerEdgeChanged,
+        [backendNode](Node::TriggerEdge edge) {
+            backendNode->setTriggerEdge(edge);
+        });
+
+    layout->addWidget(controlWidget);
+}
 
 class AnyNodeData : public QtNodes::NodeData
 {
@@ -137,41 +168,18 @@ void NodeDelegate::setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::P
 void NodeDelegate::setBackendNode(std::unique_ptr<Node> backendNode)
 {
     m_backendNode = std::move(backendNode);
+    if (!m_backendNode) return;
+
+    // The backend is now attached. It's safe to create the widget.
+    populateEmbeddedWidget();
+
+    // Initial processing to populate output ports.
     m_backendNode->process();
 }
 
 QWidget* NodeDelegate::embeddedWidget()
 {
-    // If the widget has not been created yet AND the backend is ready...
-    if (!m_embeddedWidget && m_backendNode && m_backendNode->needsExecutionControls())
-    {
-        // ...create the widget now.
-        auto* controlWidget = new ExecutionControlWidget();
-        m_embeddedWidget = controlWidget; // Store the pointer immediately.
-
-        // Set its initial state from the backend node.
-        controlWidget->setInitialState(m_backendNode->getUpdatePolicy(), m_backendNode->getTriggerEdge());
-
-        // Connect the widget's signals to update the backend and the UI.
-        connect(controlWidget, &ExecutionControlWidget::updatePolicyChanged,
-            this, [this](Node::UpdatePolicy policy) {
-                if (m_backendNode) {
-                    m_backendNode->setUpdatePolicy(policy);
-                    // We must emit a signal that forces a full node repaint to update the port caption.
-                    // We ask the MainWindow to do this.
-                    Q_EMIT embeddedWidgetSizeUpdated(); // This is a general "something changed" signal
-                }
-            });
-
-        connect(controlWidget, &ExecutionControlWidget::triggerEdgeChanged,
-            this, [this](Node::TriggerEdge edge) {
-                if (m_backendNode) {
-                    m_backendNode->setTriggerEdge(edge);
-                }
-            });
-    }
-
-    // Return the widget.
+    // NO creation logic here. Just return the member variable.
     return m_embeddedWidget;
 }
 
@@ -192,4 +200,28 @@ const Port* NodeDelegate::getBackendPort(QtNodes::PortType portType, QtNodes::Po
         }
     }
     return nullptr;
+}
+
+void NodeDelegate::populateEmbeddedWidget()
+{
+    if (!m_backendNode || m_embeddedWidget) {
+        // Don't do anything if there's no backend or the widget already exists.
+        return;
+    }
+
+    // 1. Create a container widget. This will be the main embedded widget.
+    auto* container = new QWidget();
+    auto* layout = new QVBoxLayout(container);
+    layout->setContentsMargins(2, 2, 2, 2); // Keep it tight
+
+    // 2. Call the "global" function to add common controls.
+    addCommonNodeControls(layout, m_backendNode.get());
+
+    // 3. Call a "node-specific" function on the backend to get custom controls.
+    if (QWidget* customWidget = m_backendNode->createCustomWidget()) {
+        layout->addWidget(customWidget);
+    }
+
+    container->setLayout(layout);
+    m_embeddedWidget = container;
 }
