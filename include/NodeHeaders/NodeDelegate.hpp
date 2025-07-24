@@ -25,6 +25,8 @@ public:
     QWidget* embeddedWidget() override;
 
     void setBackendNode(std::unique_ptr<Node> backendNode);
+    void populateEmbeddedWidget();
+
 
 Q_SIGNALS:
     void portCaptionChanged();
