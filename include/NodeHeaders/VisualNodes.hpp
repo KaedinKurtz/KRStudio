@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include <glm/glm.hpp>
@@ -37,6 +39,7 @@ namespace NodeLibrary {
      */
     class ConditionalLightNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         // This vector of rules would be configured in the IDE's property editor.
         std::vector<LightCondition> conditions;
         glm::vec4 defaultColor = { 0.2f, 0.2f, 0.2f, 1.0f }; // Default gray/off color
@@ -50,6 +53,7 @@ namespace NodeLibrary {
      */
     class DialGaugeNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         DialGaugeNode();
         void compute() override;
     };
@@ -59,6 +63,7 @@ namespace NodeLibrary {
      */
     class ValuePlotterNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         ValuePlotterNode();
         void compute() override;
     private:
@@ -74,6 +79,7 @@ namespace NodeLibrary {
      */
     class DataMonitorNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         // Configurable properties for the monitor instance.
         std::function<bool(float)> errorCondition;
         std::string errorMessage = "Value out of bounds!";

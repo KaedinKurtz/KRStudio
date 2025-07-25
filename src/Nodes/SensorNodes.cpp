@@ -69,4 +69,11 @@ namespace NodeLibrary {
     }
 
 
+
+
+QWidget* ImuUnpackerNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ImuUnpackerNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

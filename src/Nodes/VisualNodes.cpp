@@ -139,4 +139,32 @@ namespace NodeLibrary {
     // FIX: Declared static instance on its own line
     static DataMonitorRegistrar g_dataMonitorRegistrar;
 
+
+
+QWidget* DataMonitorNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DataMonitorNode"
+    return nullptr;
+}
+
+
+QWidget* ValuePlotterNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ValuePlotterNode"
+    return nullptr;
+}
+
+
+QWidget* DialGaugeNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DialGaugeNode"
+    return nullptr;
+}
+
+
+QWidget* ConditionalLightNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ConditionalLightNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

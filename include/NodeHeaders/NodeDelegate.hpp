@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include <QtNodes/NodeDelegateModel>
 #include "Node.hpp"
 #include <memory>

@@ -510,4 +510,158 @@ namespace NodeLibrary {
     }
     static IntegralNodeRegistrar g_integralNodeRegistrar;
 
+
+
+QWidget* IntegralNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "IntegralNode"
+    return nullptr;
+}
+
+
+QWidget* DerivativeNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DerivativeNode"
+    return nullptr;
+}
+
+
+QWidget* MaxNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "MaxNode"
+    return nullptr;
+}
+
+
+QWidget* MinNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "MinNode"
+    return nullptr;
+}
+
+
+QWidget* LerpNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "LerpNode"
+    return nullptr;
+}
+
+
+QWidget* ClampNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ClampNode"
+    return nullptr;
+}
+
+
+QWidget* AbsNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "AbsNode"
+    return nullptr;
+}
+
+
+QWidget* EqualsNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "EqualsNode"
+    return nullptr;
+}
+
+
+QWidget* LessThanNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "LessThanNode"
+    return nullptr;
+}
+
+
+QWidget* GreaterThanNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "GreaterThanNode"
+    return nullptr;
+}
+
+
+QWidget* LogNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "LogNode"
+    return nullptr;
+}
+
+
+QWidget* SqrtNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "SqrtNode"
+    return nullptr;
+}
+
+
+QWidget* PowerNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "PowerNode"
+    return nullptr;
+}
+
+
+QWidget* ArcTan2Node::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ArcTan2Node"
+    return nullptr;
+}
+
+
+QWidget* TangentNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "TangentNode"
+    return nullptr;
+}
+
+
+QWidget* CosineNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "CosineNode"
+    return nullptr;
+}
+
+
+QWidget* SineNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "SineNode"
+    return nullptr;
+}
+
+
+QWidget* ModuloNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ModuloNode"
+    return nullptr;
+}
+
+
+QWidget* DivideNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DivideNode"
+    return nullptr;
+}
+
+
+QWidget* MultiplyNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "MultiplyNode"
+    return nullptr;
+}
+
+
+QWidget* SubtractNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "SubtractNode"
+    return nullptr;
+}
+
+
+QWidget* AdditionNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "AdditionNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

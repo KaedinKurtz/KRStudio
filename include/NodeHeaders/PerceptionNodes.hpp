@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include <vector>
@@ -37,30 +39,35 @@ namespace NodeLibrary {
 
     class DownsamplePointCloudNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         DownsamplePointCloudNode();
         void compute() override;
     };
 
     class RemoveOutliersNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         RemoveOutliersNode();
         void compute() override;
     };
 
     class SegmentPlaneNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         SegmentPlaneNode();
         void compute() override;
     };
 
     class ConvertToGrayscaleNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         ConvertToGrayscaleNode();
         void compute() override;
     };
 
     class DetectEdgesNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         DetectEdgesNode();
         void compute() override;
     };

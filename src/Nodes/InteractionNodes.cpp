@@ -174,4 +174,39 @@ namespace NodeLibrary {
     }
     static PrintToConsoleRegistrar g_printToConsoleRegistrar;
 
+
+
+QWidget* PrintToConsoleNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "PrintToConsoleNode"
+    return nullptr;
+}
+
+
+QWidget* IsKeyPressedNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "IsKeyPressedNode"
+    return nullptr;
+}
+
+
+QWidget* GetMouseRaycastNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "GetMouseRaycastNode"
+    return nullptr;
+}
+
+
+QWidget* DrawDebugLineNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DrawDebugLineNode"
+    return nullptr;
+}
+
+
+QWidget* DrawDebugSphereNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DrawDebugSphereNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

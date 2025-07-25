@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include <string>
@@ -15,6 +17,7 @@ namespace NodeLibrary {
 
     class RerouteNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         RerouteNode();
         void compute() override;
         void setDataType(const DataType& type);
@@ -22,6 +25,7 @@ namespace NodeLibrary {
 
     class CommentNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         std::string commentText = "This is a comment.";
         CommentNode();
         void compute() override;
@@ -32,12 +36,14 @@ namespace NodeLibrary {
 
     class SwitchNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         SwitchNode();
         void compute() override;
     };
 
     class SwitchCaseNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         SwitchCaseNode();
         void compute() override;
         void addCase(int caseValue);
@@ -51,6 +57,7 @@ namespace NodeLibrary {
 
     class CustomScriptNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         std::string scriptContent =
             "// Define ports like GLSL\n"
             "in float(meters) temperature;\n"
@@ -78,6 +85,7 @@ namespace NodeLibrary {
 
     class LatchNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         LatchNode();
         void compute() override;
     private:
@@ -87,6 +95,7 @@ namespace NodeLibrary {
 
     class DelayNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         DelayNode();
         void compute() override;
     private:

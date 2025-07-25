@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include "components.hpp" // For InferenceModel, Blackboard, etc.
@@ -23,6 +25,7 @@ namespace NodeLibrary {
     /** @brief Node that wraps the runInference function. */
     class RunInferenceNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         RunInferenceNode();
         void compute() override; // FIX: Was process()
     };
@@ -30,6 +33,7 @@ namespace NodeLibrary {
     /** @brief Node to set a float value in a blackboard. */
     class SetBlackboardFloatNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         SetBlackboardFloatNode();
         void compute() override; // FIX: Was process()
     };
@@ -37,6 +41,7 @@ namespace NodeLibrary {
     /** @brief Node to get a float value from a blackboard. */
     class GetBlackboardFloatNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         GetBlackboardFloatNode();
         void compute() override; // FIX: Was process()
     };
@@ -46,6 +51,7 @@ namespace NodeLibrary {
     /** @brief A BT leaf node that performs an action. */
     class BTActionNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         BTActionNode();
         void compute() override; // FIX: Was process()
         // In a real system, this function would be configured in the IDE
@@ -55,6 +61,7 @@ namespace NodeLibrary {
     /** @brief A BT composite node that executes children sequentially. Fails if any child fails. */
     class BTSequenceNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         BTSequenceNode();
         void compute() override; // FIX: Was process()
     };
@@ -62,6 +69,7 @@ namespace NodeLibrary {
     /** @brief A BT composite node that executes children sequentially. Succeeds if any child succeeds. */
     class BTSelectorNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         BTSelectorNode();
         void compute() override; // FIX: Was process()
     };

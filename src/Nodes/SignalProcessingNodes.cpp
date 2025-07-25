@@ -223,4 +223,32 @@ namespace NodeLibrary {
     }
     static GenerateWaveformRegistrar g_generateWaveformRegistrar;
 
+
+
+QWidget* GenerateWaveformNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "GenerateWaveformNode"
+    return nullptr;
+}
+
+
+QWidget* ComposeTransformNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ComposeTransformNode"
+    return nullptr;
+}
+
+
+QWidget* DecomposeTransformNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DecomposeTransformNode"
+    return nullptr;
+}
+
+
+QWidget* DotProductNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DotProductNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

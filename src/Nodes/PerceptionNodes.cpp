@@ -197,4 +197,39 @@ namespace NodeLibrary {
         } g_detectEdgesRegistrar;
     }
 
+
+
+QWidget* DetectEdgesNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DetectEdgesNode"
+    return nullptr;
+}
+
+
+QWidget* ConvertToGrayscaleNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ConvertToGrayscaleNode"
+    return nullptr;
+}
+
+
+QWidget* SegmentPlaneNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "SegmentPlaneNode"
+    return nullptr;
+}
+
+
+QWidget* RemoveOutliersNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "RemoveOutliersNode"
+    return nullptr;
+}
+
+
+QWidget* DownsamplePointCloudNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DownsamplePointCloudNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

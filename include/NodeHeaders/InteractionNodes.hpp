@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include "components.hpp" // For Camera, entt::entity
@@ -30,24 +32,28 @@ namespace NodeLibrary {
 
     class DrawDebugSphereNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         DrawDebugSphereNode();
         void compute() override;
     };
 
     class DrawDebugLineNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         DrawDebugLineNode();
         void compute() override;
     };
 
     class GetMouseRaycastNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         GetMouseRaycastNode();
         void compute() override;
     };
 
     class IsKeyPressedNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         int key_code = 0; // This would be configured in the IDE per-instance
         IsKeyPressedNode();
         void compute() override;
@@ -55,6 +61,7 @@ namespace NodeLibrary {
 
     class PrintToConsoleNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         PrintToConsoleNode();
         void compute() override;
     };

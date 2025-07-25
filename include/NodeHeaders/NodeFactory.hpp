@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include <string>
 #include <vector>
 #include <map>

@@ -254,4 +254,60 @@ namespace NodeLibrary {
         static StateMonitorRegistrar g_stateMonitorRegistrar;
     }
 
+
+
+QWidget* StateMonitorNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "StateMonitorNode"
+    return nullptr;
+}
+
+
+QWidget* CheckStabilityNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "CheckStabilityNode"
+    return nullptr;
+}
+
+
+QWidget* ObservabilityMatrixNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ObservabilityMatrixNode"
+    return nullptr;
+}
+
+
+QWidget* ControllabilityMatrixNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ControllabilityMatrixNode"
+    return nullptr;
+}
+
+
+QWidget* StateFeedbackRegulatorNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "StateFeedbackRegulatorNode"
+    return nullptr;
+}
+
+
+QWidget* LQRControllerNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "LQRControllerNode"
+    return nullptr;
+}
+
+
+QWidget* StateSpaceSimulatorNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "StateSpaceSimulatorNode"
+    return nullptr;
+}
+
+
+QWidget* DefineLTISystemNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DefineLTISystemNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

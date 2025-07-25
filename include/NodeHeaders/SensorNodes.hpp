@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include "ObservableDataManager.hpp" // Crucial include
@@ -16,6 +18,12 @@ namespace NodeLibrary {
     template<typename T>
     class SensorNode : public Node {
     public:
+        QWidget* createCustomWidget() override {
+            // TODO: Implement a custom widget for SensorNode if needed.
+            // This widget could have a dropdown to select the m_dataSourceID.
+            return nullptr;
+        }
+
         // Constructor takes the string name of the data type for the port.
         SensorNode(const std::string& dataTypeName) {
             // FIX: The port's type must be initialized as a DataType struct {name, unit}.
@@ -52,6 +60,7 @@ namespace NodeLibrary {
      */
     class ImuUnpackerNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         ImuUnpackerNode();
         void compute() override;
     };
