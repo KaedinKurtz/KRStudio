@@ -147,4 +147,36 @@ namespace NodeLibrary {
         static KalmanFilterRegistrar g_kalmanFilterRegistrar;
     }
 
+
+    QWidget* IsControllableNode::createCustomWidget()
+    {
+        // TODO: Implement custom widget for "IsControllableNode"
+        return nullptr;
+    }
+
+    QWidget* IsObservableNode::createCustomWidget()
+    {
+        // TODO: Implement custom widget for "IsObservableNode"
+        return nullptr;
+    }
+
+    QWidget* PolePlacementNode::createCustomWidget()
+    {
+        // TODO: Implement custom widget for "PolePlacementNode"
+        return nullptr;
+    }
+
+    QWidget* LQRDesignNode::createCustomWidget()
+    {
+        // TODO: Implement custom widget for "LQRDesignNode"
+        return nullptr;
+    }
+
+    QWidget* KalmanFilterNode::createCustomWidget()
+    {
+        // TODO: Implement custom widget for "KalmanFilterNode"
+        return nullptr;
+    }
+
 } // namespace NodeLibrary
+

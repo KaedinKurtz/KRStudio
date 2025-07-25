@@ -88,4 +88,11 @@ namespace NodeLibrary {
         static UniversalConverterRegistrar g_universalConverterRegistrar;
     }
 
+
+
+QWidget* UniversalConverterNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "UniversalConverterNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

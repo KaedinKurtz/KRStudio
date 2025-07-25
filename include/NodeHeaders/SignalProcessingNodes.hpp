@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include <glm/glm.hpp>
@@ -39,24 +41,28 @@ namespace NodeLibrary {
 
     class DotProductNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         DotProductNode();
         void compute() override;
     };
 
     class DecomposeTransformNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         DecomposeTransformNode();
         void compute() override;
     };
 
     class ComposeTransformNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         ComposeTransformNode();
         void compute() override;
     };
 
     class GenerateWaveformNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         // These would be configured in the IDE per-instance
         WaveformType waveformType = WaveformType::Sine;
         GenerateWaveformNode();

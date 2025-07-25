@@ -160,4 +160,32 @@ namespace NodeLibrary {
     }
     static CheckBeginOverlapRegistrar g_checkBeginOverlapRegistrar;
 
+
+
+QWidget* CheckBeginOverlapNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "CheckBeginOverlapNode"
+    return nullptr;
+}
+
+
+QWidget* SetLinearVelocityNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "SetLinearVelocityNode"
+    return nullptr;
+}
+
+
+QWidget* ApplyForceNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ApplyForceNode"
+    return nullptr;
+}
+
+
+QWidget* GetLinearVelocityNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "GetLinearVelocityNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

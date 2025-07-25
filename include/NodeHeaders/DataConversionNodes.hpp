@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include "DataConversion.hpp" // Your provided header
@@ -16,6 +18,7 @@ namespace NodeLibrary {
      */
     class UniversalConverterNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         UniversalConverterNode();
         void compute() override;
 

@@ -238,4 +238,53 @@ namespace NodeLibrary {
     }
     static DelayRegistrar g_delayRegistrar;
 
+
+
+QWidget* DelayNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DelayNode"
+    return nullptr;
+}
+
+
+QWidget* LatchNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "LatchNode"
+    return nullptr;
+}
+
+
+QWidget* CustomScriptNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "CustomScriptNode"
+    return nullptr;
+}
+
+
+QWidget* SwitchCaseNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "SwitchCaseNode"
+    return nullptr;
+}
+
+
+QWidget* SwitchNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "SwitchNode"
+    return nullptr;
+}
+
+
+QWidget* CommentNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "CommentNode"
+    return nullptr;
+}
+
+
+QWidget* RerouteNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "RerouteNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

@@ -378,4 +378,95 @@ namespace NodeLibrary {
         static RK4SolverRegistrar g_rk4SolverRegistrar;
     }
 
+
+
+QWidget* RK4SolverNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "RK4SolverNode"
+    return nullptr;
+}
+
+
+QWidget* DecomposeVector3Node::createCustomWidget()
+{
+    // TODO: Implement custom widget for "DecomposeVector3Node"
+    return nullptr;
+}
+
+
+QWidget* ComposeVector3Node::createCustomWidget()
+{
+    // TODO: Implement custom widget for "ComposeVector3Node"
+    return nullptr;
+}
+
+
+QWidget* EigenvalueSolverNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "EigenvalueSolverNode"
+    return nullptr;
+}
+
+
+QWidget* SolveLinearSystemNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "SolveLinearSystemNode"
+    return nullptr;
+}
+
+
+QWidget* MatrixVectorMultiplyNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "MatrixVectorMultiplyNode"
+    return nullptr;
+}
+
+
+QWidget* MatrixDeterminantNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "MatrixDeterminantNode"
+    return nullptr;
+}
+
+
+QWidget* MatrixTransposeNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "MatrixTransposeNode"
+    return nullptr;
+}
+
+
+QWidget* MatrixInverseNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "MatrixInverseNode"
+    return nullptr;
+}
+
+
+QWidget* MatrixMultiplyNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "MatrixMultiplyNode"
+    return nullptr;
+}
+
+
+QWidget* VectorCrossProductNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "VectorCrossProductNode"
+    return nullptr;
+}
+
+
+QWidget* NormalizeVectorNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "NormalizeVectorNode"
+    return nullptr;
+}
+
+
+QWidget* VectorMagnitudeNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "VectorMagnitudeNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

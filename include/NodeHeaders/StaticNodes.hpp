@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include <glm/glm.hpp>
@@ -17,6 +19,13 @@ namespace NodeLibrary {
     template<typename T>
     class StaticNode : public Node {
     public:
+        QWidget* createCustomWidget() override {
+            // TODO: Implement a custom widget for StaticNode.
+            // This widget would contain a control (e.g., QDoubleSpinBox, QLineEdit)
+            // to edit the 'value' member variable.
+            return nullptr;
+        }
+
         T value{};
 
         // MODIFIED CONSTRUCTOR:

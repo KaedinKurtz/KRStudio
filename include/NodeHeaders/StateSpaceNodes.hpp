@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include <Eigen/Dense>
@@ -33,11 +35,13 @@ namespace NodeLibrary {
     // --- Node Classes ---
 
     // --- Model Definition ---
-    class DefineLTISystemNode : public Node { public: DefineLTISystemNode(); void compute() override; };
+    class DefineLTISystemNode : public Node { public:
+        QWidget* createCustomWidget() override; DefineLTISystemNode(); void compute() override; };
 
     // --- Simulation ---
     class StateSpaceSimulatorNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         StateSpaceSimulatorNode();
         void compute() override;
     private:
@@ -46,15 +50,21 @@ namespace NodeLibrary {
     };
 
     // --- Control & Regulation ---
-    class LQRControllerNode : public Node { public: LQRControllerNode(); void compute() override; };
-    class StateFeedbackRegulatorNode : public Node { public: StateFeedbackRegulatorNode(); void compute() override; };
+    class LQRControllerNode : public Node { public:
+        QWidget* createCustomWidget() override; LQRControllerNode(); void compute() override; };
+    class StateFeedbackRegulatorNode : public Node { public:
+        QWidget* createCustomWidget() override; StateFeedbackRegulatorNode(); void compute() override; };
 
     // --- System Analysis ---
-    class ControllabilityMatrixNode : public Node { public: ControllabilityMatrixNode(); void compute() override; };
-    class ObservabilityMatrixNode : public Node { public: ObservabilityMatrixNode(); void compute() override; };
-    class CheckStabilityNode : public Node { public: CheckStabilityNode(); void compute() override; };
+    class ControllabilityMatrixNode : public Node { public:
+        QWidget* createCustomWidget() override; ControllabilityMatrixNode(); void compute() override; };
+    class ObservabilityMatrixNode : public Node { public:
+        QWidget* createCustomWidget() override; ObservabilityMatrixNode(); void compute() override; };
+    class CheckStabilityNode : public Node { public:
+        QWidget* createCustomWidget() override; CheckStabilityNode(); void compute() override; };
 
     // --- Monitoring & Safety ---
-    class StateMonitorNode : public Node { public: StateMonitorNode(); void compute() override; };
+    class StateMonitorNode : public Node { public:
+        QWidget* createCustomWidget() override; StateMonitorNode(); void compute() override; };
 
 } // namespace NodeLibrary

@@ -46,4 +46,11 @@ namespace NodeLibrary {
      */
     static AddNodeRegistrar g_addNodeRegistrar;
 
+
+
+QWidget* AddNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "AddNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

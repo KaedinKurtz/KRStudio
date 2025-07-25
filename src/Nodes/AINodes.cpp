@@ -203,4 +203,46 @@ namespace NodeLibrary {
     }
     static BTSelectorNodeRegistrar g_btSelectorRegistrar;
 
+
+
+QWidget* BTSelectorNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "BTSelectorNode"
+    return nullptr;
+}
+
+
+QWidget* BTSequenceNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "BTSequenceNode"
+    return nullptr;
+}
+
+
+QWidget* BTActionNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "BTActionNode"
+    return nullptr;
+}
+
+
+QWidget* GetBlackboardFloatNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "GetBlackboardFloatNode"
+    return nullptr;
+}
+
+
+QWidget* SetBlackboardFloatNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "SetBlackboardFloatNode"
+    return nullptr;
+}
+
+
+QWidget* RunInferenceNode::createCustomWidget()
+{
+    // TODO: Implement custom widget for "RunInferenceNode"
+    return nullptr;
+}
 } // namespace NodeLibrary

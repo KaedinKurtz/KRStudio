@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QWidget>
+
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include "components.hpp" // For RigidBodyComponent
@@ -29,24 +31,28 @@ namespace NodeLibrary {
 
     class GetLinearVelocityNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         GetLinearVelocityNode();
         void compute() override;
     };
 
     class ApplyForceNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         ApplyForceNode();
         void compute() override;
     };
 
     class SetLinearVelocityNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         SetLinearVelocityNode();
         void compute() override;
     };
 
     class CheckBeginOverlapNode : public Node {
     public:
+        QWidget* createCustomWidget() override;
         CheckBeginOverlapNode();
         void compute() override;
     };
