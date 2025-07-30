@@ -20,6 +20,7 @@ class QTimer;
 class FlowVisualizerMenu; // Forward-declare our new menu
 class SlamManager; // Forward-declare SlamManager
 class RealSenseManager; // Forward-declare RealSenseManager
+class ViewportManagerPopup; // Forward-declare ViewportManagerPopup
 
 namespace ads {
     class CDockManager;
@@ -52,6 +53,8 @@ private:
     // --- Member variables updated for the new layout ---
     QWidget* m_centralContainer;
     StaticToolbar* m_fixedTopToolbar;
+    ViewportManagerPopup* m_viewportManagerPopup;
+
     ads::CDockManager* m_dockManager;
     QString generateCameraColourCss(ads::CDockWidget* dock,
         entt::entity      camEntity,
@@ -64,7 +67,7 @@ private:
     // A pointer to our menu widget
     SlamManager* m_slamManager;
 
-
+    void syncViewportManagerPopup();
 
     FlowVisualizerMenu* m_flowVisualizerMenu;
     QTimer* m_rsPollTimer;
@@ -83,6 +86,8 @@ private:
     QtNodes::BasicGraphicsScene* m_nodeScene; // Owned by GraphicsView
     QtNodes::GraphicsView* m_nodeView;
 
+    void destroyCameraRig(entt::entity cameraEntity);
+
 public slots:
     void addViewport();
     void removeViewport();
@@ -90,6 +95,11 @@ public slots:
 private slots:
     void onTestNewViewport();
     void updateViewportLayouts();
+
+    void onShowViewportManager(); // Add this
+    void onShowViewportRequested(ads::CDockWidget* dock); // Add this
+    void onResetViewports(); // Add this
+    void onViewportDockClosed(ads::CDockWidget* closedDock); // Add this
 
 protected slots:
     void onLoadRobotClicked();

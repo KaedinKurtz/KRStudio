@@ -92,5 +92,5 @@ private:
     std::unique_ptr<QSqlTableModel> m_model;
     QString m_currentScene;
     qint64 m_currentEntityId = -1;
-    std::unique_ptr<Scene> m_scene;
+    Scene* m_scene;
 }; 

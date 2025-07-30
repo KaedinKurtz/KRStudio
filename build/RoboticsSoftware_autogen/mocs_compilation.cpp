@@ -21,6 +21,7 @@
 #include "IO2SIJJ3DB/moc_RobotEnrichmentDialog.cpp"
 #include "IO2SIJJ3DB/moc_StaticToolbar.cpp"
 #include "IO2SIJJ3DB/moc_URDFImporterDialog.cpp"
+#include "IO2SIJJ3DB/moc_ViewportManagerPopup.cpp"
 #include "IO2SIJJ3DB/moc_ViewportWidget.cpp"
 #include "IO2SIJJ3DB/moc_gridPropertiesWidget.cpp"
 #include "GP522AIZQX/moc_DatabaseBackupManager.cpp"

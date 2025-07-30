@@ -20,7 +20,22 @@ public:
     // This is a public helper now, which is fine.
     void createResourcesForContext(QOpenGLFunctions_4_3_Core* gl);
 
-private:
+private:  
+    
+    struct VisResources {
+        GLuint particleBuffer[2] = { 0 };
+        GLuint particleVAO[2] = { 0 };
+        int currentReadBuffer = 0;
+
+        GLuint samplePointsSSBO = 0;
+        GLuint instanceDataSSBO = 0;
+        GLuint commandUBO = 0; // For indirect drawing
+        int numSamplePoints = 0;
+    };
+
+    // A map from a context to the resources for each entity in that context.
+    QHash<QOpenGLContext*, QHash<entt::entity, VisResources>> m_perContextResources;
+
     void createArrowPrimitiveForContext(QOpenGLContext* ctx, QOpenGLFunctions_4_3_Core* gl);
     void gatherEffectorData(const RenderFrameContext& context);
 
@@ -28,16 +43,18 @@ private:
     // These functions now take the specific resources they need as parameters.
     void uploadEffectorData(QOpenGLFunctions_4_3_Core* gl, GLuint uboID, GLuint ssboID);
 
+    // --- These function signatures need to be updated to pass the resources ---
     void renderParticles(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf,
-        Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID);
+        Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID, VisResources& res);
 
     void renderFlow(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf,
-        Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID);
+        Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID, VisResources& res);
 
     void renderArrows(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf,
-        Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID);
+        Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID, VisResources& res);
+
     // --- END UPDATED SIGNATURES ---
-    
+
     // You have correctly updated these members to be per-context.
     QHash<QOpenGLContext*, GLuint> m_effectorDataUBOs;
     QHash<QOpenGLContext*, GLuint> m_triangleDataSSBOs;
@@ -50,4 +67,6 @@ private:
     std::vector<PointEffectorGpu> m_pointEffectors;
     std::vector<TriangleGpu> m_triangleEffectors;
     std::vector<DirectionalEffectorGpu> m_directionalEffectors;
+
+
 };

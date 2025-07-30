@@ -10,6 +10,8 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
     // You can connect signals/slots for your toolbar buttons here if needed
     // For example:
     connect(ui->load_robot_button, &QToolButton::clicked, this, &StaticToolbar::loadRobotClicked); // after a line, explain what it does
+
+    connect(ui->ViewportManagerbutton, &QToolButton::pressed, this, &StaticToolbar::viewportManagerClicked); // <<< ADD THIS LINE
 }
 
 StaticToolbar::~StaticToolbar()

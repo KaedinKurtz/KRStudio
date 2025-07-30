@@ -1354,6 +1354,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/include/UIHeaders/StaticToolbar.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/UIManager.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/URDFImporterDialog.hpp \
+	D:/RoboticsSoftware/include/UIHeaders/ViewportManagerPopup.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/ViewportWidget.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/gridPropertiesWidget.hpp \
 	D:/RoboticsSoftware/include/UtilityHeaders/AppPaths.hpp \
@@ -1441,6 +1442,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/src/UI/RobotEnrichmentDialog.cpp \
 	D:/RoboticsSoftware/src/UI/StaticToolbar.cpp \
 	D:/RoboticsSoftware/src/UI/URDFImporterDialog.cpp \
+	D:/RoboticsSoftware/src/UI/ViewportManagerPopup.cpp \
 	D:/RoboticsSoftware/src/UI/ViewportWidget.cpp \
 	D:/RoboticsSoftware/src/UI/gridPropertiesWidget.cpp \
 	D:/RoboticsSoftware/src/Utility/BlackBox.cpp \

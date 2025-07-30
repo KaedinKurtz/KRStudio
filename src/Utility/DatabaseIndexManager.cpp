@@ -1,4 +1,5 @@
 #include "DatabaseIndexManager.hpp"
+#include "DatabaseManager.hpp"
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
@@ -20,20 +21,41 @@ bool DatabaseIndexManager::createIndex(const QString& table, const QString& inde
         emit indexError("Invalid parameters for createIndex");
         return false;
     }
+
+    // Get the manager via its parent QObject pointer
+    DatabaseManager* manager = qobject_cast<DatabaseManager*>(parent());
+    if (!manager) {
+        emit indexError("Internal error: Could not retrieve DatabaseManager.");
+        return false;
+    }
+
+    // Get a connection from the pool
+    QSqlDatabase db = manager->getConnection();
+    if (!db.isValid()) {
+        emit indexError("Failed to get a valid database connection from the pool.");
+        return false;
+    }
+
     QString sql = QString("CREATE %1 INDEX IF NOT EXISTS %2 ON %3 (%4)")
         .arg(unique ? "UNIQUE" : "")
         .arg(indexName)
         .arg(table)
         .arg(columns.join(", "));
-    QSqlDatabase db = QSqlDatabase::database();
+
     QSqlQuery query(db);
     bool ok = query.exec(sql);
+
     if (!ok) {
         emit indexError(query.lastError().text());
-    } else {
+    }
+    else {
         emit indexCreated(indexName, true);
         m_cacheValid = false;
     }
+
+    // IMPORTANT: Release the connection back to the pool
+    manager->releaseConnection(db);
+
     return ok;
 }
 
