@@ -61,7 +61,12 @@
 #include <DockAreaTitleBar.h> 
 #include <QRandomGenerator>
 #include <QColor>
-
+#include <QApplication>
+#include <QStyle>
+#include <QAbstractButton>
+#include <QFrame>
+#include <QMenu>
+#include <QWidgetAction>
 
 const QString sidePanelStyle = R"(
     /* General Window and Text Styling */
@@ -258,12 +263,18 @@ void MainWindow::disableFloatingForAllDockWidgets()
 }
 
 MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent)
+    : QMainWindow(parent),
+    m_colorInUse(kPalette.size(), false)
 {
     setNodeEditorStyle();
     // --- 1. Create the Scene and Initial Entities ---
     m_scene = std::make_unique<Scene>();
     auto& registry = m_scene->getRegistry();
+
+    ads::CDockManager::setConfigFlag(ads::CDockManager::ActiveTabHasCloseButton, true);
+    ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaHasCloseButton, true);
+    ads::CDockManager::setConfigFlag(ads::CDockManager::TabCloseButtonIsToolButton, true);
+    ads::CDockManager::setConfigFlag(ads::CDockManager::AllTabsHaveCloseButton, true);
 
     // --- Set up scene-wide properties like fog ---
     auto& sceneProps = registry.ctx().emplace<SceneProperties>();
@@ -380,8 +391,18 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     // --- Create initial cameras for the viewports ---
-    auto cameraEntity1 = SceneBuilder::createCamera(registry, { 0, 2, 5 }, { 1, 0.3f, 0 });
-    auto cameraEntity2 = SceneBuilder::createCamera(registry, { 10, 5, 10 }, { 0, 0.6f, 1 });
+    const QColor& c0 = kPalette[0];
+    glm::vec3 tint0{ c0.redF(), c0.greenF(), c0.blueF() };
+
+    auto cameraEntity1 = SceneBuilder::createCamera(
+        registry,
+        { 0, 2, 5 },
+        tint0
+    );
+
+    // mark slot 0 taken
+    m_colorInUse[0] = true;
+    registry.emplace<ColorIndexComponent>(cameraEntity1, 0);
 
     // --- 2. Create the SINGLE Shared Rendering System ---
     m_renderingSystem = std::make_unique<RenderingSystem>(nullptr);
@@ -398,9 +419,19 @@ MainWindow::MainWindow(QWidget* parent)
     m_fixedTopToolbar = new StaticToolbar(this);
     mainLayout->addWidget(m_fixedTopToolbar, 0);
 
-    m_viewportManagerPopup = nullptr;
-    // This now correctly connects the toolbar's signal to the main window's slot
-    connect(m_fixedTopToolbar, &StaticToolbar::viewportManagerClicked, this, &MainWindow::onShowViewportManager); // <<< THIS REPLACES THE OLD LOGIC
+    // 3a) Grab the toolbar’s embedded popup:
+    auto* popup = m_fixedTopToolbar->viewportManagerPopup();
+    m_viewportManagerPopup = popup;
+    // 3b) Wire up its buttons ? your slots:
+    connect(popup, &ViewportManagerPopup::addViewportRequested, this, &MainWindow::addViewport);
+    connect(popup, &ViewportManagerPopup::removeViewportRequested, this, &MainWindow::removeViewport);
+    connect(popup, &ViewportManagerPopup::resetViewportsRequested, this, &MainWindow::onResetViewports);
+    connect(popup, &ViewportManagerPopup::showViewportRequested, this, &MainWindow::onShowViewportRequested);
+
+    // 3c) Also re?sync the initial state of the menu:
+    popup->updateUi(m_dockContainers, m_scene.get());
+
+    syncViewportManagerPopup();
 
     // ADS dock manager
     m_dockManager = new ads::CDockManager();
@@ -448,50 +479,25 @@ MainWindow::MainWindow(QWidget* parent)
             ).arg(bg.name(), fg.name()));
         }
     }
-    // ---------------------------------------------------------------------------
-    // Viewport 2  (right, same row)
-    // ---------------------------------------------------------------------------
-    ViewportWidget* viewport2 = new ViewportWidget(
-        m_scene.get(), m_renderingSystem.get(), cameraEntity2, this);
 
-    auto* viewportDock2 = new ads::CDockWidget(QStringLiteral("3D Viewport 2"));
-    viewportDock2->setWidget(viewport2);
-    viewportDock2->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
-
-    auto* viewportArea2 =
-        m_dockManager->addDockWidget(ads::RightDockWidgetArea,
-            viewportDock2,
-            viewportArea1);   // same horizontal row
-
-    // 2. colour the title bar
-    if (auto* area = viewportDock2->dockAreaWidget()) {
-        if (auto* tb = area->titleBar()) {
-            // ?A. fetch the camera’s tint  (0?1 floats)
-            const glm::vec3 camTint =
-                m_scene->getRegistry()
-                .get<CameraComponent>(cameraEntity2).tint;
-
-            // ?B. make it 20?% darker for the bar
-            glm::vec3 darkTint = camTint * 0.8f;
-
-            QColor bg; bg.setRgbF(darkTint.r, darkTint.g, darkTint.b);
-            QColor fg = Qt::white;                     // force white text
-
-            // C. remove borders + apply colours
-            tb->setStyleSheet(QStringLiteral(
-                "background:%1;"
-                "color:%2;"
-                "border:0;"
-            ).arg(bg.name(), fg.name()));
-        }
-    }
     // ---------------------------------------------------------------------------
     // keep track of the docks so your later loops still work
     // ---------------------------------------------------------------------------
-    m_dockContainers << viewportDock1 << viewportDock2;
+    m_dockContainers << viewportDock1;
 
     applyCameraColorToDock(viewportDock1, cameraEntity1);
-    applyCameraColorToDock(viewportDock2, cameraEntity2);
+
+    connect(viewportDock1, &ads::CDockWidget::closed, this, [this, viewportDock1]() {
+        // 1) destroy the camera/rig
+        if (auto* vp = qobject_cast<ViewportWidget*>(viewportDock1->widget())) {
+            destroyCameraRig(vp->getCameraEntity());
+        }
+        // 2) once Qt has actually deleted the widget, remove it from our list and refresh
+        QTimer::singleShot(0, this, [this, viewportDock1]() {
+            m_dockContainers.removeAll(viewportDock1);
+            syncViewportManagerPopup();
+            });
+        });
 
     // Create the properties panel and dock it to the RIGHT of the SECOND viewport.
     PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this); // Creates the properties panel widget.
@@ -499,7 +505,7 @@ MainWindow::MainWindow(QWidget* parent)
     ads::CDockWidget* propertiesDock = new ads::CDockWidget("Grid(s)"); // Creates the properties dock widget.
     propertiesDock->setWidget(propertiesPanel); // Sets the properties panel as the content of the dock widget.
     propertiesDock->setStyleSheet(sidePanelStyle); // Applies your custom style.
-    ads::CDockAreaWidget* propertiesArea = m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock, viewportArea2); // Docks the properties panel to the right OF viewport 2, creating our third column.
+    ads::CDockAreaWidget* propertiesArea = m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock); // Docks the properties panel to the right OF viewport 2, creating our third column.
 
     // Create the database panel and dock it to the right
     DatabasePanel* databasePanel = new DatabasePanel(m_scene.get(), this);
@@ -611,6 +617,10 @@ MainWindow::MainWindow(QWidget* parent)
             Q_EMIT graphModel->nodeUpdated(nodeId);
         });
 
+    connect(m_dockManager,
+        &ads::CDockManager::dockWidgetRemoved,
+        this,
+        &MainWindow::syncViewportManagerPopup);
 
     // ===================================================================
 
@@ -729,7 +739,6 @@ MainWindow::MainWindow(QWidget* parent)
 
     // We still need topLevelChanged for each dock widget to handle docking/undocking
     connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, &MainWindow::updateViewportLayouts);
-    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, &MainWindow::updateViewportLayouts);
 
     // --- 6. Other Signal/Slot Connections ---
     connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
@@ -750,24 +759,10 @@ MainWindow::MainWindow(QWidget* parent)
         }
         });
 
-    // Do the same for the second viewport
-    connect(viewportDock2, &ads::CDockWidget::topLevelChanged, this, [viewport2, viewportDock2](bool isFloating) {
-        if (isFloating) {
-            QTimer::singleShot(10, viewport2, [viewport2]() {
-                viewport2->hide();
-                viewport2->show();
-                });
-        }
-        else {
-            QTimer::singleShot(0, viewport2, [=]() {
-                viewport2->update();
-                });
-        }
-        });
-
     connect(m_flowVisualizerMenu, &FlowVisualizerMenu::settingsChanged, this, &MainWindow::onFlowVisualizerSettingsChanged);
     connect(m_flowVisualizerMenu, &FlowVisualizerMenu::testViewportRequested, this, &MainWindow::onTestNewViewport);
 
+    syncViewportManagerPopup();
     updateVisualizerUI();
     onFlowVisualizerSettingsChanged();
 
@@ -1075,55 +1070,74 @@ void MainWindow::updateViewportLayouts()
 
 // Modified addViewport function
 void MainWindow::addViewport() {
-    // Limit the number of viewports.
-    if (m_dockContainers.size() >= 6) {
+    // 0) limit by palette size
+    if (m_dockContainers.size() >= kPalette.size()) {
         statusBar()->showMessage("Maximum number of viewports reached.", 2000);
         return;
     }
 
     auto& reg = m_scene->getRegistry();
 
-    // ================== NEW COLOR LOGIC ==================
-    // 1. Generate a random Hue, and keep Saturation/Value high for nice colors.
-    float hue = QRandomGenerator::global()->generateDouble(); // Random value 0.0 to 1.0
-    float saturation = 0.9f;
-    float value = 0.95f;
+    // 1) build a set of all the palette indexes currently in use
+    QSet<int> used;
+    for (auto* dock : m_dockContainers) {
+        if (auto* vp = qobject_cast<ViewportWidget*>(dock->widget())) {
+            auto cam = vp->getCameraEntity();
+            if (reg.all_of<ColorIndexComponent>(cam))
+                used.insert(reg.get<ColorIndexComponent>(cam).paletteIndex);
+        }
+    }
 
-    // 2. Use QColor to easily convert from HSV to RGB.
-    QColor color;
-    color.setHsvF(hue, saturation, value);
+    // 2) pick the smallest free index
+    int colorIdx = 0;
+    while (colorIdx < kPalette.size() && used.contains(colorIdx))
+        ++colorIdx;
 
-    // 3. Create a glm::vec3 from the resulting RGB values.
-    glm::vec3 randomTint(color.redF(), color.greenF(), color.blueF());
-    // =======================================================
+    // 3) grab that color
+    const QColor   c = kPalette[colorIdx];
+    glm::vec3      tint{ c.redF(), c.greenF(), c.blueF() };
 
-    // 4. Create the camera using the new random tint.
-    entt::entity camEntity = SceneBuilder::createCamera(reg, { 0.f, 2.f, 5.f + (float)m_dockContainers.size() }, randomTint);
+    // 4) create camera & tag it
+    entt::entity cam = SceneBuilder::createCamera(
+        reg,
+        { 0.f, 2.f, 5.f + float(m_dockContainers.size()) },
+        tint
+    );
+    reg.emplace<ColorIndexComponent>(cam, colorIdx);
 
-    // --- The rest of the function remains the same ---
-    auto* vp = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), camEntity, this);
-    auto* dock = new ads::CDockWidget(""); // Title will be set by sync function
+    // 5) make the viewport + dock it
+    auto* vp = new ViewportWidget(m_scene.get(), m_renderingSystem.get(), cam, this);
+    auto* dock = new ads::CDockWidget("");
     dock->setWidget(vp);
-    
     m_dockContainers.append(dock);
 
-    ads::CDockAreaWidget* anchorArea = nullptr;
-    if (m_dockContainers.size() > 1) {
-        ads::CDockWidget* lastDock = m_dockContainers.at(m_dockContainers.size() - 2);
-        anchorArea = lastDock->dockAreaWidget();
-    }
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, dock, anchorArea);
+    ads::CDockAreaWidget* anchor = nullptr;
+    if (m_dockContainers.size() > 1)
+        anchor = m_dockContainers[m_dockContainers.size() - 2]->dockAreaWidget();
 
-    if (auto* dockArea = dock->dockAreaWidget()) {
-        if (auto* titleBar = dockArea->titleBar()) {
-            if (auto* btn = titleBar->findChild<QAbstractButton*>("CloseButton")) {
+    m_dockManager->addDockWidget(ads::CenterDockWidgetArea, dock, anchor);
+
+    // 6) hook its close so we resync
+    connect(dock, &ads::CDockWidget::closed, this, [this, dock]() {
+        if (auto* vp = qobject_cast<ViewportWidget*>(dock->widget())) {
+            destroyCameraRig(vp->getCameraEntity());
+        }
+        QTimer::singleShot(0, this, [this, dock]() {
+            m_dockContainers.removeAll(dock);
+            syncViewportManagerPopup();
+            });
+        });
+
+    // 7) set the little X icon
+    if (auto* area = dock->dockAreaWidget())
+        if (auto* tb = area->titleBar())
+            if (auto* btn = tb->button(ads::TitleBarButtonClose)) {
                 btn->setIcon(QApplication::style()->standardIcon(QStyle::SP_TitleBarCloseButton));
                 btn->setToolTip("Close");
                 btn->setStyleSheet("border:none;background:transparent;");
             }
-        }
-    }
 
+    // 8) refresh your popup/menu
     syncViewportManagerPopup();
 }
 
@@ -1207,44 +1221,6 @@ void MainWindow::onSceneReloadRequested(const QString& sceneName)
     }
 }
 
-void MainWindow::onShowViewportManager() {
-    // --- UX IMPROVEMENT: Make the button a toggle ---
-    // If the popup exists and is currently visible, just hide it and we're done.
-    if (m_viewportManagerPopup && m_viewportManagerPopup->isVisible()) {
-        m_viewportManagerPopup->hide();
-        return;
-    }
-
-    // If the popup doesn't exist (because it was closed and deleted), create it.
-    if (!m_viewportManagerPopup) {
-        m_viewportManagerPopup = new ViewportManagerPopup(this);
-
-        // Connect the functional signals
-        connect(m_viewportManagerPopup, &ViewportManagerPopup::showViewportRequested, this, &MainWindow::onShowViewportRequested);
-        connect(m_viewportManagerPopup, &ViewportManagerPopup::resetViewportsRequested, this, &MainWindow::onResetViewports);
-        connect(m_viewportManagerPopup, &ViewportManagerPopup::addViewportRequested, this, &MainWindow::addViewport);
-        connect(m_viewportManagerPopup, &ViewportManagerPopup::removeViewportRequested, this, &MainWindow::removeViewport);
-
-        // ============================ THE FIX ============================
-        // When the popup is destroyed (due to WA_DeleteOnClose),
-        // set our pointer back to nullptr. This prevents the dangling pointer.
-        connect(m_viewportManagerPopup, &QObject::destroyed, this, [this]() {
-            m_viewportManagerPopup = nullptr;
-            });
-        // ===============================================================
-    }
-
-    // Position the popup below the button that was clicked
-    if (auto* button = qobject_cast<QWidget*>(sender())) {
-        QPoint buttonPos = button->mapToGlobal(QPoint(0, button->height()));
-        m_viewportManagerPopup->move(buttonPos);
-    }
-
-    // Update its content and show it
-    syncViewportManagerPopup();
-    m_viewportManagerPopup->show();
-}
-
 void MainWindow::onShowViewportRequested(ads::CDockWidget* dock) {
     if (dock) {
         dock->setAsCurrentTab(); // This brings the tab to the front
@@ -1260,12 +1236,15 @@ void MainWindow::onResetViewports() {
     addViewport();
 }
 
-void MainWindow::syncViewportManagerPopup() {
-    // Re-index all viewport titles
+void MainWindow::syncViewportManagerPopup()
+{
+    // 1) Renumber the visible docks
     for (int i = 0; i < m_dockContainers.size(); ++i) {
-        m_dockContainers[i]->setWindowTitle(QString("3D Viewport %1").arg(i + 1));
+        m_dockContainers[i]
+            ->setWindowTitle(QStringLiteral("3D Viewport %1").arg(i + 1));
     }
 
+    // 2) Update *your* popup (if it still exists)
     if (m_viewportManagerPopup) {
         m_viewportManagerPopup->updateUi(m_dockContainers, m_scene.get());
     }
@@ -1277,34 +1256,65 @@ void MainWindow::onViewportDockClosed(ads::CDockWidget* closedDock)
     if (!closedDock)
         return;
 
-    qDebug() << "Dock closed, starting ordered cleanup for:" << closedDock->windowTitle();
+    // Debug: which dock & widget is being closed
+    qDebug() << "[VIEWPORT] Closing dock:" << closedDock->windowTitle();
 
-    // STEP 1: GPU resource cleanup
     if (auto* vp = qobject_cast<ViewportWidget*>(closedDock->widget()))
     {
-        if (m_renderingSystem)
-            m_renderingSystem->onViewportWillBeDestroyed(vp);
-        // Camera & mesh entities are destroyed via the destroyCameraRig lambda
-        // connected to vp's QObject::destroyed() signal.
+        entt::entity cam = vp->getCameraEntity();
+        qDebug() << "[VIEWPORT] Found ViewportWidget" << vp
+            << "with camera entity =" << (uint32_t)cam;
+
+        if (m_scene->getRegistry().all_of<ColorIndexComponent>(cam)) {
+            int idx = m_scene->getRegistry().get<ColorIndexComponent>(cam).paletteIndex;
+            m_colorInUse[idx] = false;
+        }
+
+        // 1) GPU cleanup
+        m_renderingSystem->onViewportWillBeDestroyed(vp);
+
+        // 2) Explicit camera+mesh destroy
+        destroyCameraRig(cam);
     }
 
-    // STEP 2: Remove from our UI list and update the manager menu
+    // 3) Remove from the UI list and refresh
     m_dockContainers.removeAll(closedDock);
+    
     syncViewportManagerPopup();
 }
 
-void MainWindow::destroyCameraRig(entt::entity cameraEntity) {
+void MainWindow::destroyCameraRig(entt::entity cameraEntity)
+{
     auto& reg = m_scene->getRegistry();
-    if (!reg.valid(cameraEntity)) return;
+    if (!reg.valid(cameraEntity)) {
+        qDebug() << "[CLEANUP] cameraEntity invalid:" << (uint32_t)cameraEntity;
+        return;
+    }
 
-    // Find camera gizmo mesh (ParentComponent)
+    // 1) Find the gizmo (mini?camera mesh) child of the camera
+    entt::entity gizE = entt::null;
     for (auto entity : reg.view<ParentComponent>()) {
         if (reg.get<ParentComponent>(entity).parent == cameraEntity) {
-            qDebug() << "Destroying mesh entity:" << (uint32_t)entity;
-            reg.destroy(entity);
+            gizE = entity;
+            qDebug() << "[CLEANUP] Found gizmo entity:" << (uint32_t)gizE;
             break;
         }
     }
-    qDebug() << "Destroying camera entity:" << (uint32_t)cameraEntity;
+
+    if (gizE != entt::null) {
+        // 2) Find & destroy the LED child of the gizmo
+        for (auto entity : reg.view<ParentComponent>()) {
+            if (reg.get<ParentComponent>(entity).parent == gizE) {
+                qDebug() << "[CLEANUP] Destroying LED entity:" << (uint32_t)entity;
+                reg.destroy(entity);
+            }
+        }
+        // 3) Destroy the gizmo itself
+        qDebug() << "[CLEANUP] Destroying gizmo entity:" << (uint32_t)gizE;
+        reg.destroy(gizE);
+    }
+
+    // 4) Finally destroy the camera entity
+    qDebug() << "[CLEANUP] Destroying camera entity:" << (uint32_t)cameraEntity;
     reg.destroy(cameraEntity);
 }

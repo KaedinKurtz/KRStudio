@@ -23,7 +23,9 @@ struct SelectedComponent {};
 struct CameraGizmoTag {};
 struct RecordLedTag {};
 struct PulsingSplineTag {};
-
+struct ColorIndexComponent {
+    int paletteIndex;
+};
 
 /**
  * @brief A structure that wraps any published value with profiling and tracing information.

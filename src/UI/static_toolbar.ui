@@ -1672,7 +1672,7 @@ Lighting</string>
                </property>
               </widget>
              </item>
-             <item row="1" column="11" colspan="4">
+             <item row="1" column="13" colspan="4">
               <widget class="Line" name="line_19">
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>
@@ -1852,6 +1852,13 @@ Lighting</string>
                </layout>
               </widget>
              </item>
+             <item row="2" column="12">
+              <widget class="Line" name="line_140">
+               <property name="orientation">
+                <enum>Qt::Orientation::Vertical</enum>
+               </property>
+              </widget>
+             </item>
              <item row="0" column="6" colspan="2">
               <widget class="QLabel" name="label_16">
                <property name="text">
@@ -1862,7 +1869,7 @@ Lighting</string>
                </property>
               </widget>
              </item>
-             <item row="2" column="13">
+             <item row="2" column="15">
               <widget class="QToolButton" name="show_object_axes_button">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -1897,7 +1904,7 @@ Lighting</string>
                </property>
               </widget>
              </item>
-             <item row="1" column="19">
+             <item row="1" column="21">
               <widget class="Line" name="line_25">
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>
@@ -1911,7 +1918,7 @@ Lighting</string>
                </property>
               </widget>
              </item>
-             <item row="2" column="12">
+             <item row="2" column="14">
               <widget class="QToolButton" name="show_axes_button">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -1946,10 +1953,17 @@ Lighting</string>
                </property>
               </widget>
              </item>
-             <item row="2" column="8">
+             <item row="2" column="9">
               <widget class="Line" name="line_29">
                <property name="orientation">
                 <enum>Qt::Orientation::Vertical</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="10">
+              <widget class="Line" name="line_141">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
                </property>
               </widget>
              </item>
@@ -1967,7 +1981,7 @@ Lighting</string>
                </property>
               </widget>
              </item>
-             <item row="2" column="19">
+             <item row="2" column="21">
               <widget class="QWidget" name="widget_13" native="true">
                <property name="maximumSize">
                 <size>
@@ -2059,7 +2073,7 @@ View</string>
                </property>
               </widget>
              </item>
-             <item row="2" column="20">
+             <item row="2" column="22">
               <spacer name="horizontalSpacer_2">
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>
@@ -2212,7 +2226,7 @@ View</string>
                </layout>
               </widget>
              </item>
-             <item row="2" column="14">
+             <item row="2" column="16">
               <widget class="QToolButton" name="show_collision_shapes_button">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -2248,7 +2262,7 @@ Boxes</string>
                </property>
               </widget>
              </item>
-             <item row="2" column="11">
+             <item row="2" column="13">
               <widget class="QToolButton" name="show_grid_button">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -2411,33 +2425,6 @@ Boxes</string>
                </layout>
               </widget>
              </item>
-             <item row="2" column="9">
-              <widget class="QToolButton" name="ViewportManagerbutton">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="text">
-                <string>Viewport
-Manager</string>
-               </property>
-               <property name="icon">
-                <iconset resource="../../resources.qrc">
-                 <normaloff>:/icons/icons8-view-all-48.png</normaloff>:/icons/icons8-view-all-48.png</iconset>
-               </property>
-               <property name="iconSize">
-                <size>
-                 <width>48</width>
-                 <height>40</height>
-                </size>
-               </property>
-               <property name="toolButtonStyle">
-                <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-               </property>
-              </widget>
-             </item>
              <item row="2" column="4">
               <widget class="QToolButton" name="reset_view_button">
                <property name="sizePolicy">
@@ -2470,14 +2457,14 @@ Manager</string>
                </property>
               </widget>
              </item>
-             <item row="2" column="18">
+             <item row="2" column="20">
               <widget class="Line" name="line_20">
                <property name="orientation">
                 <enum>Qt::Orientation::Vertical</enum>
                </property>
               </widget>
              </item>
-             <item row="0" column="11" colspan="4">
+             <item row="0" column="13" colspan="4">
               <widget class="QLabel" name="label_15">
                <property name="text">
                 <string>Overlays &amp; Helpers</string>
@@ -2487,7 +2474,7 @@ Manager</string>
                </property>
               </widget>
              </item>
-             <item row="0" column="19">
+             <item row="0" column="21">
               <widget class="QLabel" name="label_13">
                <property name="text">
                 <string>View Management</string>
@@ -2504,17 +2491,25 @@ Manager</string>
                </property>
               </widget>
              </item>
-             <item row="2" column="10">
-              <widget class="Line" name="line_140">
-               <property name="orientation">
-                <enum>Qt::Orientation::Vertical</enum>
+             <item row="0" column="11" rowspan="3">
+              <widget class="QWidget" name="ViewportManagerWidgetPlaceholder" native="true">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
                </property>
-              </widget>
-             </item>
-             <item row="1" column="9">
-              <widget class="Line" name="line_141">
-               <property name="orientation">
-                <enum>Qt::Orientation::Horizontal</enum>
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>300</width>
+                 <height>112</height>
+                </size>
                </property>
               </widget>
              </item>
@@ -10698,8 +10693,8 @@ Inspector</string>
  </resources>
  <connections/>
  <buttongroups>
+  <buttongroup name="view_button_group"/>
   <buttongroup name="control_button_group"/>
   <buttongroup name="viewport_shading_button_group"/>
-  <buttongroup name="view_button_group"/>
  </buttongroups>
 </ui>
