@@ -38,13 +38,12 @@ struct qt_meta_tag_ZN20ViewportManagerPopupE_t {};
 #ifdef QT_MOC_HAS_STRINGDATA
 static constexpr auto qt_meta_stringdata_ZN20ViewportManagerPopupE = QtMocHelpers::stringData(
     "ViewportManagerPopup",
-    "showViewportRequested",
-    "",
-    "ads::CDockWidget*",
-    "dock",
-    "resetViewportsRequested",
     "addViewportRequested",
-    "removeViewportRequested"
+    "",
+    "removeViewportRequested",
+    "resetViewportsRequested",
+    "showViewportRequested",
+    "ads::CDockWidget*"
 );
 #else  // !QT_MOC_HAS_STRINGDATA
 #error "qtmochelpers.h not found or too old."
@@ -64,16 +63,16 @@ Q_CONSTINIT static const uint qt_meta_data_ZN20ViewportManagerPopupE[] = {
        4,       // signalCount
 
  // signals: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    1,   38,    2, 0x06,    1 /* Public */,
-       5,    0,   41,    2, 0x06,    3 /* Public */,
-       6,    0,   42,    2, 0x06,    4 /* Public */,
-       7,    0,   43,    2, 0x06,    5 /* Public */,
+       1,    0,   38,    2, 0x06,    1 /* Public */,
+       3,    0,   39,    2, 0x06,    2 /* Public */,
+       4,    0,   40,    2, 0x06,    3 /* Public */,
+       5,    1,   41,    2, 0x06,    4 /* Public */,
 
  // signals: parameters
-    QMetaType::Void, 0x80000000 | 3,    4,
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
+    QMetaType::Void, 0x80000000 | 6,    2,
 
        0        // eod
 };
@@ -87,15 +86,15 @@ Q_CONSTINIT const QMetaObject ViewportManagerPopup::staticMetaObject = { {
     qt_incomplete_metaTypeArray<qt_meta_tag_ZN20ViewportManagerPopupE_t,
         // Q_OBJECT / Q_GADGET
         QtPrivate::TypeAndForceComplete<ViewportManagerPopup, std::true_type>,
-        // method 'showViewportRequested'
-        QtPrivate::TypeAndForceComplete<void, std::false_type>,
-        QtPrivate::TypeAndForceComplete<ads::CDockWidget *, std::false_type>,
-        // method 'resetViewportsRequested'
-        QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'addViewportRequested'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'removeViewportRequested'
-        QtPrivate::TypeAndForceComplete<void, std::false_type>
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'resetViewportsRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'showViewportRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<ads::CDockWidget *, std::false_type>
     >,
     nullptr
 } };
@@ -105,39 +104,39 @@ void ViewportManagerPopup::qt_static_metacall(QObject *_o, QMetaObject::Call _c,
     auto *_t = static_cast<ViewportManagerPopup *>(_o);
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
-        case 0: _t->showViewportRequested((*reinterpret_cast< std::add_pointer_t<ads::CDockWidget*>>(_a[1]))); break;
-        case 1: _t->resetViewportsRequested(); break;
-        case 2: _t->addViewportRequested(); break;
-        case 3: _t->removeViewportRequested(); break;
+        case 0: _t->addViewportRequested(); break;
+        case 1: _t->removeViewportRequested(); break;
+        case 2: _t->resetViewportsRequested(); break;
+        case 3: _t->showViewportRequested((*reinterpret_cast< std::add_pointer_t<ads::CDockWidget*>>(_a[1]))); break;
         default: ;
         }
     }
     if (_c == QMetaObject::IndexOfMethod) {
         int *result = reinterpret_cast<int *>(_a[0]);
         {
-            using _q_method_type = void (ViewportManagerPopup::*)(ads::CDockWidget * );
-            if (_q_method_type _q_method = &ViewportManagerPopup::showViewportRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+            using _q_method_type = void (ViewportManagerPopup::*)();
+            if (_q_method_type _q_method = &ViewportManagerPopup::addViewportRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
                 *result = 0;
                 return;
             }
         }
         {
             using _q_method_type = void (ViewportManagerPopup::*)();
-            if (_q_method_type _q_method = &ViewportManagerPopup::resetViewportsRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+            if (_q_method_type _q_method = &ViewportManagerPopup::removeViewportRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
                 *result = 1;
                 return;
             }
         }
         {
             using _q_method_type = void (ViewportManagerPopup::*)();
-            if (_q_method_type _q_method = &ViewportManagerPopup::addViewportRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+            if (_q_method_type _q_method = &ViewportManagerPopup::resetViewportsRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
                 *result = 2;
                 return;
             }
         }
         {
-            using _q_method_type = void (ViewportManagerPopup::*)();
-            if (_q_method_type _q_method = &ViewportManagerPopup::removeViewportRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+            using _q_method_type = void (ViewportManagerPopup::*)(ads::CDockWidget * );
+            if (_q_method_type _q_method = &ViewportManagerPopup::showViewportRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
                 *result = 3;
                 return;
             }
@@ -177,27 +176,27 @@ int ViewportManagerPopup::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
 }
 
 // SIGNAL 0
-void ViewportManagerPopup::showViewportRequested(ads::CDockWidget * _t1)
+void ViewportManagerPopup::addViewportRequested()
 {
-    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
-    QMetaObject::activate(this, &staticMetaObject, 0, _a);
+    QMetaObject::activate(this, &staticMetaObject, 0, nullptr);
 }
 
 // SIGNAL 1
-void ViewportManagerPopup::resetViewportsRequested()
+void ViewportManagerPopup::removeViewportRequested()
 {
     QMetaObject::activate(this, &staticMetaObject, 1, nullptr);
 }
 
 // SIGNAL 2
-void ViewportManagerPopup::addViewportRequested()
+void ViewportManagerPopup::resetViewportsRequested()
 {
     QMetaObject::activate(this, &staticMetaObject, 2, nullptr);
 }
 
 // SIGNAL 3
-void ViewportManagerPopup::removeViewportRequested()
+void ViewportManagerPopup::showViewportRequested(ads::CDockWidget * _t1)
 {
-    QMetaObject::activate(this, &staticMetaObject, 3, nullptr);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 3, _a);
 }
 QT_WARNING_POP

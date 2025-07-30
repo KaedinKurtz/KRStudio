@@ -185,16 +185,20 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_MainWindow.cpp
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qwindowdefs_win.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QFrame \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QMainWindow \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QMenu \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QPushButton \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QStyle \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QToolButton \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QWidget \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qabstractbutton.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qframe.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qmainwindow.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qmenu.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qpushbutton.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qsizepolicy.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qstyle.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtabwidget.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtoolbutton.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgets-config.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgetsexports.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgetsglobal.h \
@@ -294,4 +298,5 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_MainWindow.cpp
   D:/RoboticsSoftware/external/entt/signal/dispatcher.hpp \
   D:/RoboticsSoftware/external/entt/signal/emitter.hpp \
   D:/RoboticsSoftware/external/entt/signal/fwd.hpp \
-  D:/RoboticsSoftware/external/entt/signal/sigh.hpp
+  D:/RoboticsSoftware/external/entt/signal/sigh.hpp \
+  D:/RoboticsSoftware/include/UIHeaders/ViewportManagerPopup.hpp

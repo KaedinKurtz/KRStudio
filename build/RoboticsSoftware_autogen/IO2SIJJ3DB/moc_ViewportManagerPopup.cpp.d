@@ -1,5 +1,4 @@
 D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_ViewportManagerPopup.cpp: D:/RoboticsSoftware/include/UIHeaders/ViewportManagerPopup.hpp \
-  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QList \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/q20functional.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/q20iterator.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/q20memory.h \

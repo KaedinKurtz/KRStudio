@@ -8,7 +8,9 @@
 #include <entt/entt.hpp> 
 #include <DockWidget.h>   
 #include <librealsense2/rs.hpp>
-
+#include <QMenu>
+#include <QToolButton>      // for the slot signature
+#include "ViewportManagerPopup.hpp"
 
 // Forward declarations
 class QWidget;
@@ -88,6 +90,18 @@ private:
 
     void destroyCameraRig(entt::entity cameraEntity);
 
+    const QVector<QColor> kPalette = {
+        QColor::fromRgb(230,  25,  75),
+        QColor::fromRgb(60, 180,  75),
+        QColor::fromRgb(255, 225,  25),
+        QColor::fromRgb(0, 130, 200),
+        QColor::fromRgb(245, 130,  48),
+        QColor::fromRgb(145,  30, 180),
+        // …add more as needed…
+    };
+
+    QVector<bool> m_colorInUse;
+
 public slots:
     void addViewport();
     void removeViewport();
@@ -96,7 +110,6 @@ private slots:
     void onTestNewViewport();
     void updateViewportLayouts();
 
-    void onShowViewportManager(); // Add this
     void onShowViewportRequested(ads::CDockWidget* dock); // Add this
     void onResetViewports(); // Add this
     void onViewportDockClosed(ads::CDockWidget* closedDock); // Add this

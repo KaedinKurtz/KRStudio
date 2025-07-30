@@ -1,45 +1,26 @@
-// In a new file, e.g., include/ViewportManagerPopup.hpp
 #pragma once
-
 #include <QWidget>
-#include <QList>
-
-// Forward declarations
-class QVBoxLayout;
-class QGridLayout;
-class QLabel;
-class QPushButton;
+namespace ads { class CDockWidget; }
 class Scene;
-namespace ads {
-    class CDockWidget;
-}
+
+namespace Ui { class ViewportManagerWidget; }
 
 class ViewportManagerPopup : public QWidget {
     Q_OBJECT
-
 public:
     explicit ViewportManagerPopup(QWidget* parent = nullptr);
+    ~ViewportManagerPopup() override;
 
-    // This is the main function to update the popup's content.
-    void updateUi(const QList<ads::CDockWidget*>& viewportDocks, Scene* scene);
+    void updateUi(const QList<ads::CDockWidget*>& viewportDocks,
+        Scene* scene);
 
 signals:
-    // Signal to tell MainWindow to bring a specific viewport to the front.
-    void showViewportRequested(ads::CDockWidget* dock);
-    // Signal to tell MainWindow to reset the layout to a single viewport.
-    void resetViewportsRequested();
-    // Signals for adding/removing viewports
     void addViewportRequested();
     void removeViewportRequested();
+    void resetViewportsRequested();
+    void showViewportRequested(ads::CDockWidget*);
 
 private:
+    Ui::ViewportManagerWidget* ui;
     void clearLayout(QLayout* layout);
-
-    // UI elements
-    QVBoxLayout* m_mainLayout;
-    QLabel* m_counterLabel;
-    QGridLayout* m_buttonGrid;
-    QPushButton* m_addViewportButton;
-    QPushButton* m_removeViewportButton;
-    QPushButton* m_resetButton;
 };

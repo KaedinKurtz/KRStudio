@@ -40,7 +40,9 @@ static constexpr auto qt_meta_stringdata_ZN13StaticToolbarE = QtMocHelpers::stri
     "StaticToolbar",
     "loadRobotClicked",
     "",
-    "viewportManagerClicked"
+    "viewportManagerClicked",
+    "QToolButton*",
+    "button"
 );
 #else  // !QT_MOC_HAS_STRINGDATA
 #error "qtmochelpers.h not found or too old."
@@ -61,11 +63,11 @@ Q_CONSTINIT static const uint qt_meta_data_ZN13StaticToolbarE[] = {
 
  // signals: name, argc, parameters, tag, flags, initial metatype offsets
        1,    0,   26,    2, 0x06,    1 /* Public */,
-       3,    0,   27,    2, 0x06,    2 /* Public */,
+       3,    1,   27,    2, 0x06,    2 /* Public */,
 
  // signals: parameters
     QMetaType::Void,
-    QMetaType::Void,
+    QMetaType::Void, 0x80000000 | 4,    5,
 
        0        // eod
 };
@@ -82,7 +84,8 @@ Q_CONSTINIT const QMetaObject StaticToolbar::staticMetaObject = { {
         // method 'loadRobotClicked'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'viewportManagerClicked'
-        QtPrivate::TypeAndForceComplete<void, std::false_type>
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<QToolButton *, std::false_type>
     >,
     nullptr
 } };
@@ -93,7 +96,7 @@ void StaticToolbar::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _i
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
         case 0: _t->loadRobotClicked(); break;
-        case 1: _t->viewportManagerClicked(); break;
+        case 1: _t->viewportManagerClicked((*reinterpret_cast< std::add_pointer_t<QToolButton*>>(_a[1]))); break;
         default: ;
         }
     }
@@ -107,7 +110,7 @@ void StaticToolbar::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _i
             }
         }
         {
-            using _q_method_type = void (StaticToolbar::*)();
+            using _q_method_type = void (StaticToolbar::*)(QToolButton * );
             if (_q_method_type _q_method = &StaticToolbar::viewportManagerClicked; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
                 *result = 1;
                 return;
@@ -154,8 +157,9 @@ void StaticToolbar::loadRobotClicked()
 }
 
 // SIGNAL 1
-void StaticToolbar::viewportManagerClicked()
+void StaticToolbar::viewportManagerClicked(QToolButton * _t1)
 {
-    QMetaObject::activate(this, &staticMetaObject, 1, nullptr);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 1, _a);
 }
 QT_WARNING_POP

@@ -150,4 +150,5 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_StaticToolbar.
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgets-config.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgetsexports.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgetsglobal.h \
-  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qwidget.h
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qwidget.h \
+  D:/RoboticsSoftware/include/UIHeaders/ViewportManagerPopup.hpp

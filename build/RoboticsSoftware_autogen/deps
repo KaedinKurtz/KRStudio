@@ -515,6 +515,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QTableView \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QTableWidget \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QTextEdit \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QToolButton \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QTreeWidget \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QVBoxLayout \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QWidget \
@@ -556,6 +557,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtablewidget.h \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtabwidget.h \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtextedit.h \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtoolbutton.h \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtreeview.h \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtreewidget.h \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtreewidgetitemiterator.h \
@@ -1466,6 +1468,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/src/main.cpp \
 	D:/RoboticsSoftware/vcpkg.json \
 	D:/RoboticsSoftware/src/UI/RealSenseConfigMenu.ui \
+	D:/RoboticsSoftware/src/UI/ViewportManagerWidget.ui \
 	D:/RoboticsSoftware/src/UI/flowVisualizerMenu.ui \
 	D:/RoboticsSoftware/src/UI/gridPropertiesWidget.ui \
 	D:/RoboticsSoftware/src/UI/propertiespanel.ui \

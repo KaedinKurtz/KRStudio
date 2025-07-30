@@ -43,7 +43,6 @@ static constexpr auto qt_meta_stringdata_ZN10MainWindowE = QtMocHelpers::stringD
     "removeViewport",
     "onTestNewViewport",
     "updateViewportLayouts",
-    "onShowViewportManager",
     "onShowViewportRequested",
     "ads::CDockWidget*",
     "dock",
@@ -67,7 +66,7 @@ Q_CONSTINIT static const uint qt_meta_data_ZN10MainWindowE[] = {
       12,       // revision
        0,       // classname
        0,    0, // classinfo
-      13,   14, // methods
+      12,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
@@ -75,34 +74,32 @@ Q_CONSTINIT static const uint qt_meta_data_ZN10MainWindowE[] = {
        0,       // signalCount
 
  // slots: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    0,   92,    2, 0x0a,    1 /* Public */,
-       3,    0,   93,    2, 0x0a,    2 /* Public */,
-       4,    0,   94,    2, 0x08,    3 /* Private */,
-       5,    0,   95,    2, 0x08,    4 /* Private */,
-       6,    0,   96,    2, 0x08,    5 /* Private */,
-       7,    1,   97,    2, 0x08,    6 /* Private */,
-      10,    0,  100,    2, 0x08,    8 /* Private */,
-      11,    1,  101,    2, 0x08,    9 /* Private */,
-      13,    0,  104,    2, 0x09,   11 /* Protected */,
-      14,    0,  105,    2, 0x09,   12 /* Protected */,
-      15,    0,  106,    2, 0x09,   13 /* Protected */,
-      16,    0,  107,    2, 0x09,   14 /* Protected */,
-      17,    1,  108,    2, 0x09,   15 /* Protected */,
+       1,    0,   86,    2, 0x0a,    1 /* Public */,
+       3,    0,   87,    2, 0x0a,    2 /* Public */,
+       4,    0,   88,    2, 0x08,    3 /* Private */,
+       5,    0,   89,    2, 0x08,    4 /* Private */,
+       6,    1,   90,    2, 0x08,    5 /* Private */,
+       9,    0,   93,    2, 0x08,    7 /* Private */,
+      10,    1,   94,    2, 0x08,    8 /* Private */,
+      12,    0,   97,    2, 0x09,   10 /* Protected */,
+      13,    0,   98,    2, 0x09,   11 /* Protected */,
+      14,    0,   99,    2, 0x09,   12 /* Protected */,
+      15,    0,  100,    2, 0x09,   13 /* Protected */,
+      16,    1,  101,    2, 0x09,   14 /* Protected */,
 
  // slots: parameters
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
+    QMetaType::Void, 0x80000000 | 7,    8,
     QMetaType::Void,
-    QMetaType::Void, 0x80000000 | 8,    9,
-    QMetaType::Void,
-    QMetaType::Void, 0x80000000 | 8,   12,
-    QMetaType::Void,
+    QMetaType::Void, 0x80000000 | 7,   11,
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
-    QMetaType::Void, QMetaType::QString,   18,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::QString,   17,
 
        0        // eod
 };
@@ -123,8 +120,6 @@ Q_CONSTINIT const QMetaObject MainWindow::staticMetaObject = { {
         // method 'onTestNewViewport'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'updateViewportLayouts'
-        QtPrivate::TypeAndForceComplete<void, std::false_type>,
-        // method 'onShowViewportManager'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'onShowViewportRequested'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
@@ -158,29 +153,28 @@ void MainWindow::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, 
         case 1: _t->removeViewport(); break;
         case 2: _t->onTestNewViewport(); break;
         case 3: _t->updateViewportLayouts(); break;
-        case 4: _t->onShowViewportManager(); break;
-        case 5: _t->onShowViewportRequested((*reinterpret_cast< std::add_pointer_t<ads::CDockWidget*>>(_a[1]))); break;
-        case 6: _t->onResetViewports(); break;
-        case 7: _t->onViewportDockClosed((*reinterpret_cast< std::add_pointer_t<ads::CDockWidget*>>(_a[1]))); break;
-        case 8: _t->onLoadRobotClicked(); break;
-        case 9: _t->onMasterRender(); break;
-        case 10: _t->onFlowVisualizerTransformChanged(); break;
-        case 11: _t->onFlowVisualizerSettingsChanged(); break;
-        case 12: _t->onSceneReloadRequested((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        case 4: _t->onShowViewportRequested((*reinterpret_cast< std::add_pointer_t<ads::CDockWidget*>>(_a[1]))); break;
+        case 5: _t->onResetViewports(); break;
+        case 6: _t->onViewportDockClosed((*reinterpret_cast< std::add_pointer_t<ads::CDockWidget*>>(_a[1]))); break;
+        case 7: _t->onLoadRobotClicked(); break;
+        case 8: _t->onMasterRender(); break;
+        case 9: _t->onFlowVisualizerTransformChanged(); break;
+        case 10: _t->onFlowVisualizerSettingsChanged(); break;
+        case 11: _t->onSceneReloadRequested((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
         default: ;
         }
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
         switch (_id) {
         default: *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType(); break;
-        case 5:
+        case 4:
             switch (*reinterpret_cast<int*>(_a[1])) {
             default: *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType(); break;
             case 0:
                 *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType::fromType< ads::CDockWidget* >(); break;
             }
             break;
-        case 7:
+        case 6:
             switch (*reinterpret_cast<int*>(_a[1])) {
             default: *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType(); break;
             case 0:
@@ -210,14 +204,14 @@ int MainWindow::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 13)
+        if (_id < 12)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 13;
+        _id -= 12;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 13)
+        if (_id < 12)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 13;
+        _id -= 12;
     }
     return _id;
 }
