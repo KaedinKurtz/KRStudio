@@ -155,10 +155,6 @@ struct FieldVisualizerComponent {
 
     // --- Internal GPU State ---
     bool isGpuDataDirty = true;
-    FieldVisGpuData gpuData;
-    GLuint particleBuffer[2] = { 0, 0 };
-    GLuint particleVAO[2] = { 0, 0 };
-    int currentReadBuffer = 0;
 };
 
 struct DrawElementsIndirectCommand {

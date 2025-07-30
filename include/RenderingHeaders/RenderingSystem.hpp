@@ -56,7 +56,7 @@ public:
 
     void updatePointCloud(const rs2::points& points, const rs2::video_frame& colorFrame, const glm::mat4& pose);
 
-
+    void onViewportWillBeDestroyed(ViewportWidget* viewport);
 
     // --- Public Helpers & Getters (for Render Passes) ---
     bool isInitialized() const { return m_isInitialized; }

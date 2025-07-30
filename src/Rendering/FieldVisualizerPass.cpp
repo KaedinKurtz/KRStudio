@@ -1,4 +1,4 @@
-﻿#include "FieldVisualizerPass.hpp"
+#include "FieldVisualizerPass.hpp"
 #include "PrimitiveBuilders.hpp" // Your existing file!
 #include "RenderingSystem.hpp"
 #include "Shader.hpp"
@@ -42,7 +42,7 @@ namespace {
         qDebug() << "  - Stop Count Sent to Shader:" << count;
         // --- END OF INSTRUMENTATION ---
 
-        // ── scalar uniform ────────────────────────────────────────────────────
+        // ?? scalar uniform ????????????????????????????????????????????????????
         GLint loc = gl->glGetUniformLocation(prog, "u_stopCount");
         if (loc != -1) {
             gl->glUniform1i(loc, count);
@@ -63,7 +63,7 @@ namespace {
                     << "Color = (" << col[i].r << "," << col[i].g << "," << col[i].b << "," << col[i].a << ")";
             }
 
-            // ── array uniforms: MUST use [0] in the query ─────────────────────────
+            // ?? array uniforms: MUST use [0] in the query ?????????????????????????
             loc = gl->glGetUniformLocation(prog, "u_stopPos[0]");
             if (loc != -1) {
                 gl->glUniform1fv(loc, count, pos.data());
@@ -146,15 +146,19 @@ void FieldVisualizerPass::execute(const RenderFrameContext& context) {
         if (!vis.isEnabled) continue;
         const auto& xf = registry.get<TransformComponent>(entity);
 
-        // --- 6. Delegate to sub-routines, passing all necessary resources ---
+        // Get or create the resources for this specific entity and context.
+        // The QHash operator[] will default-construct a VisResources if it doesn't exist.
+        VisResources& resources = m_perContextResources[ctx][entity];
+
+        // Delegate to sub-routines, passing the resources struct.
         if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Particles) {
-            renderParticles(context, vis, xf, particleRenderShader, particleUpdateComputeShader, effectorUBO, triangleSSBO);
+            renderParticles(context, vis, xf, particleRenderShader, particleUpdateComputeShader, effectorUBO, triangleSSBO, resources);
         }
         else if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Flow) {
-            renderFlow(context, vis, xf, instancedArrowShader, flowVectorComputeShader, effectorUBO, triangleSSBO);
+            renderFlow(context, vis, xf, instancedArrowShader, flowVectorComputeShader, effectorUBO, triangleSSBO, resources);
         }
         else if (vis.displayMode == FieldVisualizerComponent::DisplayMode::Arrows) {
-            renderArrows(context, vis, xf, instancedArrowShader, arrowFieldComputeShader, effectorUBO, triangleSSBO);
+            renderArrows(context, vis, xf, instancedArrowShader, arrowFieldComputeShader, effectorUBO, triangleSSBO, resources);
         }
         vis.isGpuDataDirty = false;
     }
@@ -295,30 +299,23 @@ void FieldVisualizerPass::uploadEffectorData(QOpenGLFunctions_4_3_Core* gl, GLui
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); // Unbind
 }
 
-void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
-    FieldVisualizerComponent& vis,
-    const TransformComponent& xf,
-    Shader* renderShader,
-    Shader* computeShader,
-    GLuint                     uboID,
-    GLuint                     ssboID)
+void FieldVisualizerPass::renderParticles(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf,
+    Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID, VisResources& res)
 {
     auto* gl = context.gl;
     auto& settings = vis.particleSettings;
 
-    GLStateSaver stateSaver(gl);
-
-    /* ───────────────────────  create or rebuild GPU resources  ─────────────────────── */
-    const bool needInit = (vis.particleBuffer[0] == 0) || vis.isGpuDataDirty;
+    // Check if resources need to be created or rebuilt.
+    const bool needInit = (res.particleBuffer[0] == 0) || vis.isGpuDataDirty;
     if (needInit)
     {
-        /* clean up old buffers / VAO if they exist */
-        if (vis.particleBuffer[0] != 0) {
-            gl->glDeleteBuffers(2, vis.particleBuffer);
-            gl->glDeleteVertexArrays(2, vis.particleVAO); // Delete both old VAOs
+        // Clean up old buffers if they exist.
+        if (res.particleBuffer[0] != 0) {
+            gl->glDeleteBuffers(2, res.particleBuffer);
+            gl->glDeleteVertexArrays(2, res.particleVAO);
         }
 
-        /* CPU-side bootstrap */
+        // --- CPU-side bootstrap ---
         std::vector<Particle> particles(settings.particleCount);
         std::mt19937 rng{ std::random_device{}() };
         std::uniform_real_distribution<float> dist(0.0f, 1.0f);
@@ -335,24 +332,24 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
         }
 
         /* ping-pong SSBO pair */
-        gl->glGenBuffers(2, vis.particleBuffer);
+        gl->glGenBuffers(2, res.particleBuffer);
 
-        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[0]);            // read
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, res.particleBuffer[0]);            // read
         gl->glBufferData(GL_SHADER_STORAGE_BUFFER,
             particles.size() * sizeof(Particle),
             particles.data(),
             GL_DYNAMIC_DRAW);
 
-        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[1]);            // write
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, res.particleBuffer[1]);            // write
         gl->glBufferData(GL_SHADER_STORAGE_BUFFER,
             particles.size() * sizeof(Particle),
             nullptr,
             GL_DYNAMIC_DRAW);
-        gl->glGenVertexArrays(2, vis.particleVAO);
+        gl->glGenVertexArrays(2, res.particleVAO);
 
         // Configure VAO 0 to read from Buffer 0
-        gl->glBindVertexArray(vis.particleVAO[0]);
-        gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[0]);
+        gl->glBindVertexArray(res.particleVAO[0]);
+        gl->glBindBuffer(GL_ARRAY_BUFFER, res.particleBuffer[0]);
         gl->glEnableVertexAttribArray(0); // a_position
         gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position));
         gl->glEnableVertexAttribArray(1); // a_color
@@ -361,8 +358,8 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
         gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, size));
 
         // Configure VAO 1 to read from Buffer 1
-        gl->glBindVertexArray(vis.particleVAO[1]);
-        gl->glBindBuffer(GL_ARRAY_BUFFER, vis.particleBuffer[1]);
+        gl->glBindVertexArray(res.particleVAO[1]);
+        gl->glBindBuffer(GL_ARRAY_BUFFER, res.particleBuffer[1]);
         gl->glEnableVertexAttribArray(0); // a_position
         gl->glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position));
         gl->glEnableVertexAttribArray(1); // a_color
@@ -371,16 +368,16 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
         gl->glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, size));
 
         gl->glBindVertexArray(0); // Unbind the VAO when done.
-        vis.currentReadBuffer = 0;
+        res.currentReadBuffer = 0;
     }
 
-    /* ─────────────────────────  compute pass  ───────────────────────── */
+    /* ?????????????????????????  compute pass  ????????????????????????? */
     computeShader->use(gl);
 
     gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, uboID);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboID);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, vis.particleBuffer[vis.currentReadBuffer]);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, vis.particleBuffer[1 - vis.currentReadBuffer]);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, res.particleBuffer[res.currentReadBuffer]);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, res.particleBuffer[1 - res.currentReadBuffer]);
 
     // --- THE FIX: Set ALL uniforms the compute shader expects, every frame ---
     computeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
@@ -432,7 +429,7 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
    // This block reads the output of the compute shader for inspection.
    // ========================================================================
     {
-        GLuint outputBuffer = vis.particleBuffer[1 - vis.currentReadBuffer];
+        GLuint outputBuffer = res.particleBuffer[1 - res.currentReadBuffer];
         Particle p = {};
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, outputBuffer);
         gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle), &p);
@@ -450,7 +447,7 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     // --- DEBUG_READBACK: END ---
     // 
 
-    /* ─────────────────────────  render pass  ───────────────────────── */
+    /* ?????????????????????????  render pass  ????????????????????????? */
     gl->glEnable(GL_PROGRAM_POINT_SIZE);
     gl->glEnable(GL_BLEND);
     gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
@@ -460,7 +457,7 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     renderShader->setMat4(gl, "u_view", context.view);
     renderShader->setMat4(gl, "u_projection", context.projection);
 
-    gl->glBindVertexArray(vis.particleVAO[1 - vis.currentReadBuffer]);
+    gl->glBindVertexArray(res.particleVAO[1 - res.currentReadBuffer]);
     gl->glDrawArrays(GL_POINTS, 0, settings.particleCount);
 
     gl->glBindVertexArray(0);
@@ -469,19 +466,22 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context,
     gl->glDisable(GL_PROGRAM_POINT_SIZE); // <<< RESTORE STATE
 
     // Swap buffers for the next frame
-    vis.currentReadBuffer = 1 - vis.currentReadBuffer;
+    res.currentReadBuffer = 1 - res.currentReadBuffer;
 }
 
-void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf, Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID)
+void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf,
+    Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID, VisResources& res)
 {
     auto* gl = context.gl;
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
     auto& settings = vis.flowSettings;
-    if (vis.particleBuffer[0] == 0 || vis.isGpuDataDirty) {
-        if (vis.particleBuffer[0] != 0) {
-            gl->glDeleteBuffers(2, vis.particleBuffer);
-            if (vis.gpuData.instanceDataSSBO) gl->glDeleteBuffers(1, &vis.gpuData.instanceDataSSBO);
+
+    // Check if resources need to be created or rebuilt.
+    if (res.particleBuffer[0] == 0 || vis.isGpuDataDirty) {
+        if (res.particleBuffer[0] != 0) {
+            gl->glDeleteBuffers(2, res.particleBuffer);
+            if (res.instanceDataSSBO) gl->glDeleteBuffers(1, &res.instanceDataSSBO);
         }
         std::vector<Particle> particles(settings.particleCount);
         std::mt19937 rng(std::random_device{}());
@@ -495,22 +495,22 @@ void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVis
             particles[i].lifetime = settings.lifetime;
             particles[i].size = settings.baseSize;
         }
-        gl->glGenBuffers(2, vis.particleBuffer);
-        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[0]);
+        gl->glGenBuffers(2, res.particleBuffer);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, res.particleBuffer[0]);
         gl->glBufferData(GL_SHADER_STORAGE_BUFFER, particles.size() * sizeof(Particle), particles.data(), GL_DYNAMIC_DRAW);
-        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.particleBuffer[1]);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, res.particleBuffer[1]);
         gl->glBufferData(GL_SHADER_STORAGE_BUFFER, particles.size() * sizeof(Particle), nullptr, GL_DYNAMIC_DRAW);
-        if (vis.gpuData.instanceDataSSBO == 0) gl->glGenBuffers(1, &vis.gpuData.instanceDataSSBO);
-        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
+        if (res.instanceDataSSBO == 0) gl->glGenBuffers(1, &res.instanceDataSSBO);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, res.instanceDataSSBO);
         gl->glBufferData(GL_SHADER_STORAGE_BUFFER, settings.particleCount * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
     }
 
     computeShader->use(gl);
     gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, uboID);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboID);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, vis.particleBuffer[vis.currentReadBuffer]);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, vis.particleBuffer[1 - vis.currentReadBuffer]);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, vis.gpuData.instanceDataSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, res.particleBuffer[res.currentReadBuffer]);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, res.particleBuffer[1 - res.currentReadBuffer]);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, res.instanceDataSSBO);
 
     computeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
     computeShader->setFloat(gl, "u_deltaTime", context.deltaTime);
@@ -545,7 +545,7 @@ void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVis
     renderShader->setMat4(gl, "view", context.view);
     renderShader->setMat4(gl, "projection", context.projection);
     gl->glBindVertexArray(m_arrowVAOs[ctx]);
-    gl->glBindBuffer(GL_ARRAY_BUFFER, vis.gpuData.instanceDataSSBO);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, res.instanceDataSSBO);
     const GLsizei stride = sizeof(InstanceData);
     const GLsizei vec4Size = sizeof(glm::vec4);
     gl->glEnableVertexAttribArray(2);
@@ -571,27 +571,30 @@ void FieldVisualizerPass::renderFlow(const RenderFrameContext& context, FieldVis
     gl->glVertexAttribDivisor(5, 0);
     gl->glVertexAttribDivisor(6, 0);
 
-    vis.currentReadBuffer = 1 - vis.currentReadBuffer;
+    res.currentReadBuffer = 1 - res.currentReadBuffer;
 }
 
 void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldVisualizerComponent& vis, const TransformComponent& xf,
-    Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID)
+    Shader* renderShader, Shader* computeShader, GLuint uboID, GLuint ssboID, VisResources& res)
 {
     auto* gl = context.gl;
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
 
     auto& settings = vis.arrowSettings;
-    if (vis.isGpuDataDirty) {
-        if (vis.gpuData.samplePointsSSBO) gl->glDeleteBuffers(1, &vis.gpuData.samplePointsSSBO);
-        if (vis.gpuData.instanceDataSSBO) gl->glDeleteBuffers(1, &vis.gpuData.instanceDataSSBO);
-        if (vis.gpuData.commandUBO) gl->glDeleteBuffers(1, &vis.gpuData.commandUBO);
+
+    // Check if resources need to be created or rebuilt.
+    if (res.samplePointsSSBO == 0 || vis.isGpuDataDirty) {
+        // Clean up old buffers if they exist.
+        if (res.samplePointsSSBO) gl->glDeleteBuffers(1, &res.samplePointsSSBO);
+        if (res.instanceDataSSBO) gl->glDeleteBuffers(1, &res.instanceDataSSBO);
+        if (res.commandUBO)       gl->glDeleteBuffers(1, &res.commandUBO);
 
         std::vector<glm::vec4> samplePoints;
-        vis.gpuData.numSamplePoints = settings.density.x * settings.density.y * settings.density.z;
+        res.numSamplePoints = settings.density.x * settings.density.y * settings.density.z;
 
-        if (vis.gpuData.numSamplePoints > 0) {
-            samplePoints.reserve(vis.gpuData.numSamplePoints);
+        if (res.numSamplePoints > 0) {
+            samplePoints.reserve(res.numSamplePoints);
             glm::vec3 boundsSize = vis.bounds.max - vis.bounds.min;
             for (int x = 0; x < settings.density.x; ++x) {
                 for (int y = 0; y < settings.density.y; ++y) {
@@ -605,31 +608,31 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
                     }
                 }
             }
-            gl->glGenBuffers(1, &vis.gpuData.samplePointsSSBO);
-            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.samplePointsSSBO);
+            gl->glGenBuffers(1, &res.samplePointsSSBO);
+            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, res.samplePointsSSBO);
             gl->glBufferData(GL_SHADER_STORAGE_BUFFER, samplePoints.size() * sizeof(glm::vec4), samplePoints.data(), GL_STATIC_DRAW);
 
-            gl->glGenBuffers(1, &vis.gpuData.instanceDataSSBO);
-            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
-            gl->glBufferData(GL_SHADER_STORAGE_BUFFER, vis.gpuData.numSamplePoints * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
+            gl->glGenBuffers(1, &res.instanceDataSSBO);
+            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, res.instanceDataSSBO);
+            gl->glBufferData(GL_SHADER_STORAGE_BUFFER, res.numSamplePoints * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
 
             DrawElementsIndirectCommand cmd = { (GLuint)m_arrowIndexCounts[ctx], 0, 0, 0, 0 };
-            gl->glGenBuffers(1, &vis.gpuData.commandUBO);
-            gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
+            gl->glGenBuffers(1, &res.commandUBO);
+            gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, res.commandUBO);
             gl->glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(cmd), &cmd, GL_DYNAMIC_DRAW);
         }
     }
 
-    if (vis.gpuData.numSamplePoints == 0) return;
+    if (res.numSamplePoints == 0) return;
 
     // --- Compute Pass ---
-    gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
+    gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, res.commandUBO);
     GLuint zero = 0;
     gl->glBufferSubData(GL_DRAW_INDIRECT_BUFFER, sizeof(GLuint), sizeof(GLuint), &zero);
     computeShader->use(gl);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, vis.gpuData.samplePointsSSBO);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vis.gpuData.instanceDataSSBO);
-    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, vis.gpuData.commandUBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, res.samplePointsSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, res.instanceDataSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, res.commandUBO);
     gl->glBindBufferBase(GL_UNIFORM_BUFFER, 3, uboID);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssboID);
     computeShader->setMat4(gl, "u_visualizerModelMatrix", xf.getTransform());
@@ -639,13 +642,13 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
     computeShader->setInt(gl, "u_pointEffectorCount", static_cast<int>(m_pointEffectors.size()));
     computeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
     computeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
-    gl->glDispatchCompute((GLuint)vis.gpuData.numSamplePoints / 256 + 1, 1, 1);
+    gl->glDispatchCompute((GLuint)res.numSamplePoints / 256 + 1, 1, 1);
     gl->glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
     {
         // 1. Read the DrawElementsIndirectCommand struct back from the command UBO.
         DrawElementsIndirectCommand cmd_readback = { 0 };
-        gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
+        gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, res.commandUBO);
         gl->glGetBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(DrawElementsIndirectCommand), &cmd_readback);
         gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
 
@@ -659,7 +662,7 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
         if (cmd_readback.instanceCount > 0)
         {
             InstanceData firstInstance_readback;
-            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, vis.gpuData.instanceDataSSBO);
+            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, res.instanceDataSSBO);
             gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(InstanceData), &firstInstance_readback);
             gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
@@ -692,7 +695,7 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
     // --- END OF THE FIX ---
 
     gl->glBindVertexArray(m_arrowVAOs[ctx]);
-    gl->glBindBuffer(GL_ARRAY_BUFFER, vis.gpuData.instanceDataSSBO);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, res.instanceDataSSBO);
     const GLsizei stride = sizeof(InstanceData);
     const GLsizei vec4Size = sizeof(glm::vec4);
 
@@ -724,7 +727,7 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
     gl->glVertexAttribDivisor(7, 1);
 
     // Perform the indirect draw call
-    gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, vis.gpuData.commandUBO);
+    gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, res.commandUBO);
     gl->glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (void*)0);
 
     // Cleanup

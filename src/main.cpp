@@ -5,6 +5,7 @@
 #include <QOpenGLContext>
 #include "MainWindow.hpp"
 #include <QtWidgets>
+#include "DatabaseManager.hpp"
 
 
 
@@ -85,5 +86,11 @@ int main(int argc, char* argv[])
     MainWindow w;
     w.show();
 
-    return app.exec();
+    int result = app.exec();
+
+    // Explicitly shut down the database manager BEFORE the QApplication
+    // instance ('app') is destroyed at the end of this scope.
+    db::DatabaseManager::instance().shutdown(); // Add this line
+
+    return result;
 }

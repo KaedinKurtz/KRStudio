@@ -199,15 +199,26 @@ void RenderingSystem::shutdown(QOpenGLFunctions_4_3_Core* gl) {
     if (!m_isInitialized || !gl) return;
     qDebug() << "[LIFECYCLE] Shutting down all GPU resources...";
 
-    // --- 1. Delete all shaders from all per-context maps --- // MODIFIED SECTION
+    // ================== ADD THIS SECTION ==================
+    // --- 1. Tell all render passes to clean up their resources ---
+    //    This is the missing step. We must iterate through all tracked contexts
+    //    and tell each pass to release any resources associated with them.
+    for (QOpenGLContext* ctx : m_trackedContexts) {
+        for (const auto& pass : m_renderPasses) {
+            pass->onContextDestroyed(ctx, gl);
+        }
+    }
+    // ======================================================
+
+    // --- 2. Delete all shaders from all per-context maps ---
     for (auto& contextShaders : m_perContextShaders) {
         for (auto* shader : contextShaders) {
-            shader->destroy(gl); // First, release the GPU resource
-            delete shader;       // Then, delete the C++ object
+            shader->destroy(gl);
+            delete shader;
         }
     }
     m_perContextShaders.clear();
-    m_initializedContexts.clear(); // Also clear our set of initialized contexts
+    m_initializedContexts.clear();
     // --- END MODIFIED SECTION ---
 
     // --- 2. Delete all per-viewport FBOs (No changes needed) ---
@@ -542,4 +553,50 @@ void RenderingSystem::updatePointCloud(const rs2::points& points, const rs2::vid
     if (m_pointCloudPass) {
         m_pointCloudPass->update(points, colorFrame, pose);
     }
+}
+
+void RenderingSystem::onViewportWillBeDestroyed(ViewportWidget* viewport) {
+    if (!viewport || !m_targets.contains(viewport))
+        return;
+
+    // Grab the context of the viewport that's going away
+    QOpenGLContext* dyingContext = viewport->context();
+    qDebug() << "[CLEANUP] Releasing GPU resources for viewport" << viewport;
+
+    // Lambda to delete Framebuffers and textures
+    auto cleanupTask = [&](QOpenGLFunctions_4_3_Core* gl) {
+        if (!gl || !m_targets.contains(viewport)) return;
+        TargetFBOs& target = m_targets[viewport];
+        gl->glDeleteFramebuffers(1, &target.mainFBO);
+        gl->glDeleteTextures(1, &target.mainColorTexture);
+        gl->glDeleteTextures(1, &target.mainDepthTexture);
+        gl->glDeleteFramebuffers(1, &target.glowFBO);
+        gl->glDeleteTextures(1, &target.glowTexture);
+        gl->glDeleteFramebuffers(2, target.pingpongFBO);
+        gl->glDeleteTextures(2, target.pingpongTexture);
+        qDebug() << "[CLEANUP] Deleted all FBOs for context" << dyingContext;
+        };
+
+    // Choose another live viewport's context to run cleanup, if possible
+    ViewportWidget* survivor = nullptr;
+    for (auto* vp : m_targets.keys()) {
+        if (vp != viewport) { survivor = vp; break; }
+    }
+
+    if (survivor && survivor->context()) {
+        survivor->makeCurrent();
+        auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(survivor->context());
+        cleanupTask(gl);
+        survivor->doneCurrent();
+    }
+    else {
+        // Last viewport: use its own context
+        viewport->makeCurrent();
+        auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport->context());
+        cleanupTask(gl);
+        viewport->doneCurrent();
+    }
+
+    // Finally remove the entry from the map
+    m_targets.remove(viewport);
 }

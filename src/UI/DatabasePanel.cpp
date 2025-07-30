@@ -15,7 +15,7 @@
 using namespace db;
 
 DatabasePanel::DatabasePanel(Scene* scene, QWidget* parent)
-    : QWidget(parent), m_scene(scene)
+    : QWidget(parent), m_scene(scene) // Correctly assigns the raw pointer
 {
     setupUI();
     refreshSceneList();
@@ -185,19 +185,13 @@ void DatabasePanel::onSaveScene() {
 
 
 void DatabasePanel::onLoadScene() {
-    if (m_sceneCombo->count() == 0) return;
-    QString sceneName = m_sceneCombo->currentText();
-
-    // CORRECTED: Move the returned scene into the panel's scene pointer
-    m_scene = std::move(db::DatabaseManager::instance().loadScene(sceneName));
-
-    if (m_scene) {
-        emit requestSceneReload(sceneName);
-        showStatus("Scene loaded successfully.");
+    if (m_sceneCombo->count() == 0) { // Check if the combo box has any items.
+        return; // Nothing to do if it's empty.
     }
-    else {
-        showStatus("Failed to load scene.", true);
-    }
+    QString sceneName = m_sceneCombo->currentText(); // Get the name of the scene to load.
+
+    // Emit the signal to notify the MainWindow. Do not perform the load here.
+    emit requestSceneReload(sceneName); // Let the MainWindow handle the loading request.
 }
 
 

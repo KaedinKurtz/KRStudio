@@ -47,7 +47,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* ev) override;
     void mouseDoubleClickEvent(QMouseEvent* ev) override;
 
-	const float frameDt = 1.0f / 60.0f; // Fixed frame rate for simplicity
+    const float frameDt = 1.0f / 60.0f; // Fixed frame rate for simplicity
 
 
 

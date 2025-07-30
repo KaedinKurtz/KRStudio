@@ -1,4 +1,4 @@
-﻿#include <QOpenGLContext>
+#include <QOpenGLContext>
 #include <QOpenGLFunctions_4_3_Core>
 #include <QOpenGLVersionFunctionsFactory>
 #include <QOpenGLDebugLogger>
@@ -123,7 +123,7 @@ void ViewportWidget::resizeGL(int w, int h) {
 void ViewportWidget::shutdown()
 {
     makeCurrent();
-    
+
     glDeleteVertexArrays(1, &m_outlineVAO);
     glDeleteBuffers(1, &m_outlineVBO);
     doneCurrent();
@@ -165,38 +165,6 @@ void ViewportWidget::renderNow()
         doneCurrent();
     }
 }
-/*
-
-void ViewportWidget::updateAnimations(entt::registry& registry, float frameDt)
-{
-    // A persistent timer, just like in your example
-    static float timer = 0.f;
-    timer += frameDt;
-
-    // --- Pulsing Spline Logic ---
-    float pulseSpeed = 3.0f; // Controls how fast the pulse is. Higher is faster.
-
-    // A sine wave oscillates smoothly between -1.0 and 1.0.
-    // We map it to a 0.0 to 1.0 range to use as a brightness multiplier.
-    float brightness = (sin(timer * pulseSpeed) + 1.0f) / 2.0f;
-
-    // To prevent the glow from disappearing completely, we'll set a minimum brightness.
-    float minBrightness = 0.1f;
-    float finalBrightness = minBrightness + (1.0f - minBrightness) * brightness;
-
-    // Find all entities that have BOTH a PulsingSplineTag and a SplineComponent
-    auto view = registry.view<PulsingSplineTag, SplineComponent>();
-    for (auto entity : view)
-    {
-        // Get the spline component for this entity
-        auto& spline = view.get<SplineComponent>(entity);
-
-        // Modulate the alpha of the glowColour to make it pulse.
-        // We set the base alpha to 1.0 and multiply by our pulsing brightness.
-        spline.glowColour.a = 1.0f * finalBrightness;
-    }
-}
-*/
 
 void ViewportWidget::handleLoggedMessage(const QOpenGLDebugMessage& debugMessage)
 {
@@ -308,6 +276,3 @@ void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* ev)
         update();
     }
 }
-
-
-

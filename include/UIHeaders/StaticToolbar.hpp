@@ -17,6 +17,7 @@ public:
 
 signals:
     void loadRobotClicked();
+    void viewportManagerClicked();
 
 private:
     Ui::toolbarContainer* ui; // Pointer to the generated UI class
