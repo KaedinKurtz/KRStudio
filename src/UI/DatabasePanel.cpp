@@ -16,10 +16,10 @@
 using namespace db;
 
 DatabasePanel::DatabasePanel(Scene* scene, QWidget* parent)
-    : QWidget(parent), m_scene(scene) // Correctly assigns the raw pointer
+    : QWidget(parent), m_scene(scene)
 {
+    // The constructor is now responsible for building the UI.
     setupUI();
-    refreshSceneList();
 }
 
 DatabasePanel::~DatabasePanel() = default;
@@ -217,7 +217,8 @@ void DatabasePanel::onRunQuery() {
     if (!query.exec(sql)) {
         m_queryResult->setText(query.lastError().text());
         showStatus("Query failed.", true);
-    } else {
+    }
+    else {
         QString result;
         int cols = query.record().count();
         for (int i = 0; i < cols; ++i) {
@@ -282,10 +283,11 @@ void DatabasePanel::onCreateIndex() {
     QString table = m_indexTableEdit->text();
     QString name = m_indexNameEdit->text();
     QStringList columns = m_indexColumnsEdit->text().split(',', Qt::SkipEmptyParts);
-    bool unique = QMessageBox::question(this, "Unique Index?", "Should the index be UNIQUE?", QMessageBox::Yes|QMessageBox::No) == QMessageBox::Yes;
+    bool unique = QMessageBox::question(this, "Unique Index?", "Should the index be UNIQUE?", QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes;
     if (idxMgr.createIndex(table, name, columns, unique)) {
         showStatus("Index created.");
-    } else {
+    }
+    else {
         showStatus("Failed to create index.", true);
     }
 }
@@ -295,7 +297,8 @@ void DatabasePanel::onDropIndex() {
     QString name = m_indexNameEdit->text();
     if (idxMgr.dropIndex(name)) {
         showStatus("Index dropped.");
-    } else {
+    }
+    else {
         showStatus("Failed to drop index.", true);
     }
 }
@@ -305,7 +308,8 @@ void DatabasePanel::onRebuildIndex() {
     QString name = m_indexNameEdit->text();
     if (idxMgr.rebuildIndex(name)) {
         showStatus("Index rebuilt.");
-    } else {
+    }
+    else {
         showStatus("Failed to rebuild index.", true);
     }
 }
@@ -315,7 +319,8 @@ void DatabasePanel::onAnalyzeIndex() {
     QString name = m_indexNameEdit->text();
     if (idxMgr.analyzeIndex(name)) {
         showStatus("Index analyzed.");
-    } else {
+    }
+    else {
         showStatus("Failed to analyze index.", true);
     }
 }
@@ -325,7 +330,8 @@ void DatabasePanel::onValidateIndex() {
     QString name = m_indexNameEdit->text();
     if (idxMgr.validateIndex(name)) {
         showStatus("Index is valid.");
-    } else {
+    }
+    else {
         showStatus("Index is NOT valid.", true);
     }
 }
@@ -335,7 +341,8 @@ void DatabasePanel::onEnableReplication() {
     QString master = m_replicationMasterEdit->text();
     if (replMgr.enableReplication(master)) {
         showStatus("Replication enabled.");
-    } else {
+    }
+    else {
         showStatus("Failed to enable replication.", true);
     }
 }
@@ -344,7 +351,8 @@ void DatabasePanel::onDisableReplication() {
     db::DatabaseReplicationManager replMgr;
     if (replMgr.disableReplication()) {
         showStatus("Replication disabled.");
-    } else {
+    }
+    else {
         showStatus("Failed to disable replication.", true);
     }
 }
@@ -353,7 +361,8 @@ void DatabasePanel::onSyncReplication() {
     db::DatabaseReplicationManager replMgr;
     if (replMgr.syncWithMaster()) {
         showStatus("Replication sync complete.");
-    } else {
+    }
+    else {
         showStatus("Replication sync failed.", true);
     }
 }
@@ -372,14 +381,19 @@ void DatabasePanel::onShowReplicationStatus() {
 
 void DatabasePanel::initializeFresh()
 {
-    setupUI();
+    // This function now only populates the data, since the UI is built in the constructor.
     refreshSceneList();
 }
 
 void DatabasePanel::initializeFromDatabase()
 {
     auto blob = db::DatabaseManager::instance().loadMenuState("Database");
-    // apply blob -> UI controls
+    if (blob.isEmpty()) {
+        initializeFresh();
+    }
+    else {
+        // TODO: Parse blob and set UI state
+    }
 }
 
 void DatabasePanel::shutdownAndSave()

@@ -47,6 +47,7 @@ signals:
     void pointCloudReady(const rs2::points& points, const rs2::video_frame& colorFrame);
     void startStreamingRequested(const std::string& serial,
         const std::vector<StreamProfile>& profiles);
+    void stopStreamingRequested();
 private:
     // --- Setup Methods ---
     void setupUi();

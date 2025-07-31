@@ -1917,7 +1917,7 @@ View</string>
               </widget>
              </item>
              <item row="2" column="13">
-              <widget class="QToolButton" name="show_grid_button">
+              <widget class="QToolButton" name="gridPropertiesButton">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                  <horstretch>0</horstretch>
@@ -1941,7 +1941,7 @@ View</string>
                </property>
                <property name="icon">
                 <iconset resource="../../resources.qrc">
-                 <normaloff>:/icons/groundplane.png</normaloff>:/icons/groundplane.png</iconset>
+                 <normaloff>:/icons/icons8-grid-48.png</normaloff>:/icons/icons8-grid-48.png</iconset>
                </property>
                <property name="iconSize">
                 <size>

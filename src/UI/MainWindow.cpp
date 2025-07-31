@@ -334,61 +334,6 @@ MainWindow::MainWindow(QWidget* parent)
         reg.emplace<PulsingSplineTag>(LinearEntity);
         auto bezierEntity = SB::makeBezier(reg, { {5, 0.1, -5}, {5, 4, -5}, {2, 4, -5}, {2, 0.1, -5} }, { 0.9f,0.9f,0.9f,1 }, { 1.0f, 0.9f, 0.2f, 1 }, 18.0f);
         reg.emplace<PulsingSplineTag>(bezierEntity);
-        // auto& splineEffector = reg.emplace<SplineEffectorComponent>(bezierEntity);
-        // splineEffector.strength = -1.0f; // Example: make it an attractor
-        // splineEffector.radius = 02.00f;
-    }
-
-    // --- Create Field Visualizers and Effectors ---
-    {
-        auto& reg = m_scene->getRegistry();
-        auto visualizerEntity = reg.create();
-        reg.emplace<TagComponent>(visualizerEntity, "Field Visualizer");
-        reg.emplace<TransformComponent>(visualizerEntity);
-        auto& visualizer = reg.emplace<FieldVisualizerComponent>(visualizerEntity);
-        visualizer.bounds = { glm::vec3(-5.0f, -2.5f, -5.0f), glm::vec3(10.0f, 2.5f, 5.0f) };
-        visualizer.displayMode = FieldVisualizerComponent::DisplayMode::Arrows;
-        auto& registry = m_scene->getRegistry();
-        QTimer::singleShot(0, this, [this, &registry] {
-            auto view = registry.view<FieldVisualizerComponent>();
-            if (!view.empty())
-                m_flowVisualizerMenu->updateControlsFromComponent(
-                    firstComponent<FieldVisualizerComponent>(registry));
-            });
-        // Set properties on the correct sub-struct
-
-        visualizer.arrowSettings.density = { 15, 5, 15 };
-        visualizer.arrowSettings.vectorScale = 0.5f;
-        visualizer.arrowSettings.headScale = 0.4f;
-        visualizer.arrowSettings.intensityMultiplier = 1.0f;
-        visualizer.arrowSettings.cullingThreshold = 0.01f;
-        visualizer.arrowSettings.coloringMode = FieldVisualizerComponent::ColoringMode::Intensity;
-        visualizer.bounds.max = { 4, 2, 4 };
-        visualizer.bounds.min = { -4, -2, -4 };
-        visualizer.flowSettings.particleCount = 5000;
-        visualizer.flowSettings.baseSpeed = 0.15f;
-        visualizer.flowSettings.baseSize = 0.30f; // Was flowScale
-        visualizer.flowSettings.randomWalkStrength = 0.1f; // Was flowRandomWalk
-        visualizer.flowSettings.lifetime = 7.0f;
-
-        auto windSource = reg.create();
-        reg.emplace<TagComponent>(windSource, "Wind Source");
-        reg.emplace<TransformComponent>(windSource);
-        reg.emplace<FieldSourceTag>(windSource);
-        auto& directional = reg.emplace<DirectionalEffectorComponent>(windSource);
-        directional.direction = { 1.0f, 0.0f, 0.50f };
-        directional.strength = 0.60f;
-
-
-        auto repulsorSource = reg.create();
-        reg.emplace<TagComponent>(repulsorSource, "Repulsor");
-        auto& repulsorTransform = reg.emplace<TransformComponent>(repulsorSource);
-        repulsorTransform.translation = { 5.0f, 1.0f, 0.0f };
-        reg.emplace<FieldSourceTag>(repulsorSource);
-        auto& point = reg.emplace<PointEffectorComponent>(repulsorSource);
-        point.strength = 10.0f;
-        point.radius = 4.0f;
-        point.falloff = PointEffectorComponent::FalloffType::Linear;
     }
 
     // --- Create initial cameras for the viewports ---
@@ -409,8 +354,8 @@ MainWindow::MainWindow(QWidget* parent)
     m_renderingSystem = std::make_unique<RenderingSystem>(nullptr);
 
     // ---------------------------------------------------------------------------
-// 3.  Core UI layout & dock setup – NO FLOATING VIEWPORTS
-// ---------------------------------------------------------------------------
+    // 3.  Core UI layout & dock setup
+    // ---------------------------------------------------------------------------
     m_centralContainer = new QWidget(this);
     auto* mainLayout = new QVBoxLayout(m_centralContainer);
     mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -420,18 +365,17 @@ MainWindow::MainWindow(QWidget* parent)
     m_fixedTopToolbar = new StaticToolbar(this);
     mainLayout->addWidget(m_fixedTopToolbar, 0);
 
-    // 3a) Grab the toolbar’s embedded popup:
+    // Grab the toolbar’s embedded popup
     auto* popup = m_fixedTopToolbar->viewportManagerPopup();
     m_viewportManagerPopup = popup;
-    // 3b) Wire up its buttons ? your slots:
+    // Wire up its buttons to your slots
     connect(popup, &ViewportManagerPopup::addViewportRequested, this, &MainWindow::addViewport);
     connect(popup, &ViewportManagerPopup::removeViewportRequested, this, &MainWindow::removeViewport);
     connect(popup, &ViewportManagerPopup::resetViewportsRequested, this, &MainWindow::onResetViewports);
     connect(popup, &ViewportManagerPopup::showViewportRequested, this, &MainWindow::onShowViewportRequested);
 
-    // 3c) Also re?sync the initial state of the menu:
+    // Also re-sync the initial state of the menu
     popup->updateUi(m_dockContainers, m_scene.get());
-
     syncViewportManagerPopup();
 
     // ADS dock manager
@@ -439,9 +383,7 @@ MainWindow::MainWindow(QWidget* parent)
     mainLayout->addWidget(m_dockManager, 1);
 
     connect(m_dockManager, &ads::CDockManager::dockWidgetRemoved, this, &MainWindow::onViewportDockClosed);
-
     setCentralWidget(m_centralContainer);
-
     setDockManagerBaseStyle();
 
     // ---------------------------------------------------------------------------
@@ -454,25 +396,19 @@ MainWindow::MainWindow(QWidget* parent)
     viewportDock1->setWidget(viewport1);
     viewportDock1->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
 
-    //  ?? 3.  add the dock *first* – now it really belongs to an area ??????????
     auto* viewportArea1 =
         m_dockManager->addDockWidget(ads::LeftDockWidgetArea, viewportDock1);
 
-    //  ?? 4.  colour the title?bar ?????????????????????????????????????????????
     if (auto* area = viewportDock1->dockAreaWidget()) {
         if (auto* tb = area->titleBar()) {
-            // ?A. fetch the camera’s tint  (01 floats)
             const glm::vec3 camTint =
                 m_scene->getRegistry()
                 .get<CameraComponent>(cameraEntity1).tint;
-
-            // ?B. make it 20?% darker for the bar
             glm::vec3 darkTint = camTint * 0.8f;
 
             QColor bg; bg.setRgbF(darkTint.r, darkTint.g, darkTint.b);
-            QColor fg = Qt::white;                     // force white text
+            QColor fg = Qt::white;
 
-            // ?C. remove borders + apply colours
             tb->setStyleSheet(QStringLiteral(
                 "background:%1;"
                 "color:%2;"
@@ -481,247 +417,128 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // keep track of the docks so your later loops still work
-    // ---------------------------------------------------------------------------
     m_dockContainers << viewportDock1;
-
     applyCameraColorToDock(viewportDock1, cameraEntity1);
 
     connect(viewportDock1, &ads::CDockWidget::closed, this, [this, viewportDock1]() {
-        // 1) destroy the camera/rig
         if (auto* vp = qobject_cast<ViewportWidget*>(viewportDock1->widget())) {
             destroyCameraRig(vp->getCameraEntity());
         }
-        // 2) once Qt has actually deleted the widget, remove it from our list and refresh
         QTimer::singleShot(0, this, [this, viewportDock1]() {
             m_dockContainers.removeAll(viewportDock1);
             syncViewportManagerPopup();
             });
         });
 
-    // Create the properties panel and dock it to the RIGHT of the SECOND viewport.
-    PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this); // Creates the properties panel widget.
-    propertiesPanel->setMinimumWidth(700); // Sets the minimum width of the properties panel. The dock widget will respect this.
-    ads::CDockWidget* propertiesDock = new ads::CDockWidget("Grid(s)"); // Creates the properties dock widget.
-    propertiesDock->setWidget(propertiesPanel); // Sets the properties panel as the content of the dock widget.
-    propertiesDock->setStyleSheet(sidePanelStyle); // Applies your custom style.
-    ads::CDockAreaWidget* propertiesArea = m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock); // Docks the properties panel to the right OF viewport 2, creating our third column.
-
-    // Create the database panel and dock it to the right
-    DatabasePanel* databasePanel = new DatabasePanel(m_scene.get(), this);
-    ads::CDockWidget* databaseDock = new ads::CDockWidget("Database");
-    databaseDock->setWidget(databasePanel);
-    databaseDock->setStyleSheet(sidePanelStyle);
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, databaseDock, propertiesArea);
+    // Create the properties panel and dock it to the RIGHT. This will be our main area for tabbed menus.
+    PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this);
+    propertiesPanel->setMinimumWidth(700);
+    ads::CDockWidget* propertiesDock = new ads::CDockWidget("Grid(s)");
+    propertiesDock->setWidget(propertiesPanel);
+    propertiesDock->setStyleSheet(sidePanelStyle);
+    // Store the area where the properties panel is docked, so we can add other menus as tabs to it.
+    m_propertiesArea = m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock);
 
     // Connect the database panel's scene reload signal
-    connect(databasePanel, &DatabasePanel::requestSceneReload, this, &MainWindow::onSceneReloadRequested);
+    // This is connected here, but the panel itself is created on-demand.
+    // We need to connect it when the panel is created in showMenu.
+    // connect(databasePanel, &DatabasePanel::requestSceneReload, this, &MainWindow::onSceneReloadRequested);
 
     // --- Set Proportions for the three main dock areas ---
-
-    ads::CDockSplitter* mainSplitter = viewportArea1->parentSplitter(); // Gets the custom splitter containing our dock areas.
-    if (mainSplitter) // Checks if the splitter is valid.
+    ads::CDockSplitter* mainSplitter = viewportArea1->parentSplitter();
+    if (mainSplitter)
     {
-        // We give it a list of integers representing the initial sizes for a 25:50:25 ratio.
         mainSplitter->setSizes({ 1, 2, 1 });
     }
 
-    // Create the flow visualizer menu and add it as a TAB to the properties area.
-    m_flowVisualizerMenu = new FlowVisualizerMenu(this); // Creates the flow visualizer menu widget.
-    ads::CDockWidget* flowMenuDock = new ads::CDockWidget("Field Visualizer"); // Creates the flow visualizer dock widget.
-    m_flowVisualizerMenu->setMinimumWidth(650); // Sets the minimum width for this widget as well.
-    flowMenuDock->setWidget(m_flowVisualizerMenu); // Sets the menu as the content of the dock widget.
-    flowMenuDock->setStyleSheet(sidePanelStyle); // Applies your custom style.
-    m_dockManager->addDockWidget(ads::CenterDockWidgetArea, flowMenuDock, propertiesArea); // Adds the flow menu as a tab in the properties dock area.
-
     // ===================================================================
-    // --- Add the RealSense Configuration Menu ---
+    // --- Node Editor Setup (with combined Catalog and Editor) ---
     // ===================================================================
-    RealSenseConfigMenu* realSenseMenu = new RealSenseConfigMenu(this); // Creates the menu widget.
-    ads::CDockWidget* realSenseDock = new ads::CDockWidget("RealSense Camera"); // Creates the dock container.
-    realSenseMenu->setMinimumWidth(650); // Ensures consistent width with other panels.
-    realSenseDock->setWidget(realSenseMenu); // Sets the menu as the content of the dock widget.
-    realSenseDock->setStyleSheet(sidePanelStyle); // Applies your existing custom style.
-
-    // Adds the RealSense menu as a new tab in the same properties dock area.
-    m_dockManager->addDockWidget(ads::CenterDockWidgetArea, realSenseDock, propertiesArea);
-    // ===================================================================
-
-
-// ===================================================================
-// --- Node Editor Setup (with combined Catalog and Editor) ---
-// ===================================================================
-
-// --- 1. Create the backend model and scene (no changes here) ---
-    auto nodeRegistry = std::make_shared<QtNodes::NodeDelegateModelRegistry>(); // The registry for all node types.
-
-    for (auto const& [typeId, desc] : NodeFactory::instance().getRegisteredNodeTypes()) // Loop through all nodes from your factory.
+    auto nodeRegistry = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
+    for (auto const& [typeId, desc] : NodeFactory::instance().getRegisteredNodeTypes())
     {
-        nodeRegistry->registerModel<NodeDelegate>( // Register a delegate model for each node type.
-            [typeId]() { // A lambda that creates a delegate instance.
-                return std::make_unique<NodeDelegate>(typeId); // Create a delegate with its unique type ID.
+        nodeRegistry->registerModel<NodeDelegate>(
+            [typeId]() {
+                return std::make_unique<NodeDelegate>(typeId);
             },
-            QString::fromStdString(desc.category) // Assign the node to its correct category in the context menu.
+            QString::fromStdString(desc.category)
         );
     }
 
-    auto graphModel = std::make_shared<QtNodes::DataFlowGraphModel>(nodeRegistry); // The model that holds the graph data.
-    m_nodeScene = new CustomDataFlowScene(*graphModel, this); // Use your custom scene class.
-    m_nodeView = new DroppableGraphicsView(m_nodeScene, this); // Your custom view that handles dropping nodes.
+    auto graphModel = std::make_shared<QtNodes::DataFlowGraphModel>(nodeRegistry);
+    m_nodeScene = new CustomDataFlowScene(*graphModel, this);
+    m_nodeView = new DroppableGraphicsView(m_nodeScene, this);
 
-    // --- 2. Create the combined editor widget ---
-    auto* nodeEditorContainer = new QWidget(); // This is the main widget that will hold everything.
-    auto* splitter = new QSplitter(Qt::Horizontal, nodeEditorContainer); // The splitter that creates the left/right columns.
-
-    // --- 3. Create and configure the Node Catalog (Left Side) ---
-    NodeCatalogWidget* catalog = new NodeCatalogWidget(splitter); // Create the catalog widget as a child of the splitter.
-    catalog->setMaximumWidth(300); // Enforce the maximum width of 200 pixels on the catalog.
+    auto* nodeEditorContainer = new QWidget();
+    auto* splitter = new QSplitter(Qt::Horizontal, nodeEditorContainer);
+    NodeCatalogWidget* catalog = new NodeCatalogWidget(splitter);
+    catalog->setMaximumWidth(300);
     catalog->setMinimumWidth(200);
-    splitter->addWidget(catalog); // Add the catalog to the left side of the splitter (index 0).
+    splitter->addWidget(catalog);
+    splitter->addWidget(m_nodeView);
+    splitter->setStretchFactor(0, 1);
+    splitter->setStretchFactor(1, 3);
+    auto* containerLayout = new QHBoxLayout(nodeEditorContainer);
+    containerLayout->setContentsMargins(0, 0, 0, 0);
+    containerLayout->addWidget(splitter);
+    nodeEditorContainer->setLayout(containerLayout);
+    auto* combinedNodeDock = new ads::CDockWidget("Node Editor");
+    combinedNodeDock->setWidget(nodeEditorContainer);
+    combinedNodeDock->setStyleSheet(sidePanelStyle);
+    m_dockManager->addDockWidget(ads::RightDockWidgetArea, combinedNodeDock, m_propertiesArea);
 
-    // --- 4. Configure the Node Editor View (Right Side) ---
-    splitter->addWidget(m_nodeView); // Add the existing node editor view to the right side of the splitter (index 1).
-
-    // --- 5. Set the splitter's size ratio ---
-    splitter->setStretchFactor(0, 1); // Set the stretch factor for the left widget (catalog, index 0) to 1.
-    splitter->setStretchFactor(1, 3); // Set the stretch factor for the right widget (editor, index 1) to 5.
-
-    // --- 6. Set up the layout for the container ---
-    auto* containerLayout = new QHBoxLayout(nodeEditorContainer); // Create a horizontal layout for the container.
-    containerLayout->setContentsMargins(0, 0, 0, 0); // Remove any extra padding around the layout.
-    containerLayout->addWidget(splitter); // Place the splitter into the layout.
-    nodeEditorContainer->setLayout(containerLayout); // Apply the layout to our main container widget.
-
-    // --- 7. Create and add the final dock widget ---
-    auto* combinedNodeDock = new ads::CDockWidget("Node Editor"); // Create a single dock widget for the combined editor.
-    combinedNodeDock->setWidget(nodeEditorContainer); // Place our container widget (with the splitter) inside the dock.
-    combinedNodeDock->setStyleSheet(sidePanelStyle); // Apply your custom styling.
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, combinedNodeDock, propertiesArea); // Add the new dock to the right of the properties panel.
-
-    // --- 8. Connect the node creation signal (no changes here) ---
     connect(graphModel.get(), &QtNodes::AbstractGraphModel::nodeCreated,
         this, [this, graphModel](QtNodes::NodeId nodeId) {
-
-            // Get the delegate and attach the backend.
             auto* delegate = graphModel->delegateModel<NodeDelegate>(nodeId);
             if (!delegate) return;
-
             auto backendNodePtr = NodeFactory::instance().createNode(delegate->name().toStdString());
             if (!backendNodePtr) return;
-
             delegate->setBackendNode(std::move(backendNodePtr));
-
-            // Emit the signal that tells the scene to update itself. This will
-            // trigger calls to recomputeSize() and embeddedWidget(),
-            // correctly creating and displaying your controls.
             Q_EMIT graphModel->nodeUpdated(nodeId);
         });
 
-    connect(m_dockManager,
-        &ads::CDockManager::dockWidgetRemoved,
-        this,
-        &MainWindow::syncViewportManagerPopup);
+    connect(m_dockManager, &ads::CDockManager::dockWidgetRemoved, this, &MainWindow::syncViewportManagerPopup);
 
     // ===================================================================
-
+    // --- Menu Toggle Connections ---
+    // ===================================================================
     connect(m_fixedTopToolbar, &StaticToolbar::flowMenuToggled,
         this, [this](bool on) { handleMenuToggle(MenuType::FlowVisualizer, on); });
     connect(m_fixedTopToolbar, &StaticToolbar::realSenseMenuToggled,
         this, [this](bool on) { handleMenuToggle(MenuType::RealSense, on); });
     connect(m_fixedTopToolbar, &StaticToolbar::databaseMenuToggled,
         this, [this](bool on) { handleMenuToggle(MenuType::Database, on); });
+    connect(m_fixedTopToolbar, &StaticToolbar::gridMenuToggled, // Connect the new signal for the grid properties
+        this, [this](bool on) { handleMenuToggle(MenuType::GridProperties, on); });
 
     //========================= Start the SLAM Manager =========================
-    // 1. Create the manager instances.
-    // SlamManager is a QObject, so we give it a parent for memory management.
     m_slamManager = new SlamManager(this);
-    // RealSenseManager is not a QObject, so we use a unique_ptr for lifetime management.
     m_realSenseManager = std::make_unique<RealSenseManager>();
-
-    // 2. Give the SLAM manager a pointer to the rendering system.
-    // This allows the SLAM backend to directly update the point cloud visualization.
     m_slamManager->setRenderingSystem(m_renderingSystem.get());
-
-    // 3. Set up the polling timer for the RealSense camera.
-    // The RealSense SDK is configured to be polled for new frames rather than using callbacks.
-    m_rsPollTimer = new QTimer(this); // Parented to MainWindow for memory management.
-    m_rsPollTimer->setInterval(33);   // Poll at ~30 FPS, matching typical depth camera rates.
-
-    // 4. Create the point cloud calculation object from the RealSense SDK.
+    m_rsPollTimer = new QTimer(this);
+    m_rsPollTimer->setInterval(33);
     m_pointCloud = std::make_unique<rs2::pointcloud>();
 
-    // 5. Connect signals and slots for the data pipeline.
-    // A. Connect the polling timer's timeout to a lambda that gets and processes frames.
     connect(m_rsPollTimer, &QTimer::timeout, this, [this]() {
         rs2::frameset frames;
-        // Poll the pipeline for a new set of frames; this is a non-blocking call.
         if (m_realSenseManager->pollFrames(frames)) {
-            auto depth = frames.get_depth_frame(); // Get the depth frame from the set.
-            auto color = frames.get_color_frame(); // Get the color frame from the set.
-
+            auto depth = frames.get_depth_frame();
+            auto color = frames.get_color_frame();
             if (depth && color) {
-                // Align the point cloud to the color frame's perspective.
                 m_pointCloud->map_to(color);
-                // Generate the point cloud vertices from the depth data.
                 rs2::points points = m_pointCloud->calculate(depth);
-
-                // Forward the processed data to the SLAM system. This is the entry point
-                // that sends data to the frontend thread for tracking and mapping.
-                // This slot also forwards the point cloud to the RenderingSystem for visualization.
                 m_slamManager->onPointCloudReady(points, color);
             }
         }
         });
 
-    // B. Connect the UI "Start" button to actually starting the physical camera.
-    // Note: Assumes 'realSenseMenu' emits 'startClicked' and 'stopClicked' signals.
-    connect(realSenseMenu,
-        &RealSenseConfigMenu::startStreamingRequested,
-        this,
-        [this](const std::string& serial,
-            const std::vector<StreamProfile>& profiles) {
-                if (m_realSenseManager->startStreaming(serial, profiles)) {
-                    statusBar()->showMessage("Streaming started");
-                    m_rsPollTimer->start();
-                }
-                else {
-                    QMessageBox::critical(this, "Error", "Failed to start stream.");
-                }
-        });
-
-    // C. Connect the UI "Stop" button to stopping the camera and the polling timer.
-    connect(realSenseMenu, &RealSenseConfigMenu::onStopStreamingClicked, this, [this]() {
-        m_rsPollTimer->stop(); // Stop asking for new frames.
-        m_realSenseManager->stopStreaming(); // Tell the camera to stop sending data.
-        statusBar()->showMessage("RealSense streaming stopped.");
-        });
-
-    // 6. Start the SLAM system's background threads (Frontend/Backend).
-    // These threads will now wait for data to be processed by the connect() statements above.
+    // NOTE: The connections to the RealSenseMenu will be made inside `showMenu` when it's created.
     m_slamManager->start();
 
-    // Connect the SLAM manager to the RealSense menu for point cloud updates
-    //===========================================================================
-
-
-    connect(m_flowVisualizerMenu, &FlowVisualizerMenu::settingsChanged,
-        this, &MainWindow::onFlowVisualizerSettingsChanged);
-
-
-    connect(m_flowVisualizerMenu, &FlowVisualizerMenu::settingsChanged,
-        this, &MainWindow::onFlowVisualizerSettingsChanged);
-
-    connect(m_flowVisualizerMenu, &FlowVisualizerMenu::transformChanged,
-        this, &MainWindow::onFlowVisualizerTransformChanged);
-
     // --- 5. FINAL, ROBUST INITIALIZATION AND RENDER LOOP START ---
-
-    // 1. Create the timer, but DO NOT START IT YET.
     m_masterRenderTimer = new QTimer(this);
     connect(m_masterRenderTimer, &QTimer::timeout, this, &MainWindow::onMasterRender);
 
-    // The glContextReady connection for the first viewport to initialize the renderer
     connect(viewport1, &ViewportWidget::glContextReady, this, [this, viewport1]() {
         if (!m_renderingSystem->isInitialized()) {
             qDebug() << "[LIFECYCLE] Primary viewport context is ready. Initializing RenderingSystem.";
@@ -739,47 +556,31 @@ MainWindow::MainWindow(QWidget* parent)
         }
         });
 
-
-    // --- Connect Signals for Updating Viewport Layouts ---
-    // We connect to signals that tell us when the user might have changed
-    // which tab is visible or moved a dock widget.
     connect(m_dockManager, &ads::CDockManager::focusedDockWidgetChanged, this, &MainWindow::updateViewportLayouts);
-
-    // We still need topLevelChanged for each dock widget to handle docking/undocking
     connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, &MainWindow::updateViewportLayouts);
 
     // --- 6. Other Signal/Slot Connections ---
     connect(m_fixedTopToolbar, &StaticToolbar::loadRobotClicked, this, &MainWindow::onLoadRobotClicked);
     connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, [viewport1, viewportDock1](bool isFloating) {
         if (isFloating) {
-            // The widget has just been undocked.
-            // Schedule a hide/show cycle on the dock widget itself to force a full refresh.
             QTimer::singleShot(10, viewportDock1, [viewportDock1]() {
                 viewportDock1->hide();
                 viewportDock1->show();
                 });
         }
         else {
-            // When the widget is redocked...
-            QTimer::singleShot(0, viewport1, [=]() { // Use a default capture [=]
+            QTimer::singleShot(0, viewport1, [=]() {
                 viewport1->update();
                 });
         }
         });
-
-    connect(m_flowVisualizerMenu, &FlowVisualizerMenu::settingsChanged, this, &MainWindow::onFlowVisualizerSettingsChanged);
-    connect(m_flowVisualizerMenu, &FlowVisualizerMenu::testViewportRequested, this, &MainWindow::onTestNewViewport);
-
-    syncViewportManagerPopup();
-    updateVisualizerUI();
-    onFlowVisualizerSettingsChanged();
 
     // --- 7. Final Window Setup ---
     if (menuBar()) {
         menuBar()->setVisible(false);
     }
     resize(1600, 900);
-    setWindowTitle("KR Studio ALPHA V0.602");
+    setWindowTitle("KR Studio - Kaedin Kurtz");
     setWindowIcon(QIcon(":/icons/kRLogoSquare.png"));
     statusBar()->showMessage("Ready.");
 
@@ -1335,31 +1136,52 @@ void MainWindow::handleMenuToggle(MenuType type, bool checked)
 
 void MainWindow::showMenu(MenuType type)
 {
+    qDebug() << "showMenu called for type:" << static_cast<int>(type) << "Toggled ON";
+
     auto& entry = m_menus[type];
     if (!entry.menu) {
-        // First time ever: create it
-        auto menu = MenuFactory::create(type, m_scene.get(), this);
-        QString title;
-        switch (type) {
-        case MenuType::FlowVisualizer:   title = QStringLiteral("Flow Visualizer");   break;
-        case MenuType::RealSense:        title = QStringLiteral("RealSense Config");  break;
-        case MenuType::Database:         title = QStringLiteral("Database Panel");    break;
-                                        /*…other cases…*/                  
+        qDebug() << "Menu does not exist. Creating it for the first time.";
+
+        // FIX 1: Assign the unique_ptr from the factory directly to the shared_ptr.
+        // This correctly transfers ownership without using .release().
+        entry.menu = MenuFactory::create(type, m_scene.get(), this);
+
+        if (!entry.menu) {
+            qWarning() << "MenuFactory failed to create menu for type" << (int)type;
+            return;
         }
+
+        // FIX 3: Restore the title logic.
+        QString title = db::DatabaseManager::menuTypeToString(type);
         entry.dock = new ads::CDockWidget(title, this);
+
         entry.dock->setWidget(entry.menu->widget());
         entry.dock->setStyleSheet(sidePanelStyle);
-        m_dockManager->addDockWidget(ads::CenterDockWidgetArea, entry.dock);
-        // Fresh vs. reopened?  (you’ll need to implement this in your DatabaseManager)
-        if (db::DatabaseManager::instance()
-             .menuConfigExists(db::DatabaseManager::menuTypeToString(type))) {
+        m_dockManager->addDockWidget(ads::RightDockWidgetArea, entry.dock, m_propertiesArea);
+
+        connect(entry.dock, &ads::CDockWidget::closed, this, [this, type]() {
+            if (m_fixedTopToolbar) {
+                m_fixedTopToolbar->uncheckButtonForMenu(type);
+            }
+            auto it = m_menus.find(type);
+            if (it != m_menus.end()) {
+                // FIX 2: Do not manually delete a smart pointer.
+                // Erasing it from the map will destroy the shared_ptr,
+                // and the menu object will be deleted automatically if this is the last reference.
+                m_menus.erase(it);
+            }
+            });
+
+        if (db::DatabaseManager::instance().menuConfigExists(db::DatabaseManager::menuTypeToString(type))) {
             entry.menu->initializeFromDatabase();
         }
-         else {
+        else {
             entry.menu->initializeFresh();
         }
     }
+
     entry.dock->show();
+    entry.dock->setAsCurrentTab();
 }
 
 void MainWindow::hideMenu(MenuType type)
