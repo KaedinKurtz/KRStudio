@@ -11,7 +11,8 @@
 #include <QDebug>
 #include <QInputDialog>
 #include "Scene.hpp"
-
+#include "IMenu.hpp"
+#include "MenuFactory.hpp"
 using namespace db;
 
 DatabasePanel::DatabasePanel(Scene* scene, QWidget* parent)
@@ -367,4 +368,24 @@ void DatabasePanel::onShowReplicationStatus() {
         .arg(status.mode);
     m_queryResult->setText(msg);
     showStatus("Replication status shown.");
+}
+
+void DatabasePanel::initializeFresh()
+{
+    setupUI();
+    refreshSceneList();
+}
+
+void DatabasePanel::initializeFromDatabase()
+{
+    auto blob = db::DatabaseManager::instance().loadMenuState("Database");
+    // apply blob -> UI controls
+}
+
+void DatabasePanel::shutdownAndSave()
+{
+    // serialize current filters, selected scene, etc.
+    QString blob;
+    db::DatabaseManager::instance()
+        .saveMenuState(db::DatabaseManager::menuTypeToString(MenuType::Database), blob);
 }

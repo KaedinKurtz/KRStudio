@@ -67,6 +67,7 @@
 #include <QFrame>
 #include <QMenu>
 #include <QWidgetAction>
+#include <memory>
 
 const QString sidePanelStyle = R"(
     /* General Window and Text Styling */
@@ -623,6 +624,13 @@ MainWindow::MainWindow(QWidget* parent)
         &MainWindow::syncViewportManagerPopup);
 
     // ===================================================================
+
+    connect(m_fixedTopToolbar, &StaticToolbar::flowMenuToggled,
+        this, [this](bool on) { handleMenuToggle(MenuType::FlowVisualizer, on); });
+    connect(m_fixedTopToolbar, &StaticToolbar::realSenseMenuToggled,
+        this, [this](bool on) { handleMenuToggle(MenuType::RealSense, on); });
+    connect(m_fixedTopToolbar, &StaticToolbar::databaseMenuToggled,
+        this, [this](bool on) { handleMenuToggle(MenuType::Database, on); });
 
     //========================= Start the SLAM Manager =========================
     // 1. Create the manager instances.
@@ -1317,4 +1325,49 @@ void MainWindow::destroyCameraRig(entt::entity cameraEntity)
     // 4) Finally destroy the camera entity
     qDebug() << "[CLEANUP] Destroying camera entity:" << (uint32_t)cameraEntity;
     reg.destroy(cameraEntity);
+}
+
+void MainWindow::handleMenuToggle(MenuType type, bool checked)
+{
+    if (checked)   showMenu(type);
+    else           hideMenu(type);
+}
+
+void MainWindow::showMenu(MenuType type)
+{
+    auto& entry = m_menus[type];
+    if (!entry.menu) {
+        // First time ever: create it
+        auto menu = MenuFactory::create(type, m_scene.get(), this);
+        QString title;
+        switch (type) {
+        case MenuType::FlowVisualizer:   title = QStringLiteral("Flow Visualizer");   break;
+        case MenuType::RealSense:        title = QStringLiteral("RealSense Config");  break;
+        case MenuType::Database:         title = QStringLiteral("Database Panel");    break;
+                                        /*…other cases…*/                  
+        }
+        entry.dock = new ads::CDockWidget(title, this);
+        entry.dock->setWidget(entry.menu->widget());
+        entry.dock->setStyleSheet(sidePanelStyle);
+        m_dockManager->addDockWidget(ads::CenterDockWidgetArea, entry.dock);
+        // Fresh vs. reopened?  (you’ll need to implement this in your DatabaseManager)
+        if (db::DatabaseManager::instance()
+             .menuConfigExists(db::DatabaseManager::menuTypeToString(type))) {
+            entry.menu->initializeFromDatabase();
+        }
+         else {
+            entry.menu->initializeFresh();
+        }
+    }
+    entry.dock->show();
+}
+
+void MainWindow::hideMenu(MenuType type)
+{
+    auto it = m_menus.find(type);
+    if (it == m_menus.end()) return;
+    auto& entry = it.value();
+    // Save UI state, then hide
+    entry.menu->shutdownAndSave();
+    entry.dock->hide();
 }

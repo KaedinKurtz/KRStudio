@@ -25,7 +25,7 @@
 #include <variant>
 #include <entt/entt.hpp>
 #include "Scene.hpp" 
-
+#include "UIHeaders/MenuFactory.hpp"
 
 namespace db {
 
@@ -253,6 +253,13 @@ public:
     void resetStats();
     void exportStats(const QString& filePath);
     
+    /// Returns true if we already have a saved state for this menu name.
+    bool menuConfigExists(const QString& menuName);
+    QString loadMenuState(const QString& menuName);
+    bool saveMenuState(const QString& menuName, const QString& blob);
+
+    static QString menuTypeToString(MenuType type);
+
 signals:
     void databaseEvent(const DatabaseEventData& event);
     void queryExecuted(const QueryMetrics& metrics);

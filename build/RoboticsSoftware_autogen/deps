@@ -1344,9 +1344,11 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/include/UIHeaders/DroppableGraphicsView.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/FlowVisualizerMenu.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/GraphWidget.hpp \
+	D:/RoboticsSoftware/include/UIHeaders/IMenu.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/JointPropertiesWidget.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/LinkPropertiesWidget.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/MainWindow.hpp \
+	D:/RoboticsSoftware/include/UIHeaders/MenuFactory.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/NodeCatalogWidget.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/PreviewViewport.hpp \
 	D:/RoboticsSoftware/include/UIHeaders/PropertiesPanel.hpp \

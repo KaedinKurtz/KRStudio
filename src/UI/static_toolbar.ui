@@ -1495,7 +1495,7 @@ Inspector</string>
               <widget class="QWidget" name="widget_7" native="true">
                <property name="minimumSize">
                 <size>
-                 <width>200</width>
+                 <width>240</width>
                  <height>0</height>
                 </size>
                </property>
@@ -1540,6 +1540,33 @@ Inspector</string>
                    <size>
                     <width>36</width>
                     <height>36</height>
+                   </size>
+                  </property>
+                  <property name="toolButtonStyle">
+                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="databaseManagerButton">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>Database
+Manager</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="../../resources.qrc">
+                    <normaloff>:/icons/icons8-laptop-settings-48.png</normaloff>:/icons/icons8-laptop-settings-48.png</iconset>
+                  </property>
+                  <property name="iconSize">
+                   <size>
+                    <width>48</width>
+                    <height>40</height>
                    </size>
                   </property>
                   <property name="toolButtonStyle">
@@ -1635,8 +1662,453 @@ Inspector</string>
              <property name="verticalSpacing">
               <number>3</number>
              </property>
-             <item row="2" column="7">
-              <widget class="QToolButton" name="toolButton">
+             <item row="2" column="9">
+              <widget class="Line" name="line_29">
+               <property name="orientation">
+                <enum>Qt::Orientation::Vertical</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="13" colspan="5">
+              <widget class="Line" name="line_19">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="22">
+              <widget class="Line" name="line_25">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="Line" name="line_31">
+               <property name="orientation">
+                <enum>Qt::Orientation::Vertical</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="22">
+              <widget class="QWidget" name="widget_13" native="true">
+               <property name="maximumSize">
+                <size>
+                 <width>200</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true"/>
+               </property>
+               <layout class="QHBoxLayout" name="horizontalLayout_13">
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <item>
+                 <widget class="QToolButton" name="view_presets_button">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>View
+Presets</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="../../resources.qrc">
+                    <normaloff>:/icons/cubeView.png</normaloff>:/icons/cubeView.png</iconset>
+                  </property>
+                  <property name="iconSize">
+                   <size>
+                    <width>40</width>
+                    <height>40</height>
+                   </size>
+                  </property>
+                  <property name="toolButtonStyle">
+                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="save_view_button">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>Save Current
+View</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="../../resources.qrc">
+                    <normaloff>:/icons/icons8-save-48.png</normaloff>:/icons/icons8-save-48.png</iconset>
+                  </property>
+                  <property name="iconSize">
+                   <size>
+                    <width>40</width>
+                    <height>48</height>
+                   </size>
+                  </property>
+                  <property name="toolButtonStyle">
+                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="1" column="0" colspan="5">
+              <widget class="Line" name="line_23">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="2">
+              <widget class="QGroupBox" name="control_group_box">
+               <property name="maximumSize">
+                <size>
+                 <width>210</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="title">
+                <string>Control</string>
+               </property>
+               <layout class="QHBoxLayout" name="horizontalLayout_44">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <property name="leftMargin">
+                 <number>2</number>
+                </property>
+                <property name="topMargin">
+                 <number>4</number>
+                </property>
+                <property name="rightMargin">
+                 <number>2</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>2</number>
+                </property>
+                <item>
+                 <widget class="QToolButton" name="orbit_button">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>77</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string>Orbit</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="../../resources.qrc">
+                    <normaloff>:/icons/icons8-3d-rotate-48.png</normaloff>:/icons/icons8-3d-rotate-48.png</iconset>
+                  </property>
+                  <property name="iconSize">
+                   <size>
+                    <width>36</width>
+                    <height>36</height>
+                   </size>
+                  </property>
+                  <property name="checkable">
+                   <bool>true</bool>
+                  </property>
+                  <property name="autoExclusive">
+                   <bool>true</bool>
+                  </property>
+                  <property name="toolButtonStyle">
+                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+                  </property>
+                  <attribute name="buttonGroup">
+                   <string notr="true">control_button_group</string>
+                  </attribute>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="Line" name="line_17">
+                  <property name="frameShadow">
+                   <enum>QFrame::Shadow::Plain</enum>
+                  </property>
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Vertical</enum>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="pan_button">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>77</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string>Pan</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="../../resources.qrc">
+                    <normaloff>:/icons/icons8-hand-48.png</normaloff>:/icons/icons8-hand-48.png</iconset>
+                  </property>
+                  <property name="iconSize">
+                   <size>
+                    <width>36</width>
+                    <height>36</height>
+                   </size>
+                  </property>
+                  <property name="checkable">
+                   <bool>true</bool>
+                  </property>
+                  <property name="autoExclusive">
+                   <bool>true</bool>
+                  </property>
+                  <property name="toolButtonStyle">
+                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+                  </property>
+                  <attribute name="buttonGroup">
+                   <string notr="true">control_button_group</string>
+                  </attribute>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="0" column="11" rowspan="3">
+              <widget class="QWidget" name="ViewportManagerWidgetPlaceholder" native="true">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>300</width>
+                 <height>112</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="13">
+              <widget class="QToolButton" name="show_grid_button">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>77</width>
+                 <height>32</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Grid Plane</string>
+               </property>
+               <property name="icon">
+                <iconset resource="../../resources.qrc">
+                 <normaloff>:/icons/groundplane.png</normaloff>:/icons/groundplane.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>48</width>
+                 <height>60</height>
+                </size>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+               <property name="toolButtonStyle">
+                <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QGroupBox" name="view_group_box">
+               <property name="maximumSize">
+                <size>
+                 <width>206</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="title">
+                <string>Views</string>
+               </property>
+               <layout class="QHBoxLayout" name="horizontalLayout_43">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <property name="leftMargin">
+                 <number>6</number>
+                </property>
+                <property name="topMargin">
+                 <number>4</number>
+                </property>
+                <property name="rightMargin">
+                 <number>2</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>2</number>
+                </property>
+                <item>
+                 <widget class="QToolButton" name="perpective_button">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>77</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>100</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Create New Project File&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                  </property>
+                  <property name="text">
+                   <string>Perspective</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="../../resources.qrc">
+                    <normaloff>:/icons/perspective.png</normaloff>:/icons/perspective.png</iconset>
+                  </property>
+                  <property name="iconSize">
+                   <size>
+                    <width>34</width>
+                    <height>36</height>
+                   </size>
+                  </property>
+                  <property name="checkable">
+                   <bool>true</bool>
+                  </property>
+                  <property name="autoExclusive">
+                   <bool>true</bool>
+                  </property>
+                  <property name="toolButtonStyle">
+                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+                  </property>
+                  <attribute name="buttonGroup">
+                   <string notr="true">view_button_group</string>
+                  </attribute>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="Line" name="line_16">
+                  <property name="frameShadow">
+                   <enum>QFrame::Shadow::Plain</enum>
+                  </property>
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Vertical</enum>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="orthographic_button">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>77</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>100</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Open Project File From Computer&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                  </property>
+                  <property name="text">
+                   <string>Orthographic</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="../../resources.qrc">
+                    <normaloff>:/icons/orthographic.png</normaloff>:/icons/orthographic.png</iconset>
+                  </property>
+                  <property name="iconSize">
+                   <size>
+                    <width>30</width>
+                    <height>36</height>
+                   </size>
+                  </property>
+                  <property name="checkable">
+                   <bool>true</bool>
+                  </property>
+                  <property name="autoExclusive">
+                   <bool>true</bool>
+                  </property>
+                  <property name="toolButtonStyle">
+                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+                  </property>
+                  <attribute name="buttonGroup">
+                   <string notr="true">view_button_group</string>
+                  </attribute>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="0" column="13" colspan="5">
+              <widget class="QLabel" name="label_15">
+               <property name="text">
+                <string>Overlays &amp; Helpers</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignmentFlag::AlignCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="17">
+              <widget class="QToolButton" name="show_collision_shapes_button">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                  <horstretch>0</horstretch>
@@ -1650,18 +2122,17 @@ Inspector</string>
                 </size>
                </property>
                <property name="text">
-                <string> Scene
-Lighting</string>
+                <string>Collision
+Boxes</string>
                </property>
                <property name="icon">
                 <iconset resource="../../resources.qrc">
-                 <normaloff>:/icons/icons8-light-48 (1).png</normaloff>
-                 <normalon>:/icons/icons8-light-48.png</normalon>:/icons/icons8-light-48 (1).png</iconset>
+                 <normaloff>:/icons/collisionBox-1.png</normaloff>:/icons/collisionBox-1.png</iconset>
                </property>
                <property name="iconSize">
                 <size>
-                 <width>36</width>
-                 <height>36</height>
+                 <width>56</width>
+                 <height>46</height>
                 </size>
                </property>
                <property name="checkable">
@@ -1672,12 +2143,35 @@ Lighting</string>
                </property>
               </widget>
              </item>
-             <item row="1" column="13" colspan="4">
-              <widget class="Line" name="line_19">
+             <item row="0" column="0" colspan="5">
+              <widget class="QLabel" name="label_12">
+               <property name="text">
+                <string>Camera Projection &amp; Control</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignmentFlag::AlignCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="5">
+              <widget class="Line" name="line_28">
+               <property name="orientation">
+                <enum>Qt::Orientation::Vertical</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="23">
+              <spacer name="horizontalSpacer_2">
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>
                </property>
-              </widget>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
              </item>
              <item row="2" column="6">
               <widget class="QGroupBox" name="viewport_shading_group">
@@ -1852,24 +2346,39 @@ Lighting</string>
                </layout>
               </widget>
              </item>
-             <item row="2" column="12">
-              <widget class="Line" name="line_140">
-               <property name="orientation">
-                <enum>Qt::Orientation::Vertical</enum>
+             <item row="2" column="4">
+              <widget class="QToolButton" name="reset_view_button">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
                </property>
-              </widget>
-             </item>
-             <item row="0" column="6" colspan="2">
-              <widget class="QLabel" name="label_16">
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>16777215</height>
+                </size>
+               </property>
                <property name="text">
-                <string>Viewport Shading</string>
+                <string>Reset View</string>
                </property>
-               <property name="alignment">
-                <set>Qt::AlignmentFlag::AlignCenter</set>
+               <property name="icon">
+                <iconset resource="../../resources.qrc">
+                 <normaloff>:/icons/icons8-rotate-48.png</normaloff>:/icons/icons8-rotate-48.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>36</width>
+                 <height>36</height>
+                </size>
+               </property>
+               <property name="toolButtonStyle">
+                <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
                </property>
               </widget>
              </item>
-             <item row="2" column="15">
+             <item row="2" column="16">
               <widget class="QToolButton" name="show_object_axes_button">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -1904,17 +2413,71 @@ Lighting</string>
                </property>
               </widget>
              </item>
-             <item row="1" column="21">
-              <widget class="Line" name="line_25">
+             <item row="2" column="21">
+              <widget class="Line" name="line_20">
+               <property name="orientation">
+                <enum>Qt::Orientation::Vertical</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="7">
+              <widget class="QToolButton" name="toolButton">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="text">
+                <string> Scene
+Lighting</string>
+               </property>
+               <property name="icon">
+                <iconset resource="../../resources.qrc">
+                 <normaloff>:/icons/icons8-light-48 (1).png</normaloff>
+                 <normalon>:/icons/icons8-light-48.png</normalon>:/icons/icons8-light-48 (1).png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>36</width>
+                 <height>36</height>
+                </size>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+               <property name="toolButtonStyle">
+                <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="10">
+              <widget class="Line" name="line_141">
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>
                </property>
               </widget>
              </item>
-             <item row="1" column="0" colspan="5">
-              <widget class="Line" name="line_23">
+             <item row="1" column="6" colspan="2">
+              <widget class="Line" name="line_18">
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="22">
+              <widget class="QLabel" name="label_13">
+               <property name="text">
+                <string>View Management</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignmentFlag::AlignCenter</set>
                </property>
               </widget>
              </item>
@@ -1953,107 +2516,21 @@ Lighting</string>
                </property>
               </widget>
              </item>
-             <item row="2" column="9">
-              <widget class="Line" name="line_29">
+             <item row="2" column="12">
+              <widget class="Line" name="line_140">
                <property name="orientation">
                 <enum>Qt::Orientation::Vertical</enum>
                </property>
               </widget>
              </item>
-             <item row="1" column="10">
-              <widget class="Line" name="line_141">
-               <property name="orientation">
-                <enum>Qt::Orientation::Horizontal</enum>
+             <item row="0" column="6" colspan="2">
+              <widget class="QLabel" name="label_16">
+               <property name="text">
+                <string>Viewport Shading</string>
                </property>
-              </widget>
-             </item>
-             <item row="1" column="6" colspan="2">
-              <widget class="Line" name="line_18">
-               <property name="orientation">
-                <enum>Qt::Orientation::Horizontal</enum>
+               <property name="alignment">
+                <set>Qt::AlignmentFlag::AlignCenter</set>
                </property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="Line" name="line_31">
-               <property name="orientation">
-                <enum>Qt::Orientation::Vertical</enum>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="21">
-              <widget class="QWidget" name="widget_13" native="true">
-               <property name="maximumSize">
-                <size>
-                 <width>200</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="styleSheet">
-                <string notr="true"/>
-               </property>
-               <layout class="QHBoxLayout" name="horizontalLayout_13">
-                <property name="topMargin">
-                 <number>0</number>
-                </property>
-                <property name="bottomMargin">
-                 <number>0</number>
-                </property>
-                <item>
-                 <widget class="QToolButton" name="view_presets_button">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="text">
-                   <string>View
-Presets</string>
-                  </property>
-                  <property name="icon">
-                   <iconset resource="../../resources.qrc">
-                    <normaloff>:/icons/cubeView.png</normaloff>:/icons/cubeView.png</iconset>
-                  </property>
-                  <property name="iconSize">
-                   <size>
-                    <width>40</width>
-                    <height>40</height>
-                   </size>
-                  </property>
-                  <property name="toolButtonStyle">
-                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="save_view_button">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="text">
-                   <string>Save Current
-View</string>
-                  </property>
-                  <property name="icon">
-                   <iconset resource="../../resources.qrc">
-                    <normaloff>:/icons/icons8-save-48.png</normaloff>:/icons/icons8-save-48.png</iconset>
-                  </property>
-                  <property name="iconSize">
-                   <size>
-                    <width>40</width>
-                    <height>48</height>
-                   </size>
-                  </property>
-                  <property name="toolButtonStyle">
-                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
               </widget>
              </item>
              <item row="2" column="3">
@@ -2063,453 +2540,30 @@ View</string>
                </property>
               </widget>
              </item>
-             <item row="0" column="0" colspan="5">
-              <widget class="QLabel" name="label_12">
-               <property name="text">
-                <string>Camera Projection &amp; Control</string>
-               </property>
-               <property name="alignment">
-                <set>Qt::AlignmentFlag::AlignCenter</set>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="22">
-              <spacer name="horizontalSpacer_2">
-               <property name="orientation">
-                <enum>Qt::Orientation::Horizontal</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>40</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-             <item row="2" column="0">
-              <widget class="QGroupBox" name="view_group_box">
-               <property name="maximumSize">
-                <size>
-                 <width>206</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="title">
-                <string>Views</string>
-               </property>
-               <layout class="QHBoxLayout" name="horizontalLayout_43">
-                <property name="spacing">
-                 <number>0</number>
-                </property>
-                <property name="leftMargin">
-                 <number>6</number>
-                </property>
-                <property name="topMargin">
-                 <number>4</number>
-                </property>
-                <property name="rightMargin">
-                 <number>2</number>
-                </property>
-                <property name="bottomMargin">
-                 <number>2</number>
-                </property>
-                <item>
-                 <widget class="QToolButton" name="perpective_button">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize">
-                   <size>
-                    <width>77</width>
-                    <height>32</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize">
-                   <size>
-                    <width>100</width>
-                    <height>16777215</height>
-                   </size>
-                  </property>
-                  <property name="toolTip">
-                   <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Create New Project File&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                  </property>
-                  <property name="text">
-                   <string>Perspective</string>
-                  </property>
-                  <property name="icon">
-                   <iconset resource="../../resources.qrc">
-                    <normaloff>:/icons/perspective.png</normaloff>:/icons/perspective.png</iconset>
-                  </property>
-                  <property name="iconSize">
-                   <size>
-                    <width>34</width>
-                    <height>36</height>
-                   </size>
-                  </property>
-                  <property name="checkable">
-                   <bool>true</bool>
-                  </property>
-                  <property name="autoExclusive">
-                   <bool>true</bool>
-                  </property>
-                  <property name="toolButtonStyle">
-                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-                  </property>
-                  <attribute name="buttonGroup">
-                   <string notr="true">view_button_group</string>
-                  </attribute>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="Line" name="line_16">
-                  <property name="frameShadow">
-                   <enum>QFrame::Shadow::Plain</enum>
-                  </property>
-                  <property name="orientation">
-                   <enum>Qt::Orientation::Vertical</enum>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="orthographic_button">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize">
-                   <size>
-                    <width>77</width>
-                    <height>32</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize">
-                   <size>
-                    <width>100</width>
-                    <height>16777215</height>
-                   </size>
-                  </property>
-                  <property name="toolTip">
-                   <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Open Project File From Computer&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                  </property>
-                  <property name="text">
-                   <string>Orthographic</string>
-                  </property>
-                  <property name="icon">
-                   <iconset resource="../../resources.qrc">
-                    <normaloff>:/icons/orthographic.png</normaloff>:/icons/orthographic.png</iconset>
-                  </property>
-                  <property name="iconSize">
-                   <size>
-                    <width>30</width>
-                    <height>36</height>
-                   </size>
-                  </property>
-                  <property name="checkable">
-                   <bool>true</bool>
-                  </property>
-                  <property name="autoExclusive">
-                   <bool>true</bool>
-                  </property>
-                  <property name="toolButtonStyle">
-                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-                  </property>
-                  <attribute name="buttonGroup">
-                   <string notr="true">view_button_group</string>
-                  </attribute>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </item>
-             <item row="2" column="16">
-              <widget class="QToolButton" name="show_collision_shapes_button">
+             <item row="2" column="15">
+              <widget class="QToolButton" name="flowVisualizerMenu">
                <property name="sizePolicy">
-                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
                  <horstretch>0</horstretch>
                  <verstretch>0</verstretch>
                 </sizepolicy>
                </property>
-               <property name="maximumSize">
-                <size>
-                 <width>100</width>
-                 <height>16777215</height>
-                </size>
-               </property>
                <property name="text">
-                <string>Collision
-Boxes</string>
+                <string>Field
+Visualizer</string>
                </property>
                <property name="icon">
                 <iconset resource="../../resources.qrc">
-                 <normaloff>:/icons/collisionBox-1.png</normaloff>:/icons/collisionBox-1.png</iconset>
-               </property>
-               <property name="iconSize">
-                <size>
-                 <width>56</width>
-                 <height>46</height>
-                </size>
-               </property>
-               <property name="checkable">
-                <bool>true</bool>
-               </property>
-               <property name="toolButtonStyle">
-                <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="13">
-              <widget class="QToolButton" name="show_grid_button">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="minimumSize">
-                <size>
-                 <width>77</width>
-                 <height>32</height>
-                </size>
-               </property>
-               <property name="maximumSize">
-                <size>
-                 <width>100</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="text">
-                <string>Grid Plane</string>
-               </property>
-               <property name="icon">
-                <iconset resource="../../resources.qrc">
-                 <normaloff>:/icons/groundplane.png</normaloff>:/icons/groundplane.png</iconset>
+                 <normaloff>:/icons/icons8-wind-48.png</normaloff>:/icons/icons8-wind-48.png</iconset>
                </property>
                <property name="iconSize">
                 <size>
                  <width>48</width>
-                 <height>60</height>
-                </size>
-               </property>
-               <property name="checkable">
-                <bool>true</bool>
-               </property>
-               <property name="toolButtonStyle">
-                <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="2">
-              <widget class="QGroupBox" name="control_group_box">
-               <property name="maximumSize">
-                <size>
-                 <width>210</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="title">
-                <string>Control</string>
-               </property>
-               <layout class="QHBoxLayout" name="horizontalLayout_44">
-                <property name="spacing">
-                 <number>0</number>
-                </property>
-                <property name="leftMargin">
-                 <number>2</number>
-                </property>
-                <property name="topMargin">
-                 <number>4</number>
-                </property>
-                <property name="rightMargin">
-                 <number>2</number>
-                </property>
-                <property name="bottomMargin">
-                 <number>2</number>
-                </property>
-                <item>
-                 <widget class="QToolButton" name="orbit_button">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize">
-                   <size>
-                    <width>77</width>
-                    <height>32</height>
-                   </size>
-                  </property>
-                  <property name="text">
-                   <string>Orbit</string>
-                  </property>
-                  <property name="icon">
-                   <iconset resource="../../resources.qrc">
-                    <normaloff>:/icons/icons8-3d-rotate-48.png</normaloff>:/icons/icons8-3d-rotate-48.png</iconset>
-                  </property>
-                  <property name="iconSize">
-                   <size>
-                    <width>36</width>
-                    <height>36</height>
-                   </size>
-                  </property>
-                  <property name="checkable">
-                   <bool>true</bool>
-                  </property>
-                  <property name="autoExclusive">
-                   <bool>true</bool>
-                  </property>
-                  <property name="toolButtonStyle">
-                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-                  </property>
-                  <attribute name="buttonGroup">
-                   <string notr="true">control_button_group</string>
-                  </attribute>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="Line" name="line_17">
-                  <property name="frameShadow">
-                   <enum>QFrame::Shadow::Plain</enum>
-                  </property>
-                  <property name="orientation">
-                   <enum>Qt::Orientation::Vertical</enum>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="pan_button">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize">
-                   <size>
-                    <width>77</width>
-                    <height>32</height>
-                   </size>
-                  </property>
-                  <property name="text">
-                   <string>Pan</string>
-                  </property>
-                  <property name="icon">
-                   <iconset resource="../../resources.qrc">
-                    <normaloff>:/icons/icons8-hand-48.png</normaloff>:/icons/icons8-hand-48.png</iconset>
-                  </property>
-                  <property name="iconSize">
-                   <size>
-                    <width>36</width>
-                    <height>36</height>
-                   </size>
-                  </property>
-                  <property name="checkable">
-                   <bool>true</bool>
-                  </property>
-                  <property name="autoExclusive">
-                   <bool>true</bool>
-                  </property>
-                  <property name="toolButtonStyle">
-                   <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-                  </property>
-                  <attribute name="buttonGroup">
-                   <string notr="true">control_button_group</string>
-                  </attribute>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </item>
-             <item row="2" column="4">
-              <widget class="QToolButton" name="reset_view_button">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="maximumSize">
-                <size>
-                 <width>100</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="text">
-                <string>Reset View</string>
-               </property>
-               <property name="icon">
-                <iconset resource="../../resources.qrc">
-                 <normaloff>:/icons/icons8-rotate-48.png</normaloff>:/icons/icons8-rotate-48.png</iconset>
-               </property>
-               <property name="iconSize">
-                <size>
-                 <width>36</width>
-                 <height>36</height>
+                 <height>38</height>
                 </size>
                </property>
                <property name="toolButtonStyle">
                 <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="20">
-              <widget class="Line" name="line_20">
-               <property name="orientation">
-                <enum>Qt::Orientation::Vertical</enum>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="13" colspan="4">
-              <widget class="QLabel" name="label_15">
-               <property name="text">
-                <string>Overlays &amp; Helpers</string>
-               </property>
-               <property name="alignment">
-                <set>Qt::AlignmentFlag::AlignCenter</set>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="21">
-              <widget class="QLabel" name="label_13">
-               <property name="text">
-                <string>View Management</string>
-               </property>
-               <property name="alignment">
-                <set>Qt::AlignmentFlag::AlignCenter</set>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="5">
-              <widget class="Line" name="line_28">
-               <property name="orientation">
-                <enum>Qt::Orientation::Vertical</enum>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="11" rowspan="3">
-              <widget class="QWidget" name="ViewportManagerWidgetPlaceholder" native="true">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="minimumSize">
-                <size>
-                 <width>0</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="maximumSize">
-                <size>
-                 <width>300</width>
-                 <height>112</height>
-                </size>
                </property>
               </widget>
              </item>
@@ -10693,8 +10747,8 @@ Inspector</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="view_button_group"/>
   <buttongroup name="control_button_group"/>
   <buttongroup name="viewport_shading_button_group"/>
+  <buttongroup name="view_button_group"/>
  </buttongroups>
 </ui>

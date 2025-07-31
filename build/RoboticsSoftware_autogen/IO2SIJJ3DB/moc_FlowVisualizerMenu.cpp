@@ -314,6 +314,8 @@ void *FlowVisualizerMenu::qt_metacast(const char *_clname)
     if (!_clname) return nullptr;
     if (!strcmp(_clname, qt_meta_stringdata_ZN18FlowVisualizerMenuE.stringdata0))
         return static_cast<void*>(this);
+    if (!strcmp(_clname, "IMenu"))
+        return static_cast< IMenu*>(this);
     return QWidget::qt_metacast(_clname);
 }
 

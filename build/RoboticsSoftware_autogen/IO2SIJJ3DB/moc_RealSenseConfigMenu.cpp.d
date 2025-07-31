@@ -174,4 +174,5 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_RealSenseConfi
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/rs.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/rs.hpp \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/librealsense2/rsutil.h \
+  D:/RoboticsSoftware/include/UIHeaders/IMenu.hpp \
   D:/RoboticsSoftware/include/UtilityHeaders/RealSenseManager.hpp

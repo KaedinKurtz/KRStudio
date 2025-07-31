@@ -13,6 +13,13 @@
 #include <set>
 #include <sstream>
 #include <QRegularExpression>
+#include <QJsonParseError>
+#include <QJsonObject>
+#include <QJsonDocument>
+
+#include "DatabaseManager.hpp"
+#include "IMenu.hpp"
+#include "MenuFactory.hpp"
 
 RealSenseConfigMenu::RealSenseConfigMenu(QWidget* parent) :
     QWidget(parent),
@@ -461,4 +468,63 @@ void RealSenseConfigMenu::logAllStreamProfiles(const std::string& serialNumber)
         qDebug() << "--- END DEBUG ---";
         return; // We found our device, no need to loop further
     }
+}
+
+void RealSenseConfigMenu::initializeFresh()
+{
+
+        setupUi();
+    setupConnections();
+    setupPreview();
+    populateDeviceList();
+        // default toggles already set in ctor
+}
+
+void RealSenseConfigMenu::initializeFromDatabase()
+{
+    QString blob = db::DatabaseManager::instance()
+         .loadMenuState(db::DatabaseManager::menuTypeToString(MenuType::RealSense));
+    if (blob.isEmpty()) {
+        initializeFresh();
+        return;
+        
+    }
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(blob.toUtf8(), &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        qWarning() << "JSON parse error in RealSenseConfigMenu:" << parseError.errorString();
+        initializeFresh();
+        return;
+    }
+    QJsonObject obj = doc.object();
+    
+            // Restore device selection
+        QString savedSerial = obj.value("selectedDevice").toString();
+    int idx = RealSenseCameraSelectionComboBox->findText(savedSerial);
+    if (idx >= 0) RealSenseCameraSelectionComboBox->setCurrentIndex(idx);
+    
+            // Restore stream toggles
+        enableDepthStream_toggle_tool->setChecked(obj.value("depthEnabled").toBool());
+    enableRGBStream_toggle_tool->setChecked(obj.value("rgbEnabled").toBool());
+    enableInfaredStream_toggle_tool->setChecked(obj.value("irEnabled").toBool());
+    
+            // …and any saved profile indices:
+        depthProfileCombo->setCurrentIndex(obj.value("depthProfileIndex").toInt());
+    colorProfileCombo->setCurrentIndex(obj.value("colorProfileIndex").toInt());
+}
+
+void RealSenseConfigMenu::shutdownAndSave()
+{
+
+    QJsonObject obj;
+    obj["selectedDevice"] = RealSenseCameraSelectionComboBox->currentText();
+    obj["depthEnabled"] = enableDepthStream_toggle_tool->isChecked();
+    obj["rgbEnabled"] = enableRGBStream_toggle_tool->isChecked();
+    obj["irEnabled"] = enableInfaredStream_toggle_tool->isChecked();
+    obj["depthProfileIndex"] = depthProfileCombo->currentIndex();
+    obj["colorProfileIndex"] = colorProfileCombo->currentIndex();
+        // …any other settings…
+        
+        QJsonDocument doc(obj);
+        db::DatabaseManager::instance().saveMenuState("RealSense", doc.toJson());
 }

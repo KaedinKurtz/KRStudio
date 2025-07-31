@@ -11,6 +11,9 @@
 #include <QMenu>
 #include <QToolButton>      // for the slot signature
 #include "ViewportManagerPopup.hpp"
+#include "MenuFactory.hpp"
+#include "IMenu.hpp"
+#include <QMap>
 
 // Forward declarations
 class QWidget;
@@ -52,6 +55,18 @@ protected:
     void applyCameraColorToDock(ads::CDockWidget* dock, entt::entity camEntity);
 
 private:
+
+    struct MenuEntry {
+        std::shared_ptr<IMenu> menu;
+        ads::CDockWidget * dock;
+    };
+
+    QMap<MenuType, MenuEntry>   m_menus;
+
+    void handleMenuToggle(MenuType type, bool checked);
+    void showMenu(MenuType type);
+    void hideMenu(MenuType type);
+
     // --- Member variables updated for the new layout ---
     QWidget* m_centralContainer;
     StaticToolbar* m_fixedTopToolbar;

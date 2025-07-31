@@ -22,6 +22,10 @@ signals:
     void loadRobotClicked();
     void viewportManagerClicked(QToolButton* button);
 
+    void flowMenuToggled(bool checked);
+    void realSenseMenuToggled(bool checked);
+    void databaseMenuToggled(bool checked);
+
 private:
     Ui::toolbarContainer* ui; // Pointer to the generated UI class
     ViewportManagerPopup* m_viewportManagerPopup;

@@ -127,14 +127,39 @@ public:
     QWidget *widget_7;
     QHBoxLayout *horizontalLayout_15;
     QToolButton *preferences_button;
+    QToolButton *databaseManagerButton;
     QToolButton *help_button;
     QSpacerItem *horizontalSpacer;
     QWidget *view_toolbar;
     QGridLayout *gridLayout_4;
     QWidget *widget_8;
     QGridLayout *gridLayout_12;
-    QToolButton *toolButton;
+    QFrame *line_29;
     QFrame *line_19;
+    QFrame *line_25;
+    QFrame *line_31;
+    QWidget *widget_13;
+    QHBoxLayout *horizontalLayout_13;
+    QToolButton *view_presets_button;
+    QToolButton *save_view_button;
+    QFrame *line_23;
+    QGroupBox *control_group_box;
+    QHBoxLayout *horizontalLayout_44;
+    QToolButton *orbit_button;
+    QFrame *line_17;
+    QToolButton *pan_button;
+    QWidget *ViewportManagerWidgetPlaceholder;
+    QToolButton *show_grid_button;
+    QGroupBox *view_group_box;
+    QHBoxLayout *horizontalLayout_43;
+    QToolButton *perpective_button;
+    QFrame *line_16;
+    QToolButton *orthographic_button;
+    QLabel *label_15;
+    QToolButton *show_collision_shapes_button;
+    QLabel *label_12;
+    QFrame *line_28;
+    QSpacerItem *horizontalSpacer_2;
     QGroupBox *viewport_shading_group;
     QHBoxLayout *horizontalLayout_45;
     QToolButton *shaded_view_button;
@@ -142,41 +167,18 @@ public:
     QToolButton *shaded_edges_view_button;
     QFrame *line_22;
     QToolButton *wireframe_view_button;
-    QFrame *line_140;
-    QLabel *label_16;
+    QToolButton *reset_view_button;
     QToolButton *show_object_axes_button;
-    QFrame *line_25;
-    QFrame *line_23;
-    QToolButton *show_axes_button;
-    QFrame *line_29;
+    QFrame *line_20;
+    QToolButton *toolButton;
     QFrame *line_141;
     QFrame *line_18;
-    QFrame *line_31;
-    QWidget *widget_13;
-    QHBoxLayout *horizontalLayout_13;
-    QToolButton *view_presets_button;
-    QToolButton *save_view_button;
-    QFrame *line_32;
-    QLabel *label_12;
-    QSpacerItem *horizontalSpacer_2;
-    QGroupBox *view_group_box;
-    QHBoxLayout *horizontalLayout_43;
-    QToolButton *perpective_button;
-    QFrame *line_16;
-    QToolButton *orthographic_button;
-    QToolButton *show_collision_shapes_button;
-    QToolButton *show_grid_button;
-    QGroupBox *control_group_box;
-    QHBoxLayout *horizontalLayout_44;
-    QToolButton *orbit_button;
-    QFrame *line_17;
-    QToolButton *pan_button;
-    QToolButton *reset_view_button;
-    QFrame *line_20;
-    QLabel *label_15;
     QLabel *label_13;
-    QFrame *line_28;
-    QWidget *ViewportManagerWidgetPlaceholder;
+    QToolButton *show_axes_button;
+    QFrame *line_140;
+    QLabel *label_16;
+    QFrame *line_32;
+    QToolButton *flowVisualizerMenu;
     QWidget *robot_toolbar;
     QGridLayout *gridLayout;
     QWidget *widget_10;
@@ -613,9 +615,9 @@ public:
     QFrame *line_139;
     QFrame *line_136;
     QFrame *line_132;
-    QButtonGroup *view_button_group;
     QButtonGroup *control_button_group;
     QButtonGroup *viewport_shading_button_group;
+    QButtonGroup *view_button_group;
 
     void setupUi(QWidget *toolbarContainer)
     {
@@ -1408,7 +1410,7 @@ public:
 
         widget_7 = new QWidget(widget);
         widget_7->setObjectName("widget_7");
-        widget_7->setMinimumSize(QSize(200, 0));
+        widget_7->setMinimumSize(QSize(240, 0));
         widget_7->setMaximumSize(QSize(160, 16777215));
         horizontalLayout_15 = new QHBoxLayout(widget_7);
         horizontalLayout_15->setSpacing(6);
@@ -1426,13 +1428,25 @@ public:
 
         horizontalLayout_15->addWidget(preferences_button);
 
+        databaseManagerButton = new QToolButton(widget_7);
+        databaseManagerButton->setObjectName("databaseManagerButton");
+        sizePolicy1.setHeightForWidth(databaseManagerButton->sizePolicy().hasHeightForWidth());
+        databaseManagerButton->setSizePolicy(sizePolicy1);
+        QIcon icon11;
+        icon11.addFile(QString::fromUtf8(":/icons/icons8-laptop-settings-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        databaseManagerButton->setIcon(icon11);
+        databaseManagerButton->setIconSize(QSize(48, 40));
+        databaseManagerButton->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
+
+        horizontalLayout_15->addWidget(databaseManagerButton);
+
         help_button = new QToolButton(widget_7);
         help_button->setObjectName("help_button");
         sizePolicy3.setHeightForWidth(help_button->sizePolicy().hasHeightForWidth());
         help_button->setSizePolicy(sizePolicy3);
-        QIcon icon11;
-        icon11.addFile(QString::fromUtf8(":/icons/icons8-help-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        help_button->setIcon(icon11);
+        QIcon icon12;
+        icon12.addFile(QString::fromUtf8(":/icons/icons8-help-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        help_button->setIcon(icon12);
         help_button->setIconSize(QSize(36, 36));
         help_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -1462,157 +1476,6 @@ public:
         gridLayout_12->setHorizontalSpacing(0);
         gridLayout_12->setVerticalSpacing(3);
         gridLayout_12->setContentsMargins(0, 0, 0, 0);
-        toolButton = new QToolButton(widget_8);
-        toolButton->setObjectName("toolButton");
-        sizePolicy3.setHeightForWidth(toolButton->sizePolicy().hasHeightForWidth());
-        toolButton->setSizePolicy(sizePolicy3);
-        toolButton->setMaximumSize(QSize(100, 16777215));
-        QIcon icon12;
-        icon12.addFile(QString::fromUtf8(":/icons/icons8-light-48 (1).png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        icon12.addFile(QString::fromUtf8(":/icons/icons8-light-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::On);
-        toolButton->setIcon(icon12);
-        toolButton->setIconSize(QSize(36, 36));
-        toolButton->setCheckable(true);
-        toolButton->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
-
-        gridLayout_12->addWidget(toolButton, 2, 7, 1, 1);
-
-        line_19 = new QFrame(widget_8);
-        line_19->setObjectName("line_19");
-        line_19->setFrameShape(QFrame::Shape::HLine);
-        line_19->setFrameShadow(QFrame::Shadow::Sunken);
-
-        gridLayout_12->addWidget(line_19, 1, 13, 1, 4);
-
-        viewport_shading_group = new QGroupBox(widget_8);
-        viewport_shading_group->setObjectName("viewport_shading_group");
-        viewport_shading_group->setMaximumSize(QSize(318, 16777215));
-        horizontalLayout_45 = new QHBoxLayout(viewport_shading_group);
-        horizontalLayout_45->setSpacing(0);
-        horizontalLayout_45->setObjectName("horizontalLayout_45");
-        horizontalLayout_45->setContentsMargins(2, 4, 2, 2);
-        shaded_view_button = new QToolButton(viewport_shading_group);
-        viewport_shading_button_group = new QButtonGroup(toolbarContainer);
-        viewport_shading_button_group->setObjectName("viewport_shading_button_group");
-        viewport_shading_button_group->addButton(shaded_view_button);
-        shaded_view_button->setObjectName("shaded_view_button");
-        sizePolicy3.setHeightForWidth(shaded_view_button->sizePolicy().hasHeightForWidth());
-        shaded_view_button->setSizePolicy(sizePolicy3);
-        shaded_view_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon13;
-        icon13.addFile(QString::fromUtf8(":/icons/shaded.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        shaded_view_button->setIcon(icon13);
-        shaded_view_button->setIconSize(QSize(40, 40));
-        shaded_view_button->setCheckable(true);
-        shaded_view_button->setAutoExclusive(true);
-        shaded_view_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
-
-        horizontalLayout_45->addWidget(shaded_view_button);
-
-        line_21 = new QFrame(viewport_shading_group);
-        line_21->setObjectName("line_21");
-        line_21->setFrameShadow(QFrame::Shadow::Plain);
-        line_21->setFrameShape(QFrame::Shape::VLine);
-
-        horizontalLayout_45->addWidget(line_21);
-
-        shaded_edges_view_button = new QToolButton(viewport_shading_group);
-        viewport_shading_button_group->addButton(shaded_edges_view_button);
-        shaded_edges_view_button->setObjectName("shaded_edges_view_button");
-        sizePolicy3.setHeightForWidth(shaded_edges_view_button->sizePolicy().hasHeightForWidth());
-        shaded_edges_view_button->setSizePolicy(sizePolicy3);
-        shaded_edges_view_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon14;
-        icon14.addFile(QString::fromUtf8(":/icons/shadededges.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        shaded_edges_view_button->setIcon(icon14);
-        shaded_edges_view_button->setIconSize(QSize(40, 40));
-        shaded_edges_view_button->setCheckable(true);
-        shaded_edges_view_button->setAutoExclusive(true);
-        shaded_edges_view_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
-
-        horizontalLayout_45->addWidget(shaded_edges_view_button);
-
-        line_22 = new QFrame(viewport_shading_group);
-        line_22->setObjectName("line_22");
-        line_22->setFrameShadow(QFrame::Shadow::Plain);
-        line_22->setFrameShape(QFrame::Shape::VLine);
-
-        horizontalLayout_45->addWidget(line_22);
-
-        wireframe_view_button = new QToolButton(viewport_shading_group);
-        viewport_shading_button_group->addButton(wireframe_view_button);
-        wireframe_view_button->setObjectName("wireframe_view_button");
-        sizePolicy3.setHeightForWidth(wireframe_view_button->sizePolicy().hasHeightForWidth());
-        wireframe_view_button->setSizePolicy(sizePolicy3);
-        wireframe_view_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon15;
-        icon15.addFile(QString::fromUtf8(":/icons/wireframe.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        wireframe_view_button->setIcon(icon15);
-        wireframe_view_button->setIconSize(QSize(40, 40));
-        wireframe_view_button->setCheckable(true);
-        wireframe_view_button->setAutoExclusive(true);
-        wireframe_view_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
-
-        horizontalLayout_45->addWidget(wireframe_view_button);
-
-
-        gridLayout_12->addWidget(viewport_shading_group, 2, 6, 1, 1);
-
-        line_140 = new QFrame(widget_8);
-        line_140->setObjectName("line_140");
-        line_140->setFrameShape(QFrame::Shape::VLine);
-        line_140->setFrameShadow(QFrame::Shadow::Sunken);
-
-        gridLayout_12->addWidget(line_140, 2, 12, 1, 1);
-
-        label_16 = new QLabel(widget_8);
-        label_16->setObjectName("label_16");
-        label_16->setAlignment(Qt::AlignmentFlag::AlignCenter);
-
-        gridLayout_12->addWidget(label_16, 0, 6, 1, 2);
-
-        show_object_axes_button = new QToolButton(widget_8);
-        show_object_axes_button->setObjectName("show_object_axes_button");
-        sizePolicy3.setHeightForWidth(show_object_axes_button->sizePolicy().hasHeightForWidth());
-        show_object_axes_button->setSizePolicy(sizePolicy3);
-        show_object_axes_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon16;
-        icon16.addFile(QString::fromUtf8(":/icons/coordinateAxesMulti.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        show_object_axes_button->setIcon(icon16);
-        show_object_axes_button->setIconSize(QSize(56, 56));
-        show_object_axes_button->setCheckable(true);
-        show_object_axes_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
-
-        gridLayout_12->addWidget(show_object_axes_button, 2, 15, 1, 1);
-
-        line_25 = new QFrame(widget_8);
-        line_25->setObjectName("line_25");
-        line_25->setFrameShape(QFrame::Shape::HLine);
-        line_25->setFrameShadow(QFrame::Shadow::Sunken);
-
-        gridLayout_12->addWidget(line_25, 1, 21, 1, 1);
-
-        line_23 = new QFrame(widget_8);
-        line_23->setObjectName("line_23");
-        line_23->setFrameShape(QFrame::Shape::HLine);
-        line_23->setFrameShadow(QFrame::Shadow::Sunken);
-
-        gridLayout_12->addWidget(line_23, 1, 0, 1, 5);
-
-        show_axes_button = new QToolButton(widget_8);
-        show_axes_button->setObjectName("show_axes_button");
-        sizePolicy3.setHeightForWidth(show_axes_button->sizePolicy().hasHeightForWidth());
-        show_axes_button->setSizePolicy(sizePolicy3);
-        show_axes_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon17;
-        icon17.addFile(QString::fromUtf8(":/icons/coordinateAxes.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        show_axes_button->setIcon(icon17);
-        show_axes_button->setIconSize(QSize(56, 56));
-        show_axes_button->setCheckable(true);
-        show_axes_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
-
-        gridLayout_12->addWidget(show_axes_button, 2, 14, 1, 1);
-
         line_29 = new QFrame(widget_8);
         line_29->setObjectName("line_29");
         line_29->setFrameShape(QFrame::Shape::VLine);
@@ -1620,19 +1483,19 @@ public:
 
         gridLayout_12->addWidget(line_29, 2, 9, 1, 1);
 
-        line_141 = new QFrame(widget_8);
-        line_141->setObjectName("line_141");
-        line_141->setFrameShape(QFrame::Shape::HLine);
-        line_141->setFrameShadow(QFrame::Shadow::Sunken);
+        line_19 = new QFrame(widget_8);
+        line_19->setObjectName("line_19");
+        line_19->setFrameShape(QFrame::Shape::HLine);
+        line_19->setFrameShadow(QFrame::Shadow::Sunken);
 
-        gridLayout_12->addWidget(line_141, 1, 10, 1, 1);
+        gridLayout_12->addWidget(line_19, 1, 13, 1, 5);
 
-        line_18 = new QFrame(widget_8);
-        line_18->setObjectName("line_18");
-        line_18->setFrameShape(QFrame::Shape::HLine);
-        line_18->setFrameShadow(QFrame::Shadow::Sunken);
+        line_25 = new QFrame(widget_8);
+        line_25->setObjectName("line_25");
+        line_25->setFrameShape(QFrame::Shape::HLine);
+        line_25->setFrameShadow(QFrame::Shadow::Sunken);
 
-        gridLayout_12->addWidget(line_18, 1, 6, 1, 2);
+        gridLayout_12->addWidget(line_25, 1, 22, 1, 1);
 
         line_31 = new QFrame(widget_8);
         line_31->setObjectName("line_31");
@@ -1652,9 +1515,9 @@ public:
         view_presets_button->setObjectName("view_presets_button");
         sizePolicy3.setHeightForWidth(view_presets_button->sizePolicy().hasHeightForWidth());
         view_presets_button->setSizePolicy(sizePolicy3);
-        QIcon icon18;
-        icon18.addFile(QString::fromUtf8(":/icons/cubeView.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        view_presets_button->setIcon(icon18);
+        QIcon icon13;
+        icon13.addFile(QString::fromUtf8(":/icons/cubeView.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        view_presets_button->setIcon(icon13);
         view_presets_button->setIconSize(QSize(40, 40));
         view_presets_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -1671,24 +1534,92 @@ public:
         horizontalLayout_13->addWidget(save_view_button);
 
 
-        gridLayout_12->addWidget(widget_13, 2, 21, 1, 1);
+        gridLayout_12->addWidget(widget_13, 2, 22, 1, 1);
 
-        line_32 = new QFrame(widget_8);
-        line_32->setObjectName("line_32");
-        line_32->setFrameShape(QFrame::Shape::VLine);
-        line_32->setFrameShadow(QFrame::Shadow::Sunken);
+        line_23 = new QFrame(widget_8);
+        line_23->setObjectName("line_23");
+        line_23->setFrameShape(QFrame::Shape::HLine);
+        line_23->setFrameShadow(QFrame::Shadow::Sunken);
 
-        gridLayout_12->addWidget(line_32, 2, 3, 1, 1);
+        gridLayout_12->addWidget(line_23, 1, 0, 1, 5);
 
-        label_12 = new QLabel(widget_8);
-        label_12->setObjectName("label_12");
-        label_12->setAlignment(Qt::AlignmentFlag::AlignCenter);
+        control_group_box = new QGroupBox(widget_8);
+        control_group_box->setObjectName("control_group_box");
+        control_group_box->setMaximumSize(QSize(210, 16777215));
+        horizontalLayout_44 = new QHBoxLayout(control_group_box);
+        horizontalLayout_44->setSpacing(0);
+        horizontalLayout_44->setObjectName("horizontalLayout_44");
+        horizontalLayout_44->setContentsMargins(2, 4, 2, 2);
+        orbit_button = new QToolButton(control_group_box);
+        control_button_group = new QButtonGroup(toolbarContainer);
+        control_button_group->setObjectName("control_button_group");
+        control_button_group->addButton(orbit_button);
+        orbit_button->setObjectName("orbit_button");
+        sizePolicy3.setHeightForWidth(orbit_button->sizePolicy().hasHeightForWidth());
+        orbit_button->setSizePolicy(sizePolicy3);
+        orbit_button->setMinimumSize(QSize(77, 32));
+        QIcon icon14;
+        icon14.addFile(QString::fromUtf8(":/icons/icons8-3d-rotate-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        orbit_button->setIcon(icon14);
+        orbit_button->setIconSize(QSize(36, 36));
+        orbit_button->setCheckable(true);
+        orbit_button->setAutoExclusive(true);
+        orbit_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
-        gridLayout_12->addWidget(label_12, 0, 0, 1, 5);
+        horizontalLayout_44->addWidget(orbit_button);
 
-        horizontalSpacer_2 = new QSpacerItem(40, 20, QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Minimum);
+        line_17 = new QFrame(control_group_box);
+        line_17->setObjectName("line_17");
+        line_17->setFrameShadow(QFrame::Shadow::Plain);
+        line_17->setFrameShape(QFrame::Shape::VLine);
 
-        gridLayout_12->addItem(horizontalSpacer_2, 2, 22, 1, 1);
+        horizontalLayout_44->addWidget(line_17);
+
+        pan_button = new QToolButton(control_group_box);
+        control_button_group->addButton(pan_button);
+        pan_button->setObjectName("pan_button");
+        sizePolicy3.setHeightForWidth(pan_button->sizePolicy().hasHeightForWidth());
+        pan_button->setSizePolicy(sizePolicy3);
+        pan_button->setMinimumSize(QSize(77, 32));
+        QIcon icon15;
+        icon15.addFile(QString::fromUtf8(":/icons/icons8-hand-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        pan_button->setIcon(icon15);
+        pan_button->setIconSize(QSize(36, 36));
+        pan_button->setCheckable(true);
+        pan_button->setAutoExclusive(true);
+        pan_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
+
+        horizontalLayout_44->addWidget(pan_button);
+
+
+        gridLayout_12->addWidget(control_group_box, 2, 2, 1, 1);
+
+        ViewportManagerWidgetPlaceholder = new QWidget(widget_8);
+        ViewportManagerWidgetPlaceholder->setObjectName("ViewportManagerWidgetPlaceholder");
+        QSizePolicy sizePolicy5(QSizePolicy::Policy::Minimum, QSizePolicy::Policy::Preferred);
+        sizePolicy5.setHorizontalStretch(0);
+        sizePolicy5.setVerticalStretch(0);
+        sizePolicy5.setHeightForWidth(ViewportManagerWidgetPlaceholder->sizePolicy().hasHeightForWidth());
+        ViewportManagerWidgetPlaceholder->setSizePolicy(sizePolicy5);
+        ViewportManagerWidgetPlaceholder->setMinimumSize(QSize(0, 0));
+        ViewportManagerWidgetPlaceholder->setMaximumSize(QSize(300, 112));
+
+        gridLayout_12->addWidget(ViewportManagerWidgetPlaceholder, 0, 11, 3, 1);
+
+        show_grid_button = new QToolButton(widget_8);
+        show_grid_button->setObjectName("show_grid_button");
+        sizePolicy3.setHeightForWidth(show_grid_button->sizePolicy().hasHeightForWidth());
+        show_grid_button->setSizePolicy(sizePolicy3);
+        show_grid_button->setMinimumSize(QSize(77, 32));
+        show_grid_button->setMaximumSize(QSize(100, 16777215));
+        QIcon icon16;
+        icon16.addFile(QString::fromUtf8(":/icons/groundplane.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        show_grid_button->setIcon(icon16);
+        show_grid_button->setIconSize(QSize(48, 60));
+        show_grid_button->setCheckable(true);
+        show_grid_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
+
+        gridLayout_12->addWidget(show_grid_button, 2, 13, 1, 1);
 
         view_group_box = new QGroupBox(widget_8);
         view_group_box->setObjectName("view_group_box");
@@ -1706,9 +1637,9 @@ public:
         perpective_button->setSizePolicy(sizePolicy3);
         perpective_button->setMinimumSize(QSize(77, 32));
         perpective_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon19;
-        icon19.addFile(QString::fromUtf8(":/icons/perspective.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        perpective_button->setIcon(icon19);
+        QIcon icon17;
+        icon17.addFile(QString::fromUtf8(":/icons/perspective.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        perpective_button->setIcon(icon17);
         perpective_button->setIconSize(QSize(34, 36));
         perpective_button->setCheckable(true);
         perpective_button->setAutoExclusive(true);
@@ -1730,9 +1661,9 @@ public:
         orthographic_button->setSizePolicy(sizePolicy3);
         orthographic_button->setMinimumSize(QSize(77, 32));
         orthographic_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon20;
-        icon20.addFile(QString::fromUtf8(":/icons/orthographic.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        orthographic_button->setIcon(icon20);
+        QIcon icon18;
+        icon18.addFile(QString::fromUtf8(":/icons/orthographic.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        orthographic_button->setIcon(icon18);
         orthographic_button->setIconSize(QSize(30, 36));
         orthographic_button->setCheckable(true);
         orthographic_button->setAutoExclusive(true);
@@ -1743,85 +1674,116 @@ public:
 
         gridLayout_12->addWidget(view_group_box, 2, 0, 1, 1);
 
+        label_15 = new QLabel(widget_8);
+        label_15->setObjectName("label_15");
+        label_15->setAlignment(Qt::AlignmentFlag::AlignCenter);
+
+        gridLayout_12->addWidget(label_15, 0, 13, 1, 5);
+
         show_collision_shapes_button = new QToolButton(widget_8);
         show_collision_shapes_button->setObjectName("show_collision_shapes_button");
         sizePolicy3.setHeightForWidth(show_collision_shapes_button->sizePolicy().hasHeightForWidth());
         show_collision_shapes_button->setSizePolicy(sizePolicy3);
         show_collision_shapes_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon21;
-        icon21.addFile(QString::fromUtf8(":/icons/collisionBox-1.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        show_collision_shapes_button->setIcon(icon21);
+        QIcon icon19;
+        icon19.addFile(QString::fromUtf8(":/icons/collisionBox-1.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        show_collision_shapes_button->setIcon(icon19);
         show_collision_shapes_button->setIconSize(QSize(56, 46));
         show_collision_shapes_button->setCheckable(true);
         show_collision_shapes_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
-        gridLayout_12->addWidget(show_collision_shapes_button, 2, 16, 1, 1);
+        gridLayout_12->addWidget(show_collision_shapes_button, 2, 17, 1, 1);
 
-        show_grid_button = new QToolButton(widget_8);
-        show_grid_button->setObjectName("show_grid_button");
-        sizePolicy3.setHeightForWidth(show_grid_button->sizePolicy().hasHeightForWidth());
-        show_grid_button->setSizePolicy(sizePolicy3);
-        show_grid_button->setMinimumSize(QSize(77, 32));
-        show_grid_button->setMaximumSize(QSize(100, 16777215));
+        label_12 = new QLabel(widget_8);
+        label_12->setObjectName("label_12");
+        label_12->setAlignment(Qt::AlignmentFlag::AlignCenter);
+
+        gridLayout_12->addWidget(label_12, 0, 0, 1, 5);
+
+        line_28 = new QFrame(widget_8);
+        line_28->setObjectName("line_28");
+        line_28->setFrameShape(QFrame::Shape::VLine);
+        line_28->setFrameShadow(QFrame::Shadow::Sunken);
+
+        gridLayout_12->addWidget(line_28, 2, 5, 1, 1);
+
+        horizontalSpacer_2 = new QSpacerItem(40, 20, QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Minimum);
+
+        gridLayout_12->addItem(horizontalSpacer_2, 2, 23, 1, 1);
+
+        viewport_shading_group = new QGroupBox(widget_8);
+        viewport_shading_group->setObjectName("viewport_shading_group");
+        viewport_shading_group->setMaximumSize(QSize(318, 16777215));
+        horizontalLayout_45 = new QHBoxLayout(viewport_shading_group);
+        horizontalLayout_45->setSpacing(0);
+        horizontalLayout_45->setObjectName("horizontalLayout_45");
+        horizontalLayout_45->setContentsMargins(2, 4, 2, 2);
+        shaded_view_button = new QToolButton(viewport_shading_group);
+        viewport_shading_button_group = new QButtonGroup(toolbarContainer);
+        viewport_shading_button_group->setObjectName("viewport_shading_button_group");
+        viewport_shading_button_group->addButton(shaded_view_button);
+        shaded_view_button->setObjectName("shaded_view_button");
+        sizePolicy3.setHeightForWidth(shaded_view_button->sizePolicy().hasHeightForWidth());
+        shaded_view_button->setSizePolicy(sizePolicy3);
+        shaded_view_button->setMaximumSize(QSize(100, 16777215));
+        QIcon icon20;
+        icon20.addFile(QString::fromUtf8(":/icons/shaded.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        shaded_view_button->setIcon(icon20);
+        shaded_view_button->setIconSize(QSize(40, 40));
+        shaded_view_button->setCheckable(true);
+        shaded_view_button->setAutoExclusive(true);
+        shaded_view_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
+
+        horizontalLayout_45->addWidget(shaded_view_button);
+
+        line_21 = new QFrame(viewport_shading_group);
+        line_21->setObjectName("line_21");
+        line_21->setFrameShadow(QFrame::Shadow::Plain);
+        line_21->setFrameShape(QFrame::Shape::VLine);
+
+        horizontalLayout_45->addWidget(line_21);
+
+        shaded_edges_view_button = new QToolButton(viewport_shading_group);
+        viewport_shading_button_group->addButton(shaded_edges_view_button);
+        shaded_edges_view_button->setObjectName("shaded_edges_view_button");
+        sizePolicy3.setHeightForWidth(shaded_edges_view_button->sizePolicy().hasHeightForWidth());
+        shaded_edges_view_button->setSizePolicy(sizePolicy3);
+        shaded_edges_view_button->setMaximumSize(QSize(100, 16777215));
+        QIcon icon21;
+        icon21.addFile(QString::fromUtf8(":/icons/shadededges.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        shaded_edges_view_button->setIcon(icon21);
+        shaded_edges_view_button->setIconSize(QSize(40, 40));
+        shaded_edges_view_button->setCheckable(true);
+        shaded_edges_view_button->setAutoExclusive(true);
+        shaded_edges_view_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
+
+        horizontalLayout_45->addWidget(shaded_edges_view_button);
+
+        line_22 = new QFrame(viewport_shading_group);
+        line_22->setObjectName("line_22");
+        line_22->setFrameShadow(QFrame::Shadow::Plain);
+        line_22->setFrameShape(QFrame::Shape::VLine);
+
+        horizontalLayout_45->addWidget(line_22);
+
+        wireframe_view_button = new QToolButton(viewport_shading_group);
+        viewport_shading_button_group->addButton(wireframe_view_button);
+        wireframe_view_button->setObjectName("wireframe_view_button");
+        sizePolicy3.setHeightForWidth(wireframe_view_button->sizePolicy().hasHeightForWidth());
+        wireframe_view_button->setSizePolicy(sizePolicy3);
+        wireframe_view_button->setMaximumSize(QSize(100, 16777215));
         QIcon icon22;
-        icon22.addFile(QString::fromUtf8(":/icons/groundplane.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        show_grid_button->setIcon(icon22);
-        show_grid_button->setIconSize(QSize(48, 60));
-        show_grid_button->setCheckable(true);
-        show_grid_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
+        icon22.addFile(QString::fromUtf8(":/icons/wireframe.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        wireframe_view_button->setIcon(icon22);
+        wireframe_view_button->setIconSize(QSize(40, 40));
+        wireframe_view_button->setCheckable(true);
+        wireframe_view_button->setAutoExclusive(true);
+        wireframe_view_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
-        gridLayout_12->addWidget(show_grid_button, 2, 13, 1, 1);
-
-        control_group_box = new QGroupBox(widget_8);
-        control_group_box->setObjectName("control_group_box");
-        control_group_box->setMaximumSize(QSize(210, 16777215));
-        horizontalLayout_44 = new QHBoxLayout(control_group_box);
-        horizontalLayout_44->setSpacing(0);
-        horizontalLayout_44->setObjectName("horizontalLayout_44");
-        horizontalLayout_44->setContentsMargins(2, 4, 2, 2);
-        orbit_button = new QToolButton(control_group_box);
-        control_button_group = new QButtonGroup(toolbarContainer);
-        control_button_group->setObjectName("control_button_group");
-        control_button_group->addButton(orbit_button);
-        orbit_button->setObjectName("orbit_button");
-        sizePolicy3.setHeightForWidth(orbit_button->sizePolicy().hasHeightForWidth());
-        orbit_button->setSizePolicy(sizePolicy3);
-        orbit_button->setMinimumSize(QSize(77, 32));
-        QIcon icon23;
-        icon23.addFile(QString::fromUtf8(":/icons/icons8-3d-rotate-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        orbit_button->setIcon(icon23);
-        orbit_button->setIconSize(QSize(36, 36));
-        orbit_button->setCheckable(true);
-        orbit_button->setAutoExclusive(true);
-        orbit_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
-
-        horizontalLayout_44->addWidget(orbit_button);
-
-        line_17 = new QFrame(control_group_box);
-        line_17->setObjectName("line_17");
-        line_17->setFrameShadow(QFrame::Shadow::Plain);
-        line_17->setFrameShape(QFrame::Shape::VLine);
-
-        horizontalLayout_44->addWidget(line_17);
-
-        pan_button = new QToolButton(control_group_box);
-        control_button_group->addButton(pan_button);
-        pan_button->setObjectName("pan_button");
-        sizePolicy3.setHeightForWidth(pan_button->sizePolicy().hasHeightForWidth());
-        pan_button->setSizePolicy(sizePolicy3);
-        pan_button->setMinimumSize(QSize(77, 32));
-        QIcon icon24;
-        icon24.addFile(QString::fromUtf8(":/icons/icons8-hand-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        pan_button->setIcon(icon24);
-        pan_button->setIconSize(QSize(36, 36));
-        pan_button->setCheckable(true);
-        pan_button->setAutoExclusive(true);
-        pan_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
-
-        horizontalLayout_44->addWidget(pan_button);
+        horizontalLayout_45->addWidget(wireframe_view_button);
 
 
-        gridLayout_12->addWidget(control_group_box, 2, 2, 1, 1);
+        gridLayout_12->addWidget(viewport_shading_group, 2, 6, 1, 1);
 
         reset_view_button = new QToolButton(widget_8);
         reset_view_button->setObjectName("reset_view_button");
@@ -1834,43 +1796,107 @@ public:
 
         gridLayout_12->addWidget(reset_view_button, 2, 4, 1, 1);
 
+        show_object_axes_button = new QToolButton(widget_8);
+        show_object_axes_button->setObjectName("show_object_axes_button");
+        sizePolicy3.setHeightForWidth(show_object_axes_button->sizePolicy().hasHeightForWidth());
+        show_object_axes_button->setSizePolicy(sizePolicy3);
+        show_object_axes_button->setMaximumSize(QSize(100, 16777215));
+        QIcon icon23;
+        icon23.addFile(QString::fromUtf8(":/icons/coordinateAxesMulti.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        show_object_axes_button->setIcon(icon23);
+        show_object_axes_button->setIconSize(QSize(56, 56));
+        show_object_axes_button->setCheckable(true);
+        show_object_axes_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
+
+        gridLayout_12->addWidget(show_object_axes_button, 2, 16, 1, 1);
+
         line_20 = new QFrame(widget_8);
         line_20->setObjectName("line_20");
         line_20->setFrameShape(QFrame::Shape::VLine);
         line_20->setFrameShadow(QFrame::Shadow::Sunken);
 
-        gridLayout_12->addWidget(line_20, 2, 20, 1, 1);
+        gridLayout_12->addWidget(line_20, 2, 21, 1, 1);
 
-        label_15 = new QLabel(widget_8);
-        label_15->setObjectName("label_15");
-        label_15->setAlignment(Qt::AlignmentFlag::AlignCenter);
+        toolButton = new QToolButton(widget_8);
+        toolButton->setObjectName("toolButton");
+        sizePolicy3.setHeightForWidth(toolButton->sizePolicy().hasHeightForWidth());
+        toolButton->setSizePolicy(sizePolicy3);
+        toolButton->setMaximumSize(QSize(100, 16777215));
+        QIcon icon24;
+        icon24.addFile(QString::fromUtf8(":/icons/icons8-light-48 (1).png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        icon24.addFile(QString::fromUtf8(":/icons/icons8-light-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::On);
+        toolButton->setIcon(icon24);
+        toolButton->setIconSize(QSize(36, 36));
+        toolButton->setCheckable(true);
+        toolButton->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
-        gridLayout_12->addWidget(label_15, 0, 13, 1, 4);
+        gridLayout_12->addWidget(toolButton, 2, 7, 1, 1);
+
+        line_141 = new QFrame(widget_8);
+        line_141->setObjectName("line_141");
+        line_141->setFrameShape(QFrame::Shape::HLine);
+        line_141->setFrameShadow(QFrame::Shadow::Sunken);
+
+        gridLayout_12->addWidget(line_141, 1, 10, 1, 1);
+
+        line_18 = new QFrame(widget_8);
+        line_18->setObjectName("line_18");
+        line_18->setFrameShape(QFrame::Shape::HLine);
+        line_18->setFrameShadow(QFrame::Shadow::Sunken);
+
+        gridLayout_12->addWidget(line_18, 1, 6, 1, 2);
 
         label_13 = new QLabel(widget_8);
         label_13->setObjectName("label_13");
         label_13->setAlignment(Qt::AlignmentFlag::AlignCenter);
 
-        gridLayout_12->addWidget(label_13, 0, 21, 1, 1);
+        gridLayout_12->addWidget(label_13, 0, 22, 1, 1);
 
-        line_28 = new QFrame(widget_8);
-        line_28->setObjectName("line_28");
-        line_28->setFrameShape(QFrame::Shape::VLine);
-        line_28->setFrameShadow(QFrame::Shadow::Sunken);
+        show_axes_button = new QToolButton(widget_8);
+        show_axes_button->setObjectName("show_axes_button");
+        sizePolicy3.setHeightForWidth(show_axes_button->sizePolicy().hasHeightForWidth());
+        show_axes_button->setSizePolicy(sizePolicy3);
+        show_axes_button->setMaximumSize(QSize(100, 16777215));
+        QIcon icon25;
+        icon25.addFile(QString::fromUtf8(":/icons/coordinateAxes.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        show_axes_button->setIcon(icon25);
+        show_axes_button->setIconSize(QSize(56, 56));
+        show_axes_button->setCheckable(true);
+        show_axes_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
-        gridLayout_12->addWidget(line_28, 2, 5, 1, 1);
+        gridLayout_12->addWidget(show_axes_button, 2, 14, 1, 1);
 
-        ViewportManagerWidgetPlaceholder = new QWidget(widget_8);
-        ViewportManagerWidgetPlaceholder->setObjectName("ViewportManagerWidgetPlaceholder");
-        QSizePolicy sizePolicy5(QSizePolicy::Policy::Minimum, QSizePolicy::Policy::Preferred);
-        sizePolicy5.setHorizontalStretch(0);
-        sizePolicy5.setVerticalStretch(0);
-        sizePolicy5.setHeightForWidth(ViewportManagerWidgetPlaceholder->sizePolicy().hasHeightForWidth());
-        ViewportManagerWidgetPlaceholder->setSizePolicy(sizePolicy5);
-        ViewportManagerWidgetPlaceholder->setMinimumSize(QSize(0, 0));
-        ViewportManagerWidgetPlaceholder->setMaximumSize(QSize(300, 112));
+        line_140 = new QFrame(widget_8);
+        line_140->setObjectName("line_140");
+        line_140->setFrameShape(QFrame::Shape::VLine);
+        line_140->setFrameShadow(QFrame::Shadow::Sunken);
 
-        gridLayout_12->addWidget(ViewportManagerWidgetPlaceholder, 0, 11, 3, 1);
+        gridLayout_12->addWidget(line_140, 2, 12, 1, 1);
+
+        label_16 = new QLabel(widget_8);
+        label_16->setObjectName("label_16");
+        label_16->setAlignment(Qt::AlignmentFlag::AlignCenter);
+
+        gridLayout_12->addWidget(label_16, 0, 6, 1, 2);
+
+        line_32 = new QFrame(widget_8);
+        line_32->setObjectName("line_32");
+        line_32->setFrameShape(QFrame::Shape::VLine);
+        line_32->setFrameShadow(QFrame::Shadow::Sunken);
+
+        gridLayout_12->addWidget(line_32, 2, 3, 1, 1);
+
+        flowVisualizerMenu = new QToolButton(widget_8);
+        flowVisualizerMenu->setObjectName("flowVisualizerMenu");
+        sizePolicy1.setHeightForWidth(flowVisualizerMenu->sizePolicy().hasHeightForWidth());
+        flowVisualizerMenu->setSizePolicy(sizePolicy1);
+        QIcon icon26;
+        icon26.addFile(QString::fromUtf8(":/icons/icons8-wind-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        flowVisualizerMenu->setIcon(icon26);
+        flowVisualizerMenu->setIconSize(QSize(48, 38));
+        flowVisualizerMenu->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
+
+        gridLayout_12->addWidget(flowVisualizerMenu, 2, 15, 1, 1);
 
 
         gridLayout_4->addWidget(widget_8, 1, 0, 1, 1);
@@ -1894,9 +1920,9 @@ public:
         sizePolicy1.setHeightForWidth(open_robot_code_button->sizePolicy().hasHeightForWidth());
         open_robot_code_button->setSizePolicy(sizePolicy1);
         open_robot_code_button->setMinimumSize(QSize(77, 32));
-        QIcon icon25;
-        icon25.addFile(QString::fromUtf8(":/icons/icons8-code-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        open_robot_code_button->setIcon(icon25);
+        QIcon icon27;
+        icon27.addFile(QString::fromUtf8(":/icons/icons8-code-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        open_robot_code_button->setIcon(icon27);
         open_robot_code_button->setIconSize(QSize(36, 36));
         open_robot_code_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -1970,9 +1996,9 @@ public:
         add_accessory_button->setSizePolicy(sizePolicy3);
         add_accessory_button->setMinimumSize(QSize(77, 32));
         add_accessory_button->setMaximumSize(QSize(120, 16777215));
-        QIcon icon26;
-        icon26.addFile(QString::fromUtf8(":/icons/icons8-deployment-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_accessory_button->setIcon(icon26);
+        QIcon icon28;
+        icon28.addFile(QString::fromUtf8(":/icons/icons8-deployment-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_accessory_button->setIcon(icon28);
         add_accessory_button->setIconSize(QSize(40, 48));
         add_accessory_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2010,9 +2036,9 @@ public:
         joint_editor_button->setObjectName("joint_editor_button");
         sizePolicy3.setHeightForWidth(joint_editor_button->sizePolicy().hasHeightForWidth());
         joint_editor_button->setSizePolicy(sizePolicy3);
-        QIcon icon27;
-        icon27.addFile(QString::fromUtf8(":/icons/icons8-elbow-64.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        joint_editor_button->setIcon(icon27);
+        QIcon icon29;
+        icon29.addFile(QString::fromUtf8(":/icons/icons8-elbow-64.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        joint_editor_button->setIcon(icon29);
         joint_editor_button->setIconSize(QSize(46, 48));
         joint_editor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2022,9 +2048,9 @@ public:
         link_editor_button->setObjectName("link_editor_button");
         sizePolicy3.setHeightForWidth(link_editor_button->sizePolicy().hasHeightForWidth());
         link_editor_button->setSizePolicy(sizePolicy3);
-        QIcon icon28;
-        icon28.addFile(QString::fromUtf8(":/icons/icons8-chain-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        link_editor_button->setIcon(icon28);
+        QIcon icon30;
+        icon30.addFile(QString::fromUtf8(":/icons/icons8-chain-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        link_editor_button->setIcon(icon30);
         link_editor_button->setIconSize(QSize(46, 48));
         link_editor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2034,7 +2060,7 @@ public:
         collision_box_editor_button->setObjectName("collision_box_editor_button");
         sizePolicy3.setHeightForWidth(collision_box_editor_button->sizePolicy().hasHeightForWidth());
         collision_box_editor_button->setSizePolicy(sizePolicy3);
-        collision_box_editor_button->setIcon(icon21);
+        collision_box_editor_button->setIcon(icon19);
         collision_box_editor_button->setIconSize(QSize(36, 36));
         collision_box_editor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2081,9 +2107,9 @@ public:
         sizePolicy3.setHeightForWidth(toolButton_3->sizePolicy().hasHeightForWidth());
         toolButton_3->setSizePolicy(sizePolicy3);
         toolButton_3->setMinimumSize(QSize(77, 32));
-        QIcon icon29;
-        icon29.addFile(QString::fromUtf8(":/icons/icons8-close-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        toolButton_3->setIcon(icon29);
+        QIcon icon31;
+        icon31.addFile(QString::fromUtf8(":/icons/icons8-close-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        toolButton_3->setIcon(icon31);
         toolButton_3->setIconSize(QSize(48, 28));
         toolButton_3->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2094,9 +2120,9 @@ public:
         sizePolicy3.setHeightForWidth(toolButton_4->sizePolicy().hasHeightForWidth());
         toolButton_4->setSizePolicy(sizePolicy3);
         toolButton_4->setMinimumSize(QSize(77, 32));
-        QIcon icon30;
-        icon30.addFile(QString::fromUtf8(":/icons/icons8-edit-property-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        toolButton_4->setIcon(icon30);
+        QIcon icon32;
+        icon32.addFile(QString::fromUtf8(":/icons/icons8-edit-property-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        toolButton_4->setIcon(icon32);
         toolButton_4->setIconSize(QSize(47, 38));
         toolButton_4->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2110,9 +2136,9 @@ public:
 
         robot_visual_editor_button = new QToolButton(widget_10);
         robot_visual_editor_button->setObjectName("robot_visual_editor_button");
-        QIcon icon31;
-        icon31.addFile(QString::fromUtf8(":/icons/robotrotate.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        robot_visual_editor_button->setIcon(icon31);
+        QIcon icon33;
+        icon33.addFile(QString::fromUtf8(":/icons/robotrotate.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        robot_visual_editor_button->setIcon(icon33);
         robot_visual_editor_button->setIconSize(QSize(36, 36));
         robot_visual_editor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2148,9 +2174,9 @@ public:
         forward_kinematics_button->setObjectName("forward_kinematics_button");
         sizePolicy2.setHeightForWidth(forward_kinematics_button->sizePolicy().hasHeightForWidth());
         forward_kinematics_button->setSizePolicy(sizePolicy2);
-        QIcon icon32;
-        icon32.addFile(QString::fromUtf8(":/icons/icons8-move-right-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        forward_kinematics_button->setIcon(icon32);
+        QIcon icon34;
+        icon34.addFile(QString::fromUtf8(":/icons/icons8-move-right-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        forward_kinematics_button->setIcon(icon34);
         forward_kinematics_button->setIconSize(QSize(36, 36));
         forward_kinematics_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2160,9 +2186,9 @@ public:
         inverse_kinematic_button->setObjectName("inverse_kinematic_button");
         sizePolicy2.setHeightForWidth(inverse_kinematic_button->sizePolicy().hasHeightForWidth());
         inverse_kinematic_button->setSizePolicy(sizePolicy2);
-        QIcon icon33;
-        icon33.addFile(QString::fromUtf8(":/icons/icons8-move-left-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        inverse_kinematic_button->setIcon(icon33);
+        QIcon icon35;
+        icon35.addFile(QString::fromUtf8(":/icons/icons8-move-left-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        inverse_kinematic_button->setIcon(icon35);
         inverse_kinematic_button->setIconSize(QSize(36, 36));
         inverse_kinematic_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2172,9 +2198,9 @@ public:
         virtual_jog_button->setObjectName("virtual_jog_button");
         sizePolicy3.setHeightForWidth(virtual_jog_button->sizePolicy().hasHeightForWidth());
         virtual_jog_button->setSizePolicy(sizePolicy3);
-        QIcon icon34;
-        icon34.addFile(QString::fromUtf8(":/icons/icons8-walking-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        virtual_jog_button->setIcon(icon34);
+        QIcon icon36;
+        icon36.addFile(QString::fromUtf8(":/icons/icons8-walking-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        virtual_jog_button->setIcon(icon36);
         virtual_jog_button->setIconSize(QSize(36, 36));
         virtual_jog_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2191,9 +2217,9 @@ public:
         sizePolicy3.setHeightForWidth(estop_button->sizePolicy().hasHeightForWidth());
         estop_button->setSizePolicy(sizePolicy3);
         estop_button->setMaximumSize(QSize(96, 16777215));
-        QIcon icon35;
-        icon35.addFile(QString::fromUtf8(":/icons/icons8-emergency-stop-button-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        estop_button->setIcon(icon35);
+        QIcon icon37;
+        icon37.addFile(QString::fromUtf8(":/icons/icons8-emergency-stop-button-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        estop_button->setIcon(icon37);
         estop_button->setIconSize(QSize(96, 96));
 
         gridLayout_10->addWidget(estop_button, 0, 0, 1, 1);
@@ -2229,9 +2255,9 @@ public:
         sizePolicy1.setHeightForWidth(load_robot_button->sizePolicy().hasHeightForWidth());
         load_robot_button->setSizePolicy(sizePolicy1);
         load_robot_button->setMinimumSize(QSize(77, 32));
-        QIcon icon36;
-        icon36.addFile(QString::fromUtf8(":/icons/icons8-robot-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        load_robot_button->setIcon(icon36);
+        QIcon icon38;
+        icon38.addFile(QString::fromUtf8(":/icons/icons8-robot-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        load_robot_button->setIcon(icon38);
         load_robot_button->setIconSize(QSize(36, 36));
         load_robot_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2254,7 +2280,7 @@ public:
         sizePolicy3.setHeightForWidth(tcp_editor_button->sizePolicy().hasHeightForWidth());
         tcp_editor_button->setSizePolicy(sizePolicy3);
         tcp_editor_button->setMinimumSize(QSize(77, 32));
-        tcp_editor_button->setIcon(icon30);
+        tcp_editor_button->setIcon(icon32);
         tcp_editor_button->setIconSize(QSize(48, 40));
         tcp_editor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2265,9 +2291,9 @@ public:
         sizePolicy3.setHeightForWidth(active_tool_button->sizePolicy().hasHeightForWidth());
         active_tool_button->setSizePolicy(sizePolicy3);
         active_tool_button->setMinimumSize(QSize(77, 32));
-        QIcon icon37;
-        icon37.addFile(QString::fromUtf8(":/icons/icons8-minecraft-pickaxe-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        active_tool_button->setIcon(icon37);
+        QIcon icon39;
+        icon39.addFile(QString::fromUtf8(":/icons/icons8-minecraft-pickaxe-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        active_tool_button->setIcon(icon39);
         active_tool_button->setIconSize(QSize(36, 36));
         active_tool_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2279,9 +2305,9 @@ public:
         tool_calibration_button->setSizePolicy(sizePolicy3);
         tool_calibration_button->setMinimumSize(QSize(77, 32));
         tool_calibration_button->setMaximumSize(QSize(90, 16777215));
-        QIcon icon38;
-        icon38.addFile(QString::fromUtf8(":/icons/icons8-engineering-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        tool_calibration_button->setIcon(icon38);
+        QIcon icon40;
+        icon40.addFile(QString::fromUtf8(":/icons/icons8-engineering-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        tool_calibration_button->setIcon(icon40);
         tool_calibration_button->setIconSize(QSize(36, 36));
         tool_calibration_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2310,9 +2336,9 @@ public:
         define_zone_button->setObjectName("define_zone_button");
         sizePolicy3.setHeightForWidth(define_zone_button->sizePolicy().hasHeightForWidth());
         define_zone_button->setSizePolicy(sizePolicy3);
-        QIcon icon39;
-        icon39.addFile(QString::fromUtf8(":/icons/icons8-sphere-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        define_zone_button->setIcon(icon39);
+        QIcon icon41;
+        icon41.addFile(QString::fromUtf8(":/icons/icons8-sphere-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        define_zone_button->setIcon(icon41);
         define_zone_button->setIconSize(QSize(48, 44));
         define_zone_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2322,9 +2348,9 @@ public:
         calculate_workspace_button->setObjectName("calculate_workspace_button");
         sizePolicy3.setHeightForWidth(calculate_workspace_button->sizePolicy().hasHeightForWidth());
         calculate_workspace_button->setSizePolicy(sizePolicy3);
-        QIcon icon40;
-        icon40.addFile(QString::fromUtf8(":/icons/workspace.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        calculate_workspace_button->setIcon(icon40);
+        QIcon icon42;
+        icon42.addFile(QString::fromUtf8(":/icons/workspace.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        calculate_workspace_button->setIcon(icon42);
         calculate_workspace_button->setIconSize(QSize(26, 36));
         calculate_workspace_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2334,9 +2360,9 @@ public:
         visualize_workspace_button->setObjectName("visualize_workspace_button");
         sizePolicy3.setHeightForWidth(visualize_workspace_button->sizePolicy().hasHeightForWidth());
         visualize_workspace_button->setSizePolicy(sizePolicy3);
-        QIcon icon41;
-        icon41.addFile(QString::fromUtf8(":/icons/icons8-transform-clip-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        visualize_workspace_button->setIcon(icon41);
+        QIcon icon43;
+        icon43.addFile(QString::fromUtf8(":/icons/icons8-transform-clip-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        visualize_workspace_button->setIcon(icon43);
         visualize_workspace_button->setIconSize(QSize(40, 22));
         visualize_workspace_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2346,9 +2372,9 @@ public:
         show_singularity_button->setObjectName("show_singularity_button");
         sizePolicy3.setHeightForWidth(show_singularity_button->sizePolicy().hasHeightForWidth());
         show_singularity_button->setSizePolicy(sizePolicy3);
-        QIcon icon42;
-        icon42.addFile(QString::fromUtf8(":/icons/icons8-star-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        show_singularity_button->setIcon(icon42);
+        QIcon icon44;
+        icon44.addFile(QString::fromUtf8(":/icons/icons8-star-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        show_singularity_button->setIcon(icon44);
         show_singularity_button->setIconSize(QSize(40, 22));
         show_singularity_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2408,9 +2434,9 @@ public:
         slam_algorithm_button->setSizePolicy(sizePolicy3);
         slam_algorithm_button->setMinimumSize(QSize(77, 32));
         slam_algorithm_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon43;
-        icon43.addFile(QString::fromUtf8(":/icons/icons8-laravel-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        slam_algorithm_button->setIcon(icon43);
+        QIcon icon45;
+        icon45.addFile(QString::fromUtf8(":/icons/icons8-laravel-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        slam_algorithm_button->setIcon(icon45);
         slam_algorithm_button->setIconSize(QSize(36, 36));
         slam_algorithm_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2429,9 +2455,9 @@ public:
         import_point_cloud_button->setSizePolicy(sizePolicy3);
         import_point_cloud_button->setMinimumSize(QSize(77, 32));
         import_point_cloud_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon44;
-        icon44.addFile(QString::fromUtf8(":/icons/Point Cloud Insert.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        import_point_cloud_button->setIcon(icon44);
+        QIcon icon46;
+        icon46.addFile(QString::fromUtf8(":/icons/Point Cloud Insert.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        import_point_cloud_button->setIcon(icon46);
         import_point_cloud_button->setIconSize(QSize(48, 40));
         import_point_cloud_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2442,9 +2468,9 @@ public:
         sizePolicy1.setHeightForWidth(new_scene_button->sizePolicy().hasHeightForWidth());
         new_scene_button->setSizePolicy(sizePolicy1);
         new_scene_button->setMinimumSize(QSize(77, 32));
-        QIcon icon45;
-        icon45.addFile(QString::fromUtf8(":/icons/icons8-rental-house-contract-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        new_scene_button->setIcon(icon45);
+        QIcon icon47;
+        icon47.addFile(QString::fromUtf8(":/icons/icons8-rental-house-contract-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        new_scene_button->setIcon(icon47);
         new_scene_button->setIconSize(QSize(48, 36));
         new_scene_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2456,9 +2482,9 @@ public:
         annotation_button->setSizePolicy(sizePolicy3);
         annotation_button->setMinimumSize(QSize(77, 32));
         annotation_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon46;
-        icon46.addFile(QString::fromUtf8(":/icons/annotation.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        annotation_button->setIcon(icon46);
+        QIcon icon48;
+        icon48.addFile(QString::fromUtf8(":/icons/annotation.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        annotation_button->setIcon(icon48);
         annotation_button->setIconSize(QSize(40, 40));
         annotation_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2482,9 +2508,9 @@ public:
         select_object_button->setObjectName("select_object_button");
         sizePolicy3.setHeightForWidth(select_object_button->sizePolicy().hasHeightForWidth());
         select_object_button->setSizePolicy(sizePolicy3);
-        QIcon icon47;
-        icon47.addFile(QString::fromUtf8(":/icons/icons8-cursor-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        select_object_button->setIcon(icon47);
+        QIcon icon49;
+        icon49.addFile(QString::fromUtf8(":/icons/icons8-cursor-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        select_object_button->setIcon(icon49);
         select_object_button->setIconSize(QSize(46, 48));
         select_object_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2494,9 +2520,9 @@ public:
         translate_object_button->setObjectName("translate_object_button");
         sizePolicy3.setHeightForWidth(translate_object_button->sizePolicy().hasHeightForWidth());
         translate_object_button->setSizePolicy(sizePolicy3);
-        QIcon icon48;
-        icon48.addFile(QString::fromUtf8(":/icons/icons8-movement-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        translate_object_button->setIcon(icon48);
+        QIcon icon50;
+        icon50.addFile(QString::fromUtf8(":/icons/icons8-movement-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        translate_object_button->setIcon(icon50);
         translate_object_button->setIconSize(QSize(46, 48));
         translate_object_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2506,9 +2532,9 @@ public:
         rotate_object_button->setObjectName("rotate_object_button");
         sizePolicy3.setHeightForWidth(rotate_object_button->sizePolicy().hasHeightForWidth());
         rotate_object_button->setSizePolicy(sizePolicy3);
-        QIcon icon49;
-        icon49.addFile(QString::fromUtf8(":/icons/rotate.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        rotate_object_button->setIcon(icon49);
+        QIcon icon51;
+        icon51.addFile(QString::fromUtf8(":/icons/rotate.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        rotate_object_button->setIcon(icon51);
         rotate_object_button->setIconSize(QSize(48, 48));
         rotate_object_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2516,9 +2542,9 @@ public:
 
         scale_object_button = new QToolButton(widget_15);
         scale_object_button->setObjectName("scale_object_button");
-        QIcon icon50;
-        icon50.addFile(QString::fromUtf8(":/icons/icons8-zoom-to-extents-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        scale_object_button->setIcon(icon50);
+        QIcon icon52;
+        icon52.addFile(QString::fromUtf8(":/icons/icons8-zoom-to-extents-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        scale_object_button->setIcon(icon52);
         scale_object_button->setIconSize(QSize(48, 48));
         scale_object_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2529,9 +2555,9 @@ public:
         sizePolicy3.setHeightForWidth(vertex_to_vertex_button->sizePolicy().hasHeightForWidth());
         vertex_to_vertex_button->setSizePolicy(sizePolicy3);
         vertex_to_vertex_button->setMinimumSize(QSize(77, 32));
-        QIcon icon51;
-        icon51.addFile(QString::fromUtf8(":/icons/icons8-transfer-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        vertex_to_vertex_button->setIcon(icon51);
+        QIcon icon53;
+        icon53.addFile(QString::fromUtf8(":/icons/icons8-transfer-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        vertex_to_vertex_button->setIcon(icon53);
         vertex_to_vertex_button->setIconSize(QSize(48, 40));
         vertex_to_vertex_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2555,10 +2581,10 @@ public:
         grid_snapp_toggle_switch->setObjectName("grid_snapp_toggle_switch");
         sizePolicy4.setHeightForWidth(grid_snapp_toggle_switch->sizePolicy().hasHeightForWidth());
         grid_snapp_toggle_switch->setSizePolicy(sizePolicy4);
-        QIcon icon52;
-        icon52.addFile(QString::fromUtf8(":/icons/icons8-switch-48 (1).png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        icon52.addFile(QString::fromUtf8(":/icons/icons8-switch-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::On);
-        grid_snapp_toggle_switch->setIcon(icon52);
+        QIcon icon54;
+        icon54.addFile(QString::fromUtf8(":/icons/icons8-switch-48 (1).png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        icon54.addFile(QString::fromUtf8(":/icons/icons8-switch-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::On);
+        grid_snapp_toggle_switch->setIcon(icon54);
         grid_snapp_toggle_switch->setIconSize(QSize(48, 20));
         grid_snapp_toggle_switch->setCheckable(true);
         grid_snapp_toggle_switch->setChecked(false);
@@ -2630,9 +2656,9 @@ public:
         live_scene_reconstruction_button->setSizePolicy(sizePolicy3);
         live_scene_reconstruction_button->setMinimumSize(QSize(77, 32));
         live_scene_reconstruction_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon53;
-        icon53.addFile(QString::fromUtf8(":/icons/LiveSLAM.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        live_scene_reconstruction_button->setIcon(icon53);
+        QIcon icon55;
+        icon55.addFile(QString::fromUtf8(":/icons/LiveSLAM.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        live_scene_reconstruction_button->setIcon(icon55);
         live_scene_reconstruction_button->setIconSize(QSize(40, 48));
         live_scene_reconstruction_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2650,9 +2676,9 @@ public:
         sizePolicy1.setHeightForWidth(merge_scene_button->sizePolicy().hasHeightForWidth());
         merge_scene_button->setSizePolicy(sizePolicy1);
         merge_scene_button->setMinimumSize(QSize(77, 32));
-        QIcon icon54;
-        icon54.addFile(QString::fromUtf8(":/icons/icons8-merge-documents-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        merge_scene_button->setIcon(icon54);
+        QIcon icon56;
+        icon56.addFile(QString::fromUtf8(":/icons/icons8-merge-documents-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        merge_scene_button->setIcon(icon56);
         merge_scene_button->setIconSize(QSize(36, 36));
         merge_scene_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2721,9 +2747,9 @@ public:
         start_scene_reconstruction_button->setSizePolicy(sizePolicy3);
         start_scene_reconstruction_button->setMinimumSize(QSize(77, 32));
         start_scene_reconstruction_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon55;
-        icon55.addFile(QString::fromUtf8(":/icons/playHouse.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        start_scene_reconstruction_button->setIcon(icon55);
+        QIcon icon57;
+        icon57.addFile(QString::fromUtf8(":/icons/playHouse.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        start_scene_reconstruction_button->setIcon(icon57);
         start_scene_reconstruction_button->setIconSize(QSize(40, 48));
         start_scene_reconstruction_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2735,9 +2761,9 @@ public:
         terrain_tools_button->setSizePolicy(sizePolicy3);
         terrain_tools_button->setMinimumSize(QSize(77, 32));
         terrain_tools_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon56;
-        icon56.addFile(QString::fromUtf8(":/icons/icons8-construction-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        terrain_tools_button->setIcon(icon56);
+        QIcon icon58;
+        icon58.addFile(QString::fromUtf8(":/icons/icons8-construction-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        terrain_tools_button->setIcon(icon58);
         terrain_tools_button->setIconSize(QSize(40, 40));
         terrain_tools_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2755,9 +2781,9 @@ public:
         sizePolicy3.setHeightForWidth(point_cloud_segmentation_button->sizePolicy().hasHeightForWidth());
         point_cloud_segmentation_button->setSizePolicy(sizePolicy3);
         point_cloud_segmentation_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon57;
-        icon57.addFile(QString::fromUtf8(":/icons/Point Cloud.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        point_cloud_segmentation_button->setIcon(icon57);
+        QIcon icon59;
+        icon59.addFile(QString::fromUtf8(":/icons/Point Cloud.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        point_cloud_segmentation_button->setIcon(icon59);
         point_cloud_segmentation_button->setIconSize(QSize(48, 40));
         point_cloud_segmentation_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2767,7 +2793,7 @@ public:
         scene_manager_button->setObjectName("scene_manager_button");
         sizePolicy3.setHeightForWidth(scene_manager_button->sizePolicy().hasHeightForWidth());
         scene_manager_button->setSizePolicy(sizePolicy3);
-        scene_manager_button->setIcon(icon30);
+        scene_manager_button->setIcon(icon32);
         scene_manager_button->setIconSize(QSize(40, 40));
         scene_manager_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2779,9 +2805,9 @@ public:
         build_environment_from_sensor_button->setSizePolicy(sizePolicy3);
         build_environment_from_sensor_button->setMinimumSize(QSize(77, 32));
         build_environment_from_sensor_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon58;
-        icon58.addFile(QString::fromUtf8(":/icons/SceneReconstruction.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        build_environment_from_sensor_button->setIcon(icon58);
+        QIcon icon60;
+        icon60.addFile(QString::fromUtf8(":/icons/SceneReconstruction.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        build_environment_from_sensor_button->setIcon(icon60);
         build_environment_from_sensor_button->setIconSize(QSize(48, 48));
         build_environment_from_sensor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2822,9 +2848,9 @@ public:
         add_primative_button->setObjectName("add_primative_button");
         sizePolicy2.setHeightForWidth(add_primative_button->sizePolicy().hasHeightForWidth());
         add_primative_button->setSizePolicy(sizePolicy2);
-        QIcon icon59;
-        icon59.addFile(QString::fromUtf8(":/icons/addPrimative.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_primative_button->setIcon(icon59);
+        QIcon icon61;
+        icon61.addFile(QString::fromUtf8(":/icons/addPrimative.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_primative_button->setIcon(icon61);
         add_primative_button->setIconSize(QSize(36, 36));
         add_primative_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2834,9 +2860,9 @@ public:
         material_properties_button->setObjectName("material_properties_button");
         sizePolicy3.setHeightForWidth(material_properties_button->sizePolicy().hasHeightForWidth());
         material_properties_button->setSizePolicy(sizePolicy3);
-        QIcon icon60;
-        icon60.addFile(QString::fromUtf8(":/icons/icons8-mind-map-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        material_properties_button->setIcon(icon60);
+        QIcon icon62;
+        icon62.addFile(QString::fromUtf8(":/icons/icons8-mind-map-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        material_properties_button->setIcon(icon62);
         material_properties_button->setIconSize(QSize(48, 48));
         material_properties_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2846,9 +2872,9 @@ public:
         part_library_button->setObjectName("part_library_button");
         sizePolicy3.setHeightForWidth(part_library_button->sizePolicy().hasHeightForWidth());
         part_library_button->setSizePolicy(sizePolicy3);
-        QIcon icon61;
-        icon61.addFile(QString::fromUtf8(":/icons/icons8-spring-in-motion-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        part_library_button->setIcon(icon61);
+        QIcon icon63;
+        icon63.addFile(QString::fromUtf8(":/icons/icons8-spring-in-motion-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        part_library_button->setIcon(icon63);
         part_library_button->setIconSize(QSize(36, 36));
         part_library_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2878,9 +2904,9 @@ public:
 
         import_from_button = new QToolButton(widget_12);
         import_from_button->setObjectName("import_from_button");
-        QIcon icon62;
-        icon62.addFile(QString::fromUtf8(":/icons/icons8-insert-clip-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        import_from_button->setIcon(icon62);
+        QIcon icon64;
+        icon64.addFile(QString::fromUtf8(":/icons/icons8-insert-clip-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        import_from_button->setIcon(icon64);
         import_from_button->setIconSize(QSize(36, 36));
         import_from_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2922,9 +2948,9 @@ public:
         add_encoder_button->setObjectName("add_encoder_button");
         sizePolicy3.setHeightForWidth(add_encoder_button->sizePolicy().hasHeightForWidth());
         add_encoder_button->setSizePolicy(sizePolicy3);
-        QIcon icon63;
-        icon63.addFile(QString::fromUtf8(":/icons/icons8-replace-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_encoder_button->setIcon(icon63);
+        QIcon icon65;
+        icon65.addFile(QString::fromUtf8(":/icons/icons8-replace-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_encoder_button->setIcon(icon65);
         add_encoder_button->setIconSize(QSize(40, 40));
         add_encoder_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2935,9 +2961,9 @@ public:
         sizePolicy1.setHeightForWidth(add_lidar_button->sizePolicy().hasHeightForWidth());
         add_lidar_button->setSizePolicy(sizePolicy1);
         add_lidar_button->setMinimumSize(QSize(77, 32));
-        QIcon icon64;
-        icon64.addFile(QString::fromUtf8(":/icons/icons8-live-photos-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_lidar_button->setIcon(icon64);
+        QIcon icon66;
+        icon66.addFile(QString::fromUtf8(":/icons/icons8-live-photos-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_lidar_button->setIcon(icon66);
         add_lidar_button->setIconSize(QSize(36, 36));
         add_lidar_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2947,9 +2973,9 @@ public:
         add_other_button->setObjectName("add_other_button");
         sizePolicy2.setHeightForWidth(add_other_button->sizePolicy().hasHeightForWidth());
         add_other_button->setSizePolicy(sizePolicy2);
-        QIcon icon65;
-        icon65.addFile(QString::fromUtf8(":/icons/icons8-slr-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_other_button->setIcon(icon65);
+        QIcon icon67;
+        icon67.addFile(QString::fromUtf8(":/icons/icons8-slr-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_other_button->setIcon(icon67);
         add_other_button->setIconSize(QSize(46, 48));
         add_other_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2966,9 +2992,9 @@ public:
         add_laser_gate_button->setObjectName("add_laser_gate_button");
         sizePolicy3.setHeightForWidth(add_laser_gate_button->sizePolicy().hasHeightForWidth());
         add_laser_gate_button->setSizePolicy(sizePolicy3);
-        QIcon icon66;
-        icon66.addFile(QString::fromUtf8(":/icons/Laser Gate.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_laser_gate_button->setIcon(icon66);
+        QIcon icon68;
+        icon68.addFile(QString::fromUtf8(":/icons/Laser Gate.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_laser_gate_button->setIcon(icon68);
         add_laser_gate_button->setIconSize(QSize(48, 46));
         add_laser_gate_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -2982,9 +3008,9 @@ public:
 
         add_imu_button = new QToolButton(widget_20);
         add_imu_button->setObjectName("add_imu_button");
-        QIcon icon67;
-        icon67.addFile(QString::fromUtf8(":/icons/icons8-expand-influence-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_imu_button->setIcon(icon67);
+        QIcon icon69;
+        icon69.addFile(QString::fromUtf8(":/icons/icons8-expand-influence-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_imu_button->setIcon(icon69);
         add_imu_button->setIconSize(QSize(36, 36));
         add_imu_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3002,9 +3028,9 @@ public:
         sizePolicy1.setHeightForWidth(add_camera_button->sizePolicy().hasHeightForWidth());
         add_camera_button->setSizePolicy(sizePolicy1);
         add_camera_button->setMinimumSize(QSize(77, 32));
-        QIcon icon68;
-        icon68.addFile(QString::fromUtf8(":/icons/icons8-camera-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_camera_button->setIcon(icon68);
+        QIcon icon70;
+        icon70.addFile(QString::fromUtf8(":/icons/icons8-camera-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_camera_button->setIcon(icon70);
         add_camera_button->setIconSize(QSize(48, 36));
         add_camera_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3019,9 +3045,9 @@ public:
 
         add_contact_sensor_button = new QToolButton(widget_20);
         add_contact_sensor_button->setObjectName("add_contact_sensor_button");
-        QIcon icon69;
-        icon69.addFile(QString::fromUtf8(":/icons/touch sensor.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_contact_sensor_button->setIcon(icon69);
+        QIcon icon71;
+        icon71.addFile(QString::fromUtf8(":/icons/touch sensor.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_contact_sensor_button->setIcon(icon71);
         add_contact_sensor_button->setIconSize(QSize(36, 36));
         add_contact_sensor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3040,9 +3066,9 @@ public:
         create_state_estimator_button->setSizePolicy(sizePolicy3);
         create_state_estimator_button->setMinimumSize(QSize(77, 32));
         create_state_estimator_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon70;
-        icon70.addFile(QString::fromUtf8(":/icons/icons8-eye-48 (1).png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        create_state_estimator_button->setIcon(icon70);
+        QIcon icon72;
+        icon72.addFile(QString::fromUtf8(":/icons/icons8-eye-48 (1).png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        create_state_estimator_button->setIcon(icon72);
         create_state_estimator_button->setIconSize(QSize(48, 40));
         create_state_estimator_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3060,9 +3086,9 @@ public:
         show_frustrums_button->setObjectName("show_frustrums_button");
         sizePolicy2.setHeightForWidth(show_frustrums_button->sizePolicy().hasHeightForWidth());
         show_frustrums_button->setSizePolicy(sizePolicy2);
-        QIcon icon71;
-        icon71.addFile(QString::fromUtf8(":/icons/icons8-scenic-view-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        show_frustrums_button->setIcon(icon71);
+        QIcon icon73;
+        icon73.addFile(QString::fromUtf8(":/icons/icons8-scenic-view-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        show_frustrums_button->setIcon(icon73);
         show_frustrums_button->setIconSize(QSize(36, 36));
         show_frustrums_button->setCheckable(true);
         show_frustrums_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
@@ -3073,7 +3099,7 @@ public:
         show_lidar_point_cloud_button->setObjectName("show_lidar_point_cloud_button");
         sizePolicy3.setHeightForWidth(show_lidar_point_cloud_button->sizePolicy().hasHeightForWidth());
         show_lidar_point_cloud_button->setSizePolicy(sizePolicy3);
-        show_lidar_point_cloud_button->setIcon(icon57);
+        show_lidar_point_cloud_button->setIcon(icon59);
         show_lidar_point_cloud_button->setIconSize(QSize(36, 36));
         show_lidar_point_cloud_button->setCheckable(true);
         show_lidar_point_cloud_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
@@ -3085,9 +3111,9 @@ public:
         sizePolicy3.setHeightForWidth(show_hide_sensor_views_button->sizePolicy().hasHeightForWidth());
         show_hide_sensor_views_button->setSizePolicy(sizePolicy3);
         show_hide_sensor_views_button->setMinimumSize(QSize(77, 32));
-        QIcon icon72;
-        icon72.addFile(QString::fromUtf8(":/icons/icons8-view-all-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        show_hide_sensor_views_button->setIcon(icon72);
+        QIcon icon74;
+        icon74.addFile(QString::fromUtf8(":/icons/icons8-view-all-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        show_hide_sensor_views_button->setIcon(icon74);
         show_hide_sensor_views_button->setIconSize(QSize(46, 48));
         show_hide_sensor_views_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3098,9 +3124,9 @@ public:
         sizePolicy3.setHeightForWidth(isolate_sensor_selection_button->sizePolicy().hasHeightForWidth());
         isolate_sensor_selection_button->setSizePolicy(sizePolicy3);
         isolate_sensor_selection_button->setMinimumSize(QSize(77, 32));
-        QIcon icon73;
-        icon73.addFile(QString::fromUtf8(":/icons/icons8-browse-page-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        isolate_sensor_selection_button->setIcon(icon73);
+        QIcon icon75;
+        icon75.addFile(QString::fromUtf8(":/icons/icons8-browse-page-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        isolate_sensor_selection_button->setIcon(icon75);
         isolate_sensor_selection_button->setIconSize(QSize(46, 48));
         isolate_sensor_selection_button->setCheckable(true);
         isolate_sensor_selection_button->setChecked(false);
@@ -3124,9 +3150,9 @@ public:
         playback_data_button->setSizePolicy(sizePolicy3);
         playback_data_button->setMinimumSize(QSize(77, 32));
         playback_data_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon74;
-        icon74.addFile(QString::fromUtf8(":/icons/icons8-play-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        playback_data_button->setIcon(icon74);
+        QIcon icon76;
+        icon76.addFile(QString::fromUtf8(":/icons/icons8-play-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        playback_data_button->setIcon(icon76);
         playback_data_button->setIconSize(QSize(36, 36));
         playback_data_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3145,9 +3171,9 @@ public:
         add_end_stop_button->setSizePolicy(sizePolicy3);
         add_end_stop_button->setMinimumSize(QSize(77, 32));
         add_end_stop_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon75;
-        icon75.addFile(QString::fromUtf8(":/icons/liitSwitch.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_end_stop_button->setIcon(icon75);
+        QIcon icon77;
+        icon77.addFile(QString::fromUtf8(":/icons/liitSwitch.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_end_stop_button->setIcon(icon77);
         add_end_stop_button->setIconSize(QSize(40, 48));
         add_end_stop_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3173,7 +3199,7 @@ public:
         fused_data_viewer_button->setSizePolicy(sizePolicy3);
         fused_data_viewer_button->setMinimumSize(QSize(77, 32));
         fused_data_viewer_button->setMaximumSize(QSize(100, 16777215));
-        fused_data_viewer_button->setIcon(icon60);
+        fused_data_viewer_button->setIcon(icon62);
         fused_data_viewer_button->setIconSize(QSize(40, 40));
         fused_data_viewer_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3185,9 +3211,9 @@ public:
         sensor_processing_button->setSizePolicy(sizePolicy1);
         sensor_processing_button->setMinimumSize(QSize(77, 32));
         sensor_processing_button->setMaximumSize(QSize(300, 16777215));
-        QIcon icon76;
-        icon76.addFile(QString::fromUtf8(":/icons/icons8-control-panel-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        sensor_processing_button->setIcon(icon76);
+        QIcon icon78;
+        icon78.addFile(QString::fromUtf8(":/icons/icons8-control-panel-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        sensor_processing_button->setIcon(icon78);
         sensor_processing_button->setIconSize(QSize(70, 62));
         sensor_processing_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3199,9 +3225,9 @@ public:
         intrinsic_camera_calibration_button->setSizePolicy(sizePolicy3);
         intrinsic_camera_calibration_button->setMinimumSize(QSize(77, 32));
         intrinsic_camera_calibration_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon77;
-        icon77.addFile(QString::fromUtf8(":/icons/icons8-camera-automation-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        intrinsic_camera_calibration_button->setIcon(icon77);
+        QIcon icon79;
+        icon79.addFile(QString::fromUtf8(":/icons/icons8-camera-automation-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        intrinsic_camera_calibration_button->setIcon(icon79);
         intrinsic_camera_calibration_button->setIconSize(QSize(40, 48));
         intrinsic_camera_calibration_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3213,9 +3239,9 @@ public:
         sensor_diagnostics_button->setSizePolicy(sizePolicy3);
         sensor_diagnostics_button->setMinimumSize(QSize(77, 32));
         sensor_diagnostics_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon78;
-        icon78.addFile(QString::fromUtf8(":/icons/icons8-temperature-inside-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        sensor_diagnostics_button->setIcon(icon78);
+        QIcon icon80;
+        icon80.addFile(QString::fromUtf8(":/icons/icons8-temperature-inside-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        sensor_diagnostics_button->setIcon(icon80);
         sensor_diagnostics_button->setIconSize(QSize(40, 40));
         sensor_diagnostics_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3234,9 +3260,9 @@ public:
         record_data_button->setSizePolicy(sizePolicy3);
         record_data_button->setMinimumSize(QSize(77, 32));
         record_data_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon79;
-        icon79.addFile(QString::fromUtf8(":/icons/icons8-record-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        record_data_button->setIcon(icon79);
+        QIcon icon81;
+        icon81.addFile(QString::fromUtf8(":/icons/icons8-record-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        record_data_button->setIcon(icon81);
         record_data_button->setIconSize(QSize(46, 48));
         record_data_button->setCheckable(true);
         record_data_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
@@ -3247,9 +3273,9 @@ public:
         add_gps_button->setObjectName("add_gps_button");
         sizePolicy3.setHeightForWidth(add_gps_button->sizePolicy().hasHeightForWidth());
         add_gps_button->setSizePolicy(sizePolicy3);
-        QIcon icon80;
-        icon80.addFile(QString::fromUtf8(":/icons/icons8-gps-signal-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_gps_button->setIcon(icon80);
+        QIcon icon82;
+        icon82.addFile(QString::fromUtf8(":/icons/icons8-gps-signal-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_gps_button->setIcon(icon82);
         add_gps_button->setIconSize(QSize(40, 40));
         add_gps_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3260,9 +3286,9 @@ public:
         sizePolicy1.setHeightForWidth(add_load_cell_button->sizePolicy().hasHeightForWidth());
         add_load_cell_button->setSizePolicy(sizePolicy1);
         add_load_cell_button->setMinimumSize(QSize(77, 32));
-        QIcon icon81;
-        icon81.addFile(QString::fromUtf8(":/icons/loadcell.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        add_load_cell_button->setIcon(icon81);
+        QIcon icon83;
+        icon83.addFile(QString::fromUtf8(":/icons/loadcell.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        add_load_cell_button->setIcon(icon83);
         add_load_cell_button->setIconSize(QSize(36, 36));
         add_load_cell_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3306,7 +3332,7 @@ public:
         sizePolicy3.setHeightForWidth(sensor_manager_button->sizePolicy().hasHeightForWidth());
         sensor_manager_button->setSizePolicy(sizePolicy3);
         sensor_manager_button->setMinimumSize(QSize(77, 32));
-        sensor_manager_button->setIcon(icon30);
+        sensor_manager_button->setIcon(icon32);
         sensor_manager_button->setIconSize(QSize(48, 40));
         sensor_manager_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3349,9 +3375,9 @@ public:
         sizePolicy1.setHeightForWidth(network_devices_button->sizePolicy().hasHeightForWidth());
         network_devices_button->setSizePolicy(sizePolicy1);
         network_devices_button->setMinimumSize(QSize(77, 32));
-        QIcon icon82;
-        icon82.addFile(QString::fromUtf8(":/icons/WebDevice.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        network_devices_button->setIcon(icon82);
+        QIcon icon84;
+        icon84.addFile(QString::fromUtf8(":/icons/WebDevice.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        network_devices_button->setIcon(icon84);
         network_devices_button->setIconSize(QSize(40, 40));
         network_devices_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3369,9 +3395,9 @@ public:
         canbus_tools_button->setObjectName("canbus_tools_button");
         sizePolicy2.setHeightForWidth(canbus_tools_button->sizePolicy().hasHeightForWidth());
         canbus_tools_button->setSizePolicy(sizePolicy2);
-        QIcon icon83;
-        icon83.addFile(QString::fromUtf8(":/icons/icons8-ethernet-off-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        canbus_tools_button->setIcon(icon83);
+        QIcon icon85;
+        icon85.addFile(QString::fromUtf8(":/icons/icons8-ethernet-off-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        canbus_tools_button->setIcon(icon85);
         canbus_tools_button->setIconSize(QSize(36, 36));
         canbus_tools_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3381,9 +3407,9 @@ public:
         serial_connection_tools->setObjectName("serial_connection_tools");
         sizePolicy3.setHeightForWidth(serial_connection_tools->sizePolicy().hasHeightForWidth());
         serial_connection_tools->setSizePolicy(sizePolicy3);
-        QIcon icon84;
-        icon84.addFile(QString::fromUtf8(":/icons/icons8-device-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        serial_connection_tools->setIcon(icon84);
+        QIcon icon86;
+        icon86.addFile(QString::fromUtf8(":/icons/icons8-device-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        serial_connection_tools->setIcon(icon86);
         serial_connection_tools->setIconSize(QSize(36, 36));
         serial_connection_tools->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3393,7 +3419,7 @@ public:
         network_tools_button->setObjectName("network_tools_button");
         sizePolicy3.setHeightForWidth(network_tools_button->sizePolicy().hasHeightForWidth());
         network_tools_button->setSizePolicy(sizePolicy3);
-        network_tools_button->setIcon(icon80);
+        network_tools_button->setIcon(icon82);
         network_tools_button->setIconSize(QSize(36, 48));
         network_tools_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3403,9 +3429,9 @@ public:
         controllers_button->setObjectName("controllers_button");
         sizePolicy3.setHeightForWidth(controllers_button->sizePolicy().hasHeightForWidth());
         controllers_button->setSizePolicy(sizePolicy3);
-        QIcon icon85;
-        icon85.addFile(QString::fromUtf8(":/icons/icons8-game-controller-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        controllers_button->setIcon(icon85);
+        QIcon icon87;
+        icon87.addFile(QString::fromUtf8(":/icons/icons8-game-controller-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        controllers_button->setIcon(icon87);
         controllers_button->setIconSize(QSize(40, 40));
         controllers_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3446,9 +3472,9 @@ public:
 
         device_status_button = new QToolButton(widget_23);
         device_status_button->setObjectName("device_status_button");
-        QIcon icon86;
-        icon86.addFile(QString::fromUtf8(":/icons/icons8-sensor-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        device_status_button->setIcon(icon86);
+        QIcon icon88;
+        icon88.addFile(QString::fromUtf8(":/icons/icons8-sensor-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        device_status_button->setIcon(icon88);
         device_status_button->setIconSize(QSize(36, 36));
         device_status_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3492,7 +3518,7 @@ public:
         sizePolicy1.setHeightForWidth(device_manager_button->sizePolicy().hasHeightForWidth());
         device_manager_button->setSizePolicy(sizePolicy1);
         device_manager_button->setMinimumSize(QSize(77, 32));
-        device_manager_button->setIcon(icon30);
+        device_manager_button->setIcon(icon32);
         device_manager_button->setIconSize(QSize(40, 46));
         device_manager_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3522,9 +3548,9 @@ public:
         bus_monitor_button->setSizePolicy(sizePolicy3);
         bus_monitor_button->setMinimumSize(QSize(77, 32));
         bus_monitor_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon87;
-        icon87.addFile(QString::fromUtf8(":/icons/CANBUS.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        bus_monitor_button->setIcon(icon87);
+        QIcon icon89;
+        icon89.addFile(QString::fromUtf8(":/icons/CANBUS.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        bus_monitor_button->setIcon(icon89);
         bus_monitor_button->setIconSize(QSize(48, 40));
         bus_monitor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3563,9 +3589,9 @@ public:
         ros_interface_button->setSizePolicy(sizePolicy3);
         ros_interface_button->setMinimumSize(QSize(77, 32));
         ros_interface_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon88;
-        icon88.addFile(QString::fromUtf8(":/icons/icons8-thin-client-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        ros_interface_button->setIcon(icon88);
+        QIcon icon90;
+        icon90.addFile(QString::fromUtf8(":/icons/icons8-thin-client-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        ros_interface_button->setIcon(icon90);
         ros_interface_button->setIconSize(QSize(40, 48));
         ros_interface_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3577,9 +3603,9 @@ public:
         mqtt_client_button->setSizePolicy(sizePolicy3);
         mqtt_client_button->setMinimumSize(QSize(77, 32));
         mqtt_client_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon89;
-        icon89.addFile(QString::fromUtf8(":/icons/liveweb.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        mqtt_client_button->setIcon(icon89);
+        QIcon icon91;
+        icon91.addFile(QString::fromUtf8(":/icons/liveweb.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        mqtt_client_button->setIcon(icon91);
         mqtt_client_button->setIconSize(QSize(40, 48));
         mqtt_client_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3589,9 +3615,9 @@ public:
         scale_object_button_2->setObjectName("scale_object_button_2");
         scale_object_button_2->setMinimumSize(QSize(77, 32));
         scale_object_button_2->setMaximumSize(QSize(77, 16777215));
-        QIcon icon90;
-        icon90.addFile(QString::fromUtf8(":/icons/icons8-pipe-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        scale_object_button_2->setIcon(icon90);
+        QIcon icon92;
+        icon92.addFile(QString::fromUtf8(":/icons/icons8-pipe-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        scale_object_button_2->setIcon(icon92);
         scale_object_button_2->setIconSize(QSize(40, 48));
         scale_object_button_2->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3625,9 +3651,9 @@ public:
         new_device_button->setObjectName("new_device_button");
         sizePolicy1.setHeightForWidth(new_device_button->sizePolicy().hasHeightForWidth());
         new_device_button->setSizePolicy(sizePolicy1);
-        QIcon icon91;
-        icon91.addFile(QString::fromUtf8(":/icons/newDrive.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        new_device_button->setIcon(icon91);
+        QIcon icon93;
+        icon93.addFile(QString::fromUtf8(":/icons/newDrive.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        new_device_button->setIcon(icon93);
         new_device_button->setIconSize(QSize(48, 46));
         new_device_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3639,9 +3665,9 @@ public:
         firmware_flashing_button->setSizePolicy(sizePolicy3);
         firmware_flashing_button->setMinimumSize(QSize(77, 32));
         firmware_flashing_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon92;
-        icon92.addFile(QString::fromUtf8(":/icons/icons8-disk-settings-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        firmware_flashing_button->setIcon(icon92);
+        QIcon icon94;
+        icon94.addFile(QString::fromUtf8(":/icons/icons8-disk-settings-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        firmware_flashing_button->setIcon(icon94);
         firmware_flashing_button->setIconSize(QSize(40, 40));
         firmware_flashing_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3651,9 +3677,9 @@ public:
         realsense_config_button->setObjectName("realsense_config_button");
         sizePolicy1.setHeightForWidth(realsense_config_button->sizePolicy().hasHeightForWidth());
         realsense_config_button->setSizePolicy(sizePolicy1);
-        QIcon icon93;
-        icon93.addFile(QString::fromUtf8(":/icons/Realsense Logo.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        realsense_config_button->setIcon(icon93);
+        QIcon icon95;
+        icon95.addFile(QString::fromUtf8(":/icons/Realsense Logo.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        realsense_config_button->setIcon(icon95);
         realsense_config_button->setIconSize(QSize(38, 48));
         realsense_config_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3701,9 +3727,9 @@ public:
         script_error_button->setSizePolicy(sizePolicy3);
         script_error_button->setMinimumSize(QSize(77, 32));
         script_error_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon94;
-        icon94.addFile(QString::fromUtf8(":/icons/icons8-delete-message-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        script_error_button->setIcon(icon94);
+        QIcon icon96;
+        icon96.addFile(QString::fromUtf8(":/icons/icons8-delete-message-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        script_error_button->setIcon(icon96);
         script_error_button->setIconSize(QSize(40, 40));
         script_error_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3714,9 +3740,9 @@ public:
         sizePolicy3.setHeightForWidth(compiler_settings_button->sizePolicy().hasHeightForWidth());
         compiler_settings_button->setSizePolicy(sizePolicy3);
         compiler_settings_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon95;
-        icon95.addFile(QString::fromUtf8(":/icons/icons8-program-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        compiler_settings_button->setIcon(icon95);
+        QIcon icon97;
+        icon97.addFile(QString::fromUtf8(":/icons/icons8-program-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        compiler_settings_button->setIcon(icon97);
         compiler_settings_button->setIconSize(QSize(40, 40));
         compiler_settings_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3727,7 +3753,7 @@ public:
         sizePolicy1.setHeightForWidth(new_script_file_button->sizePolicy().hasHeightForWidth());
         new_script_file_button->setSizePolicy(sizePolicy1);
         new_script_file_button->setMinimumSize(QSize(77, 32));
-        new_script_file_button->setIcon(icon25);
+        new_script_file_button->setIcon(icon27);
         new_script_file_button->setIconSize(QSize(48, 36));
         new_script_file_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3784,9 +3810,9 @@ public:
         configure_git_button->setSizePolicy(sizePolicy3);
         configure_git_button->setMinimumSize(QSize(77, 32));
         configure_git_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon96;
-        icon96.addFile(QString::fromUtf8(":/icons/icons8-git-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        configure_git_button->setIcon(icon96);
+        QIcon icon98;
+        icon98.addFile(QString::fromUtf8(":/icons/icons8-git-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        configure_git_button->setIcon(icon98);
         configure_git_button->setIconSize(QSize(36, 36));
         configure_git_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3798,9 +3824,9 @@ public:
         script_log_button->setSizePolicy(sizePolicy3);
         script_log_button->setMinimumSize(QSize(77, 32));
         script_log_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon97;
-        icon97.addFile(QString::fromUtf8(":/icons/icons8-event-log-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        script_log_button->setIcon(icon97);
+        QIcon icon99;
+        icon99.addFile(QString::fromUtf8(":/icons/icons8-event-log-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        script_log_button->setIcon(icon99);
         script_log_button->setIconSize(QSize(40, 40));
         script_log_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3818,9 +3844,9 @@ public:
         package_manager_button->setSizePolicy(sizePolicy3);
         package_manager_button->setMinimumSize(QSize(77, 32));
         package_manager_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon98;
-        icon98.addFile(QString::fromUtf8(":/icons/icons8-linux-terminal-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        package_manager_button->setIcon(icon98);
+        QIcon icon100;
+        icon100.addFile(QString::fromUtf8(":/icons/icons8-linux-terminal-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        package_manager_button->setIcon(icon100);
         package_manager_button->setIconSize(QSize(40, 48));
         package_manager_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3832,9 +3858,9 @@ public:
         git_branch_button->setSizePolicy(sizePolicy3);
         git_branch_button->setMinimumSize(QSize(77, 32));
         git_branch_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon99;
-        icon99.addFile(QString::fromUtf8(":/icons/icons8-code-fork-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        git_branch_button->setIcon(icon99);
+        QIcon icon101;
+        icon101.addFile(QString::fromUtf8(":/icons/icons8-code-fork-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        git_branch_button->setIcon(icon101);
         git_branch_button->setIconSize(QSize(40, 48));
         git_branch_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3889,9 +3915,9 @@ public:
         find_replace_button->setObjectName("find_replace_button");
         sizePolicy2.setHeightForWidth(find_replace_button->sizePolicy().hasHeightForWidth());
         find_replace_button->setSizePolicy(sizePolicy2);
-        QIcon icon100;
-        icon100.addFile(QString::fromUtf8(":/icons/findreplace.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        find_replace_button->setIcon(icon100);
+        QIcon icon102;
+        icon102.addFile(QString::fromUtf8(":/icons/findreplace.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        find_replace_button->setIcon(icon102);
         find_replace_button->setIconSize(QSize(36, 36));
         find_replace_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3902,7 +3928,7 @@ public:
         sizePolicy3.setHeightForWidth(grid_snapp_toggle_switch_2->sizePolicy().hasHeightForWidth());
         grid_snapp_toggle_switch_2->setSizePolicy(sizePolicy3);
         grid_snapp_toggle_switch_2->setMaximumSize(QSize(77, 16777215));
-        grid_snapp_toggle_switch_2->setIcon(icon52);
+        grid_snapp_toggle_switch_2->setIcon(icon54);
         grid_snapp_toggle_switch_2->setIconSize(QSize(48, 20));
         grid_snapp_toggle_switch_2->setCheckable(true);
         grid_snapp_toggle_switch_2->setChecked(false);
@@ -3914,9 +3940,9 @@ public:
         api_panel_button->setObjectName("api_panel_button");
         sizePolicy2.setHeightForWidth(api_panel_button->sizePolicy().hasHeightForWidth());
         api_panel_button->setSizePolicy(sizePolicy2);
-        QIcon icon101;
-        icon101.addFile(QString::fromUtf8(":/icons/icons8-search-in-cloud-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        api_panel_button->setIcon(icon101);
+        QIcon icon103;
+        icon103.addFile(QString::fromUtf8(":/icons/icons8-search-in-cloud-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        api_panel_button->setIcon(icon103);
         api_panel_button->setIconSize(QSize(36, 36));
         api_panel_button->setCheckable(true);
         api_panel_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
@@ -3925,9 +3951,9 @@ public:
 
         lint_format_button = new QToolButton(widget_27);
         lint_format_button->setObjectName("lint_format_button");
-        QIcon icon102;
-        icon102.addFile(QString::fromUtf8(":/icons/icons8-solidworks-flow-simulation-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        lint_format_button->setIcon(icon102);
+        QIcon icon104;
+        icon104.addFile(QString::fromUtf8(":/icons/icons8-solidworks-flow-simulation-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        lint_format_button->setIcon(icon104);
         lint_format_button->setIconSize(QSize(36, 36));
         lint_format_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3961,7 +3987,7 @@ public:
         run_script_button->setObjectName("run_script_button");
         sizePolicy3.setHeightForWidth(run_script_button->sizePolicy().hasHeightForWidth());
         run_script_button->setSizePolicy(sizePolicy3);
-        run_script_button->setIcon(icon74);
+        run_script_button->setIcon(icon76);
         run_script_button->setIconSize(QSize(40, 46));
         run_script_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3971,9 +3997,9 @@ public:
         debug_script_button->setObjectName("debug_script_button");
         sizePolicy3.setHeightForWidth(debug_script_button->sizePolicy().hasHeightForWidth());
         debug_script_button->setSizePolicy(sizePolicy3);
-        QIcon icon103;
-        icon103.addFile(QString::fromUtf8(":/icons/icons8-debug-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        debug_script_button->setIcon(icon103);
+        QIcon icon105;
+        icon105.addFile(QString::fromUtf8(":/icons/icons8-debug-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        debug_script_button->setIcon(icon105);
         debug_script_button->setIconSize(QSize(40, 40));
         debug_script_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3983,9 +4009,9 @@ public:
         step_into_button->setObjectName("step_into_button");
         sizePolicy3.setHeightForWidth(step_into_button->sizePolicy().hasHeightForWidth());
         step_into_button->setSizePolicy(sizePolicy3);
-        QIcon icon104;
-        icon104.addFile(QString::fromUtf8(":/icons/icons8-step-into-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        step_into_button->setIcon(icon104);
+        QIcon icon106;
+        icon106.addFile(QString::fromUtf8(":/icons/icons8-step-into-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        step_into_button->setIcon(icon106);
         step_into_button->setIconSize(QSize(40, 40));
         step_into_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -3995,9 +4021,9 @@ public:
         step_over_button->setObjectName("step_over_button");
         sizePolicy3.setHeightForWidth(step_over_button->sizePolicy().hasHeightForWidth());
         step_over_button->setSizePolicy(sizePolicy3);
-        QIcon icon105;
-        icon105.addFile(QString::fromUtf8(":/icons/icons8-step-over-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        step_over_button->setIcon(icon105);
+        QIcon icon107;
+        icon107.addFile(QString::fromUtf8(":/icons/icons8-step-over-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        step_over_button->setIcon(icon107);
         step_over_button->setIconSize(QSize(40, 40));
         step_over_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4007,9 +4033,9 @@ public:
         variable_inspector_button->setObjectName("variable_inspector_button");
         sizePolicy3.setHeightForWidth(variable_inspector_button->sizePolicy().hasHeightForWidth());
         variable_inspector_button->setSizePolicy(sizePolicy3);
-        QIcon icon106;
-        icon106.addFile(QString::fromUtf8(":/icons/icons8-level-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        variable_inspector_button->setIcon(icon106);
+        QIcon icon108;
+        icon108.addFile(QString::fromUtf8(":/icons/icons8-level-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        variable_inspector_button->setIcon(icon108);
         variable_inspector_button->setIconSize(QSize(40, 40));
         variable_inspector_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4017,7 +4043,7 @@ public:
 
         toggle_breakpoint_button = new QToolButton(widget_28);
         toggle_breakpoint_button->setObjectName("toggle_breakpoint_button");
-        toggle_breakpoint_button->setIcon(icon79);
+        toggle_breakpoint_button->setIcon(icon81);
         toggle_breakpoint_button->setIconSize(QSize(40, 48));
         toggle_breakpoint_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4058,9 +4084,9 @@ public:
         git_compare_button->setSizePolicy(sizePolicy3);
         git_compare_button->setMinimumSize(QSize(77, 32));
         git_compare_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon107;
-        icon107.addFile(QString::fromUtf8(":/icons/icons8-compare-git-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        git_compare_button->setIcon(icon107);
+        QIcon icon109;
+        icon109.addFile(QString::fromUtf8(":/icons/icons8-compare-git-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        git_compare_button->setIcon(icon109);
         git_compare_button->setIconSize(QSize(40, 48));
         git_compare_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4082,9 +4108,9 @@ public:
         sizePolicy3.setHeightForWidth(toolButton_2->sizePolicy().hasHeightForWidth());
         toolButton_2->setSizePolicy(sizePolicy3);
         toolButton_2->setMaximumSize(QSize(77, 16777215));
-        QIcon icon108;
-        icon108.addFile(QString::fromUtf8(":/icons/icons8-repository-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        toolButton_2->setIcon(icon108);
+        QIcon icon110;
+        icon110.addFile(QString::fromUtf8(":/icons/icons8-repository-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        toolButton_2->setIcon(icon110);
         toolButton_2->setIconSize(QSize(40, 40));
         toolButton_2->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4103,9 +4129,9 @@ public:
         git_merge_button->setSizePolicy(sizePolicy3);
         git_merge_button->setMinimumSize(QSize(77, 32));
         git_merge_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon109;
-        icon109.addFile(QString::fromUtf8(":/icons/icons8-merge-git-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        git_merge_button->setIcon(icon109);
+        QIcon icon111;
+        icon111.addFile(QString::fromUtf8(":/icons/icons8-merge-git-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        git_merge_button->setIcon(icon111);
         git_merge_button->setIconSize(QSize(48, 40));
         git_merge_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4122,9 +4148,9 @@ public:
         sizePolicy3.setHeightForWidth(git_push_button->sizePolicy().hasHeightForWidth());
         git_push_button->setSizePolicy(sizePolicy3);
         git_push_button->setMinimumSize(QSize(77, 32));
-        QIcon icon110;
-        icon110.addFile(QString::fromUtf8(":/icons/icons8-commit-git-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        git_push_button->setIcon(icon110);
+        QIcon icon112;
+        icon112.addFile(QString::fromUtf8(":/icons/icons8-commit-git-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        git_push_button->setIcon(icon112);
         git_push_button->setIconSize(QSize(48, 40));
         git_push_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4142,7 +4168,7 @@ public:
         sizePolicy1.setHeightForWidth(script_manageer_button->sizePolicy().hasHeightForWidth());
         script_manageer_button->setSizePolicy(sizePolicy1);
         script_manageer_button->setMinimumSize(QSize(77, 32));
-        script_manageer_button->setIcon(icon30);
+        script_manageer_button->setIcon(icon32);
         script_manageer_button->setIconSize(QSize(36, 36));
         script_manageer_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4153,9 +4179,9 @@ public:
         sizePolicy3.setHeightForWidth(git_pull_request_button->sizePolicy().hasHeightForWidth());
         git_pull_request_button->setSizePolicy(sizePolicy3);
         git_pull_request_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon111;
-        icon111.addFile(QString::fromUtf8(":/icons/icons8-pull-request-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        git_pull_request_button->setIcon(icon111);
+        QIcon icon113;
+        icon113.addFile(QString::fromUtf8(":/icons/icons8-pull-request-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        git_pull_request_button->setIcon(icon113);
         git_pull_request_button->setIconSize(QSize(48, 40));
         git_pull_request_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4187,7 +4213,7 @@ public:
         sizePolicy3.setHeightForWidth(stability_analysis_button->sizePolicy().hasHeightForWidth());
         stability_analysis_button->setSizePolicy(sizePolicy3);
         stability_analysis_button->setMaximumSize(QSize(100, 16777215));
-        stability_analysis_button->setIcon(icon42);
+        stability_analysis_button->setIcon(icon44);
         stability_analysis_button->setIconSize(QSize(48, 40));
         stability_analysis_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4199,7 +4225,7 @@ public:
         plot_tracking_error_button->setSizePolicy(sizePolicy3);
         plot_tracking_error_button->setMinimumSize(QSize(77, 32));
         plot_tracking_error_button->setMaximumSize(QSize(100, 16777215));
-        plot_tracking_error_button->setIcon(icon97);
+        plot_tracking_error_button->setIcon(icon99);
         plot_tracking_error_button->setIconSize(QSize(40, 40));
         plot_tracking_error_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4209,9 +4235,9 @@ public:
         sequence_editor_button->setObjectName("sequence_editor_button");
         sizePolicy3.setHeightForWidth(sequence_editor_button->sizePolicy().hasHeightForWidth());
         sequence_editor_button->setSizePolicy(sizePolicy3);
-        QIcon icon112;
-        icon112.addFile(QString::fromUtf8(":/icons/icons8-test-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        sequence_editor_button->setIcon(icon112);
+        QIcon icon114;
+        icon114.addFile(QString::fromUtf8(":/icons/icons8-test-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        sequence_editor_button->setIcon(icon114);
         sequence_editor_button->setIconSize(QSize(40, 40));
         sequence_editor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4222,7 +4248,7 @@ public:
         sizePolicy1.setHeightForWidth(manual_jog_button->sizePolicy().hasHeightForWidth());
         manual_jog_button->setSizePolicy(sizePolicy1);
         manual_jog_button->setMinimumSize(QSize(77, 32));
-        manual_jog_button->setIcon(icon34);
+        manual_jog_button->setIcon(icon36);
         manual_jog_button->setIconSize(QSize(36, 36));
         manual_jog_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4266,7 +4292,7 @@ public:
         flat_trajectory_planner_button->setSizePolicy(sizePolicy3);
         flat_trajectory_planner_button->setMinimumSize(QSize(77, 32));
         flat_trajectory_planner_button->setMaximumSize(QSize(100, 16777215));
-        flat_trajectory_planner_button->setIcon(icon48);
+        flat_trajectory_planner_button->setIcon(icon50);
         flat_trajectory_planner_button->setIconSize(QSize(40, 40));
         flat_trajectory_planner_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4277,9 +4303,9 @@ public:
         sizePolicy3.setHeightForWidth(map_generation_button->sizePolicy().hasHeightForWidth());
         map_generation_button->setSizePolicy(sizePolicy3);
         map_generation_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon113;
-        icon113.addFile(QString::fromUtf8(":/icons/icons8-system-task-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        map_generation_button->setIcon(icon113);
+        QIcon icon115;
+        icon115.addFile(QString::fromUtf8(":/icons/icons8-system-task-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        map_generation_button->setIcon(icon115);
         map_generation_button->setIconSize(QSize(40, 40));
         map_generation_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4297,7 +4323,7 @@ public:
         sizePolicy3.setHeightForWidth(plot_control_efforts_button->sizePolicy().hasHeightForWidth());
         plot_control_efforts_button->setSizePolicy(sizePolicy3);
         plot_control_efforts_button->setMaximumSize(QSize(77, 16777215));
-        plot_control_efforts_button->setIcon(icon67);
+        plot_control_efforts_button->setIcon(icon69);
         plot_control_efforts_button->setIconSize(QSize(40, 40));
         plot_control_efforts_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4309,9 +4335,9 @@ public:
         auto_tune_pid_button->setSizePolicy(sizePolicy3);
         auto_tune_pid_button->setMinimumSize(QSize(77, 32));
         auto_tune_pid_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon114;
-        icon114.addFile(QString::fromUtf8(":/icons/icons8-quick-mode-on-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        auto_tune_pid_button->setIcon(icon114);
+        QIcon icon116;
+        icon116.addFile(QString::fromUtf8(":/icons/icons8-quick-mode-on-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        auto_tune_pid_button->setIcon(icon116);
         auto_tune_pid_button->setIconSize(QSize(48, 40));
         auto_tune_pid_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4351,9 +4377,9 @@ public:
         set_ik_goal_button->setObjectName("set_ik_goal_button");
         sizePolicy3.setHeightForWidth(set_ik_goal_button->sizePolicy().hasHeightForWidth());
         set_ik_goal_button->setSizePolicy(sizePolicy3);
-        QIcon icon115;
-        icon115.addFile(QString::fromUtf8(":/icons/icons8-browse-podcasts-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        set_ik_goal_button->setIcon(icon115);
+        QIcon icon117;
+        icon117.addFile(QString::fromUtf8(":/icons/icons8-browse-podcasts-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        set_ik_goal_button->setIcon(icon117);
         set_ik_goal_button->setIconSize(QSize(40, 46));
         set_ik_goal_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4365,7 +4391,7 @@ public:
         set_joint_goal_button->setSizePolicy(sizePolicy2);
         set_joint_goal_button->setMinimumSize(QSize(77, 32));
         set_joint_goal_button->setMaximumSize(QSize(77, 16777215));
-        set_joint_goal_button->setIcon(icon27);
+        set_joint_goal_button->setIcon(icon29);
         set_joint_goal_button->setIconSize(QSize(36, 36));
         set_joint_goal_button->setCheckable(true);
         set_joint_goal_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
@@ -4376,9 +4402,9 @@ public:
         select_named_pose_button->setObjectName("select_named_pose_button");
         sizePolicy3.setHeightForWidth(select_named_pose_button->sizePolicy().hasHeightForWidth());
         select_named_pose_button->setSizePolicy(sizePolicy3);
-        QIcon icon116;
-        icon116.addFile(QString::fromUtf8(":/icons/icons8-wacom-tablet-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        select_named_pose_button->setIcon(icon116);
+        QIcon icon118;
+        icon118.addFile(QString::fromUtf8(":/icons/icons8-wacom-tablet-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        select_named_pose_button->setIcon(icon118);
         select_named_pose_button->setIconSize(QSize(40, 40));
         select_named_pose_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4393,7 +4419,7 @@ public:
         system_dynamics_button->setSizePolicy(sizePolicy3);
         system_dynamics_button->setMinimumSize(QSize(77, 32));
         system_dynamics_button->setMaximumSize(QSize(77, 16777215));
-        system_dynamics_button->setIcon(icon40);
+        system_dynamics_button->setIcon(icon42);
         system_dynamics_button->setIconSize(QSize(40, 48));
         system_dynamics_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4432,9 +4458,9 @@ public:
         sizePolicy1.setHeightForWidth(enable_servos_button->sizePolicy().hasHeightForWidth());
         enable_servos_button->setSizePolicy(sizePolicy1);
         enable_servos_button->setMinimumSize(QSize(77, 32));
-        QIcon icon117;
-        icon117.addFile(QString::fromUtf8(":/icons/icons8-turn-on-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        enable_servos_button->setIcon(icon117);
+        QIcon icon119;
+        icon119.addFile(QString::fromUtf8(":/icons/icons8-turn-on-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        enable_servos_button->setIcon(icon119);
         enable_servos_button->setIconSize(QSize(48, 36));
         enable_servos_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4445,9 +4471,9 @@ public:
         sizePolicy3.setHeightForWidth(gradient_descent_tool_button->sizePolicy().hasHeightForWidth());
         gradient_descent_tool_button->setSizePolicy(sizePolicy3);
         gradient_descent_tool_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon118;
-        icon118.addFile(QString::fromUtf8(":/icons/icons8-circle-67.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        gradient_descent_tool_button->setIcon(icon118);
+        QIcon icon120;
+        icon120.addFile(QString::fromUtf8(":/icons/icons8-circle-67.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        gradient_descent_tool_button->setIcon(icon120);
         gradient_descent_tool_button->setIconSize(QSize(48, 40));
         gradient_descent_tool_button->setCheckable(true);
         gradient_descent_tool_button->setChecked(false);
@@ -4482,7 +4508,7 @@ public:
         sizePolicy3.setHeightForWidth(toolButton_5->sizePolicy().hasHeightForWidth());
         toolButton_5->setSizePolicy(sizePolicy3);
         toolButton_5->setMaximumSize(QSize(77, 16777215));
-        toolButton_5->setIcon(icon74);
+        toolButton_5->setIcon(icon76);
         toolButton_5->setIconSize(QSize(40, 40));
         toolButton_5->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4493,9 +4519,9 @@ public:
         sizePolicy2.setHeightForWidth(planning_group_button->sizePolicy().hasHeightForWidth());
         planning_group_button->setSizePolicy(sizePolicy2);
         planning_group_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon119;
-        icon119.addFile(QString::fromUtf8(":/icons/icons8-stacked-organizational-chart-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        planning_group_button->setIcon(icon119);
+        QIcon icon121;
+        icon121.addFile(QString::fromUtf8(":/icons/icons8-stacked-organizational-chart-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        planning_group_button->setIcon(icon121);
         planning_group_button->setIconSize(QSize(36, 36));
         planning_group_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4506,7 +4532,7 @@ public:
         sizePolicy1.setHeightForWidth(planner_settings_button->sizePolicy().hasHeightForWidth());
         planner_settings_button->setSizePolicy(sizePolicy1);
         planner_settings_button->setMinimumSize(QSize(77, 32));
-        planner_settings_button->setIcon(icon38);
+        planner_settings_button->setIcon(icon40);
         planner_settings_button->setIconSize(QSize(36, 36));
         planner_settings_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4528,7 +4554,7 @@ public:
         active_controller_button->setSizePolicy(sizePolicy3);
         active_controller_button->setMinimumSize(QSize(77, 32));
         active_controller_button->setMaximumSize(QSize(100, 16777215));
-        active_controller_button->setIcon(icon102);
+        active_controller_button->setIcon(icon104);
         active_controller_button->setIconSize(QSize(40, 40));
         active_controller_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4566,7 +4592,7 @@ public:
         mpc_designer_button->setObjectName("mpc_designer_button");
         sizePolicy3.setHeightForWidth(mpc_designer_button->sizePolicy().hasHeightForWidth());
         mpc_designer_button->setSizePolicy(sizePolicy3);
-        mpc_designer_button->setIcon(icon18);
+        mpc_designer_button->setIcon(icon13);
         mpc_designer_button->setIconSize(QSize(40, 40));
         mpc_designer_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4574,9 +4600,9 @@ public:
 
         initialize_robot_button = new QToolButton(widget_29);
         initialize_robot_button->setObjectName("initialize_robot_button");
-        QIcon icon120;
-        icon120.addFile(QString::fromUtf8(":/icons/robot connected.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        initialize_robot_button->setIcon(icon120);
+        QIcon icon122;
+        icon122.addFile(QString::fromUtf8(":/icons/robot connected.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        initialize_robot_button->setIcon(icon122);
         initialize_robot_button->setIconSize(QSize(45, 48));
         initialize_robot_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4594,9 +4620,9 @@ public:
         pid_tuner_button->setSizePolicy(sizePolicy3);
         pid_tuner_button->setMinimumSize(QSize(77, 32));
         pid_tuner_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon121;
-        icon121.addFile(QString::fromUtf8(":/icons/icons8-voltmeter-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        pid_tuner_button->setIcon(icon121);
+        QIcon icon123;
+        icon123.addFile(QString::fromUtf8(":/icons/icons8-voltmeter-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        pid_tuner_button->setIcon(icon123);
         pid_tuner_button->setIconSize(QSize(40, 48));
         pid_tuner_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4607,7 +4633,7 @@ public:
         sizePolicy3.setHeightForWidth(controller_library_button->sizePolicy().hasHeightForWidth());
         controller_library_button->setSizePolicy(sizePolicy3);
         controller_library_button->setMinimumSize(QSize(77, 32));
-        controller_library_button->setIcon(icon30);
+        controller_library_button->setIcon(icon32);
         controller_library_button->setIconSize(QSize(48, 40));
         controller_library_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4623,9 +4649,9 @@ public:
         waypoint_set_button->setObjectName("waypoint_set_button");
         sizePolicy3.setHeightForWidth(waypoint_set_button->sizePolicy().hasHeightForWidth());
         waypoint_set_button->setSizePolicy(sizePolicy3);
-        QIcon icon122;
-        icon122.addFile(QString::fromUtf8(":/icons/icons8-pin-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        waypoint_set_button->setIcon(icon122);
+        QIcon icon124;
+        icon124.addFile(QString::fromUtf8(":/icons/icons8-pin-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        waypoint_set_button->setIcon(icon124);
         waypoint_set_button->setIconSize(QSize(40, 40));
         waypoint_set_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4656,7 +4682,7 @@ public:
         sizePolicy3.setHeightForWidth(estop_button_2->sizePolicy().hasHeightForWidth());
         estop_button_2->setSizePolicy(sizePolicy3);
         estop_button_2->setMaximumSize(QSize(96, 16777215));
-        estop_button_2->setIcon(icon35);
+        estop_button_2->setIcon(icon37);
         estop_button_2->setIconSize(QSize(96, 96));
 
         gridLayout_20->addWidget(estop_button_2, 0, 0, 1, 1);
@@ -4673,7 +4699,7 @@ public:
         lqr_designer_button->setSizePolicy(sizePolicy3);
         lqr_designer_button->setMinimumSize(QSize(77, 32));
         lqr_designer_button->setMaximumSize(QSize(100, 16777215));
-        lqr_designer_button->setIcon(icon14);
+        lqr_designer_button->setIcon(icon21);
         lqr_designer_button->setIconSize(QSize(40, 48));
         lqr_designer_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4688,9 +4714,9 @@ public:
 
         spline_path_tool_button = new QToolButton(widget_29);
         spline_path_tool_button->setObjectName("spline_path_tool_button");
-        QIcon icon123;
-        icon123.addFile(QString::fromUtf8(":/icons/icons8-waypoint-map-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        spline_path_tool_button->setIcon(icon123);
+        QIcon icon125;
+        icon125.addFile(QString::fromUtf8(":/icons/icons8-waypoint-map-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        spline_path_tool_button->setIcon(icon125);
         spline_path_tool_button->setIconSize(QSize(40, 48));
         spline_path_tool_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4742,7 +4768,7 @@ public:
         fault_injection_button->setSizePolicy(sizePolicy3);
         fault_injection_button->setMinimumSize(QSize(77, 32));
         fault_injection_button->setMaximumSize(QSize(100, 16777215));
-        fault_injection_button->setIcon(icon94);
+        fault_injection_button->setIcon(icon96);
         fault_injection_button->setIconSize(QSize(40, 40));
         fault_injection_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4753,9 +4779,9 @@ public:
         sizePolicy1.setHeightForWidth(step_simulation_button->sizePolicy().hasHeightForWidth());
         step_simulation_button->setSizePolicy(sizePolicy1);
         step_simulation_button->setMinimumSize(QSize(77, 32));
-        QIcon icon124;
-        icon124.addFile(QString::fromUtf8(":/icons/icons8-end-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        step_simulation_button->setIcon(icon124);
+        QIcon icon126;
+        icon126.addFile(QString::fromUtf8(":/icons/icons8-end-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        step_simulation_button->setIcon(icon126);
         step_simulation_button->setIconSize(QSize(48, 46));
         step_simulation_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4777,7 +4803,7 @@ public:
 
         play_pause_simulation_button = new QToolButton(widget_33);
         play_pause_simulation_button->setObjectName("play_pause_simulation_button");
-        play_pause_simulation_button->setIcon(icon74);
+        play_pause_simulation_button->setIcon(icon76);
         play_pause_simulation_button->setIconSize(QSize(45, 48));
         play_pause_simulation_button->setCheckable(true);
         play_pause_simulation_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
@@ -4789,9 +4815,9 @@ public:
         sizePolicy3.setHeightForWidth(analysis_hub_button->sizePolicy().hasHeightForWidth());
         analysis_hub_button->setSizePolicy(sizePolicy3);
         analysis_hub_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon125;
-        icon125.addFile(QString::fromUtf8(":/icons/icons8-applet-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        analysis_hub_button->setIcon(icon125);
+        QIcon icon127;
+        icon127.addFile(QString::fromUtf8(":/icons/icons8-applet-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        analysis_hub_button->setIcon(icon127);
         analysis_hub_button->setIconSize(QSize(40, 40));
         analysis_hub_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4815,7 +4841,7 @@ public:
         sizePolicy3.setHeightForWidth(estop_button_3->sizePolicy().hasHeightForWidth());
         estop_button_3->setSizePolicy(sizePolicy3);
         estop_button_3->setMaximumSize(QSize(96, 16777215));
-        estop_button_3->setIcon(icon35);
+        estop_button_3->setIcon(icon37);
         estop_button_3->setIconSize(QSize(96, 96));
 
         gridLayout_24->addWidget(estop_button_3, 0, 0, 1, 1);
@@ -4862,9 +4888,9 @@ public:
         sizePolicy3.setHeightForWidth(domain_randomization_button->sizePolicy().hasHeightForWidth());
         domain_randomization_button->setSizePolicy(sizePolicy3);
         domain_randomization_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon126;
-        icon126.addFile(QString::fromUtf8(":/icons/icons8-clouds-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        domain_randomization_button->setIcon(icon126);
+        QIcon icon128;
+        icon128.addFile(QString::fromUtf8(":/icons/icons8-clouds-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        domain_randomization_button->setIcon(icon128);
         domain_randomization_button->setIconSize(QSize(48, 40));
         domain_randomization_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4876,7 +4902,7 @@ public:
         show_frames_button->setSizePolicy(sizePolicy3);
         show_frames_button->setMinimumSize(QSize(77, 32));
         show_frames_button->setMaximumSize(QSize(77, 16777215));
-        show_frames_button->setIcon(icon16);
+        show_frames_button->setIcon(icon23);
         show_frames_button->setIconSize(QSize(40, 48));
         show_frames_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4894,7 +4920,7 @@ public:
         sizePolicy3.setHeightForWidth(data_logger_button->sizePolicy().hasHeightForWidth());
         data_logger_button->setSizePolicy(sizePolicy3);
         data_logger_button->setMaximumSize(QSize(77, 16777215));
-        data_logger_button->setIcon(icon113);
+        data_logger_button->setIcon(icon115);
         data_logger_button->setIconSize(QSize(48, 40));
         data_logger_button->setCheckable(true);
         data_logger_button->setChecked(false);
@@ -4908,9 +4934,9 @@ public:
         event_trigger_manager_button->setSizePolicy(sizePolicy3);
         event_trigger_manager_button->setMinimumSize(QSize(77, 32));
         event_trigger_manager_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon127;
-        icon127.addFile(QString::fromUtf8(":/icons/icons8-high-priority-message-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        event_trigger_manager_button->setIcon(icon127);
+        QIcon icon129;
+        icon129.addFile(QString::fromUtf8(":/icons/icons8-high-priority-message-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        event_trigger_manager_button->setIcon(icon129);
         event_trigger_manager_button->setIconSize(QSize(48, 40));
         event_trigger_manager_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4934,9 +4960,9 @@ public:
         external_sim_interface_button->setSizePolicy(sizePolicy3);
         external_sim_interface_button->setMinimumSize(QSize(77, 32));
         external_sim_interface_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon128;
-        icon128.addFile(QString::fromUtf8(":/icons/icons8-usb-connector-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        external_sim_interface_button->setIcon(icon128);
+        QIcon icon130;
+        icon130.addFile(QString::fromUtf8(":/icons/icons8-usb-connector-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        external_sim_interface_button->setIcon(icon130);
         external_sim_interface_button->setIconSize(QSize(40, 40));
         external_sim_interface_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4955,7 +4981,7 @@ public:
         show_collisions_button->setSizePolicy(sizePolicy3);
         show_collisions_button->setMinimumSize(QSize(77, 32));
         show_collisions_button->setMaximumSize(QSize(100, 16777215));
-        show_collisions_button->setIcon(icon21);
+        show_collisions_button->setIcon(icon19);
         show_collisions_button->setIconSize(QSize(40, 40));
         show_collisions_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -4985,7 +5011,7 @@ public:
         sizePolicy3.setHeightForWidth(show_contacts_button->sizePolicy().hasHeightForWidth());
         show_contacts_button->setSizePolicy(sizePolicy3);
         show_contacts_button->setMinimumSize(QSize(77, 32));
-        show_contacts_button->setIcon(icon51);
+        show_contacts_button->setIcon(icon53);
         show_contacts_button->setIconSize(QSize(48, 40));
         show_contacts_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5029,9 +5055,9 @@ public:
         sizePolicy3.setHeightForWidth(headless_mode_button->sizePolicy().hasHeightForWidth());
         headless_mode_button->setSizePolicy(sizePolicy3);
         headless_mode_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon129;
-        icon129.addFile(QString::fromUtf8(":/icons/icons8-foreclosure-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        headless_mode_button->setIcon(icon129);
+        QIcon icon131;
+        icon131.addFile(QString::fromUtf8(":/icons/icons8-foreclosure-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        headless_mode_button->setIcon(icon131);
         headless_mode_button->setIconSize(QSize(40, 40));
         headless_mode_button->setCheckable(true);
         headless_mode_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
@@ -5049,9 +5075,9 @@ public:
         sequencer_tool_button->setObjectName("sequencer_tool_button");
         sizePolicy3.setHeightForWidth(sequencer_tool_button->sizePolicy().hasHeightForWidth());
         sequencer_tool_button->setSizePolicy(sizePolicy3);
-        QIcon icon130;
-        icon130.addFile(QString::fromUtf8(":/icons/icons8-timesheet-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        sequencer_tool_button->setIcon(icon130);
+        QIcon icon132;
+        icon132.addFile(QString::fromUtf8(":/icons/icons8-timesheet-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        sequencer_tool_button->setIcon(icon132);
         sequencer_tool_button->setIconSize(QSize(40, 40));
         sequencer_tool_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5068,9 +5094,9 @@ public:
         digital_twin_sync_mode_button->setObjectName("digital_twin_sync_mode_button");
         sizePolicy3.setHeightForWidth(digital_twin_sync_mode_button->sizePolicy().hasHeightForWidth());
         digital_twin_sync_mode_button->setSizePolicy(sizePolicy3);
-        QIcon icon131;
-        icon131.addFile(QString::fromUtf8(":/icons/digitalTwin.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        digital_twin_sync_mode_button->setIcon(icon131);
+        QIcon icon133;
+        icon133.addFile(QString::fromUtf8(":/icons/digitalTwin.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        digital_twin_sync_mode_button->setIcon(icon133);
         digital_twin_sync_mode_button->setIconSize(QSize(40, 40));
         digital_twin_sync_mode_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5082,9 +5108,9 @@ public:
         simulation_state_manager_button->setSizePolicy(sizePolicy3);
         simulation_state_manager_button->setMinimumSize(QSize(77, 32));
         simulation_state_manager_button->setMaximumSize(QSize(100, 16777215));
-        QIcon icon132;
-        icon132.addFile(QString::fromUtf8(":/icons/icons8-separate-using-a-patch-code-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        simulation_state_manager_button->setIcon(icon132);
+        QIcon icon134;
+        icon134.addFile(QString::fromUtf8(":/icons/icons8-separate-using-a-patch-code-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        simulation_state_manager_button->setIcon(icon134);
         simulation_state_manager_button->setIconSize(QSize(40, 48));
         simulation_state_manager_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5129,7 +5155,7 @@ public:
 
         record_sim_data_button = new QToolButton(widget_33);
         record_sim_data_button->setObjectName("record_sim_data_button");
-        record_sim_data_button->setIcon(icon79);
+        record_sim_data_button->setIcon(icon81);
         record_sim_data_button->setIconSize(QSize(42, 48));
         record_sim_data_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5158,7 +5184,7 @@ public:
         scene_manager_button_2->setObjectName("scene_manager_button_2");
         sizePolicy3.setHeightForWidth(scene_manager_button_2->sizePolicy().hasHeightForWidth());
         scene_manager_button_2->setSizePolicy(sizePolicy3);
-        scene_manager_button_2->setIcon(icon30);
+        scene_manager_button_2->setIcon(icon32);
         scene_manager_button_2->setIconSize(QSize(40, 46));
         scene_manager_button_2->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5193,7 +5219,7 @@ public:
         sizePolicy1.setHeightForWidth(add_primative_button_2->sizePolicy().hasHeightForWidth());
         add_primative_button_2->setSizePolicy(sizePolicy1);
         add_primative_button_2->setMinimumSize(QSize(77, 32));
-        add_primative_button_2->setIcon(icon59);
+        add_primative_button_2->setIcon(icon61);
         add_primative_button_2->setIconSize(QSize(36, 36));
         add_primative_button_2->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5204,7 +5230,7 @@ public:
         sizePolicy3.setHeightForWidth(import_from_button_2->sizePolicy().hasHeightForWidth());
         import_from_button_2->setSizePolicy(sizePolicy3);
         import_from_button_2->setMaximumSize(QSize(77, 16777215));
-        import_from_button_2->setIcon(icon62);
+        import_from_button_2->setIcon(icon64);
         import_from_button_2->setIconSize(QSize(40, 40));
         import_from_button_2->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5217,7 +5243,7 @@ public:
         twin_rules_button->setObjectName("twin_rules_button");
         sizePolicy3.setHeightForWidth(twin_rules_button->sizePolicy().hasHeightForWidth());
         twin_rules_button->setSizePolicy(sizePolicy3);
-        twin_rules_button->setIcon(icon112);
+        twin_rules_button->setIcon(icon114);
         twin_rules_button->setIconSize(QSize(40, 40));
         twin_rules_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5227,7 +5253,7 @@ public:
         calibrate_digital_twin_button->setObjectName("calibrate_digital_twin_button");
         sizePolicy3.setHeightForWidth(calibrate_digital_twin_button->sizePolicy().hasHeightForWidth());
         calibrate_digital_twin_button->setSizePolicy(sizePolicy3);
-        calibrate_digital_twin_button->setIcon(icon31);
+        calibrate_digital_twin_button->setIcon(icon33);
         calibrate_digital_twin_button->setIconSize(QSize(40, 40));
         calibrate_digital_twin_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5259,7 +5285,7 @@ public:
         master_console_button->setObjectName("master_console_button");
         sizePolicy3.setHeightForWidth(master_console_button->sizePolicy().hasHeightForWidth());
         master_console_button->setSizePolicy(sizePolicy3);
-        master_console_button->setIcon(icon98);
+        master_console_button->setIcon(icon100);
         master_console_button->setIconSize(QSize(40, 46));
         master_console_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5333,9 +5359,9 @@ public:
         tf_tree_visualizer->setObjectName("tf_tree_visualizer");
         sizePolicy3.setHeightForWidth(tf_tree_visualizer->sizePolicy().hasHeightForWidth());
         tf_tree_visualizer->setSizePolicy(sizePolicy3);
-        QIcon icon133;
-        icon133.addFile(QString::fromUtf8(":/icons/icons8-flow-chart-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        tf_tree_visualizer->setIcon(icon133);
+        QIcon icon135;
+        icon135.addFile(QString::fromUtf8(":/icons/icons8-flow-chart-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        tf_tree_visualizer->setIcon(icon135);
         tf_tree_visualizer->setIconSize(QSize(40, 40));
         tf_tree_visualizer->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5346,7 +5372,7 @@ public:
         sizePolicy3.setHeightForWidth(latency_jitter_analysis_button->sizePolicy().hasHeightForWidth());
         latency_jitter_analysis_button->setSizePolicy(sizePolicy3);
         latency_jitter_analysis_button->setMaximumSize(QSize(77, 16777215));
-        latency_jitter_analysis_button->setIcon(icon113);
+        latency_jitter_analysis_button->setIcon(icon115);
         latency_jitter_analysis_button->setIconSize(QSize(48, 40));
         latency_jitter_analysis_button->setCheckable(true);
         latency_jitter_analysis_button->setChecked(false);
@@ -5359,9 +5385,9 @@ public:
         sizePolicy1.setHeightForWidth(ram_monitor_button->sizePolicy().hasHeightForWidth());
         ram_monitor_button->setSizePolicy(sizePolicy1);
         ram_monitor_button->setMinimumSize(QSize(77, 32));
-        QIcon icon134;
-        icon134.addFile(QString::fromUtf8(":/icons/icons8-memory-slot-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        ram_monitor_button->setIcon(icon134);
+        QIcon icon136;
+        icon136.addFile(QString::fromUtf8(":/icons/icons8-memory-slot-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        ram_monitor_button->setIcon(icon136);
         ram_monitor_button->setIconSize(QSize(48, 46));
         ram_monitor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5372,9 +5398,9 @@ public:
         sizePolicy1.setHeightForWidth(script_profiler_button->sizePolicy().hasHeightForWidth());
         script_profiler_button->setSizePolicy(sizePolicy1);
         script_profiler_button->setMinimumSize(QSize(77, 32));
-        QIcon icon135;
-        icon135.addFile(QString::fromUtf8(":/icons/icons8-timer-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        script_profiler_button->setIcon(icon135);
+        QIcon icon137;
+        icon137.addFile(QString::fromUtf8(":/icons/icons8-timer-96.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        script_profiler_button->setIcon(icon137);
         script_profiler_button->setIconSize(QSize(48, 46));
         script_profiler_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5399,7 +5425,7 @@ public:
         sizePolicy2.setHeightForWidth(joint_state_viewer_button->sizePolicy().hasHeightForWidth());
         joint_state_viewer_button->setSizePolicy(sizePolicy2);
         joint_state_viewer_button->setMaximumSize(QSize(77, 16777215));
-        joint_state_viewer_button->setIcon(icon27);
+        joint_state_viewer_button->setIcon(icon29);
         joint_state_viewer_button->setIconSize(QSize(36, 36));
         joint_state_viewer_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5410,9 +5436,9 @@ public:
         sizePolicy1.setHeightForWidth(controller_status_button->sizePolicy().hasHeightForWidth());
         controller_status_button->setSizePolicy(sizePolicy1);
         controller_status_button->setMinimumSize(QSize(77, 32));
-        QIcon icon136;
-        icon136.addFile(QString::fromUtf8(":/icons/icons8-programming-logic-controller-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        controller_status_button->setIcon(icon136);
+        QIcon icon138;
+        icon138.addFile(QString::fromUtf8(":/icons/icons8-programming-logic-controller-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        controller_status_button->setIcon(icon138);
         controller_status_button->setIconSize(QSize(36, 36));
         controller_status_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5422,7 +5448,7 @@ public:
         lifetime_analysis_button->setObjectName("lifetime_analysis_button");
         sizePolicy3.setHeightForWidth(lifetime_analysis_button->sizePolicy().hasHeightForWidth());
         lifetime_analysis_button->setSizePolicy(sizePolicy3);
-        lifetime_analysis_button->setIcon(icon56);
+        lifetime_analysis_button->setIcon(icon58);
         lifetime_analysis_button->setIconSize(QSize(40, 40));
         lifetime_analysis_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5430,7 +5456,7 @@ public:
 
         power_system_monitor_button = new QToolButton(widget_37);
         power_system_monitor_button->setObjectName("power_system_monitor_button");
-        power_system_monitor_button->setIcon(icon114);
+        power_system_monitor_button->setIcon(icon116);
         power_system_monitor_button->setIconSize(QSize(42, 48));
         power_system_monitor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5441,7 +5467,7 @@ public:
         sizePolicy3.setHeightForWidth(fault_log_viewer_button->sizePolicy().hasHeightForWidth());
         fault_log_viewer_button->setSizePolicy(sizePolicy3);
         fault_log_viewer_button->setMaximumSize(QSize(77, 16777215));
-        fault_log_viewer_button->setIcon(icon97);
+        fault_log_viewer_button->setIcon(icon99);
         fault_log_viewer_button->setIconSize(QSize(40, 40));
         fault_log_viewer_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5452,9 +5478,9 @@ public:
 
         cpu_monitor_button = new QToolButton(widget_35);
         cpu_monitor_button->setObjectName("cpu_monitor_button");
-        QIcon icon137;
-        icon137.addFile(QString::fromUtf8(":/icons/icons8-cpu-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        cpu_monitor_button->setIcon(icon137);
+        QIcon icon139;
+        icon139.addFile(QString::fromUtf8(":/icons/icons8-cpu-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        cpu_monitor_button->setIcon(icon139);
         cpu_monitor_button->setIconSize(QSize(45, 48));
         cpu_monitor_button->setCheckable(true);
         cpu_monitor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
@@ -5465,9 +5491,9 @@ public:
         topic_monitor_button->setObjectName("topic_monitor_button");
         sizePolicy3.setHeightForWidth(topic_monitor_button->sizePolicy().hasHeightForWidth());
         topic_monitor_button->setSizePolicy(sizePolicy3);
-        QIcon icon138;
-        icon138.addFile(QString::fromUtf8(":/icons/icons8-view-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        topic_monitor_button->setIcon(icon138);
+        QIcon icon140;
+        icon140.addFile(QString::fromUtf8(":/icons/icons8-view-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        topic_monitor_button->setIcon(icon140);
         topic_monitor_button->setIconSize(QSize(40, 40));
         topic_monitor_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5479,9 +5505,9 @@ public:
         log_level_button->setSizePolicy(sizePolicy2);
         log_level_button->setMinimumSize(QSize(77, 32));
         log_level_button->setMaximumSize(QSize(77, 16777215));
-        QIcon icon139;
-        icon139.addFile(QString::fromUtf8(":/icons/icons8-topic-push-notification-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        log_level_button->setIcon(icon139);
+        QIcon icon141;
+        icon141.addFile(QString::fromUtf8(":/icons/icons8-topic-push-notification-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        log_level_button->setIcon(icon141);
         log_level_button->setIconSize(QSize(36, 36));
         log_level_button->setCheckable(true);
         log_level_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
@@ -5499,7 +5525,7 @@ public:
         packet_inspector_button->setObjectName("packet_inspector_button");
         sizePolicy3.setHeightForWidth(packet_inspector_button->sizePolicy().hasHeightForWidth());
         packet_inspector_button->setSizePolicy(sizePolicy3);
-        packet_inspector_button->setIcon(icon50);
+        packet_inspector_button->setIcon(icon52);
         packet_inspector_button->setIconSize(QSize(40, 40));
         packet_inspector_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
@@ -5611,22 +5637,18 @@ public:
         save_layout_button->setText(QCoreApplication::translate("toolbarContainer", "Save Layout", nullptr));
         reset_layout_button->setText(QCoreApplication::translate("toolbarContainer", "Reset Layout", nullptr));
         preferences_button->setText(QCoreApplication::translate("toolbarContainer", "Preferences", nullptr));
+        databaseManagerButton->setText(QCoreApplication::translate("toolbarContainer", "Database\n"
+"Manager", nullptr));
         help_button->setText(QCoreApplication::translate("toolbarContainer", "Help", nullptr));
         toolbar_tabs->setTabText(toolbar_tabs->indexOf(general_toolbar), QCoreApplication::translate("toolbarContainer", "General", nullptr));
-        toolButton->setText(QCoreApplication::translate("toolbarContainer", " Scene\n"
-"Lighting", nullptr));
-        viewport_shading_group->setTitle(QCoreApplication::translate("toolbarContainer", "Visual Style", nullptr));
-        shaded_view_button->setText(QCoreApplication::translate("toolbarContainer", "Shaded", nullptr));
-        shaded_edges_view_button->setText(QCoreApplication::translate("toolbarContainer", "Shaded + Edges", nullptr));
-        wireframe_view_button->setText(QCoreApplication::translate("toolbarContainer", "Wireframe", nullptr));
-        label_16->setText(QCoreApplication::translate("toolbarContainer", "Viewport Shading", nullptr));
-        show_object_axes_button->setText(QCoreApplication::translate("toolbarContainer", "Object Origins", nullptr));
-        show_axes_button->setText(QCoreApplication::translate("toolbarContainer", "Global Origin", nullptr));
         view_presets_button->setText(QCoreApplication::translate("toolbarContainer", "View\n"
 "Presets", nullptr));
         save_view_button->setText(QCoreApplication::translate("toolbarContainer", "Save Current\n"
 "View", nullptr));
-        label_12->setText(QCoreApplication::translate("toolbarContainer", "Camera Projection & Control", nullptr));
+        control_group_box->setTitle(QCoreApplication::translate("toolbarContainer", "Control", nullptr));
+        orbit_button->setText(QCoreApplication::translate("toolbarContainer", "Orbit", nullptr));
+        pan_button->setText(QCoreApplication::translate("toolbarContainer", "Pan", nullptr));
+        show_grid_button->setText(QCoreApplication::translate("toolbarContainer", "Grid Plane", nullptr));
         view_group_box->setTitle(QCoreApplication::translate("toolbarContainer", "Views", nullptr));
 #if QT_CONFIG(tooltip)
         perpective_button->setToolTip(QCoreApplication::translate("toolbarContainer", "<html><head/><body><p>Create New Project File</p></body></html>", nullptr));
@@ -5636,15 +5658,23 @@ public:
         orthographic_button->setToolTip(QCoreApplication::translate("toolbarContainer", "<html><head/><body><p>Open Project File From Computer</p></body></html>", nullptr));
 #endif // QT_CONFIG(tooltip)
         orthographic_button->setText(QCoreApplication::translate("toolbarContainer", "Orthographic", nullptr));
+        label_15->setText(QCoreApplication::translate("toolbarContainer", "Overlays & Helpers", nullptr));
         show_collision_shapes_button->setText(QCoreApplication::translate("toolbarContainer", "Collision\n"
 "Boxes", nullptr));
-        show_grid_button->setText(QCoreApplication::translate("toolbarContainer", "Grid Plane", nullptr));
-        control_group_box->setTitle(QCoreApplication::translate("toolbarContainer", "Control", nullptr));
-        orbit_button->setText(QCoreApplication::translate("toolbarContainer", "Orbit", nullptr));
-        pan_button->setText(QCoreApplication::translate("toolbarContainer", "Pan", nullptr));
+        label_12->setText(QCoreApplication::translate("toolbarContainer", "Camera Projection & Control", nullptr));
+        viewport_shading_group->setTitle(QCoreApplication::translate("toolbarContainer", "Visual Style", nullptr));
+        shaded_view_button->setText(QCoreApplication::translate("toolbarContainer", "Shaded", nullptr));
+        shaded_edges_view_button->setText(QCoreApplication::translate("toolbarContainer", "Shaded + Edges", nullptr));
+        wireframe_view_button->setText(QCoreApplication::translate("toolbarContainer", "Wireframe", nullptr));
         reset_view_button->setText(QCoreApplication::translate("toolbarContainer", "Reset View", nullptr));
-        label_15->setText(QCoreApplication::translate("toolbarContainer", "Overlays & Helpers", nullptr));
+        show_object_axes_button->setText(QCoreApplication::translate("toolbarContainer", "Object Origins", nullptr));
+        toolButton->setText(QCoreApplication::translate("toolbarContainer", " Scene\n"
+"Lighting", nullptr));
         label_13->setText(QCoreApplication::translate("toolbarContainer", "View Management", nullptr));
+        show_axes_button->setText(QCoreApplication::translate("toolbarContainer", "Global Origin", nullptr));
+        label_16->setText(QCoreApplication::translate("toolbarContainer", "Viewport Shading", nullptr));
+        flowVisualizerMenu->setText(QCoreApplication::translate("toolbarContainer", "Field\n"
+"Visualizer", nullptr));
         toolbar_tabs->setTabText(toolbar_tabs->indexOf(view_toolbar), QCoreApplication::translate("toolbarContainer", "View", nullptr));
 #if QT_CONFIG(tooltip)
         open_robot_code_button->setToolTip(QCoreApplication::translate("toolbarContainer", "<html><head/><body><p>Open Project File From Computer</p></body></html>", nullptr));

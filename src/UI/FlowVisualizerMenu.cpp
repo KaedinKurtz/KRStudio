@@ -1,9 +1,11 @@
-ï»¿#include "FlowVisualizerMenu.hpp"
+#include "FlowVisualizerMenu.hpp"
 #include "ui_flowVisualizerMenu.h"
 #include "PreviewViewport.hpp" // Include the preview viewport header here
 #include "QtHelpers.hpp"
 #include "Scene.hpp"
+#include "DatabaseManager.hpp"
 
+#include "MenuFactory.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <QColorDialog>
 #include <QPainter>
@@ -658,4 +660,27 @@ void FlowVisualizerMenu::commitToComponent(FieldVisualizerComponent& vis)
     particle.lifetimeGradient = getParticleLifetimeGradient();
 
     vis.isGpuDataDirty = true;
+}
+
+void FlowVisualizerMenu::initializeFresh()
+{
+    // your existing fresh-init code (e.g. setup defaults)
+    initializeState();
+}
+
+void FlowVisualizerMenu::initializeFromDatabase()
+{
+    QString blob = db::DatabaseManager::instance()
+        .loadMenuState(db::DatabaseManager::menuTypeToString(MenuType::FlowVisualizer));
+    QJsonParseError error;
+    // parse…
+    QJsonDocument doc = QJsonDocument::fromJson(blob.toUtf8(), &error);
+}
+
+void FlowVisualizerMenu::shutdownAndSave()
+{
+    // collect all widget values into a blob
+    QString outBlob;   // TODO: serialize your state
+    db::DatabaseManager::instance()
+        .saveMenuState(db::DatabaseManager::menuTypeToString(MenuType::FlowVisualizer), outBlob);
 }

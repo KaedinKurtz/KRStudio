@@ -6,6 +6,7 @@
 #include "DatabaseReplicationManager.hpp"
 #include "Scene.hpp"
 #include "components.hpp"
+#include "MenuFactory.hpp"
 
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -112,6 +113,20 @@ bool DatabaseManager::initialize(const DatabaseConfig& config) {
         return false;
     }
     
+    auto connection = getConnection();
+    QSqlQuery q(connection);
+    if (!q.exec(R"(
+    CREATE TABLE IF NOT EXISTS menu_states (
+        scene_name TEXT NOT NULL,
+        menu_type   TEXT NOT NULL,
+        state       TEXT,
+        PRIMARY KEY (scene_name, menu_type)
+    );
+    )")) {
+        qCritical() << "Failed to create menu_states table:" << q.lastError().text();
+    }
+    releaseConnection(connection);
+
     // Create specialized managers
     m_backupManager = std::make_unique<db::DatabaseBackupManager>(this);
     m_migrationManager = std::make_unique<db::DatabaseMigrationManager>(this);
@@ -359,6 +374,21 @@ bool DatabaseManager::createTables() {
         return false;
     }
     
+    // --- Menu states table ---
+     if (!query.exec(R"(
+        CREATE TABLE IF NOT EXISTS menu_states (
+            menu_name TEXT PRIMARY KEY,
+            state      TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+     )")) {
+        qCritical() << "Failed to create menu_states table:" << query.lastError().text();
+        releaseConnection(connection);
+        return false;
+        
+    }
+
+
     releaseConnection(connection);
     return true;
 }
@@ -1306,4 +1336,63 @@ void db::DatabaseManager::onSlowQueryDetected() {
 QStringList db::DatabaseManager::listScenes() {
     // Stub implementation - you can fill this in later
     return QStringList();
+}
+
+ bool DatabaseManager::saveMenuState(const QString & menuName, const QString & stateJson) {
+    auto conn = getConnection();
+    QSqlQuery query(conn);
+    query.prepare(
+        "INSERT OR REPLACE INTO menu_states "
+         "(menu_name, state, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)"
+         );
+    query.addBindValue(menuName);
+    query.addBindValue(stateJson);
+    bool ok = query.exec();
+    if (!ok) {
+        qWarning() << "Failed to save menu state for" << menuName << ":" << query.lastError().text();
+        
+    }
+     releaseConnection(conn);
+    return ok;
+    
+}
+
+QString DatabaseManager::loadMenuState(const QString & menuName) {
+    auto conn = getConnection();
+    QSqlQuery query(conn);
+    query.prepare("SELECT state FROM menu_states WHERE menu_name = ?");
+    query.addBindValue(menuName);
+    QString state;
+    if (query.exec() && query.next()) {
+        state = query.value(0).toString();
+        
+    }
+     releaseConnection(conn);
+    return state;
+    
+}
+
+QString DatabaseManager::menuTypeToString(MenuType type)
+{
+    switch (type) {
+    case MenuType::FlowVisualizer: return QStringLiteral("FlowVisualizer");
+    case MenuType::RealSense:      return QStringLiteral("RealSense");
+    case MenuType::Database:       return QStringLiteral("Database");
+    case MenuType::GridProperties: return QStringLiteral("GridProperties");
+        // …add any others…
+    default:                       return QString();
+    }
+}
+
+bool DatabaseManager::menuConfigExists(const QString& menuType)
+{
+    // grab a QSqlDatabase from the pool
+    QSqlQuery q(m_connectionPool->getConnection());
+    q.prepare("SELECT 1 FROM MenuStates WHERE menu_name = :name LIMIT 1");
+    q.bindValue(":name", menuType);
+    if (!q.exec()) {
+        qWarning() << "menuConfigExists query failed:" << q.lastError().text();
+        return false;
+    }
+    return q.next();
 }
