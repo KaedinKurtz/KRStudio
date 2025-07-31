@@ -15,21 +15,27 @@
 #include <QColorDialog> // For color picking dialog
 #include <QDebug> // For debugging output
 #include <QWidget> // Base class for all UI widgets
+#include "IMenu.hpp"
 
-
+#include "MenuFactory.hpp"
 
 namespace Ui {
     class gridPropertiesWidget; // Correct class name
 }
 class Scene;
 
-class gridPropertiesWidget : public QWidget
+class gridPropertiesWidget : public QWidget, public IMenu
 {
     Q_OBJECT
 
 public:
     explicit gridPropertiesWidget(Scene* scene, entt::entity entity, QWidget* parent = nullptr);
     ~gridPropertiesWidget();
+
+    void initializeFresh() override;
+    void initializeFromDatabase() override;
+    void shutdownAndSave() override;
+    QWidget* widget() override { return this; }
 
 private slots:
     // Slots to handle UI changes

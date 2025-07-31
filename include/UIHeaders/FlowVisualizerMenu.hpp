@@ -5,7 +5,7 @@
 #include <QMap>
 #include <glm/glm.hpp>
 #include "components.hpp" // For FieldVisualizerComponent and its enums
-
+#include "IMenu.hpp"
 // Include all necessary Qt headers to be safe with MOC
 #include <QSlider>
 #include <QDoubleSpinBox>
@@ -23,13 +23,18 @@ namespace Ui {
     class FlowVisualizerMenu;
 }
 
-class FlowVisualizerMenu : public QWidget
+class FlowVisualizerMenu : public QWidget, public IMenu
 {
     Q_OBJECT
 
 public:
     explicit FlowVisualizerMenu(QWidget* parent = nullptr);
     ~FlowVisualizerMenu();
+
+    void initializeFresh() override;
+    void initializeFromDatabase() override;
+    void shutdownAndSave() override;
+    QWidget* widget() override { return this; }
 
     void updateControlsFromComponent(const FieldVisualizerComponent& component);
     void updateControlsFromScene(const Scene& scene);

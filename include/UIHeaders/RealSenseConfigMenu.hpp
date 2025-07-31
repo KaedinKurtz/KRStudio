@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <QVariant> // Add this include for QVariant
+#include "IMenu.hpp"
 
 // Forward declare all Qt classes to keep this header clean
 class QTimer;
@@ -21,7 +22,7 @@ class QGroupBox;
 // Make the StreamProfile struct usable with QVariant
 Q_DECLARE_METATYPE(StreamProfile);
 
-class RealSenseConfigMenu : public QWidget
+class RealSenseConfigMenu : public QWidget, public IMenu
 {
     Q_OBJECT
 
@@ -29,6 +30,11 @@ public:
     explicit RealSenseConfigMenu(QWidget* parent = nullptr);
     ~RealSenseConfigMenu();
     void setupPreview();
+
+    void initializeFresh() override;
+    void initializeFromDatabase() override;
+    void shutdownAndSave() override;
+    QWidget* widget() override { return this; }
 
 public slots:
     void onRefreshDevicesClicked();

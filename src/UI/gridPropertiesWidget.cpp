@@ -2,6 +2,9 @@
 #include "ui_gridPropertiesWidget.h"
 #include "Scene.hpp"
 #include "components.hpp"
+#include "DatabaseManager.hpp"
+#include "IMenu.hpp"
+#include "MenuFactory.hpp"
 
 #include <QColorDialog>
 #include <QSignalBlocker>
@@ -14,6 +17,8 @@
 #include <QLabel>
 #include <QGroupBox>
 #include <QOverload>
+#include <QJsonObject>
+#include <QJsonDocument>
 
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -295,4 +300,57 @@ void gridPropertiesWidget::onQuaternionChanged()
 
     m_scene->getRegistry().get<TransformComponent>(m_entity).rotation = new_rotation;
     updateOrientationInputs(new_rotation);
+}
+
+void gridPropertiesWidget::initializeFresh()
+{
+        // First-ever setup: just populate UI from scene defaults
+        initializeUI();
+}
+
+void gridPropertiesWidget::initializeFromDatabase()
+{
+    // Attempt to load previous UI state
+    QString blob = db::DatabaseManager::instance()
+        .loadMenuState(db::DatabaseManager::menuTypeToString(MenuType::GridProperties));
+    if (blob.isEmpty()) {
+        // no saved state -> fresh UI
+        initializeUI();
+        return;
+    }
+
+    // parse JSON
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(blob.toUtf8(), &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        qWarning() << "gridPropertiesWidget: failed to parse saved state:"
+            << parseError.errorString();
+        initializeUI();
+        return;
+    }
+    QJsonObject obj = doc.object();
+
+    // Restore each control (add any additional keys you need)
+    ui->gridNameInput->setText(obj.value("gridName").toString());
+    ui->masterVisibilityCheck->setChecked(obj.value("masterVisible").toBool());
+    ui->lineThicknessBox->setValue(obj.value("lineThickness").toDouble());
+    ui->visualizationCombo->setCurrentIndex(obj.value("dotted").toBool() ? 1 : 0);
+    ui->gridSnapToggleButton->setChecked(obj.value("snapEnabled").toBool());
+
+    // and update scene if needed
+}
+
+void gridPropertiesWidget::shutdownAndSave()
+{
+
+    QJsonObject obj;
+    obj["gridName"] = ui->gridNameInput->text();
+    obj["masterVisible"] = ui->masterVisibilityCheck->isChecked();
+    obj["lineThickness"] = ui->lineThicknessBox->value();
+    obj["dotted"] = (ui->visualizationCombo->currentIndex() == 1);
+    obj["snapEnabled"] = ui->gridSnapToggleButton->isChecked();
+        // …collect colour/spacing fields as needed…
+        
+        QJsonDocument doc(obj);
+        db::DatabaseManager::instance().saveMenuState("GridProperties", doc.toJson());
 }

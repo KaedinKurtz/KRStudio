@@ -12,6 +12,7 @@
 #include <QSqlTableModel>
 #include <memory>
 #include "Scene.hpp"
+#include "IMenu.hpp"
 
 class Scene;
 
@@ -20,11 +21,16 @@ namespace db {
     
 }
 
-class DatabasePanel : public QWidget {
+class DatabasePanel : public QWidget, public IMenu {
     Q_OBJECT
 public:
     explicit DatabasePanel(Scene* scene, QWidget* parent = nullptr);
     ~DatabasePanel();
+
+    void initializeFresh() override;
+    void initializeFromDatabase() override;
+    void shutdownAndSave() override;
+    QWidget * widget() override { return this; }
 
 signals:
     void requestSceneReload(const QString& sceneName);

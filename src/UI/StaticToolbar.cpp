@@ -13,6 +13,13 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
     // For example:
     connect(ui->load_robot_button, &QToolButton::clicked, this, &StaticToolbar::loadRobotClicked); // after a line, explain what it does
 
+    connect(ui->flowVisualizerMenu, &QToolButton::toggled,
+        this, &StaticToolbar::flowMenuToggled);
+    connect(ui->realsense_config_button, &QToolButton::toggled,
+        this, &StaticToolbar::realSenseMenuToggled);
+    connect(ui->databaseManagerButton, &QToolButton::toggled,
+        this, &StaticToolbar::databaseMenuToggled);
+
     // 1) Create the popup and parent it to this toolbar
     m_viewportManagerPopup = new ViewportManagerPopup(this);
 
