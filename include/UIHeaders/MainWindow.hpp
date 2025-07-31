@@ -117,6 +117,8 @@ private:
 
     QVector<bool> m_colorInUse;
 
+    ads::CDockAreaWidget* m_propertiesArea = nullptr;
+
 public slots:
     void addViewport();
     void removeViewport();

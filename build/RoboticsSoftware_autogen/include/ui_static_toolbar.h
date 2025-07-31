@@ -149,7 +149,7 @@ public:
     QFrame *line_17;
     QToolButton *pan_button;
     QWidget *ViewportManagerWidgetPlaceholder;
-    QToolButton *show_grid_button;
+    QToolButton *gridPropertiesButton;
     QGroupBox *view_group_box;
     QHBoxLayout *horizontalLayout_43;
     QToolButton *perpective_button;
@@ -1606,20 +1606,20 @@ public:
 
         gridLayout_12->addWidget(ViewportManagerWidgetPlaceholder, 0, 11, 3, 1);
 
-        show_grid_button = new QToolButton(widget_8);
-        show_grid_button->setObjectName("show_grid_button");
-        sizePolicy3.setHeightForWidth(show_grid_button->sizePolicy().hasHeightForWidth());
-        show_grid_button->setSizePolicy(sizePolicy3);
-        show_grid_button->setMinimumSize(QSize(77, 32));
-        show_grid_button->setMaximumSize(QSize(100, 16777215));
+        gridPropertiesButton = new QToolButton(widget_8);
+        gridPropertiesButton->setObjectName("gridPropertiesButton");
+        sizePolicy3.setHeightForWidth(gridPropertiesButton->sizePolicy().hasHeightForWidth());
+        gridPropertiesButton->setSizePolicy(sizePolicy3);
+        gridPropertiesButton->setMinimumSize(QSize(77, 32));
+        gridPropertiesButton->setMaximumSize(QSize(100, 16777215));
         QIcon icon16;
-        icon16.addFile(QString::fromUtf8(":/icons/groundplane.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
-        show_grid_button->setIcon(icon16);
-        show_grid_button->setIconSize(QSize(48, 60));
-        show_grid_button->setCheckable(true);
-        show_grid_button->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
+        icon16.addFile(QString::fromUtf8(":/icons/icons8-grid-48.png"), QSize(), QIcon::Mode::Normal, QIcon::State::Off);
+        gridPropertiesButton->setIcon(icon16);
+        gridPropertiesButton->setIconSize(QSize(48, 60));
+        gridPropertiesButton->setCheckable(true);
+        gridPropertiesButton->setToolButtonStyle(Qt::ToolButtonStyle::ToolButtonTextUnderIcon);
 
-        gridLayout_12->addWidget(show_grid_button, 2, 13, 1, 1);
+        gridLayout_12->addWidget(gridPropertiesButton, 2, 13, 1, 1);
 
         view_group_box = new QGroupBox(widget_8);
         view_group_box->setObjectName("view_group_box");
@@ -5648,7 +5648,7 @@ public:
         control_group_box->setTitle(QCoreApplication::translate("toolbarContainer", "Control", nullptr));
         orbit_button->setText(QCoreApplication::translate("toolbarContainer", "Orbit", nullptr));
         pan_button->setText(QCoreApplication::translate("toolbarContainer", "Pan", nullptr));
-        show_grid_button->setText(QCoreApplication::translate("toolbarContainer", "Grid Plane", nullptr));
+        gridPropertiesButton->setText(QCoreApplication::translate("toolbarContainer", "Grid Plane", nullptr));
         view_group_box->setTitle(QCoreApplication::translate("toolbarContainer", "Views", nullptr));
 #if QT_CONFIG(tooltip)
         perpective_button->setToolTip(QCoreApplication::translate("toolbarContainer", "<html><head/><body><p>Create New Project File</p></body></html>", nullptr));

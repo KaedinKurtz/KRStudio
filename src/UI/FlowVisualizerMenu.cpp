@@ -113,26 +113,8 @@ FlowVisualizerMenu::FlowVisualizerMenu(QWidget* parent) :
     QWidget(parent),
     ui(new Ui::FlowVisualizerMenu)
 {
-    QSignalBlocker b(this);
+    // The constructor is now responsible for building the UI from the .ui file.
     ui->setupUi(this);
-    WH::unbounded(ui->originInputX);
-    WH::unbounded(ui->originInputY);
-    WH::unbounded(ui->originInputZ);
-    WH::range180deg(ui->angleInputEulerX);
-    WH::range180deg(ui->angleInputEulerY);
-    WH::range180deg(ui->angleInputEulerZ);
-    m_staticPreview = qobject_cast<PreviewViewport*>(ui->arrowPreviewViewport);
-    m_dynamicPreview = qobject_cast<PreviewViewport*>(ui->dynamic_PreviewViewport);
-    m_particlePreview = qobject_cast<PreviewViewport*>(ui->particle_previewViewport);
-    if (!m_staticPreview || !m_dynamicPreview || !m_particlePreview) {
-        qWarning() << "FlowVisualizerMenu: Failed to cast preview widgets.";
-    }
-    initializeState();
-    setupConnections();
-    auto* boundaryGroup = new QButtonGroup(this);
-    boundaryGroup->setExclusive(true);
-    boundaryGroup->addButton(ui->rectangleBoundaryButton, 0);
-    boundaryGroup->addButton(ui->sphericalBoundaryButton, 1);
 }
 
 FlowVisualizerMenu::~FlowVisualizerMenu()
@@ -183,25 +165,22 @@ void FlowVisualizerMenu::initializeState()
     ui->intensityMultiplierSpinBox->setValue(1.0);
     ui->cullingThresholdSpinBox->setValue(0.01);
 
-    // --- NEW: Add reasonable defaults for dynamic modes ---
     ui->dynamic_particleCountSpinBox->setMaximum(100000);
     ui->dynamic_particleCountSpinBox->setValue(5000);
     ui->dynamic_particleLifetimeSpinBox->setValue(5.0);
-    ui->dynamic_particleBaseSpeedSpinBox->setMaximum(1.0); // Cap speed
-    ui->dynamic_particleBaseSpeedSpinBox->setValue(0.1);   // Set smaller default
-    ui->dynamic_particleBaseSizeSpinBox->setValue(0.05);   // Increase default size
+    ui->dynamic_particleBaseSpeedSpinBox->setMaximum(1.0);
+    ui->dynamic_particleBaseSpeedSpinBox->setValue(0.1);
+    ui->dynamic_particleBaseSizeSpinBox->setValue(0.05);
 
-    // --- FIX: Update particle controls for a visible result ---
-    ui->particle_particleCountSpinBox->setMaximum(100000); // Set max count
+    ui->particle_particleCountSpinBox->setMaximum(100000);
     ui->particle_particleCountSpinBox->setValue(10000);
     ui->particle_particleLifetimeSpinBox->setValue(4.0);
-    ui->particle_particleBaseSpeedSpinBox->setMaximum(2.0); // Cap speed
-    ui->particle_particleBaseSpeedSpinBox->setValue(0.5);   // Set smaller default
-    ui->particle_intensitySpeedMultSpinBox->setMaximum(2.0); // Cap multiplier
+    ui->particle_particleBaseSpeedSpinBox->setMaximum(2.0);
+    ui->particle_particleBaseSpeedSpinBox->setValue(0.5);
+    ui->particle_intensitySpeedMultSpinBox->setMaximum(2.0);
 
-    // Adjust size controls to work in a pixel-like scale
     ui->particle_particleBaseSizeSpinBox->setRange(0.0, 50.0);
-    ui->particle_particleBaseSizeSpinBox->setValue(10.0); // A visible default size
+    ui->particle_particleBaseSizeSpinBox->setValue(10.0);
     ui->particle_particlePeakIntensitySpinBox->setRange(0.0, 5.0);
     ui->particle_particlePeakIntensitySpinBox->setValue(2.0);
     ui->particle_particleMinSizeSpinBox->setRange(0.0, 20.0);
@@ -583,16 +562,14 @@ void FlowVisualizerMenu::updateControlsFromComponent(const FieldVisualizerCompon
 
 void FlowVisualizerMenu::updateControlsFromScene(const Scene& scene)
 {
-    // Find the first FieldVisualizerComponent in the scene and update controls from it
     auto& registry = scene.getRegistry();
     auto view = registry.view<const FieldVisualizerComponent>();
-    
+
     if (view.size() > 0) {
-        // Update from the first field visualizer component found
         const auto& component = view.get<const FieldVisualizerComponent>(view.front());
         updateControlsFromComponent(component);
-    } else {
-        // If no field visualizer component exists, reset to default state
+    }
+    else {
         initializeState();
     }
 }
@@ -664,23 +641,47 @@ void FlowVisualizerMenu::commitToComponent(FieldVisualizerComponent& vis)
 
 void FlowVisualizerMenu::initializeFresh()
 {
-    // your existing fresh-init code (e.g. setup defaults)
+    // This is now the main entry point for setting up the panel for the first time.
+    QSignalBlocker b(this);
+    WH::unbounded(ui->originInputX);
+    WH::unbounded(ui->originInputY);
+    WH::unbounded(ui->originInputZ);
+    WH::range180deg(ui->angleInputEulerX);
+    WH::range180deg(ui->angleInputEulerY);
+    WH::range180deg(ui->angleInputEulerZ);
+    m_staticPreview = qobject_cast<PreviewViewport*>(ui->arrowPreviewViewport);
+    m_dynamicPreview = qobject_cast<PreviewViewport*>(ui->dynamic_PreviewViewport);
+    m_particlePreview = qobject_cast<PreviewViewport*>(ui->particle_previewViewport);
+    if (!m_staticPreview || !m_dynamicPreview || !m_particlePreview) {
+        qWarning() << "FlowVisualizerMenu: Failed to cast preview widgets.";
+    }
     initializeState();
+    setupConnections();
+    auto* boundaryGroup = new QButtonGroup(this);
+    boundaryGroup->setExclusive(true);
+    boundaryGroup->addButton(ui->rectangleBoundaryButton, 0);
+    boundaryGroup->addButton(ui->sphericalBoundaryButton, 1);
 }
 
 void FlowVisualizerMenu::initializeFromDatabase()
 {
     QString blob = db::DatabaseManager::instance()
         .loadMenuState(db::DatabaseManager::menuTypeToString(MenuType::FlowVisualizer));
+
+    if (blob.isEmpty()) {
+        initializeFresh();
+        return;
+    }
+
     QJsonParseError error;
-    // parse…
     QJsonDocument doc = QJsonDocument::fromJson(blob.toUtf8(), &error);
+    // TODO: Parse the JSON and apply the saved state to the UI controls.
 }
 
 void FlowVisualizerMenu::shutdownAndSave()
 {
-    // collect all widget values into a blob
-    QString outBlob;   // TODO: serialize your state
+    // TODO: collect all widget values into a blob
+    QString outBlob;
     db::DatabaseManager::instance()
         .saveMenuState(db::DatabaseManager::menuTypeToString(MenuType::FlowVisualizer), outBlob);
 }

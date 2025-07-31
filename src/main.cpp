@@ -1,96 +1,75 @@
 #include <QApplication>
 #include <QSurfaceFormat>
-#include <QLoggingCategory>
-#include <QOpenGLVersionFunctionsFactory>
-#include <QOpenGLContext>
-#include "MainWindow.hpp"
+#include <QCoreApplication>
+#include <QDebug>
 #include <QtWidgets>
+#include "MainWindow.hpp"
 #include "DatabaseManager.hpp"
 
-
-
-
-static void qtMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+// custom message handler (you can leave this out if you don’t need it)
+static void qtMessageOutput(QtMsgType type, const QMessageLogContext& ctx, const QString& msg)
 {
-    QByteArray localMsg = msg.toLocal8Bit();
-    const char *file = context.file ? context.file : "";
-    const char *function = context.function ? context.function : "";
-    switch (type) {
-    case QtDebugMsg:
-        fprintf(stderr, "Debug: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        break;
-    case QtInfoMsg:
-        fprintf(stderr, "Info: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        break;
-    case QtWarningMsg:
-        fprintf(stderr, "Warning: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        break;
-    case QtCriticalMsg:
-        fprintf(stderr, "Critical: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        break;
-    case QtFatalMsg:
-        fprintf(stderr, "Fatal: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        abort();
-    }
-    fflush(stderr);
+    QByteArray local = msg.toLocal8Bit();
+    fprintf(stderr, "%s\n", local.constData());
 }
 
-
-// ---------------------------------------------------------------------
-// 1. Dummy share-root context – lives for the whole program
-// ---------------------------------------------------------------------
+// one?time shared OpenGL context
 static QOpenGLContext* gShareRoot = nullptr;
-
 static void initShareRoot()
 {
-    if (gShareRoot)                    // idempotent
-        return;
-
-    gShareRoot = new QOpenGLContext;
-    gShareRoot->setFormat(QSurfaceFormat::defaultFormat());
-    gShareRoot->create();              // no surface needed
+    if (!gShareRoot) {
+        gShareRoot = new QOpenGLContext;
+        gShareRoot->setFormat(QSurfaceFormat::defaultFormat());
+        gShareRoot->create();
+    }
 }
 
-// ---------------------------------------------------------------------
-// 2. Helper to set exactly one default GL format
-// ---------------------------------------------------------------------
+// default format for all GL windows
 static QSurfaceFormat createDefaultFormat()
 {
-    QSurfaceFormat fmt;
-    fmt.setRenderableType(QSurfaceFormat::OpenGL);
-    fmt.setVersion(4, 3);
-    fmt.setProfile(QSurfaceFormat::CoreProfile);
-    fmt.setDepthBufferSize(24);
-    fmt.setStencilBufferSize(8);
-    fmt.setSamples(4);
-    fmt.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
-    fmt.setColorSpace(QSurfaceFormat::sRGBColorSpace);
-    // fmt.setOption(QSurfaceFormat::DebugContext); // if you want the debug ctx
-    return fmt;
+    QSurfaceFormat f;
+    f.setRenderableType(QSurfaceFormat::OpenGL);
+    f.setVersion(4, 3);
+    f.setProfile(QSurfaceFormat::CoreProfile);
+    f.setDepthBufferSize(24);
+    f.setStencilBufferSize(8);
+    f.setSamples(4);
+    return f;
 }
 
 int main(int argc, char* argv[])
 {
-        // 1.  message handler, attributes, default format
+    // get debug plugin output (optional)
+    //qputenv("QT_DEBUG_PLUGINS", QByteArrayLiteral("1"));
     qInstallMessageHandler(qtMessageOutput);
+
+    // share OpenGL contexts & set our default format
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
     QSurfaceFormat::setDefaultFormat(createDefaultFormat());
 
-    // 2.  *Now* we may create QApplication
     QApplication app(argc, argv);
 
-    // 3.  Root context must wait until QPA is up
-    initShareRoot();                       // <-- safe here
+    // make sure Qt loads the debug sqlite plugin from "./sqldrivers"
+    QStringList paths = QCoreApplication::libraryPaths();
+    paths.prepend(QCoreApplication::applicationDirPath() + "/sqldrivers");
+    QCoreApplication::setLibraryPaths(paths);
 
-    // 4.  Usual startup
+    // initialize the database
+    db::DatabaseConfig cfg;
+    cfg.databasePath = "krobot_studio.db";
+    if (!db::DatabaseManager::instance().initialize(cfg))
+        return -1;
+
+    // initialize our shared GL context
+    initShareRoot();
+
+    // launch main window
     MainWindow w;
     w.show();
 
     int result = app.exec();
 
-    // Explicitly shut down the database manager BEFORE the QApplication
-    // instance ('app') is destroyed at the end of this scope.
-    db::DatabaseManager::instance().shutdown(); // Add this line
-
+    // cleanly shut down DB
+    db::DatabaseManager::instance().shutdown();
     return result;
 }

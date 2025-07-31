@@ -49,6 +49,7 @@ static constexpr auto qt_meta_stringdata_ZN19RealSenseConfigMenuE = QtMocHelpers
     "serial",
     "std::vector<StreamProfile>",
     "profiles",
+    "stopStreamingRequested",
     "onRefreshDevicesClicked",
     "onDeviceSelectionChanged",
     "index",
@@ -66,31 +67,33 @@ Q_CONSTINIT static const uint qt_meta_data_ZN19RealSenseConfigMenuE[] = {
       12,       // revision
        0,       // classname
        0,    0, // classinfo
-       7,   14, // methods
+       8,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
        0,       // flags
-       2,       // signalCount
+       3,       // signalCount
 
  // signals: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    2,   56,    2, 0x06,    1 /* Public */,
-       7,    2,   61,    2, 0x06,    4 /* Public */,
+       1,    2,   62,    2, 0x06,    1 /* Public */,
+       7,    2,   67,    2, 0x06,    4 /* Public */,
+      12,    0,   72,    2, 0x06,    7 /* Public */,
 
  // slots: name, argc, parameters, tag, flags, initial metatype offsets
-      12,    0,   66,    2, 0x0a,    7 /* Public */,
-      13,    1,   67,    2, 0x0a,    8 /* Public */,
-      15,    0,   70,    2, 0x0a,   10 /* Public */,
-      16,    0,   71,    2, 0x0a,   11 /* Public */,
-      17,    0,   72,    2, 0x0a,   12 /* Public */,
+      13,    0,   73,    2, 0x0a,    8 /* Public */,
+      14,    1,   74,    2, 0x0a,    9 /* Public */,
+      16,    0,   77,    2, 0x0a,   11 /* Public */,
+      17,    0,   78,    2, 0x0a,   12 /* Public */,
+      18,    0,   79,    2, 0x0a,   13 /* Public */,
 
  // signals: parameters
     QMetaType::Void, 0x80000000 | 3, 0x80000000 | 5,    4,    6,
     QMetaType::Void, 0x80000000 | 8, 0x80000000 | 10,    9,   11,
+    QMetaType::Void,
 
  // slots: parameters
     QMetaType::Void,
-    QMetaType::Void, QMetaType::Int,   14,
+    QMetaType::Void, QMetaType::Int,   15,
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
@@ -115,6 +118,8 @@ Q_CONSTINIT const QMetaObject RealSenseConfigMenu::staticMetaObject = { {
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         QtPrivate::TypeAndForceComplete<const std::string &, std::false_type>,
         QtPrivate::TypeAndForceComplete<const std::vector<StreamProfile> &, std::false_type>,
+        // method 'stopStreamingRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'onRefreshDevicesClicked'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'onDeviceSelectionChanged'
@@ -137,11 +142,12 @@ void RealSenseConfigMenu::qt_static_metacall(QObject *_o, QMetaObject::Call _c, 
         switch (_id) {
         case 0: _t->pointCloudReady((*reinterpret_cast< std::add_pointer_t<rs2::points>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<rs2::video_frame>>(_a[2]))); break;
         case 1: _t->startStreamingRequested((*reinterpret_cast< std::add_pointer_t<std::string>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<std::vector<StreamProfile>>>(_a[2]))); break;
-        case 2: _t->onRefreshDevicesClicked(); break;
-        case 3: _t->onDeviceSelectionChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 4: _t->onStartStreamingClicked(); break;
-        case 5: _t->onStopStreamingClicked(); break;
-        case 6: _t->updatePreview(); break;
+        case 2: _t->stopStreamingRequested(); break;
+        case 3: _t->onRefreshDevicesClicked(); break;
+        case 4: _t->onDeviceSelectionChanged((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
+        case 5: _t->onStartStreamingClicked(); break;
+        case 6: _t->onStopStreamingClicked(); break;
+        case 7: _t->updatePreview(); break;
         default: ;
         }
     }
@@ -158,6 +164,13 @@ void RealSenseConfigMenu::qt_static_metacall(QObject *_o, QMetaObject::Call _c, 
             using _q_method_type = void (RealSenseConfigMenu::*)(const std::string & , const std::vector<StreamProfile> & );
             if (_q_method_type _q_method = &RealSenseConfigMenu::startStreamingRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
                 *result = 1;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (RealSenseConfigMenu::*)();
+            if (_q_method_type _q_method = &RealSenseConfigMenu::stopStreamingRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 2;
                 return;
             }
         }
@@ -185,14 +198,14 @@ int RealSenseConfigMenu::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 7)
+        if (_id < 8)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 7;
+        _id -= 8;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 7)
+        if (_id < 8)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 7;
+        _id -= 8;
     }
     return _id;
 }
@@ -209,5 +222,11 @@ void RealSenseConfigMenu::startStreamingRequested(const std::string & _t1, const
 {
     void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))), const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t2))) };
     QMetaObject::activate(this, &staticMetaObject, 1, _a);
+}
+
+// SIGNAL 2
+void RealSenseConfigMenu::stopStreamingRequested()
+{
+    QMetaObject::activate(this, &staticMetaObject, 2, nullptr);
 }
 QT_WARNING_POP

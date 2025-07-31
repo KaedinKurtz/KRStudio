@@ -26,29 +26,17 @@ RealSenseConfigMenu::RealSenseConfigMenu(QWidget* parent) :
     m_realSenseManager(std::make_unique<RealSenseManager>()),
     m_align(RS2_STREAM_COLOR)
 {
-    setupUi(); // Manually create and layout all widgets
-    setupConnections(); // Connect signals and slots
-    setupPreview();
-    // Set default and initial states for UI toggles and buttons
-    enableDepthStream_toggle_tool->setChecked(true);
-    enableRGBStream_toggle_tool->setChecked(true);
-    RSAutoExposureToggleTool->setChecked(true);
-    stopStreamingRSButton->setEnabled(false);
-
-    populateDeviceList();
+    // The constructor is now responsible for building the UI.
+    setupUi();
 }
 
 RealSenseConfigMenu::~RealSenseConfigMenu()
 {
-    // In a code-only UI, you don't 'delete ui'. The QWidget parent/child
-    // system handles memory management of the widgets.
+    // The QWidget parent/child system handles memory management of the widgets.
 }
 
 void RealSenseConfigMenu::setupUi()
 {
-    // This function manually creates the UI, replacing the auto-generated one.
-    // It can be verbose, which is the tradeoff for not using a .ui file.
-
     auto* mainLayout = new QGridLayout(this);
     this->setObjectName("RealSenseConfigMenu");
 
@@ -160,10 +148,6 @@ void RealSenseConfigMenu::setupUi()
     mainLayout->addWidget(previewGroup, 4, 0);
 }
 
-// All other methods from the previous implementation remain the same,
-// just without the 'ui->' prefix. I am including them here for completeness.
-// The logic inside them is identical.
-
 void RealSenseConfigMenu::setupConnections()
 {
     connect(refreshRealSenseDevicesButton, &QToolButton::clicked, this, &RealSenseConfigMenu::onRefreshDevicesClicked);
@@ -173,10 +157,8 @@ void RealSenseConfigMenu::setupConnections()
     m_previewTimer = new QTimer(this);
     connect(m_previewTimer, &QTimer::timeout, this, &RealSenseConfigMenu::updatePreview);
 
-    // --- NEW: Logic to make Depth and Infrared mutually exclusive ---
     connect(enableDepthStream_toggle_tool, &QToolButton::toggled, this, [this](bool checked) {
         if (checked) {
-            // If Depth is checked, uncheck Infrared
             const QSignalBlocker blocker(enableInfaredStream_toggle_tool);
             enableInfaredStream_toggle_tool->setChecked(false);
         }
@@ -184,7 +166,6 @@ void RealSenseConfigMenu::setupConnections()
 
     connect(enableInfaredStream_toggle_tool, &QToolButton::toggled, this, [this](bool checked) {
         if (checked) {
-            // If Infrared is checked, uncheck Depth
             const QSignalBlocker blocker(enableDepthStream_toggle_tool);
             enableDepthStream_toggle_tool->setChecked(false);
         }
@@ -202,8 +183,6 @@ void RealSenseConfigMenu::setupPreview()
 {
     m_previewLabel = new QLabel("Stream preview will appear here...", this);
     m_previewLabel->setAlignment(Qt::AlignCenter);
-
-    // Set scaledContents to false. We will handle the scaling manually.
     m_previewLabel->setScaledContents(false);
 
     auto* layout = new QVBoxLayout(RSDeviceStreamPreview);
@@ -221,38 +200,30 @@ void RealSenseConfigMenu::onRefreshDevicesClicked()
 
 void RealSenseConfigMenu::populateProfileDropdowns(const std::string& serialNumber)
 {
-    // Block signals to prevent updates while repopulating
     const QSignalBlocker depthBlocker(depthProfileCombo);
     const QSignalBlocker colorBlocker(colorProfileCombo);
 
-    depthProfileCombo->clear(); // Clear previous profiles
-    colorProfileCombo->clear(); // Clear previous profiles
+    depthProfileCombo->clear();
+    colorProfileCombo->clear();
 
-    // Get all unique, supported profiles from the manager
     auto profiles = m_realSenseManager->getSupportedProfiles(serialNumber);
 
     for (const auto& p : profiles)
     {
-        // Create a descriptive string for the user to see in the UI
         QString profileString = QString("%1 x %2 @ %3 FPS (%4)")
             .arg(p.stream_width)
             .arg(p.stream_height)
             .arg(p.stream_fps)
             .arg(rs2_format_to_string(p.stream_format));
 
-        // Create a QVariant to hold the actual StreamProfile struct
         QVariant profileData = QVariant::fromValue(p);
 
-        // Add the profile to the correct dropdown based on its stream type
         if (p.stream_type == RS2_STREAM_DEPTH && p.stream_format == RS2_FORMAT_Z16) {
-            depthProfileCombo->addItem(profileString, profileData); // Add text and data
+            depthProfileCombo->addItem(profileString, profileData);
         }
         else if (p.stream_type == RS2_STREAM_COLOR && (p.stream_format == RS2_FORMAT_RGB8 || p.stream_format == RS2_FORMAT_BGR8)) {
-            // Note: Use RGB8 for QImage conversion, but some cameras provide BGR8.
-            // The manager should handle the stream request; the preview handles the data format.
-            colorProfileCombo->addItem(profileString, profileData); // Add text and data
+            colorProfileCombo->addItem(profileString, profileData);
         }
-        // NOTE: A similar block for RS2_STREAM_INFRARED would be needed to populate an IR dropdown.
     }
 }
 
@@ -279,60 +250,47 @@ void RealSenseConfigMenu::onDeviceSelectionChanged(int index)
     if (index < 0 || index >= m_availableDevices.size()) return;
 
     const std::string& serial = m_availableDevices[index].serialNumber;
-    populateProfileDropdowns(serial); // Call the new population function
+    populateProfileDropdowns(serial);
     updateDeviceInfoTable(serial);
 }
 
 
 void RealSenseConfigMenu::onStartStreamingClicked()
 {
-    if (m_availableDevices.empty()) return; // Exit if no devices are available
+    if (m_availableDevices.empty()) return;
 
-    // Get the serial number of the currently selected device
     const std::string& serial = m_availableDevices[RealSenseCameraSelectionComboBox->currentIndex()].serialNumber;
-
-    // 1. Create a vector to hold the profiles selected in the UI.
     std::vector<StreamProfile> requested_profiles;
 
-    // 2. Add the selected profiles to the vector if their streams are enabled.
     if (enableDepthStream_toggle_tool->isChecked() && depthProfileCombo->currentIndex() != -1) {
-        // Retrieve the QVariant data and cast it back to a StreamProfile
         StreamProfile p = depthProfileCombo->currentData().value<StreamProfile>();
         requested_profiles.push_back(p);
     }
     if (enableRGBStream_toggle_tool->isChecked() && colorProfileCombo->currentIndex() != -1) {
-        // Retrieve the QVariant data for the color profile
         StreamProfile p = colorProfileCombo->currentData().value<StreamProfile>();
         requested_profiles.push_back(p);
     }
-    // TODO: Add logic for infrared stream if an IR profile selection dropdown is added.
 
     if (requested_profiles.empty()) {
         QMessageBox::warning(this, "No Streams Selected", "Please enable and select a profile for at least one stream.");
         return;
     }
 
-    // 3. Call the startStreaming method with the serial number and the list of profiles.
-    if (m_realSenseManager->startStreaming(serial, requested_profiles)) {
-        startStreamingRSButton->setEnabled(false); // Disable start button
-        stopStreamingRSButton->setEnabled(true);   // Enable stop button
-        m_previewTimer->start(33); // Start the preview timer (for ~30 FPS)
-    }
-    else {
-        // Show an error message if streaming fails to start
-        QMessageBox::critical(this, "Streaming Error", "Failed to start streams. Check console for details.");
-    }
-
     emit startStreamingRequested(serial, requested_profiles);
+
+    startStreamingRSButton->setEnabled(false);
+    stopStreamingRSButton->setEnabled(true);
+    m_previewTimer->start(33);
 }
 
 void RealSenseConfigMenu::onStopStreamingClicked()
 {
-    m_previewTimer->stop(); // Stop the preview update timer
-    m_realSenseManager->stopStreaming(); // Tell the manager to stop the pipeline
-    startStreamingRSButton->setEnabled(true); // Re-enable the start button
-    stopStreamingRSButton->setEnabled(false); // Disable the stop button
-    m_previewLabel->setText("Stream stopped."); // Update the preview label
+    m_previewTimer->stop();
+    emit stopStreamingRequested();
+
+    startStreamingRSButton->setEnabled(true);
+    stopStreamingRSButton->setEnabled(false);
+    m_previewLabel->setText("Stream stopped.");
 }
 
 void RealSenseConfigMenu::updatePreview()
@@ -342,28 +300,18 @@ void RealSenseConfigMenu::updatePreview()
         return;
     }
 
-    // 1. Align the frames. This creates a new, synthetic frameset where the
-    // depth and color images are perfectly matched.
     auto aligned_frames = m_align.process(frames);
-
     rs2::video_frame color_frame = aligned_frames.get_color_frame();
     rs2::depth_frame depth_frame = aligned_frames.get_depth_frame();
 
     if (!color_frame || !depth_frame) {
-        return; // Exit if we don't have both frames
+        return;
     }
 
-    // --- Point Cloud Generation ---
-    // Tell the pointcloud object to map its points to the color frame
     m_pointcloud.map_to(color_frame);
-    // Generate the point cloud from the depth frame
     rs2::points points = m_pointcloud.calculate(depth_frame);
-
-    // --- Emit the data for other parts of your application ---
     emit pointCloudReady(points, color_frame);
 
-    // --- The rest of this function is for the UI preview ONLY ---
-    // You can keep this preview logic as-is.
     rs2::frame frame_for_preview = nullptr;
     std::string preview_source = RSPreviewsourceComboBox->currentText().toStdString();
 
@@ -379,29 +327,11 @@ void RealSenseConfigMenu::updatePreview()
         return;
     };
 
-    // Cast the generic frame to a video_frame to get dimensions and data
     if (rs2::video_frame video_frame = frame_for_preview.as<rs2::video_frame>()) {
-
-        // Determine the QImage format based on the stream format
-        QImage::Format format = QImage::Format_RGB888; // Default to RGB888
-        if (video_frame.get_profile().format() == RS2_FORMAT_BGR8) {
-            format = QImage::Format_BGR888;
-        }
-
-        // Create a QImage wrapper around the librealsense frame data
-        QImage qimg(
-            static_cast<const uchar*>(video_frame.get_data()),
-            video_frame.get_width(),
-            video_frame.get_height(),
-            video_frame.get_stride_in_bytes(),
-            format
-        );
-
+        QImage::Format format = (video_frame.get_profile().format() == RS2_FORMAT_BGR8) ? QImage::Format_BGR888 : QImage::Format_RGB888;
+        QImage qimg(static_cast<const uchar*>(video_frame.get_data()), video_frame.get_width(), video_frame.get_height(), video_frame.get_stride_in_bytes(), format);
         QPixmap pixmap = QPixmap::fromImage(qimg);
-        QPixmap scaledPixmap = pixmap.scaled(m_previewLabel->size(),
-            Qt::KeepAspectRatio,
-            Qt::SmoothTransformation);
-        // Display the QImage in the label. A copy is made to ensure thread safety.
+        QPixmap scaledPixmap = pixmap.scaled(m_previewLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
         m_previewLabel->setPixmap(scaledPixmap);
     }
 }
@@ -440,19 +370,16 @@ void RealSenseConfigMenu::logAllStreamProfiles(const std::string& serialNumber)
     for (auto&& dev : ctx.query_devices())
     {
         if (serialNumber != dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER)) {
-            continue; // Skip devices that don't match the serial
+            continue;
         }
-
         qDebug() << "--- DEBUG: AVAILABLE STREAM PROFILES for"
             << dev.get_info(RS2_CAMERA_INFO_NAME)
             << "(" << serialNumber << ") ---";
-
         for (auto& sensor : dev.query_sensors())
         {
             qDebug() << "  SENSOR:" << sensor.get_info(RS2_CAMERA_INFO_NAME);
             for (auto& profile : sensor.get_stream_profiles())
             {
-                // We are only interested in video streams for this UI
                 if (auto video_profile = profile.as<rs2::video_stream_profile>())
                 {
                     std::stringstream ss;
@@ -466,28 +393,31 @@ void RealSenseConfigMenu::logAllStreamProfiles(const std::string& serialNumber)
             }
         }
         qDebug() << "--- END DEBUG ---";
-        return; // We found our device, no need to loop further
+        return;
     }
 }
 
 void RealSenseConfigMenu::initializeFresh()
 {
-
-        setupUi();
+    // This function now only handles populating data and setting up connections.
     setupConnections();
     setupPreview();
+
+    enableDepthStream_toggle_tool->setChecked(true);
+    enableRGBStream_toggle_tool->setChecked(true);
+    RSAutoExposureToggleTool->setChecked(true);
+    stopStreamingRSButton->setEnabled(false);
+
     populateDeviceList();
-        // default toggles already set in ctor
 }
 
 void RealSenseConfigMenu::initializeFromDatabase()
 {
     QString blob = db::DatabaseManager::instance()
-         .loadMenuState(db::DatabaseManager::menuTypeToString(MenuType::RealSense));
+        .loadMenuState(db::DatabaseManager::menuTypeToString(MenuType::RealSense));
     if (blob.isEmpty()) {
         initializeFresh();
         return;
-        
     }
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(blob.toUtf8(), &parseError);
@@ -497,25 +427,21 @@ void RealSenseConfigMenu::initializeFromDatabase()
         return;
     }
     QJsonObject obj = doc.object();
-    
-            // Restore device selection
-        QString savedSerial = obj.value("selectedDevice").toString();
+
+    QString savedSerial = obj.value("selectedDevice").toString();
     int idx = RealSenseCameraSelectionComboBox->findText(savedSerial);
     if (idx >= 0) RealSenseCameraSelectionComboBox->setCurrentIndex(idx);
-    
-            // Restore stream toggles
-        enableDepthStream_toggle_tool->setChecked(obj.value("depthEnabled").toBool());
+
+    enableDepthStream_toggle_tool->setChecked(obj.value("depthEnabled").toBool());
     enableRGBStream_toggle_tool->setChecked(obj.value("rgbEnabled").toBool());
     enableInfaredStream_toggle_tool->setChecked(obj.value("irEnabled").toBool());
-    
-            // …and any saved profile indices:
-        depthProfileCombo->setCurrentIndex(obj.value("depthProfileIndex").toInt());
+
+    depthProfileCombo->setCurrentIndex(obj.value("depthProfileIndex").toInt());
     colorProfileCombo->setCurrentIndex(obj.value("colorProfileIndex").toInt());
 }
 
 void RealSenseConfigMenu::shutdownAndSave()
 {
-
     QJsonObject obj;
     obj["selectedDevice"] = RealSenseCameraSelectionComboBox->currentText();
     obj["depthEnabled"] = enableDepthStream_toggle_tool->isChecked();
@@ -523,8 +449,7 @@ void RealSenseConfigMenu::shutdownAndSave()
     obj["irEnabled"] = enableInfaredStream_toggle_tool->isChecked();
     obj["depthProfileIndex"] = depthProfileCombo->currentIndex();
     obj["colorProfileIndex"] = colorProfileCombo->currentIndex();
-        // …any other settings…
-        
-        QJsonDocument doc(obj);
-        db::DatabaseManager::instance().saveMenuState("RealSense", doc.toJson());
+
+    QJsonDocument doc(obj);
+    db::DatabaseManager::instance().saveMenuState("RealSense", doc.toJson());
 }
