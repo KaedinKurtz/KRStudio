@@ -48,7 +48,10 @@ static constexpr auto qt_meta_stringdata_ZN13StaticToolbarE = QtMocHelpers::stri
     "checked",
     "realSenseMenuToggled",
     "databaseMenuToggled",
-    "gridMenuToggled"
+    "gridMenuToggled",
+    "checkButtonForMenu",
+    "MenuType",
+    "type"
 );
 #else  // !QT_MOC_HAS_STRINGDATA
 #error "qtmochelpers.h not found or too old."
@@ -60,7 +63,7 @@ Q_CONSTINIT static const uint qt_meta_data_ZN13StaticToolbarE[] = {
       12,       // revision
        0,       // classname
        0,    0, // classinfo
-       6,   14, // methods
+       7,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
@@ -68,12 +71,15 @@ Q_CONSTINIT static const uint qt_meta_data_ZN13StaticToolbarE[] = {
        6,       // signalCount
 
  // signals: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    0,   50,    2, 0x06,    1 /* Public */,
-       3,    1,   51,    2, 0x06,    2 /* Public */,
-       6,    1,   54,    2, 0x06,    4 /* Public */,
-       8,    1,   57,    2, 0x06,    6 /* Public */,
-       9,    1,   60,    2, 0x06,    8 /* Public */,
-      10,    1,   63,    2, 0x06,   10 /* Public */,
+       1,    0,   56,    2, 0x06,    1 /* Public */,
+       3,    1,   57,    2, 0x06,    2 /* Public */,
+       6,    1,   60,    2, 0x06,    4 /* Public */,
+       8,    1,   63,    2, 0x06,    6 /* Public */,
+       9,    1,   66,    2, 0x06,    8 /* Public */,
+      10,    1,   69,    2, 0x06,   10 /* Public */,
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+      11,    1,   72,    2, 0x0a,   12 /* Public */,
 
  // signals: parameters
     QMetaType::Void,
@@ -82,6 +88,9 @@ Q_CONSTINIT static const uint qt_meta_data_ZN13StaticToolbarE[] = {
     QMetaType::Void, QMetaType::Bool,    7,
     QMetaType::Void, QMetaType::Bool,    7,
     QMetaType::Void, QMetaType::Bool,    7,
+
+ // slots: parameters
+    QMetaType::Void, 0x80000000 | 12,   13,
 
        0        // eod
 };
@@ -111,7 +120,10 @@ Q_CONSTINIT const QMetaObject StaticToolbar::staticMetaObject = { {
         QtPrivate::TypeAndForceComplete<bool, std::false_type>,
         // method 'gridMenuToggled'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
-        QtPrivate::TypeAndForceComplete<bool, std::false_type>
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        // method 'checkButtonForMenu'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<MenuType, std::false_type>
     >,
     nullptr
 } };
@@ -127,6 +139,7 @@ void StaticToolbar::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _i
         case 3: _t->realSenseMenuToggled((*reinterpret_cast< std::add_pointer_t<bool>>(_a[1]))); break;
         case 4: _t->databaseMenuToggled((*reinterpret_cast< std::add_pointer_t<bool>>(_a[1]))); break;
         case 5: _t->gridMenuToggled((*reinterpret_cast< std::add_pointer_t<bool>>(_a[1]))); break;
+        case 6: _t->checkButtonForMenu((*reinterpret_cast< std::add_pointer_t<MenuType>>(_a[1]))); break;
         default: ;
         }
     }
@@ -208,14 +221,14 @@ int StaticToolbar::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 6)
+        if (_id < 7)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 6;
+        _id -= 7;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 6)
+        if (_id < 7)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 6;
+        _id -= 7;
     }
     return _id;
 }

@@ -4,13 +4,20 @@
 #include "FlowVisualizerMenu.hpp"
 #include "RealSenseConfigMenu.hpp"
 #include "DatabasePanel.hpp"
+#include "gridPropertiesWidget.hpp"
+#include "PropertiesPanel.hpp" // assuming this is a grid properties menu
 #include <memory>
+
+#include "components.hpp"
+#include <entt/entt.hpp>
 
 // forward declarations so the factory knows about each menu type
 class Scene;
 class FlowVisualizerMenu;
 class RealSenseConfigMenu;
 class DatabasePanel;
+class gridPropertiesWidget;
+class PropertiesPanel; // assuming this is a grid properties menu
 
 enum class MenuType {
     FlowVisualizer,
@@ -38,7 +45,7 @@ struct MenuFactory
 
         case MenuType::GridProperties:
             // GridPropertiesMenu when implemented
-            return nullptr;
+            return std::unique_ptr<IMenu>(new PropertiesPanel(scene, parent));
 
         case MenuType::Database:
             // DatabasePanel(Scene* scene, QWidget* parent)

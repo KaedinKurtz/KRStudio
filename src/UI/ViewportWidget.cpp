@@ -12,6 +12,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
 #include <QMessageBox>
+#include <QLabel>
 
 #include "ViewportWidget.hpp"
 #include "RenderingSystem.hpp"
@@ -63,6 +64,14 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
     m_instanceId = s_instanceCounter++;
     qDebug() << "[LIFECYCLE] Constructing ViewportWidget instance:" << m_instanceId;
     setFocusPolicy(Qt::StrongFocus);
+
+    m_statsOverlay = new QLabel(this);
+    m_statsOverlay->setStyleSheet("background-color: rgba(44, 49, 58, 0.7);"
+        "color: white;"
+        "padding: 5px;"
+        "border-radius: 3px;");
+    m_statsOverlay->setAttribute(Qt::WA_TranslucentBackground);
+    m_statsOverlay->show();
 
 }
 
@@ -132,6 +141,14 @@ void ViewportWidget::shutdown()
 void ViewportWidget::paintGL()
 {
     if (!m_renderingSystem || !m_scene) return;
+
+    if (m_renderingSystem) {
+        QString statsText = QString("FPS: %1\nFrame: %2 ms")
+            .arg(m_renderingSystem->getFPS(), 0, 'f', 1)
+            .arg(m_renderingSystem->getFrameTime(), 0, 'f', 2);
+        m_statsOverlay->setText(statsText);
+        m_statsOverlay->adjustSize();
+    }
 
     auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(context());
     if (!gl) {

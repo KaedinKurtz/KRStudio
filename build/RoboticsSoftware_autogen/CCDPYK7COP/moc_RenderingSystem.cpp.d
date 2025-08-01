@@ -55,6 +55,7 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/CCDPYK7COP/moc_RenderingSyste
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qglobalstatic.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qhash.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qhashfunctions.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qiodevice.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qiodevicebase.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qiterable.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qiterator.h \
@@ -126,6 +127,7 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/CCDPYK7COP/moc_RenderingSyste
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qtversionchecks.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qtypeinfo.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qtypes.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qurl.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qutf8stringview.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qvariant.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qvarlengtharray.h \
@@ -151,6 +153,7 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/CCDPYK7COP/moc_RenderingSyste
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qopenglext.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qpaintdevice.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qpalette.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qpicture.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qpixelformat.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qpixmap.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qpolygon.h \
@@ -158,6 +161,7 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/CCDPYK7COP/moc_RenderingSyste
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qrgb.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qrgba64.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qsurfaceformat.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qtextdocument.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qtgui-config.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qtguiexports.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtGui/qtguiglobal.h \
@@ -176,7 +180,10 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/CCDPYK7COP/moc_RenderingSyste
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtOpenGLWidgets/qopenglwidget.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtOpenGLWidgets/qtopenglwidgetsexports.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtOpenGLWidgets/qtopenglwidgetsglobal.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QLabel \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/QWidget \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qframe.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qlabel.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qsizepolicy.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgets-config.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgetsexports.h \

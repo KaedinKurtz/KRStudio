@@ -70,6 +70,9 @@ public:
 
     bool isContextInitialized(QOpenGLContext* ctx) const;
 
+    float getFPS() const { return m_fps; }
+    float getFrameTime() const { return m_frameTime; }
+
 public slots:
     // --- Lifecycle Management Slot ---
     void onContextAboutToBeDestroyed();
@@ -81,6 +84,12 @@ private:
 
     QTimer        m_frameTimer;     // drives the simulation
     QElapsedTimer m_clock;
+
+    float m_fps = 0.0f;
+    float m_frameTime = 0.0f;
+    std::deque<float> m_frameTimeHistory;
+    const int m_historySize = 100; // Number of frames to average over for a smooth value
+
 
     QString shadersRootDir();
 

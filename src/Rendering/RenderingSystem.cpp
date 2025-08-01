@@ -47,8 +47,9 @@ RenderingSystem::RenderingSystem(QObject* parent)
     qDebug() << "[LIFECYCLE] RenderingSystem created.";
 
     m_frameTimer.setTimerType(Qt::PreciseTimer);
-    m_frameTimer.setInterval(16);               // as fast as vsync allows
+    m_frameTimer.setInterval(0); // Aim for ~60 FPS
     connect(&m_frameTimer, &QTimer::timeout, this, &RenderingSystem::onMasterUpdate);
+    m_clock.start(); // Start the clock to measure frame durations
 }
 
 RenderingSystem::~RenderingSystem() {
@@ -59,9 +60,30 @@ void RenderingSystem::onMasterUpdate()
 {
     if (!m_scene) return;
 
-    // 1. Calculate deltaTime ONCE per frame.
-    const float dt = m_clock.restart() * 0.001f;
+    // --- NEW Statistics Logic ---
+    // Calculate delta time from the master clock
+    const float dt = m_clock.restart() * 0.001f; // dt in seconds
     m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime = dt;
+
+    // Add the new frame time to our history
+    m_frameTimeHistory.push_back(dt);
+    if (m_frameTimeHistory.size() > m_historySize)
+    {
+        m_frameTimeHistory.pop_front(); // Keep the history at a fixed size
+    }
+
+    // Calculate the average frame time over the history
+    if (!m_frameTimeHistory.empty())
+    {
+        float totalTime = std::accumulate(m_frameTimeHistory.begin(), m_frameTimeHistory.end(), 0.0f);
+        float avgDt = totalTime / m_frameTimeHistory.size();
+
+        m_frameTime = avgDt * 1000.0f; // Store average frame time in milliseconds
+        if (avgDt > 0)
+        {
+            m_fps = 1.0f / avgDt; // Calculate FPS from the average frame time
+        }
+    }
 
     // 2. Run ALL scene logic ONCE per frame.
     updateCameraTransforms();

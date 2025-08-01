@@ -4,12 +4,23 @@
 #include "components.hpp"
 #include "gridPropertiesWidget.hpp"
 #include <QAbstractButton>
+#include <entt/entity/storage.hpp>
+
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonDocument>
+
+#include "DatabaseManager.hpp"
 
 PropertiesPanel::PropertiesPanel(Scene* scene, QWidget* parent) :
     QWidget(parent),
     ui(std::make_unique<Ui::PropertiesPanel>()),
     m_scene(scene)
 {
+    m_scene->getRegistry()
+         .storage<GridComponent>()
+         .reserve(1);
+
     ui->setupUi(this);
     m_gridLayout = ui->gridLayout;
 
@@ -32,7 +43,28 @@ PropertiesPanel::PropertiesPanel(Scene* scene, QWidget* parent) :
     }
 }
 
-PropertiesPanel::~PropertiesPanel() = default;
+PropertiesPanel::~PropertiesPanel()
+{
+    disconnectRegistry();
+}
+
+void PropertiesPanel::initializeFresh()
+{
+    auto& reg = m_scene->getRegistry();
+    reg.storage<GridComponent>().reserve(1);
+
+    // create one grid if none exist
+    auto view = reg.view<GridComponent>();
+    if (view.begin() == view.end()) {
+        auto e = reg.create();
+        reg.emplace<TransformComponent>(e);
+        reg.emplace<GridComponent>(e);
+    }
+
+    // now drive the UI via your existing onGridAdded hook:
+    for (auto e : reg.view<GridComponent>())
+        onGridAdded(reg, e);
+}
 
 void PropertiesPanel::onGridRemoved(entt::registry& registry, entt::entity entity)
 {
@@ -75,18 +107,157 @@ void PropertiesPanel::onGridAdded(entt::registry& registry, entt::entity entity)
 // This function remains unchanged.
 void PropertiesPanel::addGridEditor(entt::entity entity)
 {
-    if (!m_scene->getRegistry().valid(entity)) return;
-    gridPropertiesWidget* widget = new gridPropertiesWidget(m_scene, entity, this);
+    if (m_entityWidgetMap.find(entity) != m_entityWidgetMap.end()) return;
+    
+        auto* widget = new gridPropertiesWidget(m_scene, entity, this);
     m_gridLayout->addWidget(widget);
     m_entityWidgetMap[entity] = widget;
 }
 
 void PropertiesPanel::clearAllGrids()
 {
-    // Remove all grid widgets from the layout and delete them
-    for (auto& [entity, widget] : m_entityWidgetMap) {
-        m_gridLayout->removeWidget(widget);
-        widget->deleteLater();
-    }
-    m_entityWidgetMap.clear();
+    auto& registry = m_scene->getRegistry();
+    // destroy every grid entity
+    std::vector<entt::entity> toDestroy;
+    for (auto ent : registry.view<GridComponent>())
+        toDestroy.push_back(ent);
+
+    for (auto ent : toDestroy)
+        if (registry.valid(ent))
+            registry.destroy(ent);
 }
+
+ QJsonArray PropertiesPanel::toJsonColor(const glm::vec3& c) {
+     QJsonArray a;
+     a.append(c.r);
+     a.append(c.g);
+     a.append(c.b);
+     return a;
+ }
+
+ // helper: JSON array  glm color
+ glm::vec3 PropertiesPanel::fromJsonColor(const QJsonArray& a) {
+     return { float(a[0].toDouble()),
+              float(a[1].toDouble()),
+              float(a[2].toDouble()) };
+ }
+
+
+ void PropertiesPanel::shutdownAndSave()
+ {
+     // --- build JSON ---
+     QJsonArray gridsArr;
+     auto& reg = m_scene->getRegistry();
+
+     for (auto ent : reg.view<GridComponent>())
+     {
+         QJsonObject obj;
+         obj["tag"] = QString::fromStdString(reg.get<TagComponent>(ent).tag);
+         const auto& gc = reg.get<GridComponent>(ent);
+         obj["baseLineWidthPixels"] = gc.baseLineWidthPixels;
+         obj["isDotted"] = gc.isDotted;
+         obj["snappingEnabled"] = gc.snappingEnabled;
+         obj["masterVisible"] = gc.masterVisible;
+         obj["xAxisColor"] = toJsonColor(gc.xAxisColor);
+         obj["zAxisColor"] = toJsonColor(gc.zAxisColor);
+
+         QJsonArray levels;
+         for (auto& lvl : gc.levels) {
+             QJsonObject L;
+             L["spacing"] = lvl.spacing;
+             L["fadeInCameraDistanceStart"] = lvl.fadeInCameraDistanceStart;
+             L["fadeInCameraDistanceEnd"] = lvl.fadeInCameraDistanceEnd;
+             L["color"] = toJsonColor(lvl.color);
+             levels.append(L);
+         }
+         obj["levels"] = levels;
+         gridsArr.append(obj);
+     }
+
+     QJsonObject root;
+     root["grids"] = gridsArr;
+     QString serialized = QJsonDocument(root).toJson(QJsonDocument::Compact);
+
+     // --- save to DB ---
+     qDebug() << "[GRID_DEBUG] shutdownAndSave(): saving" << gridsArr.size() << "grids";
+     db::DatabaseManager::instance()
+         .saveMenuState("GridProperties", serialized);
+
+     // --- then destroy all so toggling off removes them from scene ---
+     clearAllGrids();
+ }
+
+
+ void PropertiesPanel::initializeFromDatabase()
+ {
+     qDebug() << "[GRID_DEBUG] initializeFromDatabase()";
+     QString blob = db::DatabaseManager::instance()
+         .loadMenuState("GridProperties");
+
+     if (blob.isEmpty()) {
+         qDebug() << "[GRID_DEBUG] no saved state, falling back to fresh";
+         initializeFresh();
+         return;
+     }
+
+     QJsonParseError err;
+     auto doc = QJsonDocument::fromJson(blob.toUtf8(), &err);
+     if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+         qWarning() << "[GRID_DEBUG] JSON parse error:" << err.errorString();
+         initializeFresh();
+         return;
+     }
+
+     // Clear out any remnants
+     clearAllGrids();
+
+     auto root = doc.object();
+     auto arr = root["grids"].toArray();
+     auto& reg = m_scene->getRegistry();
+
+     // --- FIX: Disconnect the signal handler before restoring ---
+     reg.on_construct<GridComponent>().disconnect<&PropertiesPanel::onGridAdded>(this);
+
+     qDebug() << "[GRID_DEBUG] restoring" << arr.size() << "grids from JSON";
+     for (auto v : arr) {
+         auto o = v.toObject();
+         auto ent = reg.create();
+         reg.emplace<TransformComponent>(ent);
+         reg.emplace<TagComponent>(ent, o["tag"].toString().toStdString());
+
+         // Now emplace will not trigger the onGridAdded handler
+         auto& gc = reg.emplace<GridComponent>(ent);
+         gc.baseLineWidthPixels = float(o["baseLineWidthPixels"].toDouble());
+         gc.isDotted = o["isDotted"].toBool();
+         gc.snappingEnabled = o["snappingEnabled"].toBool();
+         gc.masterVisible = o["masterVisible"].toBool();
+         gc.xAxisColor = fromJsonColor(o["xAxisColor"].toArray());
+         gc.zAxisColor = fromJsonColor(o["zAxisColor"].toArray());
+
+         gc.levels.clear();
+         for (auto lv : o["levels"].toArray()) {
+             auto L = lv.toObject();
+             float sp = float(L["spacing"].toDouble());
+             float s0 = float(L["fadeInCameraDistanceStart"].toDouble());
+             float s1 = float(L["fadeInCameraDistanceEnd"].toDouble());
+             auto  col = fromJsonColor(L["color"].toArray());
+             gc.levels.emplace_back(sp, col, s0, s1);
+         }
+
+         // Manually add the editor now that the component is fully loaded
+         addGridEditor(ent);
+     }
+
+     // --- FIX: Reconnect the signal handler for future user actions ---
+     reg.on_construct<GridComponent>().connect<&PropertiesPanel::onGridAdded>(this);
+ }
+
+ void PropertiesPanel::disconnectRegistry()
+ {
+     auto& reg = m_scene->getRegistry();
+     // these are idempotent (disconnecting when not connected is safe)
+     reg.on_construct<GridComponent>()
+         .disconnect<&PropertiesPanel::onGridAdded>(this);
+     reg.on_destroy<GridComponent>()
+         .disconnect<&PropertiesPanel::onGridRemoved>(this);
+ }

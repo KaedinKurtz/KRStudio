@@ -1,4 +1,7 @@
 D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_PropertiesPanel.cpp: D:/RoboticsSoftware/include/UIHeaders/PropertiesPanel.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QJsonArray \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QJsonDocument \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QJsonObject \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/q20functional.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/q20iterator.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/q20memory.h \
@@ -19,6 +22,9 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_PropertiesPane
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qbytearrayalgorithms.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qbytearraylist.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qbytearrayview.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qcalendar.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qcborcommon.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qcborvalue.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qchar.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qcompare.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qcompare_impl.h \
@@ -32,6 +38,7 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_PropertiesPane
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qcontiguouscache.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qdarwinhelpers.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qdatastream.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qdatetime.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qdebug.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qendian.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qexceptionhandling.h \
@@ -48,9 +55,14 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_PropertiesPane
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qiodevicebase.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qiterable.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qiterator.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qjsonarray.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qjsondocument.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qjsonobject.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qjsonvalue.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qlatin1stringview.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qline.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qlist.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qlocale.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qlogging.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qmalloc.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qmap.h \
@@ -71,6 +83,7 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_PropertiesPane
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qprocessordetection.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qrect.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qrefcount.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qregularexpression.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qscopedpointer.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qscopeguard.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qset.h \
@@ -114,7 +127,9 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_PropertiesPane
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qtversionchecks.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qtypeinfo.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qtypes.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qurl.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qutf8stringview.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/quuid.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qvariant.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qvarlengtharray.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/qversiontagging.h \
@@ -157,6 +172,139 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_PropertiesPane
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgetsexports.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qtwidgetsglobal.h \
   D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qwidget.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/common.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/_fixes.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/_vectorize.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/compute_common.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/compute_vector_relational.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/func_common.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/func_exponential.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/func_geometric.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/func_integer.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/func_matrix.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/func_packing.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/func_trigonometric.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/func_vector_relational.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/qualifier.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/setup.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_half.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_half.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat2x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat2x2.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat2x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat2x3.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat2x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat2x4.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat3x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat3x2.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat3x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat3x3.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat3x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat3x4.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat4x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat4x2.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat4x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat4x3.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat4x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_mat4x4.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_vec1.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_vec1.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_vec2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_vec2.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_vec3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_vec3.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_vec4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/detail/type_vec4.inl \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/exponential.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double2x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double2x2_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double2x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double2x3_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double2x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double2x4_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double3x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double3x2_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double3x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double3x3_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double3x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double3x4_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double4x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double4x2_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double4x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double4x3_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double4x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_double4x4_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float2x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float2x2_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float2x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float2x3_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float2x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float2x4_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float3x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float3x2_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float3x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float3x3_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float3x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float3x4_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float4x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float4x2_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float4x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float4x3_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float4x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/matrix_float4x4_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/scalar_int_sized.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/scalar_uint_sized.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_bool2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_bool2_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_bool3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_bool3_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_bool4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_bool4_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_double2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_double2_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_double3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_double3_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_double4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_double4_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_float2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_float2_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_float3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_float3_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_float4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_float4_precision.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_int2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_int2_sized.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_int3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_int3_sized.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_int4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_int4_sized.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_uint2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_uint2_sized.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_uint3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_uint3_sized.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_uint4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/ext/vector_uint4_sized.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/fwd.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/geometric.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/glm.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/integer.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/mat2x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/mat2x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/mat2x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/mat3x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/mat3x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/mat3x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/mat4x2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/mat4x3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/mat4x4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/matrix.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/packing.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/simd/platform.h \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/trigonometric.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/vec2.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/vec3.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/vec4.hpp \
+  D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/glm/vector_relational.hpp \
   D:/RoboticsSoftware/external/entt/config/config.h \
   D:/RoboticsSoftware/external/entt/config/macro.h \
   D:/RoboticsSoftware/external/entt/config/version.h \
@@ -230,4 +378,6 @@ D:/RoboticsSoftware/build/RoboticsSoftware_autogen/IO2SIJJ3DB/moc_PropertiesPane
   D:/RoboticsSoftware/external/entt/signal/dispatcher.hpp \
   D:/RoboticsSoftware/external/entt/signal/emitter.hpp \
   D:/RoboticsSoftware/external/entt/signal/fwd.hpp \
-  D:/RoboticsSoftware/external/entt/signal/sigh.hpp
+  D:/RoboticsSoftware/external/entt/signal/sigh.hpp \
+  D:/RoboticsSoftware/include/ObjectHeaders/Scene.hpp \
+  D:/RoboticsSoftware/include/UIHeaders/IMenu.hpp

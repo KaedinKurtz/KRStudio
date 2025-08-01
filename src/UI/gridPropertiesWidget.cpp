@@ -24,7 +24,14 @@
 #include <glm/gtx/euler_angles.hpp>
 
 
-gridPropertiesWidget::gridPropertiesWidget(Scene* scene, entt::entity entity, QWidget* parent)
+gridPropertiesWidget::gridPropertiesWidget(Scene* scene, QWidget* parent)
+    : gridPropertiesWidget(scene, entt::null, parent)
+{
+}
+
+gridPropertiesWidget::gridPropertiesWidget(Scene* scene,
+    entt::entity entity,
+    QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::gridPropertiesWidget)
     , m_scene(scene)
@@ -304,8 +311,22 @@ void gridPropertiesWidget::onQuaternionChanged()
 
 void gridPropertiesWidget::initializeFresh()
 {
-        // First-ever setup: just populate UI from scene defaults
-        initializeUI();
+    // if no entity was passed, or it was null, make/find one now
+    if (m_entity == entt::null || !m_scene->getRegistry().valid(m_entity))
+    {
+        auto& reg = m_scene->getRegistry();
+        auto view = reg.view<GridComponent>();
+        if (view.begin() != view.end())
+            m_entity = *view.begin();
+        else
+        {
+            m_entity = reg.create();
+            reg.emplace<TransformComponent>(m_entity);
+            reg.emplace<GridComponent>(m_entity);
+        }
+    }
+    // now populate the UI from that component:
+    initializeUI();
 }
 
 void gridPropertiesWidget::initializeFromDatabase()

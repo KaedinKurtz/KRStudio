@@ -111,6 +111,7 @@ RoboticsSoftware_autogen/timestamp: \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QFuture \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QFutureWatcher \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QHash \
+	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QJsonArray \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QJsonDocument \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QJsonObject \
 	D:/RoboticsSoftware/build/vcpkg_installed/x64-windows/include/Qt6/QtCore/QList \

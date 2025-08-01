@@ -430,15 +430,6 @@ MainWindow::MainWindow(QWidget* parent)
             });
         });
 
-    // Create the properties panel and dock it to the RIGHT. This will be our main area for tabbed menus.
-    PropertiesPanel* propertiesPanel = new PropertiesPanel(m_scene.get(), this);
-    propertiesPanel->setMinimumWidth(700);
-    ads::CDockWidget* propertiesDock = new ads::CDockWidget("Grid(s)");
-    propertiesDock->setWidget(propertiesPanel);
-    propertiesDock->setStyleSheet(sidePanelStyle);
-    // Store the area where the properties panel is docked, so we can add other menus as tabs to it.
-    m_propertiesArea = m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertiesDock);
-
     // Connect the database panel's scene reload signal
     // This is connected here, but the panel itself is created on-demand.
     // We need to connect it when the panel is created in showMenu.
@@ -575,6 +566,17 @@ MainWindow::MainWindow(QWidget* parent)
         }
         });
 
+    {
+        QSignalBlocker block(m_fixedTopToolbar);
+        handleMenuToggle(MenuType::GridProperties, true);
+        m_fixedTopToolbar->gridMenuToggled(true);
+    }
+
+    showMenu(MenuType::GridProperties);
+
+    popup->updateUi(m_dockContainers, m_scene.get());
+    syncViewportManagerPopup();
+
     // --- 7. Final Window Setup ---
     if (menuBar()) {
         menuBar()->setVisible(false);
@@ -619,6 +621,8 @@ MainWindow::~MainWindow()
          // Stop any ongoing render loops
         m_masterRenderTimer->stop();
     
+        m_menus.clear();
+
              // 1) Remove every viewport dock. This triggers onViewportDockClosed()
              //    for each, which in turn calls destroyCameraRig() and GPU cleanup.
         while (!m_dockContainers.isEmpty()) {
@@ -1134,52 +1138,97 @@ void MainWindow::handleMenuToggle(MenuType type, bool checked)
     else           hideMenu(type);
 }
 
+void MainWindow::ensurePropertiesArea()
+{
+    // 1) If we already seeded the side-panel area, do nothing.
+    if (m_propertiesArea)
+        return;
+
+    // 2) Drop in a dummy dock so ADS will create a CDockAreaWidget for us…
+    auto* placeholder = new ads::CDockWidget(QString(), this);
+    placeholder->setFeatures(ads::CDockWidget::NoDockWidgetFeatures);
+    m_propertiesArea = m_dockManager->addDockWidget(
+        ads::RightDockWidgetArea,
+        placeholder
+    );
+
+    // 3) Immediately remove the dummy—area remains behind, ready for real tabs
+    m_dockManager->removeDockWidget(placeholder);
+    placeholder->deleteLater();
+}
+
 void MainWindow::showMenu(MenuType type)
 {
-    qDebug() << "showMenu called for type:" << static_cast<int>(type) << "Toggled ON";
+    qDebug() << "\n––– showMenu for" << int(type);
 
+    // find existing tab-area...
+    ads::CDockAreaWidget* existingArea = nullptr;
+    for (auto it = m_menus.constBegin(); it != m_menus.constEnd(); ++it) {
+        auto* d = it.value().dock;
+        if (d && !d->isHidden()) {
+            existingArea = d->dockAreaWidget();
+            qDebug() << "  found existing dock:" << d->windowTitle()
+                << "area ptr =" << static_cast<void*>(existingArea);
+            break;
+        }
+    }
+    if (!existingArea)
+        qDebug() << "  no existing area – will create a new side-panel";
+
+    // create the menu + dock if needed
     auto& entry = m_menus[type];
     if (!entry.menu) {
-        qDebug() << "Menu does not exist. Creating it for the first time.";
-
-        // FIX 1: Assign the unique_ptr from the factory directly to the shared_ptr.
-        // This correctly transfers ownership without using .release().
         entry.menu = MenuFactory::create(type, m_scene.get(), this);
-
         if (!entry.menu) {
-            qWarning() << "MenuFactory failed to create menu for type" << (int)type;
+            qWarning() << "  factory failed for" << int(type);
             return;
         }
 
-        // FIX 3: Restore the title logic.
         QString title = db::DatabaseManager::menuTypeToString(type);
         entry.dock = new ads::CDockWidget(title, this);
-
         entry.dock->setWidget(entry.menu->widget());
         entry.dock->setStyleSheet(sidePanelStyle);
-        m_dockManager->addDockWidget(ads::RightDockWidgetArea, entry.dock, m_propertiesArea);
 
+        // tabify or new widget area
+        if (existingArea) {
+            qDebug() << "  tabifying into existingArea via CenterDockWidgetArea";
+            m_dockManager->addDockWidget(
+                ads::CenterDockWidgetArea,
+                entry.dock,
+                existingArea
+            );
+        }
+        else {
+            qDebug() << "  creating brand-new RightDockWidgetArea";
+            existingArea = m_dockManager->addDockWidget(
+                ads::RightDockWidgetArea,
+                entry.dock
+            );
+            qDebug() << "  new area ptr =" << static_cast<void*>(existingArea);
+        }
+
+        // **on close: first save, then tear down**
         connect(entry.dock, &ads::CDockWidget::closed, this, [this, type]() {
-            if (m_fixedTopToolbar) {
-                m_fixedTopToolbar->uncheckButtonForMenu(type);
-            }
             auto it = m_menus.find(type);
             if (it != m_menus.end()) {
-                // FIX 2: Do not manually delete a smart pointer.
-                // Erasing it from the map will destroy the shared_ptr,
-                // and the menu object will be deleted automatically if this is the last reference.
-                m_menus.erase(it);
+                // 1) serialize & save all your grids to the DB
+                it->menu->shutdownAndSave();
+                // 2) uncheck the toolbar button
+                m_fixedTopToolbar->uncheckButtonForMenu(type);
+                // 3) remove it so next showMenu() will recreate
+                m_menus.remove(type);
             }
             });
 
-        if (db::DatabaseManager::instance().menuConfigExists(db::DatabaseManager::menuTypeToString(type))) {
+        // load from DB if exists, else fresh
+        if (db::DatabaseManager::instance().menuConfigExists(title))
             entry.menu->initializeFromDatabase();
-        }
-        else {
+        else
             entry.menu->initializeFresh();
-        }
     }
 
+    // toolbar state + bring to front
+    if (m_fixedTopToolbar) m_fixedTopToolbar->checkButtonForMenu(type);
     entry.dock->show();
     entry.dock->setAsCurrentTab();
 }
@@ -1191,5 +1240,8 @@ void MainWindow::hideMenu(MenuType type)
     auto& entry = it.value();
     // Save UI state, then hide
     entry.menu->shutdownAndSave();
-    entry.dock->hide();
+    // 2) tear down the dock widget completely
+    m_dockManager->removeDockWidget(entry.dock);
+    // 3) finally erase from our map so both dock+menu are destroyed
+    m_menus.erase(it);
 }
