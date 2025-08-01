@@ -82,3 +82,26 @@ void StaticToolbar::uncheckButtonForMenu(MenuType type)
         button->setChecked(false);
     }
 }
+
+void StaticToolbar::checkButtonForMenu(MenuType type)
+{
+    QToolButton* button = nullptr;
+    switch (type) {
+    case MenuType::FlowVisualizer:
+        button = ui->flowVisualizerMenu;
+        break;
+    case MenuType::RealSense:
+        button = ui->realsense_config_button;
+        break;
+    case MenuType::Database:
+        button = ui->databaseManagerButton;
+        break;
+    case MenuType::GridProperties:
+        button = ui->gridPropertiesButton;
+        break;
+    }
+    if (button && !button->isChecked()) {
+        QSignalBlocker block(button);
+        button->setChecked(true);
+    }
+}

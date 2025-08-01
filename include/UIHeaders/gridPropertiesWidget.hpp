@@ -1,9 +1,7 @@
 #pragma once
 
 #include <QWidget>
-#include "gridPropertiesWidget.hpp"
 #include "entt/entt.hpp"
-
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -17,8 +15,6 @@
 #include <QWidget> // Base class for all UI widgets
 #include "IMenu.hpp"
 
-#include "MenuFactory.hpp"
-
 namespace Ui {
     class gridPropertiesWidget; // Correct class name
 }
@@ -29,7 +25,8 @@ class gridPropertiesWidget : public QWidget, public IMenu
     Q_OBJECT
 
 public:
-    explicit gridPropertiesWidget(Scene* scene, entt::entity entity, QWidget* parent = nullptr);
+    explicit gridPropertiesWidget(Scene* scene, QWidget* parent = nullptr);
+    explicit gridPropertiesWidget(Scene * scene, entt::entity entity, QWidget * parent = nullptr);
     ~gridPropertiesWidget();
 
     void initializeFresh() override;

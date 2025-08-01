@@ -1338,38 +1338,85 @@ QStringList db::DatabaseManager::listScenes() {
     return QStringList();
 }
 
- bool DatabaseManager::saveMenuState(const QString & menuName, const QString & stateJson) {
+bool DatabaseManager::saveMenuState(const QString& menuName, const QString& stateJson) {
+    // 1) Log SQL + params
+    qDebug() << "[DB_DEBUG] saveMenuState()"
+        << "\n    SQL:   INSERT OR REPLACE INTO menu_states"
+        " (menu_name, state, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)"
+        << "\n    Param0:" << menuName
+        << "\n    Param1 length:" << stateJson.size();
+
     auto conn = getConnection();
     QSqlQuery query(conn);
-    query.prepare(
+
+    // 2) Prepare
+    if (!query.prepare(
         "INSERT OR REPLACE INTO menu_states "
-         "(menu_name, state, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)"
-         );
-    query.addBindValue(menuName);
-    query.addBindValue(stateJson);
+        "(menu_name, state, updated_at) "
+        "VALUES (?, ?, CURRENT_TIMESTAMP)"
+    )) {
+        qWarning() << "[DB_DEBUG] prepare() failed:" << query.lastError().text();
+    }
+    qDebug() << "[DB_DEBUG] after prepare, boundValues().count() ="
+        << query.boundValues().size();
+
+    // 3) Bind
+    query.bindValue(0, menuName);
+    query.bindValue(1, stateJson);
+    qDebug() << "[DB_DEBUG] after bindValue calls, boundValues().count() ="
+        << query.boundValues().size()
+        << "\n    boundValues() =" << query.boundValues();
+
+    // 4) Exec
     bool ok = query.exec();
     if (!ok) {
-        qWarning() << "Failed to save menu state for" << menuName << ":" << query.lastError().text();
-        
+        qWarning() << "[DB_DEBUG] exec() failed:" << query.lastError().text();
     }
-     releaseConnection(conn);
+    else {
+        qDebug() << "[DB_DEBUG] saveMenuState() succeeded for" << menuName;
+    }
+
+    releaseConnection(conn);
     return ok;
-    
 }
 
-QString DatabaseManager::loadMenuState(const QString & menuName) {
+QString DatabaseManager::loadMenuState(const QString& menuName) {
+    // 1) Log SQL + param
+    qDebug() << "[DB_DEBUG] loadMenuState()"
+        << "\n    SQL:   SELECT state FROM menu_states WHERE menu_name = ?"
+        << "\n    Param: " << menuName;
+
     auto conn = getConnection();
     QSqlQuery query(conn);
-    query.prepare("SELECT state FROM menu_states WHERE menu_name = ?");
-    query.addBindValue(menuName);
-    QString state;
-    if (query.exec() && query.next()) {
-        state = query.value(0).toString();
-        
+
+    // 2) Prepare
+    if (!query.prepare("SELECT state FROM menu_states WHERE menu_name = ?")) {
+        qWarning() << "[DB_DEBUG] prepare() failed:" << query.lastError().text();
     }
-     releaseConnection(conn);
+    qDebug() << "[DB_DEBUG] after prepare, boundValues().count() ="
+        << query.boundValues().size();
+
+    // 3) Bind
+    query.bindValue(0, menuName);
+    qDebug() << "[DB_DEBUG] after bindValue, boundValues().count() ="
+        << query.boundValues().size()
+        << "\n    boundValues() =" << query.boundValues();
+
+    // 4) Exec + fetch
+    QString state;
+    if (!query.exec()) {
+        qWarning() << "[DB_DEBUG] exec() failed:" << query.lastError().text();
+    }
+    else if (query.next()) {
+        state = query.value(0).toString();
+        qDebug() << "[DB_DEBUG] loadMenuState() returned state length =" << state.size();
+    }
+    else {
+        qDebug() << "[DB_DEBUG] loadMenuState(): no row returned";
+    }
+
+    releaseConnection(conn);
     return state;
-    
 }
 
 QString DatabaseManager::menuTypeToString(MenuType type)
@@ -1384,15 +1431,46 @@ QString DatabaseManager::menuTypeToString(MenuType type)
     }
 }
 
-bool DatabaseManager::menuConfigExists(const QString& menuType)
-{
-    // grab a QSqlDatabase from the pool
-    QSqlQuery q(m_connectionPool->getConnection());
-    q.prepare("SELECT 1 FROM MenuStates WHERE menu_name = :name LIMIT 1");
-    q.bindValue(":name", menuType);
-    if (!q.exec()) {
-        qWarning() << "menuConfigExists query failed:" << q.lastError().text();
+bool DatabaseManager::menuConfigExists(const QString& menuName) {
+    // 1) Log SQL + param
+    const QString sql = QStringLiteral("SELECT COUNT(*) FROM menu_states WHERE menu_name = ?");
+    qDebug() << "[DB_DEBUG] menuConfigExists()"
+        << "\n    SQL:   " << sql
+        << "\n    Param: " << menuName;
+
+    auto conn = getConnection();
+    QSqlQuery query(conn);
+
+    // 2) Prepare
+    if (!query.prepare(sql)) {
+        qWarning() << "[DB_DEBUG] prepare() failed:" << query.lastError().text();
+        releaseConnection(conn);
         return false;
     }
-    return q.next();
+    qDebug() << "[DB_DEBUG] after prepare, boundValues().count() ="
+        << query.boundValues().size();
+
+    // 3) Bind
+    query.bindValue(0, menuName);
+    qDebug() << "[DB_DEBUG] after bindValue, boundValues().count() ="
+        << query.boundValues().size()
+        << "\n    boundValues() =" << query.boundValues();
+
+    // 4) Exec + read count
+    if (!query.exec()) {
+        qWarning() << "[DB_DEBUG] exec() failed:" << query.lastError().text();
+        releaseConnection(conn);
+        return false;
+    }
+    int count = 0;
+    if (query.next()) {
+        count = query.value(0).toInt();
+        qDebug() << "[DB_DEBUG] menuConfigExists() count =" << count;
+    }
+    else {
+        qWarning() << "[DB_DEBUG] menuConfigExists(): no result row!";
+    }
+
+    releaseConnection(conn);
+    return count > 0;
 }

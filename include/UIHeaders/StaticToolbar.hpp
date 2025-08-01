@@ -22,6 +22,10 @@ public:
     ViewportManagerPopup* viewportManagerPopup() const { return m_viewportManagerPopup; }
 
     void uncheckButtonForMenu(MenuType type);
+    // StaticToolbar.hpp
+public slots:
+    void checkButtonForMenu(MenuType type);
+
 signals:
     void loadRobotClicked();
     void viewportManagerClicked(QToolButton* button);

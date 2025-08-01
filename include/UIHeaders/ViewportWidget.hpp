@@ -3,6 +3,7 @@
 #include <QOpenGLFunctions_4_3_Core>
 #include <memory>
 #include <entt/fwd.hpp>
+#include <QLabel> // Include QLabel for stats overlay
 
 class Scene;
 class Camera;
@@ -76,6 +77,8 @@ private:
     //static void updateAnimations(entt::registry& registry, float frameDt);
 
     bool m_hasSignaledReady = false;
+
+    QLabel* m_statsOverlay;
 
 signals: // <<< ADD THIS SECTION
     void viewportReady();
