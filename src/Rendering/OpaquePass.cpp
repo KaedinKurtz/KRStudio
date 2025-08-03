@@ -119,7 +119,7 @@ void OpaquePass::execute(const RenderFrameContext& context)
 
         // material setup
         if (auto* mat = context.registry.try_get<MaterialComponent>(ent)) {
-            gbufShader->setVec3(gl, "material.albedo", mat->albedo);
+            gbufShader->setVec3(gl, "objectColor", mat->albedo);
             gbufShader->setFloat(gl, "material.metallic", mat->metallic);
             gbufShader->setFloat(gl, "material.roughness", mat->roughness);
 
@@ -135,7 +135,7 @@ void OpaquePass::execute(const RenderFrameContext& context)
         }
         else {
             // fallback
-            gbufShader->setVec3(gl, "material.albedo", glm::vec3(0.8f));
+            gbufShader->setVec3(gl, "objectColor", glm::vec3(0.8f));
             gbufShader->setFloat(gl, "material.metallic", 0.1f);
             gbufShader->setFloat(gl, "material.roughness", 0.8f);
             gbufShader->setInt(gl, "material.useAlbedoMap", 0);
