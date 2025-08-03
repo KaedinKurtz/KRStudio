@@ -1,19 +1,38 @@
 {
   "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "windows-msvc-debug",
       "displayName": "Windows MSVC Debug",
+      "description": "Debug build with Ninja and vcpkg toolchain",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_TOOLCHAIN_FILE": "C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Windows MSVC Release",
+      "description": "Release build with Ninja and vcpkg toolchain",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake"
       }
     },
     {
       "hidden": true,
       "name": "Qt",
+      "displayName": "Qt via QTDIR",
+      "description": "Fallback: set CMAKE_PREFIX_PATH from QTDIR env var",
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "$env{QTDIR}"
       },

@@ -1,17 +1,22 @@
 #version 430 core
-// -----------------------------------------------------------------------------
-// Generates a full-screen triangle with proper UVs (no VBO required).
-// -----------------------------------------------------------------------------
-out vec2 vUV;                // passed to the fragment shader
+
+// This shader takes no vertex attributes as input.
+// It generates all data based on the vertex ID.
+
+out vec2 TexCoords; // Pass texture coordinates to the fragment shader.
 
 void main()
 {
-    // Vertex pattern:  (0,0)  (2,0)  (0,2)
-    vec2 pos = vec2( (gl_VertexID << 1) & 2,
-                     (gl_VertexID      ) & 2 );
+    // A clever trick to generate 3 vertices forming a triangle that
+    // covers the entire screen in normalized device coordinates (NDC).
+    // The bitwise operations generate the corners (-1,-1), (3,-1), and (-1,3).
+    float x = float((gl_VertexID & 1) << 2) - 1.0;
+    float y = float((gl_VertexID & 2) << 1) - 1.0;
 
-    vUV         = pos;              // 0 1 texture coords
-    gl_Position = vec4(pos * 2.0 - 1.0,   // 0/2 1/ 3 in NDC
-                       0.0,
-                       1.0);
+    // Directly output the clip-space position of the vertex.
+    gl_Position = vec4(x, y, 0.0, 1.0);
+
+    // Calculate the corresponding texture coordinate for this vertex.
+    // The math maps the large triangle's corners back to the [0,1] UV space.
+    TexCoords = vec2(x * 0.5 + 0.5, y * 0.5 + 0.5);
 }

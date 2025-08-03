@@ -3,6 +3,7 @@
 #include "Shader.hpp"
 #include "components.hpp"
 #include "Scene.hpp"
+#include "PrimitiveBuilders.hpp"
 
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_4_3_Core>
@@ -25,6 +26,21 @@ void restoreGLState(QOpenGLFunctions_4_3_Core* gl, const GLStateSnapshot& snapsh
     if (snapshot.cullFaceEnabled) gl->glEnable(GL_CULL_FACE); else gl->glDisable(GL_CULL_FACE);
 }
 
+struct GLStateSaver {
+    GLStateSaver(QOpenGLFunctions_4_3_Core* funcs) : gl(funcs) {
+        gl->glGetBooleanv(GL_BLEND, &blendEnabled);
+        gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+        gl->glGetBooleanv(GL_CULL_FACE, &cullFaceEnabled);
+    }
+    // ...and its destructor automatically restores the state when it goes out of scope.
+    ~GLStateSaver() {
+        if (blendEnabled) gl->glEnable(GL_BLEND); else gl->glDisable(GL_BLEND);
+        gl->glDepthMask(depthMask); // This is the most critical line to fix the bug.
+        if (cullFaceEnabled) gl->glEnable(GL_CULL_FACE); else gl->glDisable(GL_CULL_FACE);
+    }
+    QOpenGLFunctions_4_3_Core* gl;
+    GLboolean blendEnabled, depthMask, cullFaceEnabled;
+};
 
 // --- Class Implementation ---
 
@@ -42,7 +58,7 @@ void SplinePass::execute(const RenderFrameContext& context) {
     Shader* glowShader = context.renderer.getShader("glow");
     Shader* capShader = context.renderer.getShader("cap");
     if (!glowShader || !capShader) return;
-    
+
     auto* gl = context.gl;
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
@@ -51,12 +67,14 @@ void SplinePass::execute(const RenderFrameContext& context) {
         createPrimitivesForContext(ctx, gl);
     }
 
-    GLStateSnapshot stateBefore;
-    saveGLState(gl, stateBefore);
+    // REMOVED: The GLStateSaver is no longer used.
+    // GLStateSaver stateSaver(gl);
+
+    // --- Manually set the state needed for this pass ---
     gl->glEnable(GL_BLEND);
     gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    gl->glDepthMask(GL_FALSE);
-    gl->glDisable(GL_CULL_FACE);
+    gl->glDepthMask(GL_FALSE);      // Disable depth writes for the glow effect.
+    gl->glDisable(GL_CULL_FACE);    // Splines are 2D so they don't need culling.
 
     auto& registry = context.registry;
     auto splineView = registry.view<const SplineComponent>();
@@ -111,8 +129,12 @@ void SplinePass::execute(const RenderFrameContext& context) {
         }
     }
 
-    restoreGLState(gl, stateBefore);
     gl->glBindVertexArray(0);
+
+    // --- Manually restore the GL state to a clean default for the next pass ---
+    gl->glDepthMask(GL_TRUE);      // CRITICAL: Re-enable depth writing.
+    gl->glDisable(GL_BLEND);     // Disable blending.
+    gl->glEnable(GL_CULL_FACE);  // Re-enable face culling for the next opaque pass.
 }
 
 void SplinePass::onContextDestroyed(QOpenGLContext* dyingContext, QOpenGLFunctions_4_3_Core* gl) {
@@ -137,28 +159,28 @@ void SplinePass::onContextDestroyed(QOpenGLContext* dyingContext, QOpenGLFunctio
     }
 }
 
-void SplinePass::createPrimitivesForContext(QOpenGLContext* ctx, QOpenGLFunctions_4_3_Core* gl) {
+void SplinePass::createPrimitivesForContext(QOpenGLContext* ctx,
+    QOpenGLFunctions_4_3_Core* gl)
+{
     qDebug() << "SplinePass: Creating line and cap primitives for context" << ctx;
 
-    GLuint lineVAO = 0, lineVBO = 0, capVAO = 0, capVBO = 0;
-
+    // LINE PRIMITIVE
+    GLuint lineVAO = 0, lineVBO = 0;
     gl->glGenVertexArrays(1, &lineVAO);
     gl->glGenBuffers(1, &lineVBO);
-    gl->glBindVertexArray(lineVAO);
-    gl->glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
-    gl->glEnableVertexAttribArray(0);
-    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    // this binds VAO, binds VBO, uploads a unit?length line,
+    // sets up attribs, then unbinds VAO.
+    buildUnitLine(gl, lineVAO, lineVBO);
 
+    // CAP (triangle) PRIMITIVE
+    GLuint capVAO = 0, capVBO = 0;
     gl->glGenVertexArrays(1, &capVAO);
     gl->glGenBuffers(1, &capVBO);
-    gl->glBindVertexArray(capVAO);
-    gl->glBindBuffer(GL_ARRAY_BUFFER, capVBO);
-    gl->glEnableVertexAttribArray(0);
-    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    // this binds VAO, binds VBO, uploads a little triangle,
+    // sets up attribs, then unbinds VAO.
+    buildCap(gl, capVAO, capVBO);
 
-    gl->glBindVertexArray(0);
-
-    // FIX: Use non-const operator[] for writing to the QHash.
+    // stash them for draw() later
     m_lineVAOs[ctx] = lineVAO;
     m_lineVBOs[ctx] = lineVBO;
     m_capVAOs[ctx] = capVAO;

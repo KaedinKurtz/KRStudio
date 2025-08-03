@@ -166,60 +166,91 @@ inline std::size_t createArrowPrimitive(std::vector<Vertex>& vertices, std::vect
 inline void buildGrid(QOpenGLFunctions_4_3_Core* gl,
     GLuint vao, GLuint vbo)
 {
-    struct P { glm::vec3 pos; };
-    const P verts[] = {
-        {{-1,0,0}}, {{+1,0,0}},      // simple X line
-        {{0,-1,0}}, {{0,+1,0}}       // simple Y line
+    static const glm::vec3 verts[6] = {
+        { -1.0f, 0.0f, -1.0f },
+        { -1.0f, 0.0f,  1.0f },
+        {  1.0f, 0.0f,  1.0f },
+        { -1.0f, 0.0f, -1.0f },
+        {  1.0f, 0.0f,  1.0f },
+        {  1.0f, 0.0f, -1.0f }
     };
-
     gl->glBindVertexArray(vao);
     gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
     gl->glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
-
     gl->glEnableVertexAttribArray(0);
-    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
-        sizeof(P), (void*)0);
+    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
     gl->glBindVertexArray(0);
 }
 
 inline void buildUnitLine(QOpenGLFunctions_4_3_Core* gl,
     GLuint vao, GLuint vbo)
 {
-    struct P { glm::vec3 pos; };
-    const P verts[] = { {{0,0,0}}, {{0,0,1}} };      // +Z unit line
-
+    static const glm::vec3 verts[2] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 1.0f }
+    };
     gl->glBindVertexArray(vao);
     gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
     gl->glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
-
     gl->glEnableVertexAttribArray(0);
-    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
-        sizeof(P), (void*)0);
+    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
     gl->glBindVertexArray(0);
 }
 
 inline void buildCap(QOpenGLFunctions_4_3_Core* gl,
     GLuint vao, GLuint vbo)
 {
-    // one-triangle disc (cheap placeholder)
-    struct P { glm::vec3 pos; };
-    const P verts[] = { {{0,0,0}}, {{1,0,0}}, {{0,1,0}} };
-
+    const int segments = 32;           // match your shader’s expectations
+    std::vector<glm::vec3> pts;
+    pts.reserve(segments);
+    for (int i = 0; i < segments; ++i) {
+        float theta = 2.0f * 3.1415926f * float(i) / float(segments);
+        pts.emplace_back(std::cos(theta), std::sin(theta), 0.0f);
+    }
     gl->glBindVertexArray(vao);
     gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    gl->glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
-
+    gl->glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * pts.size(), pts.data(), GL_STATIC_DRAW);
     gl->glEnableVertexAttribArray(0);
-    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
-        sizeof(P), (void*)0);
+    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
     gl->glBindVertexArray(0);
 }
 
-inline void setupFullscreenQuadAttribs(QOpenGLFunctions_4_3_Core* gl,
-    GLuint vao)
+inline void buildGridMesh(QOpenGLFunctions_4_3_Core* gl, GLuint vao, GLuint vbo, float halfSize)
 {
-    // Attribute-less draw: VAO with no buffers bound; we’ll call glDrawArrays
+    // 6 verts => 2 triangles
+    std::array<glm::vec3, 6> verts = { {
+        { -halfSize, 0.0f, -halfSize },
+        {  halfSize, 0.0f, -halfSize },
+        {  halfSize, 0.0f,  halfSize },
+        { -halfSize, 0.0f, -halfSize },
+        {  halfSize, 0.0f,  halfSize },
+        { -halfSize, 0.0f,  halfSize }
+    } };
+
     gl->glBindVertexArray(vao);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    gl->glBufferData(GL_ARRAY_BUFFER,
+        verts.size() * sizeof(glm::vec3),
+        verts.data(),
+        GL_STATIC_DRAW);
+
+    gl->glEnableVertexAttribArray(0);
+    gl->glVertexAttribPointer(0,
+        3,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(glm::vec3),
+        (void*)0);
+
+    // unbind
+    gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
+    gl->glBindVertexArray(0);
+}
+
+inline void setupFullscreenQuadAttribs(QOpenGLFunctions_4_3_Core* gl, GLuint vao)
+{
+    gl->glBindVertexArray(vao);
+    // no VBO/attribs needed — the shader computes the positions from gl_VertexID
     gl->glBindVertexArray(0);
 }
 

@@ -55,27 +55,34 @@ void PointCloudPass::execute(const RenderFrameContext& context) {
     if (!ctx) return;
 
     // --- Lazy Initialization of GL Resources ---
-    // Following the pattern from GridPass, check if we've created buffers
-    // for this specific OpenGL context yet. If not, create them now.
     if (!m_vaos.contains(ctx)) {
         createResourcesForContext(ctx, gl);
     }
 
     // --- Upload New Data if Available ---
-    // If the update() method has been called, we have new data to send to the GPU.
     if (m_has_new_data) {
         // Bind the buffers for the current context
         gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo_vertices.value(ctx));
         gl->glBufferData(GL_ARRAY_BUFFER, m_points.size() * sizeof(float) * 3, m_points.get_vertices(), GL_DYNAMIC_DRAW);
-
         gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo_texcoords.value(ctx));
         gl->glBufferData(GL_ARRAY_BUFFER, m_points.size() * sizeof(float) * 2, m_points.get_texture_coordinates(), GL_DYNAMIC_DRAW);
-
         gl->glBindTexture(GL_TEXTURE_2D, m_texture_ids.value(ctx));
         gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, m_color_frame.get_width(), m_color_frame.get_height(), 0, GL_RGB, GL_UNSIGNED_BYTE, m_color_frame.get_data());
-
-        m_has_new_data = false; // Clear the flag after uploading
+        m_has_new_data = false;
     }
+    // --- State Management ---
+    // Save the state we are about to change.
+    GLboolean wasDepthMaskEnabled, wasPointSizeEnabled, wasCullFaceEnabled, wasBlendEnabled;
+    gl->glGetBooleanv(GL_DEPTH_WRITEMASK, &wasDepthMaskEnabled);
+    gl->glGetBooleanv(GL_PROGRAM_POINT_SIZE, &wasPointSizeEnabled);
+    gl->glGetBooleanv(GL_CULL_FACE, &wasCullFaceEnabled);
+    gl->glGetBooleanv(GL_BLEND, &wasBlendEnabled);
+
+    // Set the specific state needed for rendering this point cloud.
+    gl->glEnable(GL_PROGRAM_POINT_SIZE); // Allows shader to control point size.
+    gl->glDepthMask(GL_FALSE);           // Render points without writing to depth buffer to avoid z-fighting.
+    gl->glDisable(GL_CULL_FACE);         // Points have no faces, so culling is unnecessary.
+    gl->glDisable(GL_BLEND);             // Ensure blending is off unless explicitly needed.
 
     // --- Render ---
     m_shader->use(gl);
@@ -87,15 +94,16 @@ void PointCloudPass::execute(const RenderFrameContext& context) {
     gl->glBindTexture(GL_TEXTURE_2D, m_texture_ids.value(ctx));
     m_shader->setInt(gl, "texture_color", 0);
 
-    gl->glEnable(GL_PROGRAM_POINT_SIZE);
-    gl->glDepthMask(GL_FALSE); // Render points without writing to depth buffer to avoid z-fighting
-
     gl->glBindVertexArray(m_vaos.value(ctx));
     gl->glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(m_points.size()));
     gl->glBindVertexArray(0);
 
-    gl->glDepthMask(GL_TRUE);
-    gl->glDisable(GL_PROGRAM_POINT_SIZE);
+    // --- Restore State ---
+    // Restore all the states we changed back to their original values.
+    gl->glDepthMask(wasDepthMaskEnabled);
+    if (wasPointSizeEnabled) gl->glEnable(GL_PROGRAM_POINT_SIZE); else gl->glDisable(GL_PROGRAM_POINT_SIZE);
+    if (wasCullFaceEnabled)  gl->glEnable(GL_CULL_FACE);  else gl->glDisable(GL_CULL_FACE);
+    if (wasBlendEnabled)     gl->glEnable(GL_BLEND);     else gl->glDisable(GL_BLEND);
 }
 
 void PointCloudPass::onContextDestroyed(QOpenGLContext* dyingContext, QOpenGLFunctions_4_3_Core* gl) {

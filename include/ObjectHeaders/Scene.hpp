@@ -15,7 +15,11 @@ public:
 
     // REFACTOR: Removed the concept of a single "main camera" from the scene
     // to support multiple independent viewports and cameras.
+    void setPrimaryCamera(entt::entity camera);
+    entt::entity getPrimaryCamera() const;
 
 private:
     entt::registry m_registry;
+
+    entt::entity m_primaryCamera = entt::null;
 };

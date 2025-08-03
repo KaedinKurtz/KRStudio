@@ -31,11 +31,12 @@ public:
     // --- Core Functions ---
     glm::mat4 getViewMatrix() const;
     glm::mat4 getProjectionMatrix(float aspectRatio) const;
+    glm::mat4 getReversedZProjection(float aspectRatio) const;
 
     // --- NEW: Camera Control Functions ---
     void orbit(float xoffset, float yoffset);
     void pan(float xoffset, float yoffset);
-    void dolly(float yoffset);
+    void dolly(float wheelDelta);
     void move(Camera_Movement direction, float deltaTime);
     void focusOn(const glm::vec3& target, float distance = 5.0f);
 
@@ -48,19 +49,20 @@ public:
     void setToKnownGoodView();
 
     // --- Getters ---
-    glm::vec3 getPosition() const { return m_Position; }
-    glm::vec3 getFocalPoint() const { return m_FocalPoint; }
-    float getDistance() const { return m_Distance; }
-    bool isPerspective() const { return m_IsPerspective; }
+    glm::vec3 getPosition()    const { return m_Position; }
+    glm::vec3 getFocalPoint()  const { return m_FocalPoint; }
+    float     getDistance()    const { return m_Distance; }
+    bool      isPerspective()  const { return m_IsPerspective; }
 
 private:
-
-    NavMode m_Mode = NavMode::ORBIT;
-    // EMA for smoothing
-    glm::vec2 m_lastDelta{ 0 };
-    float      m_smoothAlpha = 0.25f; // 0 = instant, 1 = very smooth
-
     void updateCameraVectors();
+
+    // Navigation state
+    NavMode m_Mode = NavMode::ORBIT;
+
+    // EMA for smoothing freeLook
+    glm::vec2 m_lastDelta{ 0.0f, 0.0f };
+    float     m_smoothAlpha = 0.25f; // 0 = instant, 1 = very smooth
 
     // Camera Attributes
     glm::vec3 m_Position;
@@ -73,7 +75,12 @@ private:
     float m_Yaw;
     float m_Pitch;
 
+    // Projection parameters
+    float m_FOVDeg = 45.0f;    // vertical field of view in degrees
+    float m_zNear = 0.001f;   // original near plane
+    float m_zFar = 1000.0f;  // original far plane
+
     // Camera options
     float m_Distance;
-    bool m_IsPerspective;
+    bool  m_IsPerspective;
 };

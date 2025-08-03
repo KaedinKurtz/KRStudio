@@ -47,14 +47,13 @@ void BlackBox::dumpState(const QString& tag,
     // --- Per-Viewport FBOs ---
     // FIX: Cast the QOpenGLWidget* to the ViewportWidget* that the map expects.
     ViewportWidget* viewport = qobject_cast<ViewportWidget*>(vp);
-    if (viewport && rs.m_targets.contains(viewport)) {
-        // FIX: Use .value() to access the FBO struct from the QMap.
-        const TargetFBOs& t = rs.m_targets.value(viewport);
+    // Use the new public getter to safely access the FBO info
+    if (const TargetFBOs* t = rs.getTargetFBO(viewport)) {
         out << "    FBOs:\n"
-            << "        mainFBO        : " << fmt(t.mainFBO) << '\n'
-            << "        glowFBO        : " << fmt(t.glowFBO) << '\n'
-            << "        pingpongFBO[0] : " << fmt(t.pingpongFBO[0]) << '\n'
-            << "        pingpongFBO[1] : " << fmt(t.pingpongFBO[1]) << '\n';
+            // The TargetFBOs struct now has different members
+            << "        finalFBO         : " << fmt(t->finalFBO) << '\n'
+            << "        finalColorTexture: " << fmt(t->finalColorTexture) << '\n'
+            << "        finalDepthTexture: " << fmt(t->finalDepthTexture) << '\n';
     }
     else {
         out << "    (viewport not in m_targets map)\n";

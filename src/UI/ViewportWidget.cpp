@@ -61,6 +61,11 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
     m_cameraEntity(cameraEntity),
     m_renderingSystem(renderingSystem)
 {
+    setUpdateBehavior(QOpenGLWidget::PartialUpdate);
+    QSurfaceFormat format;
+    format.setOption(QSurfaceFormat::DebugContext);
+    setFormat(format);
+
     m_instanceId = s_instanceCounter++;
     qDebug() << "[LIFECYCLE] Constructing ViewportWidget instance:" << m_instanceId;
     setFocusPolicy(Qt::StrongFocus);
@@ -82,51 +87,32 @@ void ViewportWidget::setRenderingSystem(RenderingSystem* system)
 
 ViewportWidget::~ViewportWidget() {}
 
-void ViewportWidget::initializeGL() {
-    // This function will now print a very distinct block of text to the log.
-    qDebug() << "\n\n=====================================================================";
-    qDebug() << "============== VIEWPORT INITIALIZEGL() TRIGGERED ==============";
-    qDebug() << "=====================================================================";
-    qDebug() << " > Widget Address:          " << this;
-    qDebug() << " > Context Address:         " << context();
-    qDebug() << " > RenderingSystem Address: " << m_renderingSystem;
-
-    if (m_renderingSystem) {
-        // We are using the isContextInitialized helper we added previously
-        qDebug() << " > Context already known?:    " << m_renderingSystem->isContextInitialized(context());
-
-        initializeOpenGLFunctions();
-        auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(context());
-
-        if (gl) {
-            m_renderingSystem->ensureContextIsTracked(this);
-            m_renderingSystem->initializeResourcesForContext(gl, m_scene);
-        }
-        else {
-            qCritical() << " > CRITICAL: Failed to get GL functions in initializeGL!";
-        }
-
+void ViewportWidget::initializeGL()
+{
+    // ...
+    // ADD THIS BLOCK IF YOU DON'T HAVE IT
+    m_logger = new QOpenGLDebugLogger(this);
+    connect(m_logger, &QOpenGLDebugLogger::messageLogged, this, &ViewportWidget::handleLoggedMessage);
+    if (m_logger->initialize()) {
+        m_logger->startLogging(QOpenGLDebugLogger::SynchronousLogging);
+        m_logger->enableMessages();
     }
     else {
-        qCritical() << " > CRITICAL: RenderingSystem pointer is NULL!";
+        qWarning() << "Failed to initialize OpenGL Debug Logger.";
     }
-    qDebug() << "=====================================================================";
-    qDebug() << "============== VIEWPORT INITIALIZEGL() END ==================\n\n";
+    // ...
+    if (m_renderingSystem) {
+        m_renderingSystem->onViewportAdded(this);
+    }
+    emit glContextReady();
 }
 
 void ViewportWidget::resizeGL(int w, int h) {
-    if (!m_renderingSystem) return;
-
-    const int fbW = int(w * devicePixelRatioF());
-    const int fbH = int(h * devicePixelRatioF());
-
-    // Call the new, correctly named function, passing 'this' which is a ViewportWidget*.
-    m_renderingSystem->onViewportResized(this, this, fbW, fbH);
-
-#ifdef RS_DEBUG_DUMP
-    dbg::BlackBox::instance().dumpState("Resize", *m_renderingSystem,
-        this, this);
-#endif
+    // We still need to position the overlay on resize.
+    if (m_statsOverlay) {
+        m_statsOverlay->move(10, 10);
+    }
+    // The RenderingSystem will handle FBO resizing automatically in its renderFrame() loop.
 }
 
 void ViewportWidget::shutdown()
@@ -140,8 +126,8 @@ void ViewportWidget::shutdown()
 
 void ViewportWidget::paintGL()
 {
-    if (!m_renderingSystem || !m_scene) return;
-
+    // The main render call is now in MainWindow.
+    // This function's only job is to update the stats overlay.
     if (m_renderingSystem) {
         QString statsText = QString("FPS: %1\nFrame: %2 ms")
             .arg(m_renderingSystem->getFPS(), 0, 'f', 1)
@@ -149,23 +135,6 @@ void ViewportWidget::paintGL()
         m_statsOverlay->setText(statsText);
         m_statsOverlay->adjustSize();
     }
-
-    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(context());
-    if (!gl) {
-        qCritical("paintGL: Could not get GL functions for current context!");
-        return;
-    }
-
-    m_renderingSystem->initializeResourcesForContext(gl, m_scene);
-
-    const int fbW = static_cast<int>(width() * devicePixelRatioF());
-    const int fbH = static_cast<int>(height() * devicePixelRatioF());
-
-    // Get the single, authoritative deltaTime for this frame from the scene.
-    const float frameDeltaTime = m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime;
-
-    // Pass it to the renderView function.
-    m_renderingSystem->renderView(this, gl, fbW, fbH, frameDeltaTime);
 }
 
 void ViewportWidget::renderNow()

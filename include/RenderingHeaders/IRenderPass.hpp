@@ -42,4 +42,6 @@ public:
 
     // Called when a viewport is resized. For passes that manage FBOs.
     virtual void onResize(const RenderFrameContext& context) {}
+
+
 };

@@ -528,24 +528,16 @@ MainWindow::MainWindow(QWidget* parent)
 
     // --- 5. FINAL, ROBUST INITIALIZATION AND RENDER LOOP START ---
     m_masterRenderTimer = new QTimer(this);
-    connect(m_masterRenderTimer, &QTimer::timeout, this, &MainWindow::onMasterRender);
-
-    connect(viewport1, &ViewportWidget::glContextReady, this, [this, viewport1]() {
-        if (!m_renderingSystem->isInitialized()) {
-            qDebug() << "[LIFECYCLE] Primary viewport context is ready. Initializing RenderingSystem.";
-            viewport1->makeCurrent();
-            auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport1->context());
-            if (gl) {
-                m_renderingSystem->initializeResourcesForContext(gl, m_scene.get());
-            }
-            else {
-                qFatal("Could not get GL functions to initialize RenderingSystem.");
-            }
-            viewport1->doneCurrent();
-            qDebug() << "[LIFECYCLE] RenderingSystem is initialized. Starting master render timer.";
-            m_masterRenderTimer->start(16);
+    connect(m_masterRenderTimer, &QTimer::timeout, this, [this]() {
+        // The new render loop is just one simple call.
+        if (m_renderingSystem) {
+            m_renderingSystem->renderFrame();
         }
         });
+
+    m_renderingSystem->initialize(m_scene.get());
+    m_masterRenderTimer->start(0); // Start rendering as fast as possible.
+
 
     connect(m_dockManager, &ads::CDockManager::focusedDockWidgetChanged, this, &MainWindow::updateViewportLayouts);
     connect(viewportDock1, &ads::CDockWidget::topLevelChanged, this, &MainWindow::updateViewportLayouts);
@@ -590,56 +582,17 @@ MainWindow::MainWindow(QWidget* parent)
     QTimer::singleShot(0, this, &MainWindow::updateViewportLayouts);
 }
 
-void MainWindow::onMasterRender()
-{
-    // --- 1. LOGIC UPDATES (No context needed) ---
-    if (m_renderingSystem && m_renderingSystem->isInitialized())
-    {
-        const float deltaTime = static_cast<float>(m_masterRenderTimer->interval()) / 1000.0f;
-
-        // --- FIX ---
-        // These functions no longer take the registry as an argument.
-        m_renderingSystem->updateSceneLogic(deltaTime);
-        m_renderingSystem->updateCameraTransforms();
-
-        // This function is still correct as it's a static method on ViewportWidget.
-        ViewportWidget::propagateTransforms(m_scene->getRegistry());
-    }
-
-    // --- 2. SCHEDULE REPAINT (The Qt Way) ---
-    for (ads::CDockWidget* dockWidget : m_dockManager->dockWidgetsMap())
-    {
-        ViewportWidget* vp = qobject_cast<ViewportWidget*>(dockWidget->widget());
-        if (vp) {
-            vp->update();
-        }
-    }
-}
 // The destructor orchestrates a clean shutdown.
 MainWindow::~MainWindow()
 {
-         // Stop any ongoing render loops
-        m_masterRenderTimer->stop();
-    
-        m_menus.clear();
+    m_masterRenderTimer->stop();
+    m_menus.clear();
 
-             // 1) Remove every viewport dock. This triggers onViewportDockClosed()
-             //    for each, which in turn calls destroyCameraRig() and GPU cleanup.
-        while (!m_dockContainers.isEmpty()) {
-        m_dockManager->removeDockWidget(m_dockContainers.last());
-        
+    // The new shutdown call is much simpler.
+    if (m_renderingSystem) {
+        m_renderingSystem->shutdown();
     }
-    
-             // 2) (Optional) If you still have any shared GPU resources left,
-             //    shut them down now using a valid OpenGL context:
-        if (auto* ctx = QOpenGLContext::currentContext()) {
-        if (auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(ctx)) {
-            m_renderingSystem->shutdown(gl);
-            
-        }
-        
-    }
-     }
+}
 
 // This slot handles loading robot files from the toolbar button.
 void MainWindow::onLoadRobotClicked()

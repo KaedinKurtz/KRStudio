@@ -35,6 +35,7 @@ public:
     static void propagateTransforms(entt::registry& r);
 
     void resizeTargetFbos(QOpenGLWidget* vp, int fbW, int fbH);
+    QOpenGLDebugLogger* m_logger = nullptr;
 
 protected:
     void initializeGL() override;

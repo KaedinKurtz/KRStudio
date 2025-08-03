@@ -12,6 +12,9 @@ public:
     // The shader program ID is the only public data member.
     unsigned int ID = 0;
 
+    unsigned int id() const {
+        return ID;
+    }
     // --- Static Factory Methods ---
     // These are now the ONLY way to create a shader. They handle compilation and linking.
     static std::unique_ptr<Shader> build(QOpenGLFunctions_4_3_Core* gl, const std::vector<std::string>& paths);

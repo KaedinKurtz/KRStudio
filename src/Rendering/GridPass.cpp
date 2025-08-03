@@ -36,10 +36,7 @@ void GridPass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* 
 
 void GridPass::execute(const RenderFrameContext& context) {
     Shader* gridShader = context.renderer.getShader("grid");
-    if (!gridShader) {
-        // If there's no shader for this context, we can't do anything.
-        return;
-    }
+    if (!gridShader) return;
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     if (!ctx) return;
 
@@ -47,17 +44,22 @@ void GridPass::execute(const RenderFrameContext& context) {
         createGridForContext(ctx, context.gl);
     }
 
-    auto& registry = context.registry;
     auto* gl = context.gl;
-
+    auto& registry = context.registry;
     auto viewG = registry.view<GridComponent, TransformComponent>();
-    // FIX: Use size_hint() to check if the view is empty.
     if (viewG.size_hint() == 0) return;
 
-    gridShader->use(gl);
+    // --- Manually set state for this pass ---
+    // Save any state that will be restored at the end. Here, we only
+    // care about Polygon Offset. We will handle Depth Mask and Culling explicitly.
+    GLboolean isPolygonOffsetFillEnabled;
+    gl->glGetBooleanv(GL_POLYGON_OFFSET_FILL, &isPolygonOffsetFillEnabled);
     gl->glEnable(GL_POLYGON_OFFSET_FILL);
 
-    // FIX: Use .value() for read-only access to the QHash.
+    // Grids are typically two-sided, so disable culling for this pass.
+    gl->glDisable(GL_CULL_FACE);
+
+    gridShader->use(gl);
     gl->glBindVertexArray(m_gridVAOs.value(ctx));
 
     for (auto entity : viewG) {
@@ -96,21 +98,30 @@ void GridPass::execute(const RenderFrameContext& context) {
         gridShader->setFloat(gl, "u_fogStartDistance", props.fogStartDistance);
         gridShader->setFloat(gl, "u_fogEndDistance", props.fogEndDistance);
 
-        // This Z-fighting mitigation logic is correct.
+        // --- Z-Fighting Mitigation (State changes are now contained inside the loop) ---
         gl->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-        gl->glDepthMask(GL_TRUE);
+        gl->glDepthMask(GL_TRUE); // Set state for depth pre-pass
         gl->glPolygonOffset(1.0f, 1.0f);
         gl->glDrawArrays(GL_TRIANGLES, 0, 6);
 
         gl->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        gl->glDepthMask(GL_FALSE);
+        gl->glDepthMask(GL_FALSE); // Set state for color pass
         gl->glPolygonOffset(-1.0f, -1.0f);
         gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 
-    gl->glDisable(GL_POLYGON_OFFSET_FILL);
-    gl->glDepthMask(GL_TRUE);
     gl->glBindVertexArray(0);
+
+    // --- Manually restore state to a clean default ---
+    // This ensures the next pass starts in a known, good state.
+    if (isPolygonOffsetFillEnabled) {
+        gl->glEnable(GL_POLYGON_OFFSET_FILL);
+    } else {
+        gl->glDisable(GL_POLYGON_OFFSET_FILL);
+    }
+    
+    gl->glDepthMask(GL_TRUE);      // CRITICAL: Always re-enable depth writing.
+    gl->glEnable(GL_CULL_FACE);    // CRITICAL: Re-enable culling for the opaque pass.
 }
 
 void GridPass::onContextDestroyed(QOpenGLContext* dyingContext, QOpenGLFunctions_4_3_Core* gl) {

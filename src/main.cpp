@@ -31,16 +31,18 @@ static QSurfaceFormat createDefaultFormat()
     f.setRenderableType(QSurfaceFormat::OpenGL);
     f.setVersion(4, 3);
     f.setProfile(QSurfaceFormat::CoreProfile);
+    f.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     f.setDepthBufferSize(24);
     f.setStencilBufferSize(8);
-    f.setSamples(4);
+    f.setSamples(4); // For MSAA
+
     return f;
 }
 
 int main(int argc, char* argv[])
 {
     // get debug plugin output (optional)
-    //qputenv("QT_DEBUG_PLUGINS", QByteArrayLiteral("1"));
+    qputenv("QT_DEBUG_PLUGINS", QByteArrayLiteral("1"));
     qInstallMessageHandler(qtMessageOutput);
 
     // share OpenGL contexts & set our default format

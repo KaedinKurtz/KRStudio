@@ -41,7 +41,8 @@ namespace NodeLibrary {
     }
     static RunInferenceNodeRegistrar g_runInferenceRegistrar;
 
-    // SetBlackboardFloatNode
+    // Set
+    // boardFloatNode
     SetBlackboardFloatNode::SetBlackboardFloatNode() {
 	m_id = "ai_set_blackboard_float";
         m_ports.push_back({ "Blackboard In", {"Blackboard", "handle"}, Port::Direction::Input, this });

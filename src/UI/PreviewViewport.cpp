@@ -14,16 +14,15 @@
 PreviewViewport::PreviewViewport(QWidget* parent)
     : ViewportWidget(nullptr, nullptr, entt::null, parent)
 {
-    // 1. Create the self-contained resources
     m_previewScene = std::make_unique<Scene>();
     m_previewRenderSystem = std::make_unique<RenderingSystem>(this);
 
-    // 2. GET THE REGISTRY AND ADD THIS LINE
     auto& registry = m_previewScene->getRegistry();
-    registry.ctx().emplace<SceneProperties>(); // <-- This is the fix
+    registry.ctx().emplace<SceneProperties>();
 
-    // 3. Continue with existing setup...
     m_cameraEntity = SceneBuilder::createCamera(registry, { 0, 1, 3 });
+    m_previewScene->setPrimaryCamera(m_cameraEntity);
+
     m_scene = m_previewScene.get();
     m_renderingSystem = m_previewRenderSystem.get();
 }
@@ -31,20 +30,21 @@ PreviewViewport::PreviewViewport(QWidget* parent)
 // The destructor ensures a clean shutdown of its own RenderingSystem.
 PreviewViewport::~PreviewViewport()
 {
-    if (m_previewRenderSystem && m_previewRenderSystem->isInitialized()) {
-        makeCurrent();
-        auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(context());
-        if (gl) {
-            m_previewRenderSystem->shutdown(gl);
-        }
-        doneCurrent();
+    // FIX: The new shutdown() takes no arguments.
+    if (m_previewRenderSystem) {
+        m_previewRenderSystem->shutdown();
     }
 }
 
 // We override initializeGL to set up our OWN rendering system.
 void PreviewViewport::initializeGL()
 {
-    ViewportWidget::initializeGL();
+    // The base class initializeGL still handles basic GL setup.
+    QOpenGLWidget::initializeGL();
+    if (m_renderingSystem) {
+        m_renderingSystem->initialize(m_scene);
+        m_renderingSystem->onViewportAdded(this);
+    }
 }
 
 // Public API to load a robot into the private scene.

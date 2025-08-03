@@ -136,7 +136,6 @@ private slots:
 
 protected slots:
     void onLoadRobotClicked();
-    void onMasterRender();
     void onFlowVisualizerTransformChanged();
     void onFlowVisualizerSettingsChanged();
     void onSceneReloadRequested(const QString& sceneName);

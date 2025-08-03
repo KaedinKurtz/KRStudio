@@ -12,3 +12,13 @@ Scene::~Scene()
 {
     ////qDebug() << "[LIFETIME] Scene Destructor ~Scene() called. The registry is now gone.";
 }
+
+void Scene::setPrimaryCamera(entt::entity camera)
+{
+    m_primaryCamera = camera;
+}
+
+entt::entity Scene::getPrimaryCamera() const
+{
+    return m_primaryCamera;
+}

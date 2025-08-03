@@ -2,39 +2,60 @@
 
 #include "IRenderPass.hpp"
 #include "components.hpp"
-#include <librealsense2/rs.hpp> // ADDED: For RealSense point cloud support
 
 #include <QObject>
 #include <QMap>
-#include <QHash> // ADDED
-#include <QSet>  // ADDED
+#include <QHash>
+#include <QSet>
 #include <QOpenGLFunctions_4_3_Core>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
-#include <map>
 #include <memory>
-#include <string>
 #include <vector>
+#include <deque>
 #include <QElapsedTimer>
 #include <QTimer>
+#include <librealsense2/rs.hpp>
 
-#define ENABLE_BLACKBOX_LOGGING
-
-// Forward declarations to keep this header light
+// Forward declarations
 class QOpenGLContext;
-class QOpenGLWidget;
 class ViewportWidget;
 class Shader;
 class Scene;
+class OpaquePass;
+class LightingPass;
 class PointCloudPass;
 
-// This struct holds the framebuffer objects for a single viewport. (No changes needed)
+// G-Buffer struct: Holds textures for geometry, normals, and material properties.
+// Generated once per frame and shared by all viewports.
+struct GBufferFBO {
+    int w = 0, h = 0;
+    GLuint fbo = 0;
+    GLuint positionTexture = 0;
+    GLuint normalTexture = 0;
+    GLuint albedoSpecTexture = 0;
+    GLuint depthTexture = 0;
+};
+
+// Post-Processing FBO struct: Used for ping-ponging effects.
+struct PostProcessingFBO {
+    int w = 0, h = 0;
+    GLuint fbo = 0;
+    GLuint colorTexture = 0;
+};
+
+// Per-viewport FBO struct: Holds the final composed image for one viewport.
 struct TargetFBOs {
     int w = 0, h = 0;
-    GLuint mainFBO = 0, mainColorTexture = 0, mainDepthTexture = 0;
-    GLuint glowFBO = 0, glowTexture = 0;
-    GLuint pingpongFBO[2] = { 0, 0 }, pingpongTexture[2] = { 0, 0 };
+    GLuint finalFBO = 0;
+    GLuint finalColorTexture = 0;
+    GLuint finalDepthTexture = 0;
 };
+
+namespace rs2 {
+    class points;
+    class video_frame;
+}
 
 class RenderingSystem : public QObject {
     Q_OBJECT
@@ -43,75 +64,85 @@ public:
     explicit RenderingSystem(QObject* parent = nullptr);
     ~RenderingSystem();
 
-    // --- Lifecycle & Core API ---
-    // RENAMED: This function now initializes resources for a specific context.
-    void initializeResourcesForContext(QOpenGLFunctions_4_3_Core* gl, Scene* scene);
-    void renderView(ViewportWidget* viewport, QOpenGLFunctions_4_3_Core* gl, int vpW, int vpH, float frameDeltaTime);
-    void shutdown(QOpenGLFunctions_4_3_Core* gl);
-    void onViewportResized(ViewportWidget* vp, QOpenGLFunctions_4_3_Core* gl, int fbW, int fbH);
-    void onMasterUpdate();
-    // --- Scene Logic Updaters ---
-    void updateSceneLogic(float deltaTime);
-    void updateCameraTransforms();
-
-    void updatePointCloud(const rs2::points& points, const rs2::video_frame& colorFrame, const glm::mat4& pose);
-
+    // --- Core Lifecycle & Pipeline ---
+    void initialize(Scene* scene);
+    void shutdown();
+    void renderFrame(); // The new main entry point for rendering
+    void drawFullscreenQuadWithDepthTest();
+    // --- Viewport Management ---
+    void onViewportAdded(ViewportWidget* viewport);
     void onViewportWillBeDestroyed(ViewportWidget* viewport);
 
-    // --- Public Helpers & Getters (for Render Passes) ---
-    bool isInitialized() const { return m_isInitialized; }
-    Scene& getScene() const { return *m_scene; }
-    entt::entity getCurrentCameraEntity() const { return m_currentCamera; }
+    // --- Public Helpers & Resource Access ---
     Shader* getShader(const std::string& name);
-    const RenderResourceComponent::Buffers& getOrCreateMeshBuffers(
-        QOpenGLFunctions_4_3_Core* gl, QOpenGLContext* ctx, entt::entity entity);
-    void ensureContextIsTracked(QOpenGLWidget* viewport);
-    QMap<ViewportWidget*, TargetFBOs> m_targets;
+    const RenderResourceComponent::Buffers& getOrCreateMeshBuffers(QOpenGLFunctions_4_3_Core* gl, QOpenGLContext* ctx, entt::entity entity);
+    void updatePointCloud(const rs2::points& points, const rs2::video_frame& colorFrame, const glm::mat4& pose);
 
-    bool isContextInitialized(QOpenGLContext* ctx) const;
-
+    // --- Getters ---
+    Scene& getScene() const { return *m_scene; }
+    const GBufferFBO& getGBuffer() const { return m_gBuffer; }
+    const PostProcessingFBO* getPPFBOs() const { return m_ppFBOs; }
     float getFPS() const { return m_fps; }
     float getFrameTime() const { return m_frameTime; }
 
+    const TargetFBOs* getTargetFBO(ViewportWidget* vp) const;
+
 public slots:
-    // --- Lifecycle Management Slot ---
     void onContextAboutToBeDestroyed();
 
+private slots:
+    void onMasterUpdate(); // Drives simulation logic (not rendering)
+
 private:
-    // --- Private Helpers ---
-    void initOrResizeFBOsForTarget(QOpenGLFunctions_4_3_Core* gl, TargetFBOs& target, int width, int height);
+    // --- Pipeline Stages (Internal Logic) ---
+    void geometryPass();
+    void lightingPass(ViewportWidget* viewport);
+    void postProcessingPass(ViewportWidget* viewport);
+    void overlayPass(ViewportWidget* viewport);
+
+    // --- Resource Initialization & Resizing ---
+    void initializeSharedResources();
+    void initializeViewportResources(ViewportWidget* viewport);
+    void resizeGLResources();
+    void initOrResizeGBuffer(QOpenGLFunctions_4_3_Core* gl, int w, int h);
+    void initOrResizePPFBOs(QOpenGLFunctions_4_3_Core* gl, int w, int h);
+    void initOrResizeFinalFBO(QOpenGLFunctions_4_3_Core* gl, TargetFBOs& target, int w, int h);
+    void ensureContextIsTracked(QOpenGLContext* context);
+
+    // --- Internal Scene Logic Updaters ---
+    void updateCameraTransforms();
+    void updateSceneLogic(float deltaTime);
     void updateSplineCaches();
+    QString shadersRootDir();
 
-    QTimer        m_frameTimer;     // drives the simulation
+    // --- Core Members ---
+    bool m_isInitialized = false;
+    Scene* m_scene = nullptr;
+    QOpenGLFunctions_4_3_Core* m_gl = nullptr; // Cached pointer to GL functions
+
+    // --- Render Passes (Organized by stage) ---
+    std::unique_ptr<IRenderPass> m_geometryPass;
+    std::unique_ptr<IRenderPass> m_lightingPass;
+    std::vector<std::unique_ptr<IRenderPass>> m_postProcessingPasses;
+    std::vector<std::unique_ptr<IRenderPass>> m_overlayPasses;
+
+    // --- Framebuffers ---
+    GBufferFBO m_gBuffer;
+    PostProcessingFBO m_ppFBOs[2];
+    QMap<ViewportWidget*, TargetFBOs> m_targets;
+
+    // --- Resource Management (THE FIX) ---
+    // The unique_ptrs now live in a simple list for automatic memory management.
+    std::vector<std::unique_ptr<Shader>> m_shaderStore;
+    // The hash map now stores non-owning raw pointers for fast lookup.
+    QHash<QOpenGLContext*, QHash<QString, Shader*>> m_perContextShaders;
+    QSet<QOpenGLContext*> m_trackedContexts;
+
+    // --- Timing & Stats ---
+    QTimer m_frameTimer;
     QElapsedTimer m_clock;
-
     float m_fps = 0.0f;
     float m_frameTime = 0.0f;
     std::deque<float> m_frameTimeHistory;
-    const int m_historySize = 100; // Number of frames to average over for a smooth value
-
-
-    QString shadersRootDir();
-
-    // --- Core Member Variables ---
-    bool m_isInitialized = false;
-    float m_elapsedTime = 0.0f;
-    Scene* m_scene = nullptr;
-    entt::entity m_currentCamera = entt::null;
-
-    // --- Render Pass Pipeline ---
-    std::vector<std::unique_ptr<IRenderPass>> m_renderPasses;
-
-    // --- Resource Management ---
-    // FROM: QMap<QString, Shader*> m_shaders;
-    // TO: A map of contexts, each holding its own map of shaders.
-    QHash<QOpenGLContext*, QHash<QString, Shader*>> m_perContextShaders;
-
-    // ADDED: A set to track which contexts we have already loaded resources for.
-    QSet<QOpenGLContext*> m_initializedContexts;
-
-    // This existing set tracks which contexts we are watching for destruction.
-    QSet<QOpenGLContext*> m_trackedContexts; // FROM: std::set TO: QSet for consistency
-
-    PointCloudPass* m_pointCloudPass = nullptr;
+    const int m_historySize = 100;
 };
