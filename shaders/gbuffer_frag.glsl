@@ -1,27 +1,50 @@
-#version 430 core
+#version 450 core
 
-// This layout directive tells OpenGL which color attachment of the G-Buffer FBO to write to.
-layout(location = 0) out vec3 gPosition;
-layout(location = 1) out vec3 gNormal;
-layout(location = 2) out vec4 gAlbedoSpec;
+struct Material {
+    sampler2D albedoMap;
+    sampler2D normalMap;
+    sampler2D aoMap;
+    sampler2D metallicMap;
+    sampler2D roughnessMap;
+    sampler2D emissiveMap;
+};
+uniform Material material;
+
+layout(location = 0) out vec4 gPosition;
+layout(location = 1) out vec4 gNormal;
+layout(location = 2) out vec4 gAlbedoAO;
+layout (location = 3) out vec4 gMetalRough;
+layout(location = 4) out vec4 gEmissive;
 
 in vec3 FragPos;
 in vec3 Normal;
-
-// This comes from the MaterialComponent
-uniform vec3 objectColor;
+in vec2 TexCoords;
+in vec3 Tangent;
+in vec3 Bitangent;
 
 void main()
-{    
-    // Output 1: Store the fragment's world-space position in the first texture.
-    gPosition = FragPos;
-    
-    // Output 2: Store the fragment's normalized world-space normal in the second texture.
-    gNormal = normalize(Normal);
-    
-    // Output 3: Store material properties in the third texture.
-    // We store the albedo (diffuse color) in the RGB channels.
-    gAlbedoSpec.rgb = objectColor;
-    // We store the specular intensity in the alpha channel.
-    gAlbedoSpec.a = 0.5; // You can make this a uniform from MaterialComponent later
+{
+    // Position
+    gPosition = vec4(FragPos, 1.0);
+
+    // Normal (always assume normal map for this test)
+    vec3 nMap = texture(material.normalMap, TexCoords).rgb * 2.0 - 1.0;
+    vec3 T = normalize(Tangent);
+    vec3 B = normalize(Bitangent);
+    vec3 N = normalize(Normal);
+    gNormal = vec4(normalize(mat3(T, B, N) * nMap), 1.0);
+
+    // Albedo + AO
+    vec3 albedo = texture(material.albedoMap, TexCoords).rgb;
+    float ao    = texture(material.aoMap, TexCoords).r;
+    gAlbedoAO   = vec4(albedo, ao);
+
+    // Metallic + Roughness
+    float metallic  = texture(material.metallicMap, TexCoords).r;
+    float roughness = texture(material.roughnessMap, TexCoords).r;
+    gMetalRough = vec4(metallic, roughness, 0.0, 1.0);
+
+    // Emissive
+    vec3 emissive = texture(material.emissiveMap, TexCoords).rgb;
+    gEmissive = vec4(emissive, 1.0);
 }

@@ -14,72 +14,96 @@ void LightingPass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Co
 
 void LightingPass::execute(const RenderFrameContext& context) {
     auto* gl = context.gl;
-    Shader* lightingShader = context.renderer.getShader("lighting");
-    if (!gl || !lightingShader) {
-        qDebug() << "[LightingPass] Missing GL or shader!";
+    auto& renderer = context.renderer;
+    Shader* lightingShd = renderer.getShader("lighting");
+    if (!gl || !lightingShd) {
+        qWarning() << "[LightingPass] Missing GL functions or shader!";
         return;
     }
 
-    // 1) Bind the offscreen FBO as DRAW target, set draw buffer
-    const GLuint dstFBO = context.targetFBOs.finalFBO;
-    qDebug() << "[LightingPass] Binding DRAW_FRAMEBUFFER =" << dstFBO;
-    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dstFBO);
+    // --- Backup state ---
+    GLint prevDrawFBO = 0;
+    gl->glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
+    GLboolean prevDepthTest = gl->glIsEnabled(GL_DEPTH_TEST);
 
-    // Tell GL to write into COLOR_ATTACHMENT0 of that FBO
-    GLenum drawBufs[1] = { GL_COLOR_ATTACHMENT0 };
-    gl->glDrawBuffers(1, drawBufs);
-    qDebug() << "[LightingPass] Set DRAW_BUFFERS[0] =" << drawBufs[0];
+    auto restoreState = [&]() {
+        gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
+        if (prevDepthTest) gl->glEnable(GL_DEPTH_TEST);
+        else               gl->glDisable(GL_DEPTH_TEST);
+        };
 
-    // (Optional) clear the color so you can see if something actually writes
-    gl->glClearColor(0, 0, 0, 1);
+    // --- Bind final FBO and clear ---
+    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, context.targetFBOs.finalFBO);
+    GLenum buf = GL_COLOR_ATTACHMENT0;
+    gl->glDrawBuffers(1, &buf);
+    gl->glViewport(0, 0, context.targetFBOs.w, context.targetFBOs.h);
+    gl->glDisable(GL_DEPTH_TEST);
+    gl->glClearColor(0.f, 0.f, 0.f, 1.f);
     gl->glClear(GL_COLOR_BUFFER_BIT);
 
-    // 2) Set up your shader & G-Buffer textures
-    lightingShader->use(gl);
-    lightingShader->setVec3(gl, "viewPos",   context.camera.getPosition());
-    lightingShader->setVec3(gl, "lightPos",  glm::vec3(5,10,5));
-    lightingShader->setVec3(gl, "lightColor",glm::vec3(1,1,1));
+    // --- Set common uniforms ---
+    lightingShd->use(gl);
+    lightingShd->setVec3(gl, "viewPos", context.camera.getPosition());
+    lightingShd->setVec3(gl, "lightPos", glm::vec3(5.f, 10.f, 5.f));
+    lightingShd->setVec3(gl, "lightColor", glm::vec3(1.f));
 
-    const auto& gbuf = context.renderer.getGBuffer();
-    qDebug() << "[LightingPass] G-Buffer IDs ?"
-             << "Position="   << gbuf.positionTexture
-             << "Normal="     << gbuf.normalTexture
-             << "AlbedoSpec=" << gbuf.albedoSpecTexture;
+    // --- Helper to bind & assign sampler uniforms ---
+    auto bindTex = [&](GLuint tex, const char* name, int unit, GLenum target = GL_TEXTURE_2D) {
+        gl->glActiveTexture(GL_TEXTURE0 + unit);
+        gl->glBindTexture(target, tex);
+        lightingShd->setInt(gl, name, unit);
+        };
 
-    gl->glActiveTexture(GL_TEXTURE0);
-    gl->glBindTexture(GL_TEXTURE_2D, gbuf.positionTexture);
-    lightingShader->setInt(gl, "gPosition", 0);
+    // --- Bind G-Buffer textures ---
+    const auto& g = renderer.getGBuffer();
+    bindTex(g.positionTexture, "gPosition", 0);
+    bindTex(g.normalTexture, "gNormal", 1);
+    bindTex(g.albedoAOTexture, "gAlbedoAO", 2);
+    bindTex(g.metalRougTexture, "gMetalRoug", 3);
+    bindTex(g.emissiveTexture, "gEmissive", 4);
 
-    gl->glActiveTexture(GL_TEXTURE1);
-    gl->glBindTexture(GL_TEXTURE_2D, gbuf.normalTexture);
-    lightingShader->setInt(gl, "gNormal", 1);
-
-    gl->glActiveTexture(GL_TEXTURE2);
-    gl->glBindTexture(GL_TEXTURE_2D, gbuf.albedoSpecTexture);
-    lightingShader->setInt(gl, "gAlbedoSpec", 2);
-
-    // 3) Bind VAO, draw
-    QOpenGLContext* ctx = QOpenGLContext::currentContext();
-    if (!m_fullscreenVAOs.contains(ctx)) {
-        qDebug() << "[LightingPass] Creating fullscreen VAO for context" << ctx;
-        createFullscreenQuad(ctx, gl);
+    // --- Bind IBL maps (or default to 0) ---
+    int unit = 5;
+    if (auto env = renderer.getEnvCubemap()) {
+        bindTex(env->getID(), "environmentMap", unit++, GL_TEXTURE_CUBE_MAP);
     }
-    GLuint vao = m_fullscreenVAOs[ctx];
-    gl->glBindVertexArray(vao);
+    else {
+        lightingShd->setInt(gl, "environmentMap", 0);
+    }
 
-    GLint bound = 0;
-    gl->glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &bound);
-    qDebug() << "[LightingPass] Bound VAO =" << bound << "(expected" << vao << ")";
+    if (auto irrad = renderer.getIrradianceMap()) {
+        bindTex(irrad->getID(), "irradianceMap", unit++, GL_TEXTURE_CUBE_MAP);
+    }
+    else {
+        lightingShd->setInt(gl, "irradianceMap", 0);
+    }
 
-    qDebug() << "[LightingPass] Drawing fullscreen triangle...";
+    if (auto pre = renderer.getPrefilteredEnvMap()) {
+        bindTex(pre->getID(), "prefilteredEnvMap", unit++, GL_TEXTURE_CUBE_MAP);
+    }
+    else {
+        lightingShd->setInt(gl, "prefilteredEnvMap", 0);
+    }
+
+    if (auto lut = renderer.getBRDFLUT()) {
+        bindTex(lut->getID(), "brdfLUT", unit++);
+    }
+    else {
+        lightingShd->setInt(gl, "brdfLUT", 0);
+    }
+
+    // --- Draw full-screen triangle ---
+    QOpenGLContext* qc = QOpenGLContext::currentContext();
+    if (!m_fullscreenVAOs.contains(qc))
+        createFullscreenQuad(qc, gl);
+    gl->glBindVertexArray(m_fullscreenVAOs[qc]);
     gl->glDrawArrays(GL_TRIANGLES, 0, 3);
 
-    // 4) Cleanup
+    // --- Cleanup & restore ---
     gl->glBindVertexArray(0);
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    qDebug() << "[LightingPass] Draw complete.";
+    restoreState();
 }
-
 
 void LightingPass::onContextDestroyed(QOpenGLContext* dyingContext, QOpenGLFunctions_4_3_Core* gl) {
     if (m_fullscreenVAOs.contains(dyingContext)) {

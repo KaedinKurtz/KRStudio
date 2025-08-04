@@ -922,7 +922,7 @@ QString DatabaseManager::serializeComponent(const QVariant& component) {
         json["indices"] = indices;
     } else if (component.canConvert<MaterialComponent>()) {
         auto material = component.value<MaterialComponent>();
-        json["albedo"] = QJsonArray{material.albedo.x, material.albedo.y, material.albedo.z};
+        json["albedo"] = QJsonArray{material.albedoColor.x, material.albedoColor.y, material.albedoColor.z};
         json["metallic"] = material.metallic;
         json["roughness"] = material.roughness;
     } else if (component.canConvert<GridComponent>()) {
@@ -1040,7 +1040,7 @@ QVariant DatabaseManager::deserializeComponent(const QString& data, const QStrin
         if (json.contains("albedo")) {
             auto albedo = json["albedo"].toArray();
             if (albedo.size() >= 3) {
-                material.albedo = glm::vec3(albedo[0].toDouble(), albedo[1].toDouble(), albedo[2].toDouble());
+                material.albedoColor = glm::vec3(albedo[0].toDouble(), albedo[1].toDouble(), albedo[2].toDouble());
             }
         }
         if (json.contains("metallic")) {

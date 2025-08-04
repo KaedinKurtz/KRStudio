@@ -1,41 +1,46 @@
 #pragma once
 #ifdef _WIN32
-#  ifndef NOMINMAX          // keep <windows.h> from defining min/max macros
-#    define NOMINMAX
-#  endif
+#   ifndef NOMINMAX      // keep <windows.h> from defining min/max macros
+#     define NOMINMAX
+#   endif
 #endif
 
-#include <algorithm>        // std::min / std::max
-#include <cmath>      
+#include <algorithm>      // std::min / std::max
+#include <cmath>
 #include <vector>
 #include <map>
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
-#include <QtGui/qopengl.h>                // GLuint / GLenum / …
+#include <QtGui/qopengl.h>              // GLuint / GLenum / …
 #include <QOpenGLFunctions_4_3_Core>
-#include "components.hpp"
+#include "components.hpp" // This header should contain your updated Vertex struct definition
 
 /* ------------------------------------------------------------------------- */
-/* buildUnitCube – 24 verts, 12 triangles                                   */
+/* buildUnitCube – 24 verts, 12 triangles                                    */
 /* ------------------------------------------------------------------------- */
 inline void buildUnitCube(std::vector<Vertex>& verts,
     std::vector<uint32_t>& idx)
 {
     verts.clear();
     verts.reserve(24);
+    // THE FIX: Provide default uv, tangent, and bitangent for each vertex.
+    glm::vec2 defaultUV(0.0f);
+    glm::vec3 defaultTangent(0.0f);
+    glm::vec3 defaultBitangent(0.0f);
+
     verts.insert(verts.end(), {
-        /* +X face */ { {+0.5f,-0.5f,-0.5f},{+1,0,0} }, { {+0.5f,+0.5f,-0.5f},{+1,0,0} }, { {+0.5f,+0.5f,+0.5f},{+1,0,0} }, { {+0.5f,-0.5f,+0.5f},{+1,0,0} },
-        /* -X face */ { {-0.5f,-0.5f,+0.5f},{-1,0,0} }, { {-0.5f,+0.5f,+0.5f},{-1,0,0} }, { {-0.5f,+0.5f,-0.5f},{-1,0,0} }, { {-0.5f,-0.5f,-0.5f},{-1,0,0} },
-        /* +Y face */ { {-0.5f,+0.5f,-0.5f},{0,+1,0} }, { {-0.5f,+0.5f,+0.5f},{0,+1,0} }, { {+0.5f,+0.5f,+0.5f},{0,+1,0} }, { {+0.5f,+0.5f,-0.5f},{0,+1,0} },
-        /* -Y face */ { {-0.5f,-0.5f,+0.5f},{0,-1,0} }, { {-0.5f,-0.5f,-0.5f},{0,-1,0} }, { {+0.5f,-0.5f,-0.5f},{0,-1,0} }, { {+0.5f,-0.5f,+0.5f},{0,-1,0} },
-        /* +Z face */ { {-0.5f,-0.5f,+0.5f},{0,0,+1} }, { {+0.5f,-0.5f,+0.5f},{0,0,+1} }, { {+0.5f,+0.5f,+0.5f},{0,0,+1} }, { {-0.5f,+0.5f,+0.5f},{0,0,+1} },
-        /* -Z face */ { {+0.5f,-0.5f,-0.5f},{0,0,-1} }, { {-0.5f,-0.5f,-0.5f},{0,0,-1} }, { {-0.5f,+0.5f,-0.5f},{0,0,-1} }, { {+0.5f,+0.5f,-0.5f},{0,0,-1} }
+        /* +X face */ { {+0.5f,-0.5f,-0.5f},{+1,0,0}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,+0.5f,-0.5f},{+1,0,0}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,+0.5f,+0.5f},{+1,0,0}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,-0.5f,+0.5f},{+1,0,0}, defaultUV, defaultTangent, defaultBitangent },
+        /* -X face */ { {-0.5f,-0.5f,+0.5f},{-1,0,0}, defaultUV, defaultTangent, defaultBitangent }, { {-0.5f,+0.5f,+0.5f},{-1,0,0}, defaultUV, defaultTangent, defaultBitangent }, { {-0.5f,+0.5f,-0.5f},{-1,0,0}, defaultUV, defaultTangent, defaultBitangent }, { {-0.5f,-0.5f,-0.5f},{-1,0,0}, defaultUV, defaultTangent, defaultBitangent },
+        /* +Y face */ { {-0.5f,+0.5f,-0.5f},{0,+1,0}, defaultUV, defaultTangent, defaultBitangent }, { {-0.5f,+0.5f,+0.5f},{0,+1,0}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,+0.5f,+0.5f},{0,+1,0}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,+0.5f,-0.5f},{0,+1,0}, defaultUV, defaultTangent, defaultBitangent },
+        /* -Y face */ { {-0.5f,-0.5f,+0.5f},{0,-1,0}, defaultUV, defaultTangent, defaultBitangent }, { {-0.5f,-0.5f,-0.5f},{0,-1,0}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,-0.5f,-0.5f},{0,-1,0}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,-0.5f,+0.5f},{0,-1,0}, defaultUV, defaultTangent, defaultBitangent },
+        /* +Z face */ { {-0.5f,-0.5f,+0.5f},{0,0,+1}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,-0.5f,+0.5f},{0,0,+1}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,+0.5f,+0.5f},{0,0,+1}, defaultUV, defaultTangent, defaultBitangent }, { {-0.5f,+0.5f,+0.5f},{0,0,+1}, defaultUV, defaultTangent, defaultBitangent },
+        /* -Z face */ { {+0.5f,-0.5f,-0.5f},{0,0,-1}, defaultUV, defaultTangent, defaultBitangent }, { {-0.5f,-0.5f,-0.5f},{0,0,-1}, defaultUV, defaultTangent, defaultBitangent }, { {-0.5f,+0.5f,-0.5f},{0,0,-1}, defaultUV, defaultTangent, defaultBitangent }, { {+0.5f,+0.5f,-0.5f},{0,0,-1}, defaultUV, defaultTangent, defaultBitangent }
         });
 
     idx = {
-        0,1,2, 0,2,3,       // +X
-        4,5,6, 4,6,7,       // -X
-        8,9,10, 8,10,11,    // +Y
+        0,1,2, 0,2,3,      // +X
+        4,5,6, 4,6,7,      // -X
+        8,9,10, 8,10,11,   // +Y
         12,13,14, 12,14,15, // -Y
         16,17,18, 16,18,19, // +Z
         20,21,22, 20,22,23  // -Z
@@ -43,7 +48,7 @@ inline void buildUnitCube(std::vector<Vertex>& verts,
 }
 
 /* ------------------------------------------------------------------------- */
-/* buildIcoSphere – very small helper; subdivisions = 0..3 is enough        */
+/* buildIcoSphere – very small helper; subdivisions = 0..3 is enough         */
 /* ------------------------------------------------------------------------- */
 inline void buildIcoSphere(std::vector<Vertex>& verts,
     std::vector<uint32_t>& idx,
@@ -51,14 +56,14 @@ inline void buildIcoSphere(std::vector<Vertex>& verts,
 {
     /* ---- golden-ratio icosahedron -------------------------------------- */
     const float t = (1.0f + std::sqrt(5.0f)) * 0.5f;
-    const float s = 1.0f / std::sqrt(1 + t * t);
-
-    std::vector<glm::vec3> base = {
+    std::vector<glm::vec3> base_positions;
+    base_positions.reserve(12);
+    base_positions.insert(base_positions.end(), {
         { -1,  t,  0 }, {  1,  t,  0 }, { -1, -t,  0 }, {  1, -t,  0 },
         {  0, -1,  t }, {  0,  1,  t }, {  0, -1, -t }, {  0,  1, -t },
         {  t,  0, -1 }, {  t,  0,  1 }, { -t,  0, -1 }, { -t,  0,  1 }
-    };
-    for (auto& v : base) v = glm::normalize(v) * 0.5f;   // radius 0.5
+        });
+    for (auto& v : base_positions) v = glm::normalize(v) * 0.5f;   // radius 0.5
 
     std::vector<uint32_t> faces = {
         0,11,5,  0,5,1,  0,1,7,  0,7,10, 0,10,11,
@@ -79,11 +84,11 @@ inline void buildIcoSphere(std::vector<Vertex>& verts,
         Edge key{ std::min(a,b), std::max(a,b) };
         auto it = midpoint.find(key);
         if (it != midpoint.end()) return it->second;
-        glm::vec3 mid = glm::normalize(base[a] + base[b]) * 0.5f;
-        base.push_back(mid);
-        uint32_t idx = uint32_t(base.size() - 1);
-        midpoint[key] = idx;
-        return idx;
+        glm::vec3 mid = glm::normalize(base_positions[a] + base_positions[b]) * 0.5f;
+        base_positions.push_back(mid);
+        uint32_t new_idx = uint32_t(base_positions.size() - 1);
+        midpoint[key] = new_idx;
+        return new_idx;
         };
 
     for (int n = 0; n < subdivisions; ++n) {
@@ -100,23 +105,28 @@ inline void buildIcoSphere(std::vector<Vertex>& verts,
     }
 
     /* ---- convert to Vertex -------------------------------------------- */
-    verts.resize(base.size());
-    for (size_t i = 0; i < base.size(); ++i) {
-        verts[i].position = base[i];
-        verts[i].normal = glm::normalize(base[i]);
+    verts.resize(base_positions.size());
+    for (size_t i = 0; i < base_positions.size(); ++i) {
+        // THE FIX: Use the 5-argument constructor with default values for uv, tangent, bitangent
+        verts[i] = Vertex(
+            base_positions[i],                // position
+            glm::normalize(base_positions[i]),// normal
+            glm::vec2(0.0f),                  // uv
+            glm::vec3(0.0f),                  // tangent
+            glm::vec3(0.0f)                   // bitangent
+        );
     }
     idx.assign(faces.begin(), faces.end());
 }
 
 /* ------------------------------------------------------------------------- */
-/* createArrowPrimitive - simple 3D arrow along +Z for instancing           */
+/* createArrowPrimitive - simple 3D arrow along +Z for instancing            */
 /* ------------------------------------------------------------------------- */
 inline std::size_t createArrowPrimitive(std::vector<Vertex>& vertices, std::vector<unsigned int>& indices)
 {
     vertices.clear();
     indices.clear();
 
-    // Defines the proportions of the arrow primitive.
     float shaftRadius = 0.05f;
     float headRadius = 0.12f;
     float headLength = 0.35f;
@@ -126,42 +136,39 @@ inline std::size_t createArrowPrimitive(std::vector<Vertex>& vertices, std::vect
     float headBaseZ = tipZ - headLength;
     float shaftBaseZ = -totalLength / 2.0f;
 
-    // Arrow Tip (a simple cone)
-    vertices.push_back({ {0.0f, 0.0f, tipZ}, {0.0f, 0.0f, 1.0f} }); // 0: Tip vertex
-    vertices.push_back({ {headRadius, 0.0f, headBaseZ}, {0.8f, 0.0f, 0.2f} });  // 1
-    vertices.push_back({ {0.0f, headRadius, headBaseZ}, {0.0f, 0.8f, 0.2f} });  // 2
-    vertices.push_back({ {-headRadius, 0.0f, headBaseZ}, {-0.8f, 0.0f, 0.2f} }); // 3
-    vertices.push_back({ {0.0f, -headRadius, headBaseZ}, {0.0f, -0.8f, 0.2f} }); // 4
+    // THE FIX: Provide default uv, tangent, and bitangent for each vertex.
+    glm::vec2 defaultUV(0.0f);
+    glm::vec3 defaultTangent(0.0f);
+    glm::vec3 defaultBitangent(0.0f);
 
-    indices.insert(indices.end(), { 0, 1, 2 });
-    indices.insert(indices.end(), { 0, 2, 3 });
-    indices.insert(indices.end(), { 0, 3, 4 });
-    indices.insert(indices.end(), { 0, 4, 1 });
-    indices.insert(indices.end(), { 1, 4, 3, 1, 3, 2 }); // Base of the cone
+    // Arrow Tip (a simple cone)
+    vertices.push_back({ {0.0f, 0.0f, tipZ}, {0.0f, 0.0f, 1.0f}, defaultUV, defaultTangent, defaultBitangent }); // 0: Tip vertex
+    vertices.push_back({ {headRadius, 0.0f, headBaseZ}, {0.8f, 0.0f, 0.2f}, defaultUV, defaultTangent, defaultBitangent });  // 1
+    vertices.push_back({ {0.0f, headRadius, headBaseZ}, {0.0f, 0.8f, 0.2f}, defaultUV, defaultTangent, defaultBitangent });  // 2
+    vertices.push_back({ {-headRadius, 0.0f, headBaseZ}, {-0.8f, 0.0f, 0.2f}, defaultUV, defaultTangent, defaultBitangent }); // 3
+    vertices.push_back({ {0.0f, -headRadius, headBaseZ}, {0.0f, -0.8f, 0.2f}, defaultUV, defaultTangent, defaultBitangent }); // 4
+
+    indices.insert(indices.end(), { 0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1, 1, 4, 3, 1, 3, 2 }); // Tip + Base
 
     // Arrow Shaft (a simple cylinder)
-    vertices.push_back({ {shaftRadius, 0.0f, headBaseZ}, {1.0f, 0.0f, 0.0f} });    // 5
-    vertices.push_back({ {0.0f, shaftRadius, headBaseZ}, {0.0f, 1.0f, 0.0f} });    // 6
-    vertices.push_back({ {-shaftRadius, 0.0f, headBaseZ}, {-1.0f, 0.0f, 0.0f} });   // 7
-    vertices.push_back({ {0.0f, -shaftRadius, headBaseZ}, {0.0f, -1.0f, 0.0f} });   // 8
+    vertices.push_back({ {shaftRadius, 0.0f, headBaseZ}, {1.0f, 0.0f, 0.0f}, defaultUV, defaultTangent, defaultBitangent });    // 5
+    vertices.push_back({ {0.0f, shaftRadius, headBaseZ}, {0.0f, 1.0f, 0.0f}, defaultUV, defaultTangent, defaultBitangent });    // 6
+    vertices.push_back({ {-shaftRadius, 0.0f, headBaseZ}, {-1.0f, 0.0f, 0.0f}, defaultUV, defaultTangent, defaultBitangent });   // 7
+    vertices.push_back({ {0.0f, -shaftRadius, headBaseZ}, {0.0f, -1.0f, 0.0f}, defaultUV, defaultTangent, defaultBitangent });   // 8
+    vertices.push_back({ {shaftRadius, 0.0f, shaftBaseZ}, {1.0f, 0.0f, 0.0f}, defaultUV, defaultTangent, defaultBitangent });    // 9
+    vertices.push_back({ {0.0f, shaftRadius, shaftBaseZ}, {0.0f, 1.0f, 0.0f}, defaultUV, defaultTangent, defaultBitangent });    // 10
+    vertices.push_back({ {-shaftRadius, 0.0f, shaftBaseZ}, {-1.0f, 0.0f, 0.0f}, defaultUV, defaultTangent, defaultBitangent });  // 11
+    vertices.push_back({ {0.0f, -shaftRadius, shaftBaseZ}, {0.0f, -1.0f, 0.0f}, defaultUV, defaultTangent, defaultBitangent });  // 12
 
-    vertices.push_back({ {shaftRadius, 0.0f, shaftBaseZ}, {1.0f, 0.0f, 0.0f} });   // 9
-    vertices.push_back({ {0.0f, shaftRadius, shaftBaseZ}, {0.0f, 1.0f, 0.0f} });   // 10
-    vertices.push_back({ {-shaftRadius, 0.0f, shaftBaseZ}, {-1.0f, 0.0f, 0.0f} });  // 11
-    vertices.push_back({ {0.0f, -shaftRadius, shaftBaseZ}, {0.0f, -1.0f, 0.0f} });  // 12
-
-    indices.insert(indices.end(), { 5, 9, 10, 5, 10, 6 });
-    indices.insert(indices.end(), { 6, 10, 11, 6, 11, 7 });
-    indices.insert(indices.end(), { 7, 11, 12, 7, 12, 8 });
-    indices.insert(indices.end(), { 8, 12, 9, 8, 9, 5 });
+    indices.insert(indices.end(), { 5, 9, 10, 5, 10, 6, 6, 10, 11, 6, 11, 7, 7, 11, 12, 7, 12, 8, 8, 12, 9, 8, 9, 5 });
 
     return indices.size();
 }
 
 /* ------------------------------------------------------------------------- *
- *  VERY-SMALL helpers – they only create valid VAO / VBO data so that the
- *  renderer has something to bind.  Feel free to replace them with higher
- *  quality meshes later.                                                    *
+ * VERY-SMALL helpers – they only create valid VAO / VBO data so that the
+ * renderer has something to bind.  Feel free to replace them with higher
+ * quality meshes later.                                                     *
  * ------------------------------------------------------------------------- */
 inline void buildGrid(QOpenGLFunctions_4_3_Core* gl,
     GLuint vao, GLuint vbo)
@@ -200,7 +207,7 @@ inline void buildUnitLine(QOpenGLFunctions_4_3_Core* gl,
 inline void buildCap(QOpenGLFunctions_4_3_Core* gl,
     GLuint vao, GLuint vbo)
 {
-    const int segments = 32;           // match your shader’s expectations
+    const int segments = 32;          // match your shader’s expectations
     std::vector<glm::vec3> pts;
     pts.reserve(segments);
     for (int i = 0; i < segments; ++i) {
@@ -260,7 +267,7 @@ inline void setupFullscreenQuadAttribs(QOpenGLFunctions_4_3_Core* gl, GLuint vao
 inline std::size_t buildArrowMesh(QOpenGLFunctions_4_3_Core* gl,
     GLuint vao, GLuint vbo, GLuint ebo)
 {
-    std::vector<Vertex>        verts;
+    std::vector<Vertex>       verts;
     std::vector<unsigned int>  idx;
     std::size_t indexCount = createArrowPrimitive(verts, idx);
 
@@ -283,6 +290,15 @@ inline std::size_t buildArrowMesh(QOpenGLFunctions_4_3_Core* gl,
     gl->glEnableVertexAttribArray(1);
     gl->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
         sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+    // THE FIX: Also enable the other vertex attributes for the arrow mesh
+    gl->glEnableVertexAttribArray(2);
+    gl->glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
+    gl->glEnableVertexAttribArray(3);
+    gl->glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
+    gl->glEnableVertexAttribArray(4);
+    gl->glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
+
 
     gl->glBindVertexArray(0);
     return indexCount;

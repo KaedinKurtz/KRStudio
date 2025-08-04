@@ -1,4 +1,4 @@
-﻿#include "Shader.hpp"
+#include "Shader.hpp"
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -150,5 +150,17 @@ void Shader::checkCompileErrors(QOpenGLFunctions_4_3_Core* gl, unsigned int shad
             gl->glGetProgramInfoLog(shader, logLength, &logLength, &infoLog[0]);
             throw std::runtime_error("SHADER::PROGRAM::LINKING_FAILED\n" + std::string(infoLog.begin(), infoLog.end()));
         }
+    }
+}
+
+void Shader::checkUniform(QOpenGLFunctions_4_3_Core* gl, const std::string& name)
+{
+    GLint loc = gl->glGetUniformLocation(ID, name.c_str());
+    if (loc == -1) {
+        qWarning() << "UNIFORM NOT FOUND:" << QString::fromStdString(name)
+            << "in shader program ID" << ID;
+    }
+    else {
+        qDebug() << "Uniform '" << QString::fromStdString(name) << "' found at location:" << loc;
     }
 }

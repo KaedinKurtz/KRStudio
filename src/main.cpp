@@ -29,7 +29,7 @@ static QSurfaceFormat createDefaultFormat()
 {
     QSurfaceFormat f;
     f.setRenderableType(QSurfaceFormat::OpenGL);
-    f.setVersion(4, 3);
+    f.setVersion(4, 5);
     f.setProfile(QSurfaceFormat::CoreProfile);
     f.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     f.setDepthBufferSize(24);

@@ -1,4 +1,4 @@
-ï»¿#pragma once
+#pragma once
 #include "components.hpp"
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -41,7 +41,7 @@ inline void loadStlIntoRenderable(QString                qtPath,
     const aiScene* scene = nullptr;
 
     /* ---- 1) Qt resource ?  --------------------------------------------- */
-    if (qtPath.startsWith(u":/"))               //  Â»:/external/â€¦Â« etc.
+    if (qtPath.startsWith(u":/"))               //  »:/external/…« etc.
     {
         QFile f(qtPath);
         if (!f.open(QIODevice::ReadOnly))
@@ -107,7 +107,64 @@ inline void loadStlIntoRenderable(const char* utf8Path,
 
 inline QString dataDir()
 {
-    // Path that holds shaders, meshes, icons â€¦ next to the executable
+    // Path that holds shaders, meshes, icons … next to the executable
     return QDir(QCoreApplication::applicationDirPath())
-        .absoluteFilePath("data");        // â€¦/RoboticsSoftware.exe + /data
+        .absoluteFilePath("data");        // …/RoboticsSoftware.exe + /data
+}
+
+namespace MeshUtils {
+
+    inline void calculateTangentsAndBitangents(RenderableMeshComponent& mesh)
+    {
+        if (mesh.indices.empty() || mesh.vertices.empty()) {
+            return; // Cannot process mesh without indices or vertices
+        }
+
+        // Go through each triangle
+        for (size_t i = 0; i < mesh.indices.size(); i += 3) {
+            // Get the vertices of the triangle
+            Vertex& v0 = mesh.vertices[mesh.indices[i]];
+            Vertex& v1 = mesh.vertices[mesh.indices[i + 1]];
+            Vertex& v2 = mesh.vertices[mesh.indices[i + 2]];
+
+            // Edges of the triangle in position space
+            glm::vec3 edge1 = v1.position - v0.position;
+            glm::vec3 edge2 = v2.position - v0.position;
+
+            // Edges of the triangle in UV space
+            glm::vec2 deltaUV1 = v1.uv - v0.uv;
+            glm::vec2 deltaUV2 = v2.uv - v0.uv;
+
+            // Calculate tangent and bitangent
+            float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+            glm::vec3 tangent, bitangent;
+
+            tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+            tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+            tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+            tangent = glm::normalize(tangent);
+
+            bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+            bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+            bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+            bitangent = glm::normalize(bitangent);
+
+            // Accumulate the tangent and bitangent for each vertex of the triangle.
+            // This averages the values for vertices shared between multiple triangles.
+            v0.tangent += tangent;
+            v1.tangent += tangent;
+            v2.tangent += tangent;
+
+            v0.bitangent += bitangent;
+            v1.bitangent += bitangent;
+            v2.bitangent += bitangent;
+        }
+
+        // Normalize the accumulated tangent and bitangent vectors for each vertex
+        for (auto& vertex : mesh.vertices) {
+            vertex.tangent = glm::normalize(vertex.tangent);
+            vertex.bitangent = glm::normalize(vertex.bitangent);
+        }
+    }
 }

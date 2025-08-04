@@ -1,40 +1,35 @@
+#version 450 core
 
+// G-Buffer outputs
+layout(location = 0) out vec4 gPosition;
+layout(location = 1) out vec4 gNormal;
+layout(location = 2) out vec4 gAlbedoAO;
+layout (location = 3) out vec4 gMetalRough;
+layout(location = 4) out vec4 gEmissive;
 
-// =================================================================
-//                      fragment_shader.glsl
-// =================================================================
-#version 330 core
-out vec4 FragColor;
-
-// Data received from the vertex shader (already in world space)
+// Data received from the vertex shader (in world space)
 in vec3 FragPos;
 in vec3 Normal;
 
-// Uniforms from the C++ application
+// Uniform for the object's base color
 uniform vec3 objectColor;
-uniform vec3 lightColor;
-uniform vec3 lightPos;
-uniform vec3 viewPos; // Camera's position
 
 void main()
 {
-    // Ambient lighting component
-    float ambientStrength = 0.3;
-    vec3 ambient = ambientStrength * lightColor;
-  	
-    // Diffuse lighting component
-    vec3 norm = normalize(Normal);
-    vec3 lightDir = normalize(lightPos - FragPos);
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * lightColor;
-    
-    // Specular lighting component
-    float specularStrength = 0.5;
-    vec3 viewDir = normalize(viewPos - FragPos);
-    vec3 reflectDir = reflect(-lightDir, norm);  
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
-    vec3 specular = specularStrength * spec * lightColor;
-        
-    vec3 result = (ambient + diffuse + specular) * objectColor;
-    FragColor = vec4(result, 1.0);
+    // 1. Position and Normal
+    gPosition = vec4(FragPos, 1.0);
+    gNormal   = vec4(normalize(Normal), 1.0);
+
+    // 2. Albedo and AO
+    // The albedo is the object's color. We assume full ambient occlusion (1.0).
+    gAlbedoAO = vec4(objectColor, 1.0);
+
+    // 3. Metallic and Roughness
+    // A standard Phong material is non-metallic (0.0).
+    // We'll give it a medium roughness (0.5) to approximate the shininess.
+    gMetalRough = vec4(0.0, 0.5, 0.0, 1.0);
+
+    // 4. Emissive
+    // A standard Phong material is not emissive.
+    gEmissive = vec4(0.0, 0.0, 0.0, 1.0);
 }

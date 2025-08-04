@@ -1,7 +1,7 @@
 #version 430 core
 
 out vec4 FragColor;
-in vec2 TexCoords;
+in vec4 TexCoords;
 
 // This will be the primary texture on the mesh
 uniform sampler2D texture_diffuse1;

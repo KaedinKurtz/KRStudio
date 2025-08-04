@@ -1,14 +1,35 @@
-#version 430 core
+#version 450 core
 
-// This shader's only job is to output a single, solid color.
-// We use this to draw the shape of the selected object to our glow buffer.
+// G-Buffer outputs
+layout(location = 0) out vec4 gPosition;
+layout(location = 1) out vec4 gNormal;
+layout(location = 2) out vec4 gAlbedoAO;
+layout (location = 3) out vec4 gMetalRough;
+layout(location = 4) out vec4 gEmissive;
 
-out vec4 FragColor; // The final output color for the pixel.
+// Data received from the vertex shader
+in vec3 FragPos;
+in vec3 Normal;
 
-uniform vec3 emissiveColor; // A uniform to control the color from C++.
+// Uniform for the object's emissive color
+uniform vec3 emissiveColor;
 
 void main()
 {
-    // Output the specified color with full alpha.
-    FragColor = vec4(emissiveColor, 1.0);
+    // 1. Position and Normal
+    gPosition = vec4(FragPos, 1.0);
+    gNormal   = vec4(normalize(Normal), 1.0);
+
+    // 2. Albedo and AO
+    // A purely emissive object has no albedo (it's black). We assume full AO.
+    gAlbedoAO = vec4(0.0, 0.0, 0.0, 1.0);
+
+    // 3. Metallic and Roughness
+    // These properties don't apply to a purely emissive surface.
+    // We'll use defaults: not metallic (0.0) and fully rough (1.0).
+    gMetalRough = vec4(0.0, 1.0, 0.0, 1.0);
+
+    // 4. Emissive
+    // Output the specified emissive color.
+    gEmissive = vec4(emissiveColor, 1.0);
 }

@@ -27,7 +27,7 @@ public:
     // --- Explicit Cleanup ---
     // This will be called by RenderingSystem::shutdown()
     void destroy(QOpenGLFunctions_4_3_Core* gl);
-
+    void checkUniform(QOpenGLFunctions_4_3_Core* gl, const std::string& name);
     // --- MODIFIED: All public methods now take a GL functions pointer ---
     void use(QOpenGLFunctions_4_3_Core* gl);
     void setBool(QOpenGLFunctions_4_3_Core* gl, const std::string& name, bool value) const;

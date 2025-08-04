@@ -25,6 +25,8 @@
 #include "DatabasePanel.hpp"
 #include "DatabaseManager.hpp"
 #include "ViewportManagerPopup.hpp"
+#include "MaterialLoader.hpp"
+#include "MeshUtils.hpp"
 
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/DataFlowGraphModel>
@@ -297,7 +299,6 @@ MainWindow::MainWindow(QWidget* parent)
         gridComp.levels.emplace_back(10.0f, glm::vec3(0.28f, 0.56f, 0.86f), 25.0f, 200.0f);
     }
 
-    // --- Create a single test cube in the center of the scene ---
     {
         auto cubeEntity = registry.create();
         registry.emplace<TagComponent>(cubeEntity, "Test Cube");
@@ -310,17 +311,31 @@ MainWindow::MainWindow(QWidget* parent)
         pointEffector.distance = 3.0f;
 
         auto& mesh = registry.emplace<RenderableMeshComponent>(cubeEntity);
+
+        // Step 1: Create the mesh with only position, normal, and UV data.
+        // Use the S_LIT_CUBE_VERTICES array that has a stride of 8.
         const std::vector<float>& raw = Mesh::getLitCubeVertices();
-        constexpr std::size_t stride = 6;
+        constexpr std::size_t stride = 8; // Stride is 8 (3 pos + 3 normal + 2 uv)
+
         mesh.vertices.reserve(raw.size() / stride);
-        for (std::size_t i = 0; i < raw.size(); i += stride)
-        {
+        for (std::size_t i = 0; i < raw.size(); i += stride) {
             glm::vec3 pos{ raw[i],     raw[i + 1], raw[i + 2] };
-            glm::vec3 normal{ raw[i + 3],   raw[i + 4], raw[i + 5] };
-            mesh.vertices.emplace_back(pos, normal);
+            glm::vec3 normal{ raw[i + 3], raw[i + 4], raw[i + 5] };
+            glm::vec2 uv{ raw[i + 6], raw[i + 7] };
+
+            // THE FIX: Explicitly construct the Vertex object.
+            // The tangent/bitangent will be zero-initialized before calculation.
+            Vertex newVertex(pos, normal, uv, glm::vec3(0.0f), glm::vec3(0.0f));
+            mesh.vertices.push_back(newVertex);
         }
         mesh.indices = Mesh::getLitCubeIndices();
+
+        // Step 2: Programmatically calculate the tangents and bitangents for correct normal mapping.
+        MeshUtils::calculateTangentsAndBitangents(mesh);
+
+        registry.emplace<MaterialDirectoryTag>(cubeEntity, "D:/Textures/Blender/metals-bl/fancy-metal1-bl");
     }
+
 
     // --- Create Splines ---
     {

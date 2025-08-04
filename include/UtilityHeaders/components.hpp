@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <Eigen/Dense> 
 #include <any>
+#include <memory>
 
 #include "GridLevel.hpp"
 #include "Camera.hpp"
@@ -18,7 +19,8 @@
 #include "GpuResources.hpp" // <-- ADD THIS INCLUDE to get the GPU struct definitions
 
 // --- CORE COMPONENTS ---
-
+struct Texture2D;
+struct Cubemap;
 struct SelectedComponent {};
 struct CameraGizmoTag {};
 struct RecordLedTag {};
@@ -52,11 +54,95 @@ struct Texture {
     std::string path;
 };
 
-struct MaterialComponent {
-    glm::vec3 albedo = { 0.8f, 0.8f, 0.8f };
-    std::shared_ptr<Texture> albedoMap;
-    float metallic = 0.1f;
-    float roughness = 0.8f;
+struct MaterialDirectoryTag {
+    std::string dirPath;
+};
+
+struct MaterialComponent
+{
+    // — Base Layer —
+    glm::vec3  albedoColor = glm::vec3(0.8f, 0.8f, 0.8f);
+    glm::vec2  albedoTiling = glm::vec2(1.0f, 1.0f);
+    glm::vec2  albedoOffset = glm::vec2(0.0f, 0.0f);
+    std::shared_ptr<Texture2D> albedoMap = nullptr;
+
+    float      opacity = 1.0f;
+    glm::vec2  opacityTiling = glm::vec2(1.0f, 1.0f);
+    glm::vec2  opacityOffset = glm::vec2(0.0f, 0.0f);
+    std::shared_ptr<Texture2D> opacityMap = nullptr;
+
+    // — Surface Detail —
+    std::shared_ptr<Texture2D> normalMap = nullptr;
+    float      normalScale = 1.0f;
+
+    std::shared_ptr<Texture2D> heightMap = nullptr;
+    float      heightScale = 0.0f;
+
+    bool       parallaxEnabled = false;
+    int        parallaxSteps = 8;
+    float      parallaxScale = 0.02f;
+
+    // — Microfacet / PBR —
+    float      metallic = 0.0f;
+    std::shared_ptr<Texture2D> metallicMap = nullptr;
+
+    float      roughness = 0.5f;
+    std::shared_ptr<Texture2D> roughnessMap = nullptr;
+
+    glm::vec3  specularColor = glm::vec3(0.04f, 0.04f, 0.04f);
+    float      glossiness = 0.5f;
+    std::shared_ptr<Texture2D> specularMap = nullptr;
+
+    // — Ambient Occlusion —
+    float      ao = 1.0f;
+    std::shared_ptr<Texture2D> aoMap = nullptr;
+
+    // — Clearcoat —
+    float      clearcoat = 0.0f;
+    float      clearcoatRoughness = 0.03f;
+    std::shared_ptr<Texture2D> clearcoatNormalMap = nullptr;
+
+    // — Sheen —
+    float      sheen = 0.0f;
+    glm::vec3  sheenColor = glm::vec3(0.0f, 0.0f, 0.0f);
+    float      sheenRoughness = 0.5f;
+    std::shared_ptr<Texture2D> sheenMap = nullptr;
+
+    // — Transmission / Refraction —
+    float      transmission = 0.0f;
+    std::shared_ptr<Texture2D> transmissionMap = nullptr;
+    float      ior = 1.0f;
+    float      thickness = 1.0f;
+    glm::vec3  attenuationColor = glm::vec3(1.0f, 1.0f, 1.0f);
+    float      attenuationDistance = 1e6f;
+
+    // — Subsurface Scattering —
+    bool       sssEnabled = false;
+    glm::vec3  sssColor = glm::vec3(0.8f, 0.8f, 0.8f);
+    glm::vec3  sssRadius = glm::vec3(0.1f, 0.1f, 0.1f);
+    std::shared_ptr<Texture2D> sssMap = nullptr;
+
+    // — Anisotropy —
+    float      anisotropy = 0.0f;   // –1 ? 1
+    float      anisotropyRotation = 0.0f;   // radians
+    std::shared_ptr<Texture2D> anisotropyMap = nullptr;
+
+    // — Emissive —
+    glm::vec3  emissiveColor = glm::vec3(0.0f, 0.0f, 0.0f);
+    float      emissiveStrength = 0.0f;
+    std::shared_ptr<Texture2D> emissiveMap = nullptr;
+
+    // — Detail / Secondary —
+    std::shared_ptr<Texture2D> detailAlbedoMap = nullptr;
+    float      detailAlbedoBlend = 0.0f;
+
+    std::shared_ptr<Texture2D> detailNormalMap = nullptr;
+    float      detailNormalBlend = 0.0f;
+
+    // — Environment / IBL —
+    std::shared_ptr<Cubemap> envMap = nullptr;
+    std::shared_ptr<Cubemap> prefilteredEnvMap = nullptr;
+    std::shared_ptr<Texture2D> brdfLUT = nullptr;
 };
 
 // --- FIELD-SPECIFIC COMPONENTS ---
@@ -223,13 +309,16 @@ struct Vertex
 {
     glm::vec3 position{};
     glm::vec3 normal{};
-    glm::vec2 uv{ 0.0f };
+    glm::vec2 uv{};
+    glm::vec3 tangent{};
+    glm::vec3 bitangent{};
 
     Vertex() = default;
-    Vertex(const glm::vec3& p, const glm::vec3& n, const glm::vec2& t = glm::vec2(0.0f))
-        : position(p), normal(n), uv(t) {
+    Vertex(const glm::vec3& p, const glm::vec3& n, const glm::vec2& t, const glm::vec3& tan, const glm::vec3& bitan)
+        : position(p), normal(n), uv(t), tangent(tan), bitangent(bitan) {
     }
 };
+
 
 struct TagComponent
 {
