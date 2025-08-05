@@ -49,15 +49,16 @@ void GridPass::execute(const RenderFrameContext& context) {
     auto viewG = registry.view<GridComponent, TransformComponent>();
     if (viewG.size_hint() == 0) return;
 
-    // --- Manually set state for this pass ---
-    // Save any state that will be restored at the end. Here, we only
-    // care about Polygon Offset. We will handle Depth Mask and Culling explicitly.
-    GLboolean isPolygonOffsetFillEnabled;
-    gl->glGetBooleanv(GL_POLYGON_OFFSET_FILL, &isPolygonOffsetFillEnabled);
-    gl->glEnable(GL_POLYGON_OFFSET_FILL);
-
-    // Grids are typically two-sided, so disable culling for this pass.
+    // --- State setup for a single, blended draw call ---
+    // Enable depth testing to ensure the grid does not draw over objects in front of it.
+    gl->glEnable(GL_DEPTH_TEST);
+    // Disable culling as the grid plane is two-sided.
     gl->glDisable(GL_CULL_FACE);
+    // Disable depth writing to allow other transparent passes to blend correctly.
+    gl->glDepthMask(GL_FALSE);
+    // Enable blending for transparent grid lines.
+    gl->glEnable(GL_BLEND);
+    gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     gridShader->use(gl);
     gl->glBindVertexArray(m_gridVAOs.value(ctx));
@@ -67,10 +68,8 @@ void GridPass::execute(const RenderFrameContext& context) {
         if (!grid.masterVisible) continue;
 
         auto& xf = viewG.get<TransformComponent>(entity);
-        // FIX: Get camera position from the context object.
         const float camDist = glm::length(context.camera.getPosition() - xf.translation);
 
-        // FIX: Use the context object for all rendering data.
         gridShader->setMat4(gl, "u_viewMatrix", context.view);
         gridShader->setMat4(gl, "u_projectionMatrix", context.projection);
         gridShader->setMat4(gl, "u_gridModelMatrix", xf.getTransform());
@@ -98,32 +97,17 @@ void GridPass::execute(const RenderFrameContext& context) {
         gridShader->setFloat(gl, "u_fogStartDistance", props.fogStartDistance);
         gridShader->setFloat(gl, "u_fogEndDistance", props.fogEndDistance);
 
-        // --- Z-Fighting Mitigation (State changes are now contained inside the loop) ---
-        gl->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-        gl->glDepthMask(GL_TRUE); // Set state for depth pre-pass
-        gl->glPolygonOffset(1.0f, 1.0f);
-        gl->glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        gl->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        gl->glDepthMask(GL_FALSE); // Set state for color pass
-        gl->glPolygonOffset(-1.0f, -1.0f);
+        // Single draw call for the grid plane.
         gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 
     gl->glBindVertexArray(0);
 
-    // --- Manually restore state to a clean default ---
-    // This ensures the next pass starts in a known, good state.
-    if (isPolygonOffsetFillEnabled) {
-        gl->glEnable(GL_POLYGON_OFFSET_FILL);
-    } else {
-        gl->glDisable(GL_POLYGON_OFFSET_FILL);
-    }
-    
-    gl->glDepthMask(GL_TRUE);      // CRITICAL: Always re-enable depth writing.
-    gl->glEnable(GL_CULL_FACE);    // CRITICAL: Re-enable culling for the opaque pass.
+    // --- Restore state to a clean default for the next pass ---
+    gl->glDisable(GL_BLEND);
+    gl->glDepthMask(GL_TRUE);
+    gl->glEnable(GL_CULL_FACE);
 }
-
 void GridPass::onContextDestroyed(QOpenGLContext* dyingContext, QOpenGLFunctions_4_3_Core* gl) {
     if (m_gridVAOs.contains(dyingContext)) {
         qDebug() << "GridPass: Cleaning up resources for context" << dyingContext;
