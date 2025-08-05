@@ -22,6 +22,9 @@ in vec2 TexCoords;
 in vec3 Tangent;
 in vec3 Bitangent;
 
+// New uniform to control albedo brightness
+uniform float u_albedoBrightness;
+
 void main()
 {
     // Position
@@ -36,6 +39,8 @@ void main()
 
     // Albedo + AO
     vec3 albedo = texture(material.albedoMap, TexCoords).rgb;
+    // Apply the brightness factor to the albedo color.
+    albedo *= u_albedoBrightness;
     float ao    = texture(material.aoMap, TexCoords).r;
     gAlbedoAO   = vec4(albedo, ao);
 

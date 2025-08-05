@@ -50,15 +50,19 @@ void GridPass::execute(const RenderFrameContext& context) {
     if (viewG.size_hint() == 0) return;
 
     // --- State setup for a single, blended draw call ---
-    // Enable depth testing to ensure the grid does not draw over objects in front of it.
+    // The previous pass's depth test is still enabled, which is what we want.
     gl->glEnable(GL_DEPTH_TEST);
     // Disable culling as the grid plane is two-sided.
     gl->glDisable(GL_CULL_FACE);
-    // Disable depth writing to allow other transparent passes to blend correctly.
+    // Disable depth writing. This is crucial. We want the grid to appear behind
+    // opaque objects already in the scene, but we don't want it to prevent
+    // other semi-transparent objects (like the glow effects or splines) from drawing.
     gl->glDepthMask(GL_FALSE);
     // Enable blending for transparent grid lines.
     gl->glEnable(GL_BLEND);
     gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // Disable polygon offset as we are no longer using the two-pass approach.
+    gl->glDisable(GL_POLYGON_OFFSET_FILL);
 
     gridShader->use(gl);
     gl->glBindVertexArray(m_gridVAOs.value(ctx));
@@ -97,7 +101,8 @@ void GridPass::execute(const RenderFrameContext& context) {
         gridShader->setFloat(gl, "u_fogStartDistance", props.fogStartDistance);
         gridShader->setFloat(gl, "u_fogEndDistance", props.fogEndDistance);
 
-        // Single draw call for the grid plane.
+        // A single draw call is now sufficient. The fragment shader will handle depth testing implicitly
+        // with the `glDepthTest` that is enabled before the main rendering loop begins.
         gl->glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 

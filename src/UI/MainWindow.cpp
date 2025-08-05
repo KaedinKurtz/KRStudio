@@ -333,7 +333,7 @@ MainWindow::MainWindow(QWidget* parent)
         // Step 2: Programmatically calculate the tangents and bitangents for correct normal mapping.
         MeshUtils::calculateTangentsAndBitangents(mesh);
 
-        registry.emplace<MaterialDirectoryTag>(cubeEntity, "D:/Textures/Blender/metals-bl/fancy-metal1-bl");
+        registry.emplace<MaterialDirectoryTag>(cubeEntity, "D:/Textures/Blender/walls-bl/dungeon-stone1-bl");
     }
 
 

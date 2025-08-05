@@ -76,4 +76,38 @@ namespace GLUtils {
         return lut;
     }
 
+    GLuint getUnitCubeVAO(QOpenGLFunctions_4_3_Core* gl) {
+        // static VAO ensures the cube is only created on the GPU once.
+        static GLuint cubeVAO = 0;
+        if (cubeVAO == 0) {
+            float vertices[] = {
+                // positions
+                -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
+                 1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
+                -1.0f, -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
+                -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,  1.0f,
+                 1.0f, -1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+                 1.0f,  1.0f,  1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
+                -1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+                 1.0f,  1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,
+                -1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,
+                 1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f,
+                -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,
+                 1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f
+            };
+            GLuint cubeVBO;
+            gl->glGenVertexArrays(1, &cubeVAO);
+            gl->glGenBuffers(1, &cubeVBO);
+            gl->glBindVertexArray(cubeVAO);
+            gl->glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+            gl->glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+            gl->glEnableVertexAttribArray(0);
+            gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+            gl->glBindVertexArray(0);
+            // We can delete the VBO now that the VAO has captured the state.
+            gl->glDeleteBuffers(1, &cubeVBO);
+        }
+        return cubeVAO;
+    }
+
 } // namespace GLUtils

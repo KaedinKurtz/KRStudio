@@ -75,6 +75,10 @@ void OpaquePass::execute(const RenderFrameContext& context)
         auto& xf = context.registry.get<TransformComponent>(ent);
         activeShader->setMat4(gl, "model", xf.getTransform());
 
+        // Set the new brightness uniform for both paths
+        // We're doubling the brightness here by setting it to 2.0f.
+        activeShader->setFloat(gl, "u_albedoBrightness", 1.0f);
+
         if (activeShader == texturedShader) {
             // --- TEXTURED PATH (CRASH-PROOF) ---
             unsigned int unit = 0;

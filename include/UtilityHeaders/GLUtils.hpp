@@ -19,4 +19,6 @@ namespace GLUtils {
         const std::string& fragPath,
         int size);
 
+    GLuint getUnitCubeVAO(QOpenGLFunctions_4_3_Core* gl);
+
 } // namespace GLUtils

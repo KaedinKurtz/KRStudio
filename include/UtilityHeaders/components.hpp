@@ -64,6 +64,7 @@ struct MaterialComponent
     glm::vec3  albedoColor = glm::vec3(0.8f, 0.8f, 0.8f);
     glm::vec2  albedoTiling = glm::vec2(1.0f, 1.0f);
     glm::vec2  albedoOffset = glm::vec2(0.0f, 0.0f);
+    float albedoBrightness;
     std::shared_ptr<Texture2D> albedoMap = nullptr;
 
     float      opacity = 1.0f;

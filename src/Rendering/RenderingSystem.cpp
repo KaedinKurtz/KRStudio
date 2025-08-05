@@ -13,6 +13,7 @@
 #include "Texture2D.hpp"
 #include "UtilityHeaders/GLUtils.hpp"
 #include "MaterialLoader.hpp"
+#include "GLUtils.hpp"
 
 #include "OpaquePass.hpp"
 #include "LightingPass.hpp"
@@ -219,6 +220,7 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("particle_render", (shaderDir + "particle_render_vert.glsl").toStdString(), (shaderDir + "particle_render_frag.glsl").toStdString());
         loadAndStoreShader("flow_vector_compute", std::vector<std::string>{ (shaderDir + "flow_vector_update_comp.glsl").toStdString() });
         loadAndStoreShader("blur", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "gaussian_blur_frag.glsl").toStdString());
+        loadAndStoreShader("skybox", (shaderDir + "skybox_vert.glsl").toStdString(), (shaderDir + "skybox_frag.glsl").toStdString());
     }
     catch (const std::runtime_error& e) {
         qFatal("[RenderingSystem] Shader init failed: %s", e.what());
@@ -259,7 +261,7 @@ void RenderingSystem::initializeSharedResources()
     // --- 2) Build IBL resources ---
     {
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/../assets/");
-        std::string hdrPath = (assetDir + "env.hdr").toStdString();
+        std::string hdrPath = (assetDir + "env2.hdr").toStdString();
 
         auto hdrTex = std::make_shared<Texture2D>();
         if (!hdrTex->loadFromFile(hdrPath, /*flipVert=*/true)) {
@@ -274,10 +276,10 @@ void RenderingSystem::initializeSharedResources()
             std::string fsPref = (shaderDir + "prefilter_env_frag.glsl").toStdString();
             std::string vsBRDF = (shaderDir + "brdf_integration_vert.glsl").toStdString();
             std::string fsBRDF = (shaderDir + "brdf_integration_frag.glsl").toStdString();
-
+            std::string fsTriPref = (shaderDir + "trilinear_prefilter_frag.glsl").toStdString();
             // 2.1 Equirect ? Cubemap
             try {
-                m_envCubemap = Cubemap::fromEquirectangular(*hdrTex, m_gl, vsCube, fsCube, 512);
+                m_envCubemap = Cubemap::fromEquirectangular(*hdrTex, m_gl, vsCube, fsCube, 2048);
                 if (!m_envCubemap) throw std::runtime_error("null ptr");
                 qDebug() << "[IBL] Environment cubemap created.";
             }
@@ -302,7 +304,7 @@ void RenderingSystem::initializeSharedResources()
             // 2.3 Specular prefilter
             if (m_envCubemap) {
                 try {
-                    m_prefilteredEnvMap = Cubemap::prefilter(*m_envCubemap, m_gl, vsCube, fsPref, 128, 5);
+                    m_prefilteredEnvMap = Cubemap::prefilter(*m_envCubemap, m_gl, vsCube, fsTriPref, 512, 5);
                     if (!m_prefilteredEnvMap) throw std::runtime_error("null ptr");
                     qDebug() << "[IBL] Prefiltered env map ready.";
                 }
@@ -316,7 +318,7 @@ void RenderingSystem::initializeSharedResources()
             try {
                 m_brdfLUT = GLUtils::generateBRDFLUT(m_gl, vsBRDF, fsBRDF, 512);
                 if (!m_brdfLUT) throw std::runtime_error("null ptr");
-                qDebug() << "[IBL] BRDF LUT ready.";
+                qDebug() << "[IBL] BRDF LUT ready. ID:" << m_brdfLUT->getID();
             }
             catch (const std::exception& e) {
                 qWarning() << "[IBL] BRDF LUT generation failed:" << e.what();
@@ -342,6 +344,7 @@ void RenderingSystem::initializeSharedResources()
     for (auto& p : m_postProcessingPasses) p->initialize(*this, m_gl);
     for (auto& p : m_overlayPasses)       p->initialize(*this, m_gl);
 }
+
 void RenderingSystem::resizeGLResources()
 {
     int maxW = 0, maxH = 0;
@@ -796,10 +799,45 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
         viewport
     };
 
-    for (auto& pass : m_overlayPasses) {
-        qDebug() << "[overlayPass] Executing overlay pass:" << typeid(*pass).name();
-        pass->execute(ctx);
+    
+
+    Shader* skyboxShader = getShader("skybox");
+    auto envCubemap = getEnvCubemap(); // Get the main (unblurred) environment map
+    if (skyboxShader && envCubemap)
+    {
+        // Use the same depth function trick as the capture passes
+        m_gl->glDepthFunc(GL_LEQUAL);
+
+        skyboxShader->use(m_gl);
+        skyboxShader->setMat4(m_gl, "view", ctx.view);
+        skyboxShader->setMat4(m_gl, "projection", ctx.projection);
+
+        // Bind the environment cubemap to texture unit 0
+        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap->getID());
+        skyboxShader->setInt(m_gl, "skybox", 0);
+
+        // Render the unit cube
+        // This helper should exist in your Cubemap.cpp, we just need to call it
+        // For now, let's assume you have a getUnitCubeVAO() function available
+        // If not, you'll need to expose it or create one for the RenderingSystem
+        // For simplicity, we'll just draw a cube here. In a real system, you'd share the VAO.
+
+        // Placeholder for rendering a cube. You'll need to adapt this to your VAO management.
+        // This part requires getting the unit cube VAO similar to how Cubemap.cpp does.
+        // For now, this demonstrates the logic.
+
+        m_gl->glBindVertexArray(GLUtils::getUnitCubeVAO(m_gl)); 
+        m_gl->glDrawArrays(GL_TRIANGLES, 0, 36);
+        m_gl->glBindVertexArray(0);
+
+        m_gl->glDepthFunc(GL_LESS); // Reset depth function to default
     }
+
+    for (auto& pass : m_overlayPasses) {
+            qDebug() << "[overlayPass] Executing overlay pass:" << typeid(*pass).name();
+            pass->execute(ctx);
+        }
 
     // --- D) Cleanup: bind default framebuffer and reset draw buffer ---
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
