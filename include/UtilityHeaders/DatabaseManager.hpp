@@ -237,6 +237,10 @@ public:
     QFuture<bool> saveSceneAsync(const Scene& scene, const QString& name = "current");
     QFuture<std::unique_ptr<Scene>> loadSceneAsync(const QString& name = "current");
     
+    // New functions for the ResourceManager to use
+    bool saveMeshAsset(const QString& path, const RenderableMeshComponent& mesh);
+    std::optional<RenderableMeshComponent> loadMeshAsset(const QString& path);
+
     // Replication and synchronization
     bool enableReplication(const QString& masterUrl);
     bool disableReplication();
@@ -259,6 +263,11 @@ public:
     bool saveMenuState(const QString& menuName, const QString& blob);
 
     static QString menuTypeToString(MenuType type);
+
+	// Cache management
+    void touchAsset(const QString& path);
+    void performCacheCleanup(qint64 sizeLimitBytes = 50 * 1024 * 1024 * 1024LL, // 50 GB
+        int ageLimitDays = 30);
 
 signals:
     void databaseEvent(const DatabaseEventData& event);

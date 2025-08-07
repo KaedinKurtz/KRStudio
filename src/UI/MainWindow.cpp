@@ -300,45 +300,28 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     {
-        auto cubeEntity = registry.create();
-        registry.emplace<TagComponent>(cubeEntity, "Test Cube");
-        registry.emplace<TransformComponent>(cubeEntity).translation = glm::vec3(0.0f, 0.5f, 0.0f);
-        registry.emplace<BoundingBoxComponent>(cubeEntity);
-        registry.emplace<FieldSourceTag>(cubeEntity);
+        QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/../assets/");
+        QString meshPath = assetDir + "Dragon.stl";
 
-        auto& pointEffector = registry.emplace<MeshEffectorComponent>(cubeEntity);
-        pointEffector.strength = -1.0f;
-        pointEffector.distance = 3.0f;
+        // 1. Call spawnMesh and CAPTURE the handle of the new entity it creates.
+        entt::entity dragonEntity = SceneBuilder::spawnMesh(*m_scene, meshPath);
 
-        auto& mesh = registry.emplace<RenderableMeshComponent>(cubeEntity);
+        // 2. Check if the entity was created successfully before adding more components.
+        if (m_scene->getRegistry().valid(dragonEntity))
+        {
+            // 3. Add the material and rendering tags to the NEW dragon entity.
+            auto& registry = m_scene->getRegistry();
+            registry.emplace<MaterialDirectoryTag>(dragonEntity, "D:/Textures/Blender/metals-bl/fancy-metal1-bl");
 
-        // Step 1: Create the mesh with only position, normal, and UV data.
-        // Use the S_LIT_CUBE_VERTICES array that has a stride of 8.
-        const std::vector<float>& raw = Mesh::getLitCubeVertices();
-        constexpr std::size_t stride = 8; // Stride is 8 (3 pos + 3 normal + 2 uv)
-
-        mesh.vertices.reserve(raw.size() / stride);
-        for (std::size_t i = 0; i < raw.size(); i += stride) {
-            glm::vec3 pos{ raw[i],     raw[i + 1], raw[i + 2] };
-            glm::vec3 normal{ raw[i + 3], raw[i + 4], raw[i + 5] };
-            glm::vec2 uv{ raw[i + 6], raw[i + 7] };
-
-            // THE FIX: Explicitly construct the Vertex object.
-            // The tangent/bitangent will be zero-initialized before calculation.
-            Vertex newVertex(pos, normal, uv, glm::vec3(0.0f), glm::vec3(0.0f));
-            mesh.vertices.push_back(newVertex);
+            // You can also add other components here if needed
+            registry.emplace<BoundingBoxComponent>(dragonEntity);
+            registry.emplace<FieldSourceTag>(dragonEntity);
         }
-        mesh.indices = Mesh::getLitCubeIndices();
-
-        // Step 2: Programmatically calculate the tangents and bitangents for correct normal mapping.
-        MeshUtils::calculateTangentsAndBitangents(mesh);
-
-        registry.emplace<MaterialDirectoryTag>(cubeEntity, "D:/Textures/Blender/walls-bl/dungeon-stone1-bl");
     }
-
 
     // --- Create Splines ---
     {
+        /*
         using SB = SceneBuilder;
         auto& reg = m_scene->getRegistry();
         auto CREntity = SB::makeCR(reg, { {-2,0,-1}, {-2,0, 1}, { 2,0, 1}, { 2,0,-1} }, { 0.9f,0.9f,0.9f,1 }, { 0.9f,0.3f,0.3f,1 }, 18.0f);
@@ -348,18 +331,14 @@ MainWindow::MainWindow(QWidget* parent)
         auto LinearEntity = SB::makeLinear(reg, { {-5, 0.1, -5}, {-5, 2, -5}, {0, 2, -5}, {0, 0.1, -5} }, { 0.9f,0.9f,0.9f,1 }, { 0.1f, 1.0f, 0.2f, 1 }, 18.0f);
         reg.emplace<PulsingSplineTag>(LinearEntity);
         auto bezierEntity = SB::makeBezier(reg, { {5, 0.1, -5}, {5, 4, -5}, {2, 4, -5}, {2, 0.1, -5} }, { 0.9f,0.9f,0.9f,1 }, { 1.0f, 0.9f, 0.2f, 1 }, 18.0f);
-        reg.emplace<PulsingSplineTag>(bezierEntity);
+        reg.emplace<PulsingSplineTag>(bezierEntity);*/
     }
 
     // --- Create initial cameras for the viewports ---
     const QColor& c0 = kPalette[0];
     glm::vec3 tint0{ c0.redF(), c0.greenF(), c0.blueF() };
 
-    auto cameraEntity1 = SceneBuilder::createCamera(
-        registry,
-        { 0, 2, 5 },
-        tint0
-    );
+    auto cameraEntity1 = SceneBuilder::createCamera(*m_scene, { 0, 2, 5 }, tint0);
 
     // mark slot 0 taken
     m_colorInUse[0] = true;
@@ -879,11 +858,7 @@ void MainWindow::addViewport() {
     glm::vec3      tint{ c.redF(), c.greenF(), c.blueF() };
 
     // 4) create camera & tag it
-    entt::entity cam = SceneBuilder::createCamera(
-        reg,
-        { 0.f, 2.f, 5.f + float(m_dockContainers.size()) },
-        tint
-    );
+    entt::entity cam = SceneBuilder::createCamera(*m_scene, { 0.f, 2.f, 5.f + float(m_dockContainers.size()) }, tint);
     reg.emplace<ColorIndexComponent>(cam, colorIdx);
 
     // 5) make the viewport + dock it

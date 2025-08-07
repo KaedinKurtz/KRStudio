@@ -35,9 +35,12 @@ void LightingPass::execute(const RenderFrameContext& context) {
 
     // --- Animated light (Your existing code is good here) ---
     float radius = 10.0f;
-    float speed = 1.0f;
+    float speed = 1.5f;
+	float baseHeight = 5.0f; // Fixed height for the light
+	float heightAmplitude = 3.0f; // No vertical oscillation
     float x = radius * cos(context.elapsedTime * speed);
     float z = radius * sin(context.elapsedTime * speed);
+    float y = baseHeight + heightAmplitude * sin(context.elapsedTime * speed); // Fixed height for the light
     glm::vec3 animatedLightPos = glm::vec3(x, 5.0f, z);
 
     lightingShd->use(gl);

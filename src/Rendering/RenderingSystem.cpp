@@ -29,6 +29,8 @@
 #include <QDebug>
 #include <stdexcept>
 #include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QDir>
 
 
 void inspectFramebufferAttachments(QOpenGLFunctions_4_5_Core* gl, GLuint fbo, const char* fboName)
@@ -205,6 +207,9 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("gbuffer_untextured",
             (shaderDir + "gbuffer_vert.glsl").toStdString(),
             (shaderDir + "gbuffer_untextured_frag.glsl").toStdString());
+        loadAndStoreShader("gbuffer_triplanar",
+            (shaderDir + "gbuffer_triplanar_vert.glsl").toStdString(),
+            (shaderDir + "gbuffer_triplanar_frag.glsl").toStdString());
 
         // Load all other shaders as before
         loadAndStoreShader("lighting", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "lighting_frag.glsl").toStdString());
@@ -261,7 +266,7 @@ void RenderingSystem::initializeSharedResources()
     // --- 2) Build IBL resources ---
     {
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/../assets/");
-        std::string hdrPath = (assetDir + "env2.hdr").toStdString();
+        std::string hdrPath = (assetDir + "env3.hdr").toStdString();
 
         auto hdrTex = std::make_shared<Texture2D>();
         if (!hdrTex->loadFromFile(hdrPath, /*flipVert=*/true)) {
@@ -271,12 +276,14 @@ void RenderingSystem::initializeSharedResources()
             qDebug() << "[IBL] HDR loaded successfully.";
 
             std::string vsCube = (shaderDir + "equirect_to_cubemap_vert.glsl").toStdString();
+			std::string dummyVert = (shaderDir + "dummy_vert.glsl").toStdString();
             std::string fsCube = (shaderDir + "equirect_to_cubemap_frag.glsl").toStdString();
             std::string fsIrr = (shaderDir + "irradiance_convolution_frag.glsl").toStdString();
             std::string fsPref = (shaderDir + "prefilter_env_frag.glsl").toStdString();
             std::string vsBRDF = (shaderDir + "brdf_integration_vert.glsl").toStdString();
             std::string fsBRDF = (shaderDir + "brdf_integration_frag.glsl").toStdString();
             std::string fsTriPref = (shaderDir + "trilinear_prefilter_frag.glsl").toStdString();
+            std::string vsPref = (shaderDir + "prefilter_vert.glsl").toStdString();
             // 2.1 Equirect ? Cubemap
             try {
                 m_envCubemap = Cubemap::fromEquirectangular(*hdrTex, m_gl, vsCube, fsCube, 2048);
@@ -304,7 +311,7 @@ void RenderingSystem::initializeSharedResources()
             // 2.3 Specular prefilter
             if (m_envCubemap) {
                 try {
-                    m_prefilteredEnvMap = Cubemap::prefilter(*m_envCubemap, m_gl, vsCube, fsTriPref, 512, 5);
+                    m_prefilteredEnvMap = Cubemap::prefilter(*m_envCubemap, m_gl, vsPref, fsPref, 2048, 5);
                     if (!m_prefilteredEnvMap) throw std::runtime_error("null ptr");
                     qDebug() << "[IBL] Prefiltered env map ready.";
                 }
@@ -372,7 +379,7 @@ void RenderingSystem::renderFrame()
 {
     if (!m_isInitialized || m_targets.isEmpty()) return;
 
-    // --- Stats Update ---
+    // --- STATS UPDATE (unchanged) ---
     const float dt = m_clock.restart() * 0.001f;
     m_frameTimeHistory.push_back(dt);
     if (m_frameTimeHistory.size() > m_historySize) m_frameTimeHistory.pop_front();
@@ -386,30 +393,52 @@ void RenderingSystem::renderFrame()
 
     resizeGLResources();
 
+    QElapsedTimer timer;
+
     // --- PIPELINE STAGE 1: Geometry Pass (Once per frame) ---
+    timer.start();
     geometryPass();
+    qDebug() << "[Timing] geometryPass took" << timer.elapsed() << "ms";
 
     // --- PIPELINE STAGES 2-4: Per-Viewport Rendering ---
     for (auto* viewport : m_targets.keys()) {
+        if (!viewport) continue;
+
         viewport->makeCurrent();
         m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport->context());
         if (!m_gl) continue;
 
+        // Lighting
+        timer.restart();
         lightingPass(viewport);
-        postProcessingPass(viewport);
-        overlayPass(viewport);
+        qDebug() << "[Timing]" << "lightingPass (vp" << viewport << ") took" << timer.elapsed() << "ms";
 
-        // Final blit from our offscreen FBO to the viewport's default framebuffer (the screen)
-        auto& target = m_targets[viewport];
-        m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, target.finalFBO);
-        m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);             //  source
-        m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, viewport->defaultFramebufferObject());
-        m_gl->glDrawBuffer(GL_BACK);                          //  destination
-        m_gl->glBlitFramebuffer(
-            0, 0, target.w, target.h,
-            0, 0, target.w, target.h,
-            GL_COLOR_BUFFER_BIT, GL_NEAREST
-        );
+        // Post-process
+        timer.restart();
+        postProcessingPass(viewport);
+        qDebug() << "[Timing]" << "postProcessingPass (vp" << viewport << ") took" << timer.elapsed() << "ms";
+
+        // Overlay
+        timer.restart();
+        overlayPass(viewport);
+        qDebug() << "[Timing]" << "overlayPass (vp" << viewport << ") took" << timer.elapsed() << "ms";
+
+        // Final blit
+        timer.restart();
+        {
+            auto& target = m_targets[viewport];
+            m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, target.finalFBO);
+            m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
+            m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, viewport->defaultFramebufferObject());
+            m_gl->glDrawBuffer(GL_BACK);
+            m_gl->glBlitFramebuffer(
+                0, 0, target.w, target.h,
+                0, 0, target.w, target.h,
+                GL_COLOR_BUFFER_BIT, GL_NEAREST
+            );
+            m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+        qDebug() << "[Timing]" << "finalBlit (vp" << viewport << ") took" << timer.elapsed() << "ms";
 
         viewport->doneCurrent();
     }
@@ -726,7 +755,8 @@ void RenderingSystem::postProcessingPass(ViewportWidget* viewport)
 void RenderingSystem::overlayPass(ViewportWidget* viewport)
 {
     qDebug() << "--- 4. OVERLAY PASS for viewport:" << viewport << "---";
-    m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(QOpenGLContext::currentContext());
+    m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(
+        QOpenGLContext::currentContext());
     if (!m_gl) {
         qDebug() << "[overlayPass] GL funcs unavailable!";
         return;
@@ -738,49 +768,67 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
     const int   w = target.w;
     const int   h = target.h;
 
-    // --- A) Depth-Only Blit ---
-    // Bind READ (source) and DRAW (dest) FBOs
-    qDebug() << "[overlayPass] Depth blit: READ_FBO =" << gFBO
-        << ", DRAW_FBO =" << finalFBO;
-    m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, gFBO);
-    m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, finalFBO);
+    QElapsedTimer tTotal;
+    tTotal.start();
 
-    // Check completeness
+    // --- A) Depth-Only Blit ---
     {
-        GLenum status = m_gl->glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
-        qDebug() << "[overlayPass] Depth-BLIT DRAW_FRAMEBUFFER status =" << status
-            << (status == GL_FRAMEBUFFER_COMPLETE ? "(COMPLETE)" : "(INCOMPLETE)");
+        QElapsedTimer t; t.start();
+
+        // 1) Bind and check BOTH FBOs
+        m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, gFBO);
+        GLenum readStatus = m_gl->glCheckFramebufferStatus(GL_READ_FRAMEBUFFER);
+        qDebug() << "[overlayPass] READ_FRAMEBUFFER status =" << readStatus;
+
+        m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, finalFBO);
+        GLenum drawStatus = m_gl->glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
+        qDebug() << "[overlayPass] DRAW_FRAMEBUFFER status =" << drawStatus;
+
+        // 2) Disable color writes on the DRAW side
+        //    (for a depth?only blit the color buffer is irrelevant)
+        m_gl->glDrawBuffer(GL_NONE);
+        m_gl->glReadBuffer(GL_NONE);
+
+        // 3) Perform the depth blit
+        m_gl->glBlitFramebuffer(
+            0, 0, w, h,
+            0, 0, w, h,
+            GL_DEPTH_BUFFER_BIT,
+            GL_NEAREST
+        );
+
+        // 4) Restore the draw buffer so subsequent color draws work
+        GLenum buf = GL_COLOR_ATTACHMENT0;
+        m_gl->glDrawBuffers(1, &buf);
+
+        // 5) Error check & timing
+        GLenum err = m_gl->glGetError();
+        qDebug() << "[Timing] overlay-depthBlit took" << t.elapsed() << "ms"
+            << (err != GL_NO_ERROR ? QString("GL_ERR=0x%1").arg(err, 0, 16) : "");
     }
 
-    // Copy depth only
-    m_gl->glBlitFramebuffer(
-        0, 0, w, h,
-        0, 0, w, h,
-        GL_DEPTH_BUFFER_BIT,
-        GL_NEAREST
-    );
-    qDebug() << "[overlayPass] Blitted DEPTH from G-Buffer ? finalFBO";
-
     // --- B) Prepare for color overlays ---
-    // Bind finalFBO as both READ & DRAW for overlay draws
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, finalFBO);
-    m_gl->glViewport(0, 0, w, h);
+    {
+        QElapsedTimer t; t.start();
 
-    // Enable only color attachment 0 for drawing
-    GLenum drawBufs[1] = { GL_COLOR_ATTACHMENT0 };
-    m_gl->glDrawBuffers(1, drawBufs);
-    qDebug() << "[overlayPass] Restored DRAW_BUFFERS[0] =" << drawBufs[0];
+        m_gl->glBindFramebuffer(GL_FRAMEBUFFER, finalFBO);
+        m_gl->glViewport(0, 0, w, h);
+        GLenum drawBufs[1] = { GL_COLOR_ATTACHMENT0 };
+        m_gl->glDrawBuffers(1, drawBufs);
+        qDebug() << "[overlayPass] Restored DRAW_BUFFERS[0] =" << drawBufs[0];
+        m_gl->glEnable(GL_DEPTH_TEST);
+        m_gl->glDepthMask(GL_TRUE);
 
-    // Ensure depth test is on, and mask is correct
-    m_gl->glEnable(GL_DEPTH_TEST);
-    m_gl->glDepthMask(GL_TRUE);
+        GLenum err = m_gl->glGetError();
+        qDebug() << "[Timing] overlay-prepColor took" << t.elapsed() << "ms"
+            << (err != GL_NO_ERROR
+                ? QString("GL_ERR=0x%1").arg(err, 0, 16)
+                : QString());
+    }
 
-    // Optionally clear nothing (keep the lit scene), or clear color/depth here if desired
-    // m_gl->glClear(GL_DEPTH_BUFFER_BIT);
-
-    // --- C) Execute overlay passes (grid, splines, etc.) ---
-    // Build context
-    auto& camComp = m_scene->getRegistry().get<CameraComponent>(viewport->getCameraEntity());
+    // --- C) Build shared RenderFrameContext ---
+    auto& camComp = m_scene->getRegistry().get<CameraComponent>(
+        viewport->getCameraEntity());
     float aspect = float(w) / float(h);
     static float elapsed = 0.0f;
     elapsed += m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime;
@@ -793,58 +841,65 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
         camComp.camera.getViewMatrix(),
         camComp.camera.getProjectionMatrix(aspect),
         target,
-        w, h,
+        target.w,
+        target.h,
         m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime,
         elapsed,
         viewport
     };
 
-    
-
-    Shader* skyboxShader = getShader("skybox");
-    auto envCubemap = getEnvCubemap(); // Get the main (unblurred) environment map
-    if (skyboxShader && envCubemap)
+    // --- C1) Skybox ---
     {
-        // Use the same depth function trick as the capture passes
-        m_gl->glDepthFunc(GL_LEQUAL);
+        Shader* skyboxShader = getShader("skybox");
+        auto   envCubemap = getEnvCubemap();
+        if (skyboxShader && envCubemap) {
+            QElapsedTimer t; t.start();
 
-        skyboxShader->use(m_gl);
-        skyboxShader->setMat4(m_gl, "view", ctx.view);
-        skyboxShader->setMat4(m_gl, "projection", ctx.projection);
+            m_gl->glDepthFunc(GL_LEQUAL);
 
-        // Bind the environment cubemap to texture unit 0
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap->getID());
-        skyboxShader->setInt(m_gl, "skybox", 0);
+            skyboxShader->use(m_gl);
+            skyboxShader->setMat4(m_gl, "view", ctx.view);
+            skyboxShader->setMat4(m_gl, "projection", ctx.projection);
 
-        // Render the unit cube
-        // This helper should exist in your Cubemap.cpp, we just need to call it
-        // For now, let's assume you have a getUnitCubeVAO() function available
-        // If not, you'll need to expose it or create one for the RenderingSystem
-        // For simplicity, we'll just draw a cube here. In a real system, you'd share the VAO.
+            m_gl->glActiveTexture(GL_TEXTURE0);
+            m_gl->glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap->getID());
+            skyboxShader->setInt(m_gl, "skybox", 0);
 
-        // Placeholder for rendering a cube. You'll need to adapt this to your VAO management.
-        // This part requires getting the unit cube VAO similar to how Cubemap.cpp does.
-        // For now, this demonstrates the logic.
+            m_gl->glBindVertexArray(GLUtils::getUnitCubeVAO(m_gl));
+            m_gl->glDrawArrays(GL_TRIANGLES, 0, 36);
+            m_gl->glBindVertexArray(0);
 
-        m_gl->glBindVertexArray(GLUtils::getUnitCubeVAO(m_gl)); 
-        m_gl->glDrawArrays(GL_TRIANGLES, 0, 36);
-        m_gl->glBindVertexArray(0);
+            m_gl->glDepthFunc(GL_LESS);
 
-        m_gl->glDepthFunc(GL_LESS); // Reset depth function to default
+            GLenum err = m_gl->glGetError();
+            qDebug() << "[Timing] overlay-skybox took" << t.elapsed() << "ms"
+                << (err != GL_NO_ERROR
+                    ? QString("GL_ERR=0x%1").arg(err, 0, 16)
+                    : QString());
+        }
     }
 
+    // --- C2) Other overlay passes ---
     for (auto& pass : m_overlayPasses) {
-            qDebug() << "[overlayPass] Executing overlay pass:" << typeid(*pass).name();
-            pass->execute(ctx);
-        }
+        QElapsedTimer t; t.start();
 
-    // --- D) Cleanup: bind default framebuffer and reset draw buffer ---
+        qDebug() << "[overlayPass] Executing overlay pass:" << typeid(*pass).name();
+        pass->execute(ctx);
+
+        GLenum err = m_gl->glGetError();
+        qDebug() << "[Timing] overlay-" << typeid(*pass).name()
+            << "took" << t.elapsed() << "ms"
+            << (err != GL_NO_ERROR
+                ? QString("GL_ERR=0x%1").arg(err, 0, 16)
+                : QString());
+    }
+
+    // --- D) Cleanup & total time ---
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    GLenum backBuf = GL_BACK;
-    m_gl->glDrawBuffer(backBuf);
+    m_gl->glDrawBuffer(GL_BACK);
     qDebug() << "[overlayPass] Unbound all FBOs; RESET draw buffer to GL_BACK";
     qDebug() << "--------------------------------- FRAME END ---------------------------------";
+    qDebug() << "[Timing] overlay total took" << tTotal.elapsed() << "ms";
 }
 
 void RenderingSystem::shutdown()
@@ -1080,7 +1135,7 @@ const RenderResourceComponent::Buffers& RenderingSystem::getOrCreateMeshBuffers(
     // --- CORRECTED VERTEX ATTRIBUTES ---
     // The 'stride' for all attributes is the size of the entire Vertex struct.
     // The 'offset' is the byte offset of that attribute within the struct.
-
+    const GLsizei stride = sizeof(Vertex);
     // Attribute 0: Position (vec3)
     gl->glEnableVertexAttribArray(0);
     gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
@@ -1093,11 +1148,14 @@ const RenderResourceComponent::Buffers& RenderingSystem::getOrCreateMeshBuffers(
     gl->glEnableVertexAttribArray(2);
     gl->glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv)); // <-- Changed texCoords to uv
 
-    // NOTE: You will need to add similar lines for Tangent and Bitangent at locations 3 and 4
-    // if your gbuffer_vert.glsl uses them as inputs.
-    // gl->glEnableVertexAttribArray(3); 
-    // gl->glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
-    // etc.
+    gl->glEnableVertexAttribArray(3);
+    gl->glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(Vertex, tangent));
+
+    // Attribute 4: Bitangent
+    gl->glEnableVertexAttribArray(4);
+    gl->glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(Vertex, bitangent));
+
+
 
     gl->glBindVertexArray(0);
 

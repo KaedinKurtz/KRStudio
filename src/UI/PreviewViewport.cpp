@@ -20,7 +20,7 @@ PreviewViewport::PreviewViewport(QWidget* parent)
     auto& registry = m_previewScene->getRegistry();
     registry.ctx().emplace<SceneProperties>();
 
-    m_cameraEntity = SceneBuilder::createCamera(registry, { 0, 1, 3 });
+    m_cameraEntity = SceneBuilder::createCamera(*m_scene, { 0, 1, 3 }, {1, 1, 1});
     m_previewScene->setPrimaryCamera(m_cameraEntity);
 
     m_scene = m_previewScene.get();

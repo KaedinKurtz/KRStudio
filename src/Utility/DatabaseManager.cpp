@@ -143,13 +143,17 @@ bool DatabaseManager::initialize(const DatabaseConfig& config) {
             this, &DatabaseManager::onSlowQueryDetected);
     
     m_initialized = true;
-    
-    // Start maintenance timers
     m_maintenanceTimer.start();
     m_statsTimer.start();
-    
-    emit databaseEvent({DatabaseEvent::Connected, "Database initialized successfully", QDateTime::currentDateTime()});
-    
+
+    // THE FIX: Schedule the cleanup to run on the main thread after a delay.
+    // This avoids both slowing down startup and the cross-thread database error.
+    QTimer::singleShot(5000, this, [this]() {
+        performCacheCleanup();
+        });
+
+    emit databaseEvent({ DatabaseEvent::Connected, "Database initialized successfully", QDateTime::currentDateTime() });
+
     qDebug() << "DatabaseManager initialized successfully";
     return true;
 }
@@ -386,8 +390,22 @@ bool DatabaseManager::createTables() {
         releaseConnection(connection);
         return false;
         
-    }
+     }
+	// --- Assets table ---
+     if (!query.exec(R"(
+       CREATE TABLE IF NOT EXISTS assets (
+            path TEXT PRIMARY KEY,
+            type TEXT NOT NULL,
+            data BLOB NOT NULL,
+            last_modified DATETIME,
+            last_used_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+     )")) {
+         qCritical() << "Failed to create assets table:" << query.lastError().text();
+         return false;
+     }
 
+     query.exec("CREATE INDEX IF NOT EXISTS idx_assets_last_used ON assets(last_used_at)");
 
     releaseConnection(connection);
     return true;
@@ -1473,4 +1491,152 @@ bool DatabaseManager::menuConfigExists(const QString& menuName) {
 
     releaseConnection(conn);
     return count > 0;
+}
+
+bool DatabaseManager::saveMeshAsset(const QString& path, const RenderableMeshComponent& mesh) {
+    // We'll serialize to a binary format for efficiency
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
+
+    // Version our data so we can handle changes in the future
+    stream << quint32(1); // Version 1
+
+    // Write vertices
+    stream << quint32(mesh.vertices.size());
+    for (const auto& v : mesh.vertices) {
+        stream.writeRawData(reinterpret_cast<const char*>(&v.position), sizeof(glm::vec3));
+        stream.writeRawData(reinterpret_cast<const char*>(&v.normal), sizeof(glm::vec3));
+        stream.writeRawData(reinterpret_cast<const char*>(&v.uv), sizeof(glm::vec2));
+        // Write tangent/bitangent if they exist
+    }
+
+    // Write indices
+    stream << quint32(mesh.indices.size());
+    stream.writeRawData(reinterpret_cast<const char*>(mesh.indices.data()), mesh.indices.size() * sizeof(unsigned int));
+
+    // Now save to the database
+    auto conn = getConnection();
+    QSqlQuery query(conn);
+    query.prepare("INSERT OR REPLACE INTO assets (path, type, data) VALUES (?, 'mesh', ?)");
+    query.addBindValue(path);
+    query.addBindValue(data);
+
+    bool ok = query.exec();
+    if (!ok) {
+        qWarning() << "Failed to save mesh asset to DB:" << query.lastError().text();
+    }
+    releaseConnection(conn);
+    return ok;
+}
+
+std::optional<RenderableMeshComponent> DatabaseManager::loadMeshAsset(const QString& path) {
+    auto conn = getConnection();
+    QSqlQuery query(conn);
+    query.prepare("SELECT data FROM assets WHERE path = ? AND type = 'mesh'");
+    query.addBindValue(path);
+
+    if (query.exec() && query.next()) {
+        QByteArray data = query.value(0).toByteArray();
+        QDataStream stream(&data, QIODevice::ReadOnly);
+        RenderableMeshComponent mesh;
+
+        quint32 version;
+        stream >> version;
+        if (version != 1) {
+            qWarning() << "Unknown mesh asset version:" << version;
+            releaseConnection(conn);
+            return std::nullopt;
+        }
+
+        // Read vertices
+        quint32 vertexCount;
+        stream >> vertexCount;
+        mesh.vertices.resize(vertexCount);
+        for (quint32 i = 0; i < vertexCount; ++i) {
+            stream.readRawData(reinterpret_cast<char*>(&mesh.vertices[i].position), sizeof(glm::vec3));
+            stream.readRawData(reinterpret_cast<char*>(&mesh.vertices[i].normal), sizeof(glm::vec3));
+            stream.readRawData(reinterpret_cast<char*>(&mesh.vertices[i].uv), sizeof(glm::vec2));
+        }
+
+        // Read indices
+        quint32 indexCount;
+        stream >> indexCount;
+        mesh.indices.resize(indexCount);
+        stream.readRawData(reinterpret_cast<char*>(mesh.indices.data()), indexCount * sizeof(unsigned int));
+
+        releaseConnection(conn);
+        return mesh;
+    }
+
+    releaseConnection(conn);
+    return std::nullopt; // Not found
+}
+
+void DatabaseManager::performCacheCleanup(qint64 sizeLimitBytes, int ageLimitDays) {
+    qDebug() << "[DB Cache] Performing hybrid cleanup...";
+    auto conn = getConnection(); // Get one connection for the whole process
+
+    // --- Pass 1: Enforce the hard SIZE limit first ---
+    QFileInfo dbFileInfo(m_config.databasePath);
+    qint64 currentSize = dbFileInfo.size();
+
+    if (currentSize > sizeLimitBytes) {
+        qDebug() << "[DB Cache] Pass 1: Cache size" << currentSize / (1024 * 1024)
+            << "MB exceeds limit of" << sizeLimitBytes / (1024 * 1024)
+            << "MB. Purging oldest assets...";
+
+        // Continue deleting the oldest files until we are under the size limit
+        while (currentSize > sizeLimitBytes) {
+            QSqlQuery oldestQuery(conn);
+            oldestQuery.prepare("SELECT path FROM assets ORDER BY last_used_at ASC LIMIT 100"); // Get a batch of 100
+
+            if (!oldestQuery.exec() || !oldestQuery.next()) {
+                break; // No more assets to delete
+            }
+
+            QStringList pathsToDelete;
+            do {
+                pathsToDelete.append(oldestQuery.value(0).toString());
+            } while (oldestQuery.next());
+
+            QSqlQuery deleteQuery(conn);
+            deleteQuery.prepare(QString("DELETE FROM assets WHERE path IN ('%1')").arg(pathsToDelete.join("','")));
+            deleteQuery.exec();
+
+            // Update current size (this is an estimate; VACUUM would be exact but slow)
+            currentSize = QFileInfo(m_config.databasePath).size();
+        }
+        qDebug() << "[DB Cache] Pass 1 finished. New size:" << currentSize / (1024 * 1024) << "MB.";
+
+        // After a large purge, it's good to reclaim disk space
+        QSqlQuery(conn).exec("VACUUM");
+    }
+
+    // --- Pass 2: Enforce the TIME limit ---
+    // This runs regardless of the size, cleaning up any lingering old files.
+    QSqlQuery ageQuery(conn);
+    QString ageSql = QString("DELETE FROM assets WHERE last_used_at < date('now', '-%1 days')").arg(ageLimitDays);
+
+    if (ageQuery.exec(ageSql)) {
+        QSqlQuery changesQuery(conn);
+        changesQuery.exec("SELECT changes()");
+        if (changesQuery.next()) {
+            int rows = changesQuery.value(0).toInt();
+            if (rows > 0) {
+                qDebug() << "[DB Cache] Pass 2: Purged" << rows << "assets older than" << ageLimitDays << "days.";
+            }
+            else {
+                qDebug() << "[DB Cache] Pass 2: No assets older than" << ageLimitDays << "days found.";
+            }
+        }
+    }
+
+    releaseConnection(conn); // Release the connection at the end
+    qDebug() << "[DB Cache] Cleanup complete.";
+}
+
+void DatabaseManager::touchAsset(const QString& path) {
+    // This is a fast "fire and forget" update.
+    executeQuery("UPDATE assets SET last_used_at = CURRENT_TIMESTAMP WHERE path = :path",
+        { {":path", path} });
 }

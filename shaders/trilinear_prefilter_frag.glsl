@@ -2,8 +2,8 @@
 out vec4 fragColor;
 in vec3 localPos;
 
-// This will be the sharp, 2048x2048 cubemap
-uniform samplerCube sourceEnvironment; 
+// Use the name the C++ code is looking for.
+uniform samplerCube environmentMap; 
 uniform float roughness;
 
 const float PI = 3.14159265359;
@@ -48,15 +48,14 @@ void main()
         float NdotL = max(dot(N, L), 0.0);
         if(NdotL > 0.0)
         {
-            // Calculate the appropriate "blur" (mip level) based on roughness
-            float sourceResolution = float(textureSize(sourceEnvironment, 0).x);
+            // Note: This is a great, physically-based way to calculate the mip level!
+            float sourceResolution = float(textureSize(environmentMap, 0).x);
             float saTexel  = 4.0 * PI / (6.0 * sourceResolution * sourceResolution);
-            float saSample = 4.0 * PI / (float(SAMPLE_COUNT) * (1.0 / (1.0 + roughness*roughness)));
+            float saSample = 4.0 * PI / (float(SAMPLE_COUNT) * NdotL / dot(N, H)); // Corrected solid angle using NDF
             float mipLevel = 0.5 * log2(saSample / saTexel);
             
-            // Sample the source cubemap using our calculated blur level.
-            // This is high-quality trilinear filtering.
-            vec3 sampleColor = textureLod(sourceEnvironment, L, mipLevel).rgb;
+            // Sample the source cubemap using the corrected uniform name.
+            vec3 sampleColor = textureLod(environmentMap, L, mipLevel).rgb;
             
             prefilteredColor += sampleColor * NdotL;
             totalWeight      += NdotL;

@@ -1,14 +1,20 @@
+// File: prefilter_env_frag.glsl
 #version 450 core
 out vec4 fragColor;
+
+// This 'in' name must exactly match the 'out' name from your vertex shader.
+// If your vertex shader uses 'out vec3 WorldDir;', change this to 'in vec3 WorldDir;'
 in vec3 localPos;
 
+// These uniform names must exactly match what your C++ code is looking for.
 uniform samplerCube environmentMap;
 uniform float roughness;
 
 const float PI = 3.14159265359;
-const uint SAMPLE_COUNT = 8192u; // Increased for final quality
+// You can lower this sample count to 1024 or 512 for faster generation
+const uint SAMPLE_COUNT = 2048u; 
 
-// Unchanged helper functions
+// --- Helper Functions (unchanged) ---
 vec2 hammersley(uint i, uint N) {
     return vec2(float(i) / float(N), float(bitfieldReverse(i)) * 2.3283064365386963e-10);
 }
@@ -29,6 +35,7 @@ vec3 importanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
     return normalize(sampleVec);
 }
 
+// --- Main Function ---
 void main()
 {		
     vec3 N = normalize(localPos);
@@ -36,6 +43,7 @@ void main()
     vec3 V = R;
 
     vec3 prefilteredColor = vec3(0.0);
+    float totalWeight = 0.0;
     
     for(uint i = 0u; i < SAMPLE_COUNT; ++i)
     {
@@ -43,20 +51,17 @@ void main()
         vec3 H  = importanceSampleGGX(Xi, N, roughness);
         vec3 L  = normalize(2.0 * dot(V, H) * H - V);
 
-        // --- THE SOLUTION ---
-        // Your C++ code generates 5 mip levels (0-4). The max level is 4.0.
-        const float MAX_REFLECTION_LOD = 4.0;
-        
-        // Calculate the desired mip level (the "blur") based ONLY on roughness.
-        float mipLevel = roughness * MAX_REFLECTION_LOD;
-        
-        // Use textureLod() to sample the environment map at our calculated mipLevel,
-        // IGNORING the screen-space distance. This is the key.
-        prefilteredColor += textureLod(environmentMap, L, mipLevel).rgb;
+        float NdotL = max(dot(N, L), 0.0);
+        if(NdotL > 0.0)
+        {
+            // The blur comes from averaging many sharp samples.
+            // Always sample from the highest resolution (mip 0).
+            prefilteredColor += textureLod(environmentMap, L, 0.0).rgb * NdotL;
+            totalWeight      += NdotL;
+        }
     }
     
-    // Normalize by the total number of samples.
-    prefilteredColor = prefilteredColor / float(SAMPLE_COUNT);
+    prefilteredColor = (totalWeight > 0.0) ? (prefilteredColor / totalWeight) : vec3(0.0);
 
     fragColor = vec4(prefilteredColor, 1.0);
 }

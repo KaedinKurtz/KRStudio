@@ -95,6 +95,7 @@ file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/SLAM/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/UI/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Utility/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Resources/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml/*.cpp"
 )
 
@@ -122,6 +123,7 @@ target_include_directories(RoboticsSoftware PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/UtilityHeaders"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/SLAMHeaders"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/NodeHeaders"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/ResourcesHeaders"
     "${CMAKE_CURRENT_SOURCE_DIR}/external"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/pugixml"
     "${qtads_SOURCE_DIR}/src"

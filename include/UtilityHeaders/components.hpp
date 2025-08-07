@@ -43,6 +43,11 @@ struct ProfiledData {
 
 // --- Material & Texture Components ---
 
+// --- Rendering Type Tag Components ---
+
+struct TriPlanarMaterialTag {};
+struct UVTexturedMaterialTag {};
+
 struct PulsingLightComponent {
     glm::vec3 onColor{ 1.0f, 0.0f, 0.0f };
     glm::vec3 offColor{ 0.1f, 0.0f, 0.0f };
@@ -320,7 +325,6 @@ struct Vertex
     }
 };
 
-
 struct TagComponent
 {
     std::string tag;
@@ -334,11 +338,28 @@ struct CameraComponent
 	glm::vec3 tint = { 0.0f, 0.0f, 0.0f }; // Color tint applied to the camera's view
 };
 
+
+
 // --- RENDER-RELATED COMPONENTS ---
 
 struct RenderableMeshComponent {
+    // --- Core Geometry Data ---
     std::vector<Vertex> vertices;
-    std::vector<unsigned> indices;
+    std::vector<unsigned int> indices;
+
+    // --- Metadata ---
+    // The original file path this mesh was loaded from. Useful for debugging and hot-reloading.
+    std::string sourcePath;
+
+    // Flags indicating what data this mesh contains. Very useful for the renderer.
+    bool hasUVs = false;
+    bool hasTangents = false;
+    bool hasBeenUploadedToGPU = false; // Tracks if GPU buffers have been created.
+
+    // --- Bounding Volume ---
+    // AABB (Axis-Aligned Bounding Box) is great for culling, physics, picking, etc.
+    glm::vec3 aabbMin = glm::vec3(0.0f);
+    glm::vec3 aabbMax = glm::vec3(0.0f);
 };
 
 struct RenderResourceComponent
