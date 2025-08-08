@@ -122,7 +122,7 @@ void main()
     
     // --- 5. FINAL ASSEMBLY ---
     vec3 ambient = (diffuseIBL + specularIBL) * ao;
-    vec3 color = ambient * 1.5 + Lo + emissive;
+    vec3 color = ambient + Lo + emissive*10;
 
     // Post-processing
     color = color / (color + vec3(1.0)); // Tonemapping

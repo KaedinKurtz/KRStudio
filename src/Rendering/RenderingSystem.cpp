@@ -195,7 +195,9 @@ void RenderingSystem::initializeSharedResources()
     // 1) Load all standard shaders
     try {
         auto loadAndStoreShader = [&](const QString& name, auto... paths) {
-            std::unique_ptr<Shader> shader = Shader::build(m_gl, paths...);
+            // This now correctly constructs a std::vector from the path arguments
+            // before passing it to the Shader::build function.
+            std::unique_ptr<Shader> shader = Shader::build(m_gl, { paths... });
             contextShaders[name] = shader.get();
             m_shaderStore.push_back(std::move(shader));
             };
@@ -210,6 +212,16 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("gbuffer_triplanar",
             (shaderDir + "gbuffer_triplanar_vert.glsl").toStdString(),
             (shaderDir + "gbuffer_triplanar_frag.glsl").toStdString());
+        loadAndStoreShader("gbuffer_tessellated_triplanar",
+            (shaderDir + "gbuffer_tess_vert.glsl").toStdString(),
+            (shaderDir + "gbuffer_tess_tesc.glsl").toStdString(),
+            (shaderDir + "gbuffer_tess_tese.glsl").toStdString(),
+            (shaderDir + "gbuffer_triplanar_tess_frag.glsl").toStdString()
+        );
+        loadAndStoreShader("gbuffer_triplanar_pom",
+            (shaderDir + "gbuffer_pom_vert.glsl").toStdString(),
+            (shaderDir + "gbuffer_triplanar_pom_frag.glsl").toStdString()
+        );
 
         // Load all other shaders as before
         loadAndStoreShader("lighting", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "lighting_frag.glsl").toStdString());
@@ -266,7 +278,7 @@ void RenderingSystem::initializeSharedResources()
     // --- 2) Build IBL resources ---
     {
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/../assets/");
-        std::string hdrPath = (assetDir + "env3.hdr").toStdString();
+        std::string hdrPath = (assetDir + "env2.hdr").toStdString();
 
         auto hdrTex = std::make_shared<Texture2D>();
         if (!hdrTex->loadFromFile(hdrPath, /*flipVert=*/true)) {

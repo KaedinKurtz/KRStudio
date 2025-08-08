@@ -31,6 +31,7 @@ static const std::vector<MapDesc> kMaps = {
     { "metalness",[](auto& m, auto t) { m.metallicMap = t; } }, // some packs use “metalness”
     { "ao",       [](auto& m, auto t) { m.aoMap = t; } },
     { "height",   [](auto& m, auto t) { m.heightMap = t; } },
+    { "emissive", [](auto& m, auto t) { m.emissiveMap = t; } },
     // you can add “emissive”, “sheen”, etc. as needed
 };
 
@@ -70,7 +71,7 @@ MaterialComponent loadMaterialFromDirectory(const std::string& dirPath)
             {
                 // load a Texture2D (gamma for albedo only)
                 auto tex = std::make_shared<Texture2D>();
-                bool gamma = (std::string(map.key) == "albedo");
+                bool gamma = (std::string(map.key) == "albedo" || std::string(map.key) == "emissive");
                 if (tex->loadFromFile(entry.path().string(), gamma)) {
                     map.setter(mat, tex);
                 }

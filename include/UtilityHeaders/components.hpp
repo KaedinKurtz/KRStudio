@@ -63,6 +63,9 @@ struct MaterialDirectoryTag {
     std::string dirPath;
 };
 
+struct TessellatedMaterialTag{};
+struct ParallaxMaterialTag {};
+
 struct MaterialComponent
 {
     // — Base Layer —

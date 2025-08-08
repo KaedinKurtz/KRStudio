@@ -121,6 +121,13 @@ static void dumpAllGLState(QOpenGLFunctions_4_3_Core* gl, const RenderableMeshCo
     qDebug() << "    =======================================================";
 }
 
+void printMatrix(const QString& name, const glm::mat4& m) {
+    qDebug().noquote() << name << Qt::endl
+        << QString::asprintf("  [%8.3f, %8.3f, %8.3f, %8.3f]", m[0][0], m[1][0], m[2][0], m[3][0]) << Qt::endl
+        << QString::asprintf("  [%8.3f, %8.3f, %8.3f, %8.3f]", m[0][1], m[1][1], m[2][1], m[3][1]) << Qt::endl
+        << QString::asprintf("  [%8.3f, %8.3f, %8.3f, %8.3f]", m[0][2], m[1][2], m[2][2], m[3][2]) << Qt::endl
+        << QString::asprintf("  [%8.3f, %8.3f, %8.3f, %8.3f]", m[0][3], m[1][3], m[2][3], m[3][3]);
+}
 
 // ===================================================================
 // ==                       OPAQUE PASS CLASS                       ==
@@ -135,28 +142,23 @@ void OpaquePass::execute(const RenderFrameContext& context)
     auto* gl = context.gl;
     if (!gl) return;
 
-    GLStateSaver state(gl);
+    // --- OpenGL State Setup ---
     gl->glEnable(GL_DEPTH_TEST);
     gl->glDepthMask(GL_TRUE);
     gl->glDisable(GL_BLEND);
     gl->glDisable(GL_CULL_FACE);
 
+    // --- Get all required shader programs once ---
     Shader* uvShader = context.renderer.getShader("gbuffer_textured");
     Shader* triplanarShader = context.renderer.getShader("gbuffer_triplanar");
     Shader* untexturedShader = context.renderer.getShader("gbuffer_untextured");
-
-    if (!uvShader || !triplanarShader || !untexturedShader) {
-        qWarning() << "[OpaquePass] Missing one or more G-Buffer shaders!";
-        return;
-    }
-
-    if (gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        qWarning() << "[OpaquePass] G-BUFFER FBO IS NOT COMPLETE! Aborting pass.";
-        return;
-    }
-
+    Shader* tessShader = context.renderer.getShader("gbuffer_tessellated");
+    Shader* tessTriplanarShader = context.renderer.getShader("gbuffer_tessellated_triplanar");
+    Shader* pomShader = context.renderer.getShader("gbuffer_triplanar_pom");
+    // --- Render all entities ---
     auto view = context.registry.view<RenderableMeshComponent, TransformComponent>();
-    for (auto ent : view) {
+    for (auto ent : view)
+    {
         if (context.registry.any_of<CameraGizmoTag>(ent))
             continue;
 
@@ -168,91 +170,109 @@ void OpaquePass::execute(const RenderFrameContext& context)
         const MaterialComponent* mat = context.registry.try_get<MaterialComponent>(ent);
         Shader* activeShader = nullptr;
 
-        // --- 4a. Automatic Shader Selection (LOGIC CORRECTED) ---
-        bool isTriPlanar = context.registry.all_of<TriPlanarMaterialTag>(ent);
-        bool isUV = context.registry.all_of<UVTexturedMaterialTag>(ent);
-        bool hasTexture = mat && mat->albedoMap;
-
-        if (isUV && hasTexture) {
-            activeShader = uvShader;
+        // ===================================================================
+        // ## STEP 1: VERBOSE SHADER SELECTION LOGIC
+        // ===================================================================
+        qDebug().noquote() << "\n--- Selecting shader for entity" << (uint32_t)ent << "---";
+        const bool isTessellated = context.registry.all_of<TessellatedMaterialTag>(ent);
+        const bool isTriPlanar = context.registry.all_of<TriPlanarMaterialTag>(ent);
+        const bool hasTexture = mat && mat->albedoMap;
+        const bool isParallax = context.registry.all_of<ParallaxMaterialTag>(ent);
+        qDebug().noquote() << "  [Check] Tags -> isTessellated:" << isTessellated
+            << "| isTriPlanar:" << isTriPlanar << "| hasTexture:" << hasTexture;
+        if (isParallax && isTriPlanar && hasTexture) {
+            activeShader = pomShader;
+        }
+        else if (isTessellated && isTriPlanar && hasTexture) {
+            qDebug() << "  [Path 1] Condition met. Selecting 'gbuffer_tessellated_triplanar'.";
+            activeShader = tessTriplanarShader;
+        }
+        else if (isTessellated && hasTexture) {
+            qDebug() << "  [Path 2] Condition met. Selecting 'gbuffer_tessellated'.";
+            activeShader = tessShader;
         }
         else if (isTriPlanar && hasTexture) {
+            qDebug() << "  [Path 3] Condition met. Selecting 'gbuffer_triplanar'.";
             activeShader = triplanarShader;
         }
+        else if (hasTexture) {
+            qDebug() << "  [Path 4] Condition met. Selecting 'gbuffer_textured'.";
+            activeShader = uvShader;
+        }
         else {
+            qDebug() << "  [Path 5] Condition met. Selecting 'gbuffer_untextured'.";
             activeShader = untexturedShader;
         }
 
+        if (!activeShader) {
+            qWarning() << "  [!!!] FATAL: activeShader is nullptr. Skipping entity.";
+            continue;
+        }
+        qDebug() << "  [OK] Final shader program ID:" << activeShader->ID;
+
+
+        // ===================================================================
+        // ## STEP 2 & 3: SET UNIFORMS AND DRAW
+        // ===================================================================
+        // (The rest of the function remains the same as the last correct version)
+
         activeShader->use(gl);
+        auto& xf = context.registry.get<TransformComponent>(ent);
         activeShader->setMat4(gl, "view", context.view);
         activeShader->setMat4(gl, "projection", context.projection);
-        auto& xf = context.registry.get<TransformComponent>(ent);
         activeShader->setMat4(gl, "model", xf.getTransform());
 
-        // --- 4c. Set Material Uniforms ---
-        if (activeShader == uvShader || activeShader == triplanarShader) {
+        if (activeShader == untexturedShader) {
+            activeShader->setVec3(gl, "material.albedoColor", mat ? mat->albedoColor : glm::vec3(0.8f));
+            activeShader->setFloat(gl, "material.metallic", mat ? mat->metallic : 0.0f);
+            activeShader->setFloat(gl, "material.roughness", mat ? mat->roughness : 0.5f);
+            activeShader->setVec3(gl, "material.emissiveColor", mat ? mat->emissiveColor : glm::vec3(0.0f));
+        }
+        else {
             unsigned int unit = 0;
-            auto albedoTex = mat->albedoMap ? mat->albedoMap : context.renderer.getDefaultAlbedo();
-            albedoTex->bind(unit++);
-
-            if (activeShader == triplanarShader) {
-                const auto* tag = context.registry.try_get<TagComponent>(ent);
-                qDebug() << "\n[OpaquePass] --- PRE-DRAW STATE for" << (tag ? tag->tag.c_str() : "Untitled") << "---";
-                debugSample2DTexture(gl, albedoTex->getID(), albedoTex->getWidth(), albedoTex->getHeight(), "Input Albedo Tex");
-            }
-
-            (mat->normalMap ? mat->normalMap : context.renderer.getDefaultNormal())->bind(unit++);
-            (mat->aoMap ? mat->aoMap : context.renderer.getDefaultAO())->bind(unit++);
-            (mat->metallicMap ? mat->metallicMap : context.renderer.getDefaultMetallic())->bind(unit++);
-            (mat->roughnessMap ? mat->roughnessMap : context.renderer.getDefaultRoughness())->bind(unit++);
-            (mat->emissiveMap ? mat->emissiveMap : context.renderer.getDefaultEmissive())->bind(unit++);
-
+            (mat && mat->albedoMap ? mat->albedoMap : context.renderer.getDefaultAlbedo())->bind(unit++);
+            (mat && mat->normalMap ? mat->normalMap : context.renderer.getDefaultNormal())->bind(unit++);
+            (mat && mat->aoMap ? mat->aoMap : context.renderer.getDefaultAO())->bind(unit++);
+            (mat && mat->metallicMap ? mat->metallicMap : context.renderer.getDefaultMetallic())->bind(unit++);
+            (mat && mat->roughnessMap ? mat->roughnessMap : context.renderer.getDefaultRoughness())->bind(unit++);
+            (mat && mat->emissiveMap ? mat->emissiveMap : context.renderer.getDefaultEmissive())->bind(unit++);
             activeShader->setInt(gl, "material.albedoMap", 0);
             activeShader->setInt(gl, "material.normalMap", 1);
             activeShader->setInt(gl, "material.aoMap", 2);
             activeShader->setInt(gl, "material.metallicMap", 3);
             activeShader->setInt(gl, "material.roughnessMap", 4);
             activeShader->setInt(gl, "material.emissiveMap", 5);
-
-            if (activeShader == triplanarShader) {
+            if (isTessellated) {
+                activeShader->setVec3(gl, "viewPos", context.camera.getPosition());
+                activeShader->setFloat(gl, "minTess", 0.01f);
+                activeShader->setFloat(gl, "maxTess", 32.0f);
+                activeShader->setFloat(gl, "maxDist", 25.0f);
+                activeShader->setFloat(gl, "displacementScale", 0.1f);
+				activeShader->setFloat(gl, "heightScale", 0.20f);
+                if (mat && mat->heightMap) {
+                    mat->heightMap->bind(unit);
+                    activeShader->setInt(gl, "heightMap", unit);
+                    unit++;
+                }
+            }
+            if (activeShader == triplanarShader || activeShader == tessTriplanarShader) {
                 activeShader->setFloat(gl, "u_texture_scale", 1.0f);
             }
+            if (activeShader == pomShader) {
+                activeShader->setFloat(gl, "u_texture_scale", 1.0f);
+                activeShader->setFloat(gl, "u_height_scale", 0.05f);
+            }
+        }
+
+        const auto& buf = context.renderer.getOrCreateMeshBuffers(gl, QOpenGLContext::currentContext(), ent);
+        gl->glBindVertexArray(buf.VAO);
+        if (isTessellated) {
+            gl->glPatchParameteri(GL_PATCH_VERTICES, 3);
+            gl->glDrawElements(GL_PATCHES, GLsizei(meshComp.indices.size()), GL_UNSIGNED_INT, nullptr);
         }
         else {
-            activeShader->setVec3(gl, "material.albedoColor", mat ? mat->albedoColor : glm::vec3(0.8f));
-            activeShader->setFloat(gl, "material.metallic", mat ? mat->metallic : 0.0f);
-            activeShader->setFloat(gl, "material.roughness", mat ? mat->roughness : 0.5f);
-            activeShader->setVec3(gl, "material.emissiveColor", mat ? mat->emissiveColor : glm::vec3(0.0f));
-        }
-
-        // --- 4d. Get Buffers and Draw ---
-        const auto& buf = context.renderer.getOrCreateMeshBuffers(gl, QOpenGLContext::currentContext(), ent);
-        if (buf.VAO) {
-            gl->glBindVertexArray(buf.VAO);
-
-            if (activeShader == triplanarShader) {
-                dumpAllGLState(gl, meshComp);
-            }
-
-            gl->glDrawElements(
-                GL_TRIANGLES,
-                GLsizei(meshComp.indices.size()),
-                GL_UNSIGNED_INT,
-                nullptr
-            );
-        }
-
-        if (activeShader == triplanarShader) {
-            debugSample2DTexture(gl, context.renderer.getGBuffer().albedoAOTexture,
-                context.renderer.getGBuffer().w, context.renderer.getGBuffer().h,
-                "G-Buffer Albedo");
-            qDebug() << "[OpaquePass] --- POST-DRAW STATE ---";
+            gl->glDrawElements(GL_TRIANGLES, GLsizei(meshComp.indices.size()), GL_UNSIGNED_INT, nullptr);
         }
     }
     gl->glBindVertexArray(0);
-
-    qDebug() << "\n[OpaquePass] --- FINAL G-BUFFER STATE ---";
-    debugSample2DTexture(gl, context.renderer.getGBuffer().albedoAOTexture,
-        context.renderer.getGBuffer().w, context.renderer.getGBuffer().h,
-        "Final G-Buffer");
 }
