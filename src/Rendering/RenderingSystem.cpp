@@ -238,6 +238,14 @@ void RenderingSystem::initializeSharedResources()
             (shaderDir + "post_process_vert.glsl").toStdString(),
             (shaderDir + "mask_depthcompare_frag.glsl").toStdString());
 
+        loadAndStoreShader("outline_sobel",
+            (shaderDir + "post_process_vert.glsl").toStdString(),
+            (shaderDir + "outline_sobel_frag.glsl").toStdString());
+
+        loadAndStoreShader("edge_detect_advanced",
+            (shaderDir + "post_process_vert.glsl").toStdString(),
+            (shaderDir + "edge_detect_advanced_frag.glsl").toStdString());
+
         // Load all other shaders as before
         loadAndStoreShader("lighting", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "lighting_frag.glsl").toStdString());
         loadAndStoreShader("phong", (shaderDir + "vertex_shader_vert.glsl").toStdString(), (shaderDir + "fragment_shader_frag.glsl").toStdString());

@@ -292,22 +292,50 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
     }
 
     if (ev->button() == Qt::LeftButton) {
-        // If we just handled a double-click, ignore this release
         if (m_suppressClickThisRelease) {
             m_suppressClickThisRelease = false;
-            QOpenGLWidget::mouseReleaseEvent(ev);
-            return;
+            return; // Suppress click after a double-click
         }
 
         const int delta = (ev->pos() - m_clickStartPos).manhattanLength();
-        if (delta < m_ClickSlop) {
-            Camera& cam = getCamera();
-            if (auto hit = cpuPickAABB(*m_scene, cam, ev->pos().x(), ev->pos().y(), width(), height())) {
-                auto& reg = m_scene->getRegistry();
-                for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
-                reg.emplace_or_replace<SelectedComponent>(hit->entity);
+        if (delta < m_ClickSlop) { // It's a click, not a drag
+            auto& reg = m_scene->getRegistry();
+            const bool isCtrlPressed = ev->modifiers() & Qt::ControlModifier;
+
+            // Perform the raycast
+            auto hit = cpuPickAABB(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(), width(), height());
+
+            if (hit) {
+                // We clicked on an object
+                entt::entity hitEntity = hit->entity;
+                if (isCtrlPressed) {
+                    // CTRL is pressed: Toggle selection
+                    if (reg.all_of<SelectedComponent>(hitEntity)) {
+                        reg.remove<SelectedComponent>(hitEntity);
+                    }
+                    else {
+                        reg.emplace<SelectedComponent>(hitEntity);
+                    }
+                }
+                else {
+                    // CTRL is NOT pressed: Standard selection
+                    // Clear previous selection first
+                    for (auto eSel : reg.view<SelectedComponent>()) {
+                        reg.remove<SelectedComponent>(eSel);
+                    }
+                    // Select the new entity
+                    reg.emplace<SelectedComponent>(hitEntity);
+                }
             }
-            update();
+            else {
+                // We clicked on empty space: Deselect all
+                if (!isCtrlPressed) { // Only deselect all if Ctrl isn't held
+                    for (auto eSel : reg.view<SelectedComponent>()) {
+                        reg.remove<SelectedComponent>(eSel);
+                    }
+                }
+            }
+            update(); // Trigger a repaint to show the change
         }
     }
 

@@ -54,314 +54,259 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
     auto* gl = ctx.gl;
     if (!gl) { qWarning() << "[SelectionGlowPass] No GL"; return; }
 
-    // ===== Debug toggles =====================================================
-    const bool DEBUG_SHOW_MASK_ONLY = false;
-    const bool DEBUG_SHOW_EDGE_ONLY = false;
-    const bool DEBUG_READBACK_PIXELS = true;
-    const bool DEBUG_LOG_GL_ERRORS = true;
-    // Choose ONE: coverage overlay (premultiplied) OR additive glow
-    const bool USE_COVERAGE_BLEND = true;   // if false => additive
+    // ===== Effect Toggles ===================================================
+    const bool isOutline = true; // <-- SET THIS TO TRUE/FALSE TO SWITCH EFFECTS
+	const bool isInternal = false; // <-- Use internal edge detection or sobel outline
     // ========================================================================
 
+    // --- Standard checks and resource setup ---
     auto& reg = ctx.registry;
     auto viewSel = reg.view<RenderableMeshComponent, TransformComponent, SelectedComponent>();
-    const int selectedCt = int(viewSel.size_hint());
-    qDebug() << "[SelectionGlowPass] begin: selected =" << selectedCt;
-    if (selectedCt == 0) return;
+    if (viewSel.size_hint() == 0) return;
 
-    // Frame resources ---------------------------------------------------------
-    const auto* pp = ctx.renderer.getPPFBOs();    // ping-pong [0], [1]
+    const auto* pp = ctx.renderer.getPPFBOs();
     const auto& tgt = ctx.targetFBOs;
 
-    // Shaders -----------------------------------------------------------------
-    Shader* maskSolid = ctx.renderer.getShader("solid_mask");       // draws white
-    Shader* blur = ctx.renderer.getShader("blur");
-    Shader* edge = ctx.renderer.getShader("outline_edge");
+    // --- Get Shaders ---
+    Shader* maskSolid = ctx.renderer.getShader("solid_mask");
     Shader* comp = ctx.renderer.getShader("composite_simple");
-
-    if (!maskSolid || !blur || !edge || !comp) {
-        qWarning() << "[SelectionGlowPass] Missing shader(s)."
-            << " solid_mask=" << (void*)maskSolid
-            << " blur=" << (void*)blur
-            << " edge=" << (void*)edge
-            << " composite=" << (void*)comp;
+    if (!maskSolid || !comp) {
+        qWarning() << "[SelectionGlowPass] Missing common shader(s).";
         return;
     }
 
-    // Helpers -----------------------------------------------------------------
-    auto bindDrawFBO = [&](GLuint fbo, int w, int h, const char* tag) {
+    // --- Helpers and Fullscreen VAO ---
+    auto bindDrawFBO = [&](GLuint fbo, int w, int h) {
         gl->glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         gl->glDrawBuffer(GL_COLOR_ATTACHMENT0);
         gl->glViewport(0, 0, w, h);
-        GLenum st = gl->glCheckFramebufferStatus(GL_FRAMEBUFFER);
-        qDebug() << "[FBO]" << tag << " fbo=" << fbo << " size=(" << w << "x" << h << ") status=0x"
-            << QString::number(uint(st), 16).toUpper();
-        };
-    auto readCenterRGBA = [&](const char* tag, int w, int h) {
-        if (!DEBUG_READBACK_PIXELS) return;
-        unsigned char px[4] = { 0,0,0,0 };
-        gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
-        gl->glReadPixels(w / 2, h / 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px);
-        qDebug() << tag << "center RGBA =" << int(px[0]) << int(px[1]) << int(px[2]) << int(px[3]);
-        };
-    auto dumpGLErr = [&](const char* tag) {
-        if (!DEBUG_LOG_GL_ERRORS) return;
-        for (GLenum err = gl->glGetError(); err != GL_NO_ERROR; err = gl->glGetError()) {
-            qWarning() << "[SelectionGlowPass]" << tag
-                << "GL error =" << QString("0x%1").arg(uint(err), 0, 16).toUpper();
-        }
         };
 
-    // Fullscreen VAO (gl_VertexID triangle)
     static QHash<QOpenGLContext*, GLuint> s_fsVAO;
     QOpenGLContext* qctx = QOpenGLContext::currentContext();
-    if (!qctx) { qWarning() << "[SelectionGlowPass] No current context"; return; }
-    if (!s_fsVAO.contains(qctx)) {
+    if (!qctx || !s_fsVAO.contains(qctx)) {
         GLuint vao = 0; gl->glGenVertexArrays(1, &vao); s_fsVAO[qctx] = vao;
     }
     GLuint fsVAO = s_fsVAO[qctx];
 
-    // -------------------------------------------------------------------------
-    // PASS 1: depth-correct mask into PP[0] (WHITE where selected is visible)
-    // -------------------------------------------------------------------------
-    bindDrawFBO(pp[0].fbo, pp[0].w, pp[0].h, "PP[0]/MASK ");
-
-    gl->glDisable(GL_BLEND);
+    // ========================================================================
+    // PASS 1: RENDER MASK (This part is common to both effects)
+    // ========================================================================
+    bindDrawFBO(pp[0].fbo, pp[0].w, pp[0].h);
     gl->glEnable(GL_DEPTH_TEST);
-    gl->glDepthFunc(GL_LEQUAL);
-    gl->glDepthMask(GL_FALSE);      // do not write depth
+    gl->glDepthMask(GL_FALSE);
     gl->glEnable(GL_CULL_FACE);
-    gl->glCullFace(GL_BACK);
     gl->glClearColor(0, 0, 0, 0);
     gl->glClear(GL_COLOR_BUFFER_BIT);
 
-    // Attach the viewport's depth texture temporarily to PP[0]
-    GLint prevType = GL_NONE, prevDepthObj = 0;
-    gl->glGetFramebufferAttachmentParameteriv(
-        GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-        GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, &prevType);
-    if (prevType != GL_NONE) {
-        gl->glGetFramebufferAttachmentParameteriv(
-            GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-            GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &prevDepthObj);
-    }
-    qDebug() << "  [PASS1] PP[0] prev depth type =" << prevType << " name =" << prevDepthObj;
-
+    // Attach the main scene's depth buffer to ensure correct occlusion
     if (tgt.finalDepthTexture) {
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
-            tgt.finalDepthTexture, 0);
-        GLenum stA = gl->glCheckFramebufferStatus(GL_FRAMEBUFFER);
-        qDebug() << "  [PASS1] PP[0] after attach finalDepth status = 0x"
-            << QString::number(uint(stA), 16).toUpper();
-    }
-    else {
-        qWarning() << "  [PASS1] target.finalDepthTexture == 0 (mask may not match scene depth)";
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, tgt.finalDepthTexture, 0);
     }
 
-    // Draw selected meshes to WHITE
+    // Draw selected meshes into the mask texture (pp[0])
     maskSolid->use(gl);
     maskSolid->setMat4(gl, "view", ctx.view);
     maskSolid->setMat4(gl, "projection", ctx.projection);
 
-    gl->glEnable(GL_POLYGON_OFFSET_FILL);
-    gl->glPolygonOffset(-20.0f, -20.0f); // factor, units
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(-10.0f, -10.0f);
 
-    int maskDrawn = 0;
     for (auto e : viewSel) {
         const auto& mesh = viewSel.get<RenderableMeshComponent>(e);
         if (mesh.indices.empty()) continue;
-
         const auto& xf = viewSel.get<TransformComponent>(e);
         maskSolid->setMat4(gl, "model", xf.getTransform());
-
         const auto& bufs = ctx.renderer.getOrCreateMeshBuffers(gl, qctx, e);
-        if (!bufs.VAO) { qWarning() << "  [PASS1] entity" << (uint32_t)e << "no VAO"; continue; }
-
+        if (!bufs.VAO) continue;
         gl->glBindVertexArray(bufs.VAO);
         gl->glDrawElements(GL_TRIANGLES, GLsizei(mesh.indices.size()), GL_UNSIGNED_INT, 0);
-        ++maskDrawn;
     }
 
-    gl->glDisable(GL_POLYGON_OFFSET_FILL);
-    gl->glBindVertexArray(fsVAO); // restore FS VAO for screen passes
+    glDisable(GL_POLYGON_OFFSET_FILL);
 
-    // Restore depth attachment & state
-    if (prevType == GL_TEXTURE) {
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
-            (GLuint)prevDepthObj, 0);
-    }
-    else {
-        // Detach depth if none was attached before
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
-    }
-    GLenum stRestore = gl->glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    qDebug() << "  [PASS1] PP[0] depth RESTORE status = 0x"
-        << QString::number(uint(stRestore), 16).toUpper();
-
-    gl->glDisable(GL_CULL_FACE);
+    // Detach external depth buffer and restore state
+    gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
     gl->glDepthMask(GL_TRUE);
-    gl->glDepthFunc(GL_LESS);
-
-    qDebug() << "  [PASS1] drew" << maskDrawn << "selected meshes.";
-    readCenterRGBA("  [PASS1] mask", pp[0].w, pp[0].h);
-    dumpGLErr("after PASS1");
-
-    if (DEBUG_SHOW_MASK_ONLY) {
-        bindDrawFBO(tgt.finalFBO, tgt.w, tgt.h, "FINAL/MASK ");
-        gl->glDisable(GL_DEPTH_TEST);
-        gl->glDisable(GL_BLEND);
-        comp->use(gl);
-        comp->setInt(gl, "screenTexture", 0);
-        gl->glActiveTexture(GL_TEXTURE0);
-        gl->glBindTexture(GL_TEXTURE_2D, pp[0].colorTexture);
-        gl->glBindVertexArray(fsVAO);
-        gl->glDrawArrays(GL_TRIANGLES, 0, 3);
-        qDebug() << "[SelectionGlowPass] DEBUG_SHOW_MASK_ONLY done.";
-        return;
-    }
-
-    // Preserve HARD mask before blur ------------------------------------------------
-    auto ensureMaskCopyTex = [&](int w, int h) {
-        if (m_maskCopyTex == 0) {
-            gl->glGenTextures(1, &m_maskCopyTex);
-            gl->glBindTexture(GL_TEXTURE_2D, m_maskCopyTex);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        }
-        else {
-            GLint curW = 0, curH = 0;
-            gl->glBindTexture(GL_TEXTURE_2D, m_maskCopyTex);
-            gl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &curW);
-            gl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &curH);
-            if (curW != w || curH != h) {
-                gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-            }
-        }
-        gl->glBindTexture(GL_TEXTURE_2D, 0);
-        };
-    ensureMaskCopyTex(pp[0].w, pp[0].h);
-
-    // Copy the hard mask from pp[0] into m_maskCopyTex (GL 4.3+)
-    gl->glCopyImageSubData(
-        pp[0].colorTexture, GL_TEXTURE_2D, 0, 0, 0, 0,
-        m_maskCopyTex, GL_TEXTURE_2D, 0, 0, 0, 0,
-        pp[0].w, pp[0].h, 1);
-
-    // -------------------------------------------------------------------------
-    // PASS 2: two-pass Gaussian blur (H+V) using PP ping-pong
-    // -------------------------------------------------------------------------
+    gl->glDisable(GL_CULL_FACE);
     gl->glDisable(GL_DEPTH_TEST);
-    gl->glDisable(GL_BLEND);
     gl->glBindVertexArray(fsVAO);
 
-    bool horizontal = true;
-    int  lastDstIdx = -1;
-    for (int i = 0; i < 2; ++i) {
-        int dst = horizontal ? 1 : 0;
-        int src = horizontal ? 0 : 1;
+    // This variable will hold the result of our effect pass
+    GLuint finalEffectTexture = 0;
 
-        bindDrawFBO(pp[dst].fbo, pp[dst].w, pp[dst].h,
-            horizontal ? "PP[1]/BLUR_H " : "PP[0]/BLUR_V ");
+    // ========================================================================
+    //  EFFECT-SPECIFIC LOGIC
+    // ========================================================================
+    if (isOutline)
+    {
+        // The reliable mask pass is now the first step for BOTH outline types.
+        // It draws a clean, white silhouette of ONLY the selected object(s) into pp[0].
+        bindDrawFBO(pp[0].fbo, pp[0].w, pp[0].h);
+        gl->glEnable(GL_POLYGON_OFFSET_FILL);
+        gl->glPolygonOffset(-2.0f, -2.0f); // Ensure the mask wins the depth test
+        gl->glEnable(GL_DEPTH_TEST);
+        gl->glDepthMask(GL_FALSE);
+        gl->glEnable(GL_CULL_FACE);
+        gl->glClearColor(0, 0, 0, 0);
+        gl->glClear(GL_COLOR_BUFFER_BIT);
+        if (tgt.finalDepthTexture) {
+            gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, tgt.finalDepthTexture, 0);
+        }
+        maskSolid->use(gl);
+        maskSolid->setMat4(gl, "view", ctx.view);
+        maskSolid->setMat4(gl, "projection", ctx.projection);
+        for (auto e : viewSel) {
+            const auto& mesh = viewSel.get<RenderableMeshComponent>(e);
+            if (mesh.indices.empty()) continue;
+            const auto& xf = viewSel.get<TransformComponent>(e);
+            maskSolid->setMat4(gl, "model", xf.getTransform());
+            const auto& bufs = ctx.renderer.getOrCreateMeshBuffers(gl, qctx, e);
+            if (bufs.VAO) {
+                gl->glBindVertexArray(bufs.VAO);
+                gl->glDrawElements(GL_TRIANGLES, GLsizei(mesh.indices.size()), GL_UNSIGNED_INT, 0);
+            }
+        }
+        gl->glDisable(GL_POLYGON_OFFSET_FILL);
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+        gl->glDepthMask(GL_TRUE);
+        gl->glDisable(GL_CULL_FACE);
+        gl->glDisable(GL_DEPTH_TEST);
+        gl->glBindVertexArray(fsVAO);
+
+        // Now, choose which filter to apply to our scene data.
+        if (isInternal)
+        {
+            // --- ADVANCED (INTERNAL) OUTLINE PATH ---
+            Shader* advOutlineShader = ctx.renderer.getShader("edge_detect_advanced");
+            if (!advOutlineShader) { qWarning() << "Missing edge_detect_advanced shader."; return; }
+
+            // Draw the final outline into pp[1]
+            bindDrawFBO(pp[1].fbo, pp[1].w, pp[1].h);
+            gl->glClearColor(0, 0, 0, 0);
+            gl->glClear(GL_COLOR_BUFFER_BIT);
+
+            advOutlineShader->use(gl);
+            advOutlineShader->setInt(gl, "gPosition", 0);
+            advOutlineShader->setInt(gl, "gNormal", 1);
+            advOutlineShader->setInt(gl, "uSelectionMask", 2); // Pass in the new selection mask
+            advOutlineShader->setVec3(gl, "uOutlineColor", glm::vec3(1.0f, 0.84f, 0.20f));
+            advOutlineShader->setFloat(gl, "uNormalThreshold", 0.25f);
+            advOutlineShader->setFloat(gl, "uDepthThreshold", 0.1f);
+            advOutlineShader->setVec2(gl, "uTexelSize", 1.0f / glm::vec2(pp[1].w, pp[1].h));
+
+            gl->glActiveTexture(GL_TEXTURE0);
+            gl->glBindTexture(GL_TEXTURE_2D, ctx.renderer.getGBuffer().positionTexture);
+            gl->glActiveTexture(GL_TEXTURE1);
+            gl->glBindTexture(GL_TEXTURE_2D, ctx.renderer.getGBuffer().normalTexture);
+            gl->glActiveTexture(GL_TEXTURE2);
+            gl->glBindTexture(GL_TEXTURE_2D, pp[0].colorTexture); // Bind our clean mask from the first pass
+
+            gl->glDrawArrays(GL_TRIANGLES, 0, 3);
+            finalEffectTexture = pp[1].colorTexture;
+        }
+        else
+        {
+            // --- SIMPLE (SILHOUETTE) OUTLINE PATH ---
+            // (This path can now use the robust shader instead of the old Sobel one)
+            Shader* outlineShader = ctx.renderer.getShader("outline_sobel"); // The robust one
+            if (!outlineShader) { qWarning() << "Missing robust outline shader."; return; }
+
+            bindDrawFBO(pp[1].fbo, pp[1].w, pp[1].h);
+            gl->glClearColor(0, 0, 0, 0);
+            gl->glClear(GL_COLOR_BUFFER_BIT);
+
+            outlineShader->use(gl);
+            outlineShader->setInt(gl, "uMaskTexture", 0);
+            outlineShader->setVec3(gl, "uOutlineColor", glm::vec3(1.0f, 0.84f, 0.20f));
+            outlineShader->setFloat(gl, "uThickness", 1.5f);
+            outlineShader->setVec2(gl, "uTexelSize", 1.0f / glm::vec2(pp[0].w, pp[0].h));
+
+            gl->glActiveTexture(GL_TEXTURE0);
+            gl->glBindTexture(GL_TEXTURE_2D, pp[0].colorTexture);
+
+            gl->glDrawArrays(GL_TRIANGLES, 0, 3);
+            finalEffectTexture = pp[1].colorTexture;
+        }
+    }
+    else
+    {
+        // --- GLOW EFFECT PATH ---
+        Shader* blurShader = ctx.renderer.getShader("blur");
+        Shader* edgeShader = ctx.renderer.getShader("outline_edge");
+        if (!blurShader || !edgeShader) { qWarning() << "Missing glow-related shaders."; return; }
+
+        // 1. Preserve the sharp mask before blurring
+        ensureMaskCopyTex(gl, pp[0].w, pp[0].h); // Your helper to create/resize m_maskCopyTex
+        gl->glCopyImageSubData(pp[0].colorTexture, GL_TEXTURE_2D, 0, 0, 0, 0,
+            m_maskCopyTex, GL_TEXTURE_2D, 0, 0, 0, 0,
+            pp[0].w, pp[0].h, 1);
+
+        // 2. Two-pass Gaussian blur
+        bool horizontal = true;
+        for (int i = 0; i < 2; ++i) {
+            int dst = horizontal ? 1 : 0;
+            int src = horizontal ? 0 : 1;
+            bindDrawFBO(pp[dst].fbo, pp[dst].w, pp[dst].h);
+            blurShader->use(gl);
+            blurShader->setBool(gl, "horizontal", horizontal);
+            gl->glActiveTexture(GL_TEXTURE0);
+            gl->glBindTexture(GL_TEXTURE_2D, pp[src].colorTexture);
+            gl->glDrawArrays(GL_TRIANGLES, 0, 3);
+            horizontal = !horizontal;
+        }
+        const GLuint blurredTex = pp[0].colorTexture; // Blurred result ends up in pp[0]
+
+        // 3. Edge pass (blur - mask) -> writes to pp[1] to avoid hazards
+        bindDrawFBO(pp[1].fbo, pp[1].w, pp[1].h);
         gl->glClearColor(0, 0, 0, 0);
         gl->glClear(GL_COLOR_BUFFER_BIT);
 
-        blur->use(gl);
-        blur->setBool(gl, "horizontal", horizontal);
-        blur->setInt(gl, "screenTexture", 0);
+        edgeShader->use(gl);
+        edgeShader->setFloat(gl, "uIntensity", 3.5f);
+        edgeShader->setVec3(gl, "uColor", glm::vec3(1.0f, 0.84f, 0.20f));
+        // For additive glow, output should be non-premultiplied.
+        // If you had a uPremultiplyAlpha uniform, you'd set it to false here.
 
         gl->glActiveTexture(GL_TEXTURE0);
-        gl->glBindTexture(GL_TEXTURE_2D, pp[src].colorTexture);
-
-        qDebug() << "  [PASS2] blur step i=" << i
-            << " horiz=" << horizontal
-            << " srcTex=" << pp[src].colorTexture
-            << " -> fbo=" << pp[dst].fbo;
+        gl->glBindTexture(GL_TEXTURE_2D, m_maskCopyTex); // Sharp mask
+        gl->glActiveTexture(GL_TEXTURE1);
+        gl->glBindTexture(GL_TEXTURE_2D, blurredTex);   // Blurred mask
+        edgeShader->setInt(gl, "uMask", 0);
+        edgeShader->setInt(gl, "uBlur", 1);
 
         gl->glDrawArrays(GL_TRIANGLES, 0, 3);
-        readCenterRGBA(horizontal ? "  [PASS2] blurH" : "  [PASS2] blurV", pp[dst].w, pp[dst].h);
-
-        lastDstIdx = dst;
-        horizontal = !horizontal;
-    }
-    const GLuint blurredTex = pp[lastDstIdx].colorTexture;
-
-    // -------------------------------------------------------------------------
-    // PASS 3: edge = max(blur - mask, 0) * color  -> PP[0]
-    // -------------------------------------------------------------------------
-    bindDrawFBO(pp[1].fbo, pp[1].w, pp[1].h, "PP[1]/EDGE ");
-    gl->glClearColor(0, 0, 0, 0);
-    gl->glClear(GL_COLOR_BUFFER_BIT);
-
-    edge->use(gl);
-    edge->setInt(gl, "uMask", 0);
-    edge->setInt(gl, "uBlur", 1);
-    edge->setVec3(gl, "uColor", glm::vec3(1.0f, 0.84f, 0.20f)); // gold
-    edge->setFloat(gl, "uIntensity", 3.5f);   // start obvious; tune later
-    edge->setFloat(gl, "uThreshold", 0.0f);
-    edge->setBool(gl, "uPremultiplyAlpha", USE_COVERAGE_BLEND);
-
-    gl->glActiveTexture(GL_TEXTURE0);
-    gl->glBindTexture(GL_TEXTURE_2D, m_maskCopyTex);   // HARD mask
-    gl->glActiveTexture(GL_TEXTURE1);
-    gl->glBindTexture(GL_TEXTURE_2D, blurredTex);      // BLURRED mask
-
-    gl->glDrawArrays(GL_TRIANGLES, 0, 3);
-    readCenterRGBA("  [PASS3] edge", pp[0].w, pp[0].h);
-
-    if (DEBUG_SHOW_EDGE_ONLY) {
-        bindDrawFBO(tgt.finalFBO, tgt.w, tgt.h, "FINAL/EDGE ");
-        gl->glDisable(GL_DEPTH_TEST);
-        gl->glDisable(GL_BLEND);
-        comp->use(gl);
-        comp->setInt(gl, "screenTexture", 0);
-        gl->glActiveTexture(GL_TEXTURE0);
-        gl->glBindTexture(GL_TEXTURE_2D, pp[0].colorTexture);
-        gl->glBindVertexArray(fsVAO);
-        gl->glDrawArrays(GL_TRIANGLES, 0, 3);
-        qDebug() << "[SelectionGlowPass] DEBUG_SHOW_EDGE_ONLY done.";
-        return;
+        finalEffectTexture = pp[1].colorTexture;
     }
 
-    // -------------------------------------------------------------------------
-    // FINAL: composite onto this viewport’s final FBO
-    // -------------------------------------------------------------------------
+
+    // ========================================================================
+    // FINAL COMPOSITE PASS (Common to both effects)
+    // ========================================================================
     gl->glBindFramebuffer(GL_FRAMEBUFFER, tgt.finalFBO);
-    gl->glDrawBuffer(GL_COLOR_ATTACHMENT0);
     gl->glViewport(0, 0, tgt.w, tgt.h);
-    gl->glDisable(GL_DEPTH_TEST);
     gl->glEnable(GL_BLEND);
 
-    if (USE_COVERAGE_BLEND) {
-        // Overlay/tint style (expects PREMULTIPLIED src: rgb = color*k, a = k)
-        gl->glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    if (isOutline) {
+        // Standard alpha blending for a crisp outline
+        gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
     else {
-        // Additive “glow” (expects NON-premult src: rgb = color, a = k)
+        // Additive blending for a "glow" effect
         gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     }
 
     comp->use(gl);
     comp->setInt(gl, "screenTexture", 0);
     gl->glActiveTexture(GL_TEXTURE0);
-    // CHANGE THIS LINE: Bind the result from the edge pass, which is now in pp[1]
-    gl->glBindTexture(GL_TEXTURE_2D, pp[1].colorTexture);
+    gl->glBindTexture(GL_TEXTURE_2D, finalEffectTexture); // Use the result from the effect pass
 
-    // Also update your debug log to avoid future confusion
-    qDebug() << "  [FINAL] composite -> finalFBO=" << tgt.finalFBO
-        << " srcTex=" << pp[1].colorTexture; // Changed from pp[0]
-
-    gl->glBindVertexArray(fsVAO);
     gl->glDrawArrays(GL_TRIANGLES, 0, 3);
 
+    // --- Final Cleanup ---
     gl->glDisable(GL_BLEND);
     gl->glBindVertexArray(0);
-    dumpGLErr("end");
-    qDebug() << "[SelectionGlowPass] done.";
 }
-
 
 
 
@@ -375,4 +320,38 @@ void SelectionGlowPass::onContextDestroyed(QOpenGLContext* dyingContext, QOpenGL
 void SelectionGlowPass::createCompositeVAOForContext(QOpenGLContext* ctx, QOpenGLFunctions_4_3_Core* gl) {
     // Unused now; we use getFullscreenVAO() above with gl_VertexID VS.
     Q_UNUSED(ctx); Q_UNUSED(gl);
+}
+
+void SelectionGlowPass::ensureMaskCopyTex(QOpenGLFunctions_4_3_Core* gl, int w, int h)
+{
+    if (m_maskCopyTex == 0)
+    {
+        // First-time creation
+        gl->glGenTextures(1, &m_maskCopyTex);
+        gl->glBindTexture(GL_TEXTURE_2D, m_maskCopyTex);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        // Allocate storage for the texture
+        gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    }
+    else
+    {
+        // Texture exists, so just bind it and check if its size is correct
+        gl->glBindTexture(GL_TEXTURE_2D, m_maskCopyTex);
+        GLint currentW = 0, currentH = 0;
+        gl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &currentW);
+        gl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &currentH);
+
+        // Resize the texture only if the dimensions have changed
+        if (currentW != w || currentH != h)
+        {
+            gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        }
+    }
+
+    // Unbind the texture to be safe
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
 }

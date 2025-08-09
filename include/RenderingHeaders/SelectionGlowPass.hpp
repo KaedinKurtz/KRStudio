@@ -14,6 +14,7 @@ public:
     void onContextDestroyed(QOpenGLContext*, QOpenGLFunctions_4_3_Core*) override;
 private:
     void createCompositeVAOForContext(QOpenGLContext*, QOpenGLFunctions_4_3_Core*);
+    void ensureMaskCopyTex(QOpenGLFunctions_4_3_Core* gl, int w, int h);
     QHash<QOpenGLContext*, GLuint> m_compositeVAOs;
     Shader* m_shaderMask = nullptr;
     Shader* m_shaderBlur = nullptr;
