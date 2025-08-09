@@ -39,13 +39,15 @@ glm::mat4 Camera::getProjectionMatrix(float aspectRatio) const {
         aspectRatio = 1.0f;
     }
     if (m_IsPerspective) {
-        return glm::perspective(glm::radians(45.0f), aspectRatio, 0.001f, 1000.0f);
+        // CHANGE THIS LINE to use your member variables
+        return glm::perspective(glm::radians(m_FOVDeg), aspectRatio, m_zNear, m_zFar);
     }
     else {
+        // Orthographic projection also benefits from correct planes
         float ortho_size = m_Distance * 0.5f;
         return glm::ortho(-ortho_size * aspectRatio, ortho_size * aspectRatio,
             -ortho_size, ortho_size,
-            -1000.0f, 1000.0f);
+            -m_zFar, m_zFar); // Can also be controlled here
     }
 }
 

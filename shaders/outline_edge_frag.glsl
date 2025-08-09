@@ -7,6 +7,7 @@ uniform sampler2D uBlur;     // blurred mask
 uniform vec3  uColor;        // outline color
 uniform float uIntensity;    // outline strength scale (try 3.0–6.0)
 uniform float uThreshold;    // soft threshold (ignored unless enabled)
+uniform bool  uPremultiplyAlpha; // premultiply alpha in final color
 
 // ===== DEBUG SWITCHES =====
 const bool DEBUG_SHOW_MASK   = false;  // visualize mask (m)
@@ -24,11 +25,12 @@ void main() {
 
     // Edge strength
     // Small bias makes sure e is non-zero when blur expands beyond mask by even 1 texel.
-    float e = max(texture(uBlur, TexCoords).r - texture(uMask, TexCoords).r + 0.001, 0.0);
-    // If you want a threshold, uncomment this and tune later:
-    // e = smoothstep(uThreshold, 1.0, e);
+    float e = max(b - m, 0.0);
 
-    // For ADDITIVE: put all weight in alpha; keep rgb as pure tint
+    // Calculate final alpha
     float a = clamp(e * uIntensity, 0.0, 1.0);
-    FragColor = vec4(uColor, a);
+
+    // CHANGE THESE LINES: Calculate final color based on the blend mode
+    vec3 finalColor = uPremultiplyAlpha ? uColor * a : uColor;
+    FragColor = vec4(finalColor, a);
 }

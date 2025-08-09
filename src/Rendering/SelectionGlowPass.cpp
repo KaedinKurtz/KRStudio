@@ -55,7 +55,7 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
     if (!gl) { qWarning() << "[SelectionGlowPass] No GL"; return; }
 
     // ===== Debug toggles =====================================================
-    const bool DEBUG_SHOW_MASK_ONLY = true;
+    const bool DEBUG_SHOW_MASK_ONLY = false;
     const bool DEBUG_SHOW_EDGE_ONLY = false;
     const bool DEBUG_READBACK_PIXELS = true;
     const bool DEBUG_LOG_GL_ERRORS = true;
@@ -163,6 +163,9 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
     maskSolid->setMat4(gl, "view", ctx.view);
     maskSolid->setMat4(gl, "projection", ctx.projection);
 
+    gl->glEnable(GL_POLYGON_OFFSET_FILL);
+    gl->glPolygonOffset(-20.0f, -20.0f); // factor, units
+
     int maskDrawn = 0;
     for (auto e : viewSel) {
         const auto& mesh = viewSel.get<RenderableMeshComponent>(e);
@@ -178,6 +181,8 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
         gl->glDrawElements(GL_TRIANGLES, GLsizei(mesh.indices.size()), GL_UNSIGNED_INT, 0);
         ++maskDrawn;
     }
+
+    gl->glDisable(GL_POLYGON_OFFSET_FILL);
     gl->glBindVertexArray(fsVAO); // restore FS VAO for screen passes
 
     // Restore depth attachment & state
@@ -286,7 +291,7 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
     // -------------------------------------------------------------------------
     // PASS 3: edge = max(blur - mask, 0) * color  -> PP[0]
     // -------------------------------------------------------------------------
-    bindDrawFBO(pp[0].fbo, pp[0].w, pp[0].h, "PP[0]/EDGE ");
+    bindDrawFBO(pp[1].fbo, pp[1].w, pp[1].h, "PP[1]/EDGE ");
     gl->glClearColor(0, 0, 0, 0);
     gl->glClear(GL_COLOR_BUFFER_BIT);
 
@@ -296,6 +301,7 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
     edge->setVec3(gl, "uColor", glm::vec3(1.0f, 0.84f, 0.20f)); // gold
     edge->setFloat(gl, "uIntensity", 3.5f);   // start obvious; tune later
     edge->setFloat(gl, "uThreshold", 0.0f);
+    edge->setBool(gl, "uPremultiplyAlpha", USE_COVERAGE_BLEND);
 
     gl->glActiveTexture(GL_TEXTURE0);
     gl->glBindTexture(GL_TEXTURE_2D, m_maskCopyTex);   // HARD mask
@@ -340,10 +346,12 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
     comp->use(gl);
     comp->setInt(gl, "screenTexture", 0);
     gl->glActiveTexture(GL_TEXTURE0);
-    gl->glBindTexture(GL_TEXTURE_2D, pp[0].colorTexture);
+    // CHANGE THIS LINE: Bind the result from the edge pass, which is now in pp[1]
+    gl->glBindTexture(GL_TEXTURE_2D, pp[1].colorTexture);
 
+    // Also update your debug log to avoid future confusion
     qDebug() << "  [FINAL] composite -> finalFBO=" << tgt.finalFBO
-        << " srcTex=" << pp[0].colorTexture;
+        << " srcTex=" << pp[1].colorTexture; // Changed from pp[0]
 
     gl->glBindVertexArray(fsVAO);
     gl->glDrawArrays(GL_TRIANGLES, 0, 3);

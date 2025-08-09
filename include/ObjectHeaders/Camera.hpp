@@ -78,7 +78,7 @@ private:
     // Projection parameters
     float m_FOVDeg = 45.0f;    // vertical field of view in degrees
     float m_zNear = 0.001f;   // original near plane
-    float m_zFar = 1000.0f;  // original far plane
+    float m_zFar = 300.0f;  // original far plane
 
     // Camera options
     float m_Distance;
