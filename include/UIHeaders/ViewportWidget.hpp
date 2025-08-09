@@ -81,6 +81,14 @@ private:
 
     QLabel* m_statsOverlay;
 
+    QPoint m_pressPos;
+    bool   m_maybeClick = false;
+    const int m_ClickSlop = 10;  // pixels
+
+    // in ViewportWidget.hpp (private:)
+    QPoint m_clickStartPos;
+    bool   m_suppressClickThisRelease = false;
+
 signals: // <<< ADD THIS SECTION
     void viewportReady();
     void glContextReady();

@@ -13,6 +13,8 @@
 #include <stdexcept>
 #include <QMessageBox>
 #include <QLabel>
+#include <optional>
+#include <limits>
 
 #include "ViewportWidget.hpp"
 #include "RenderingSystem.hpp"
@@ -30,6 +32,96 @@ int ViewportWidget::s_instanceCounter = 0;
 
 static GLuint s_testTextureId = 0;
 static bool s_isFirstContextInit = true;
+struct CpuRay { glm::vec3 origin; glm::vec3 dir; };
+
+static CpuRay makeRayFromScreen(int px, int py, int vpW, int vpH, const Camera& cam)
+{
+    float x = (2.0f * float(px) / float(vpW)) - 1.0f;
+    float y = 1.0f - (2.0f * float(py) / float(vpH)); // NDC with Y up
+
+    glm::mat4 P = cam.getProjectionMatrix(float(vpW) / float(vpH));
+    glm::mat4 V = cam.getViewMatrix();
+    glm::mat4 invVP = glm::inverse(P * V);
+
+    glm::vec4 nearW = invVP * glm::vec4(x, y, -1.0f, 1.0f);
+    glm::vec4 farW = invVP * glm::vec4(x, y, 1.0f, 1.0f);
+    nearW /= nearW.w; farW /= farW.w;
+
+    CpuRay r;
+    r.origin = glm::vec3(nearW);
+    r.dir = glm::normalize(glm::vec3(farW - nearW));
+    return r;
+}
+
+static bool intersectRayAABB(const glm::vec3& ro, const glm::vec3& rd,
+    const glm::vec3& bmin, const glm::vec3& bmax,
+    float& tEnter, float& tExit)
+{
+    glm::vec3 invD(1.0f / rd.x, 1.0f / rd.y, 1.0f / rd.z);
+
+    glm::vec3 t0 = (bmin - ro) * invD;
+    glm::vec3 t1 = (bmax - ro) * invD;
+
+    glm::vec3 tminVec(std::min(t0.x, t1.x),
+        std::min(t0.y, t1.y),
+        std::min(t0.z, t1.z));
+
+    glm::vec3 tmaxVec(std::max(t0.x, t1.x),
+        std::max(t0.y, t1.y),
+        std::max(t0.z, t1.z));
+
+    tEnter = std::max(std::max(tminVec.x, tminVec.y), tminVec.z);
+    tExit = std::min(std::min(tmaxVec.x, tmaxVec.y), tmaxVec.z);
+
+    return (tExit >= tEnter) && (tExit >= 0.0f);
+}
+
+struct CpuPickHit {
+    entt::entity entity{ entt::null };
+    glm::vec3    worldPos{ 0 };
+    float        worldT{ std::numeric_limits<float>::max() };
+};
+
+static std::optional<CpuPickHit>
+cpuPickAABB(Scene& scene, const Camera& cam, int px, int py, int vpW, int vpH)
+{
+    CpuRay ray = makeRayFromScreen(px, py, vpW, vpH, cam);
+    if (!std::isfinite(ray.dir.x) || !std::isfinite(ray.dir.y) || !std::isfinite(ray.dir.z)) {
+        qWarning() << "[Pick] bad ray dir!";
+        return std::nullopt;
+    }
+    auto& reg = scene.getRegistry();
+    auto view = reg.view<TransformComponent, RenderableMeshComponent>();
+    qDebug() << "[Pick] entities in view:" << int(view.size_hint())
+        << " px,py=" << px << py << " vp=" << vpW << vpH;
+
+    CpuPickHit best;
+
+    for (auto [e, xform, mesh] : view.each()) {
+        glm::mat4 M = xform.getTransform();
+        glm::mat4 invM = glm::inverse(M);
+
+        glm::vec3 roL = glm::vec3(invM * glm::vec4(ray.origin, 1.0f));
+        glm::vec3 rdL = glm::normalize(glm::vec3(invM * glm::vec4(ray.dir, 0.0f)));
+
+        float t0, t1;
+        if (!intersectRayAABB(roL, rdL, mesh.aabbMin, mesh.aabbMax, t0, t1)) continue;
+        if (t0 < 0.0f) t0 = t1;
+
+        glm::vec3 localHit = roL + rdL * t0;
+        glm::vec3 worldHit = glm::vec3(M * glm::vec4(localHit, 1.0f));
+        float dist = glm::length(worldHit - ray.origin);
+
+        if (dist < best.worldT) {
+            best.entity = e;
+            best.worldPos = worldHit;
+            best.worldT = dist;
+        }
+    }
+
+    if (best.entity != entt::null) return best;
+    return std::nullopt;
+}
 
 void ViewportWidget::propagateTransforms(entt::registry& r)
 {
@@ -145,7 +237,7 @@ void ViewportWidget::renderNow()
 
         //! DIAGNOSTIC: Force the GPU to finish all drawing for this viewport
         //! before the CPU is allowed to continue to the next one.
-        glFinish();
+        //glFinish();
 
         context()->swapBuffers(context()->surface());
         doneCurrent();
@@ -179,12 +271,14 @@ void ViewportWidget::mousePressEvent(QMouseEvent* ev)
 {
     m_lastMousePos = ev->pos();
     if (ev->button() == Qt::RightButton) {
-        setFocus(Qt::OtherFocusReason);          // grab kb focus
+        setFocus(Qt::OtherFocusReason);
         getCamera().setNavMode(Camera::NavMode::FLY);
         setCursor(Qt::BlankCursor);
     }
-    if (ev->button() == Qt::LeftButton)
-        IntersectionSystem::selectObjectAt(*m_scene, *this, ev->pos().x(), ev->pos().y());
+    if (ev->button() == Qt::LeftButton) {
+        m_clickStartPos = ev->pos();   // <-- remember down position
+        // DO NOT call IntersectionSystem here anymore
+    }
 
     update();
     QOpenGLWidget::mousePressEvent(ev);
@@ -196,6 +290,27 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
         getCamera().setNavMode(Camera::NavMode::ORBIT);
         unsetCursor();
     }
+
+    if (ev->button() == Qt::LeftButton) {
+        // If we just handled a double-click, ignore this release
+        if (m_suppressClickThisRelease) {
+            m_suppressClickThisRelease = false;
+            QOpenGLWidget::mouseReleaseEvent(ev);
+            return;
+        }
+
+        const int delta = (ev->pos() - m_clickStartPos).manhattanLength();
+        if (delta < m_ClickSlop) {
+            Camera& cam = getCamera();
+            if (auto hit = cpuPickAABB(*m_scene, cam, ev->pos().x(), ev->pos().y(), width(), height())) {
+                auto& reg = m_scene->getRegistry();
+                for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+                reg.emplace_or_replace<SelectedComponent>(hit->entity);
+            }
+            update();
+        }
+    }
+
     QOpenGLWidget::mouseReleaseEvent(ev);
 }
 
@@ -205,11 +320,16 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* ev)
     int dy = ev->pos().y() - m_lastMousePos.y();
     Camera& cam = getCamera();
 
+    // If user moved more than slop, this isn't a click
+    if (m_maybeClick && (ev->pos() - m_pressPos).manhattanLength() > m_ClickSlop) {
+        m_maybeClick = false;
+    }
+
     if (cam.navMode() == Camera::NavMode::FLY)            cam.freeLook(dx, dy);
     else if (ev->buttons() & Qt::MiddleButton ||
         (ev->buttons() & Qt::LeftButton && ev->modifiers() & Qt::ShiftModifier))
         cam.pan(dx, dy, width(), height());
-    else if (ev->buttons() & Qt::LeftButton)              cam.orbit(dx, dy);
+    else if (ev->buttons() & Qt::LeftButton)              cam.orbit(dx, dy);  // unchanged
 
     m_lastMousePos = ev->pos();
     update();
@@ -254,11 +374,13 @@ void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* ev)
 {
     if (ev->button() != Qt::LeftButton) return;
 
-    if (auto hit = IntersectionSystem::pickPoint(*m_scene, *this,
-        ev->pos().x(), ev->pos().y()))
-    {
-        getCamera().focusOn(*hit,                    // new target
-            glm::length(getCamera().getPosition() - *hit));
+    Camera& cam = getCamera();
+    if (auto hit = cpuPickAABB(*m_scene, cam, ev->pos().x(), ev->pos().y(), width(), height())) {
+        float keepDist = glm::length(cam.getPosition() - hit->worldPos);
+        cam.focusOn(hit->worldPos, keepDist);
         update();
     }
+
+    // Prevent the following release from being treated as a single click
+    m_suppressClickThisRelease = true;
 }

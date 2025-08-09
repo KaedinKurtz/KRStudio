@@ -7,6 +7,7 @@
 #include "Scene.hpp"
 #include "components.hpp"
 #include "MenuFactory.hpp"
+#include "Types.hpp"
 
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -406,6 +407,21 @@ bool DatabaseManager::createTables() {
      }
 
      query.exec("CREATE INDEX IF NOT EXISTS idx_assets_last_used ON assets(last_used_at)");
+
+     // Mesh catalog: numeric IDs for paths used by renderer/instancing
+     if (!query.exec(R"(
+        CREATE TABLE IF NOT EXISTS mesh_catalog (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            path       TEXT UNIQUE NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+     )")) {
+         qCritical() << "Failed to create mesh_catalog table:" << query.lastError().text();
+         releaseConnection(connection);
+         return false;
+     }
+     query.exec("CREATE INDEX IF NOT EXISTS idx_mesh_catalog_path ON mesh_catalog(path)");
 
     releaseConnection(connection);
     return true;
@@ -1639,4 +1655,49 @@ void DatabaseManager::touchAsset(const QString& path) {
     // This is a fast "fire and forget" update.
     executeQuery("UPDATE assets SET last_used_at = CURRENT_TIMESTAMP WHERE path = :path",
         { {":path", path} });
+}
+
+std::optional<MeshID> DatabaseManager::getMeshIdForPath(const QString& path) {
+    auto conn = getConnection();
+    QSqlQuery q(conn);
+    q.prepare("SELECT id FROM mesh_catalog WHERE path = ?");
+    q.addBindValue(path);
+    if (q.exec() && q.next()) {
+        auto id = static_cast<MeshID>(q.value(0).toUInt());
+        releaseConnection(conn);
+        return id;
+    }
+    releaseConnection(conn);
+    return std::nullopt;
+}
+
+MeshID DatabaseManager::getOrCreateMeshIdForPath(const QString& path) {
+    if (auto existing = getMeshIdForPath(path)) return *existing;
+
+    auto conn = getConnection();
+    QSqlQuery q(conn);
+    q.prepare("INSERT INTO mesh_catalog(path) VALUES (?)");
+    q.addBindValue(path);
+    if (!q.exec()) {
+        qWarning() << "[DB] getOrCreateMeshIdForPath insert failed:" << q.lastError().text();
+        releaseConnection(conn);
+        return MeshID::None;
+    }
+    auto id = static_cast<MeshID>(q.lastInsertId().toUInt());
+    releaseConnection(conn);
+    return id;
+}
+
+std::optional<QString> DatabaseManager::getPathForMeshId(MeshID id) {
+    auto conn = getConnection();
+    QSqlQuery q(conn);
+    q.prepare("SELECT path FROM mesh_catalog WHERE id = ?");
+    q.addBindValue(static_cast<quint32>(id));
+    if (q.exec() && q.next()) {
+        auto path = q.value(0).toString();
+        releaseConnection(conn);
+        return path;
+    }
+    releaseConnection(conn);
+    return std::nullopt;
 }

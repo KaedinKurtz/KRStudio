@@ -54,6 +54,7 @@ struct PostProcessingFBO {
     int w = 0, h = 0;
     GLuint fbo = 0;
     GLuint colorTexture = 0;
+    GLuint depthTexture = 0;
 };
 
 // Per-viewport FBO struct: Holds the final composed image for one viewport.

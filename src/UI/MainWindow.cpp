@@ -27,6 +27,7 @@
 #include "ViewportManagerPopup.hpp"
 #include "MaterialLoader.hpp"
 #include "MeshUtils.hpp"
+#include "ResourceManager.hpp"
 
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/DataFlowGraphModel>
@@ -301,44 +302,46 @@ MainWindow::MainWindow(QWidget* parent)
 
     {
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/../assets/");
-        QString DragonMeshPath = assetDir + "lambo.stl";
-        QString K2MeshPath = assetDir + "K2.stl";
+        QString lamboPath = assetDir + "lambo.stl";
 
-        // 1. Call spawnMesh and CAPTURE the handle of the new entity it creates.
-        entt::entity dragonEntity = SceneBuilder::spawnMesh(*m_scene, DragonMeshPath);
-        //entt::entity K2Entity = SceneBuilder::spawnMesh(*m_scene, K2MeshPath, glm::vec3(0, 0, 0), glm::quat(1, 0, 0, 1), glm::vec3(2, 3, 4));
-
-        // 2. Check if the entity was created successfully before adding more components.
-        if (m_scene->getRegistry().valid(dragonEntity))
-        {
-            // 3. Add the material and rendering tags to the NEW dragon entity.
-            auto& registry = m_scene->getRegistry();
-            registry.emplace<MaterialDirectoryTag>(dragonEntity, "D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl");
-
-            // You can also add other components here if needed
-            registry.emplace_or_replace<BoundingBoxComponent>(dragonEntity);
-            registry.emplace_or_replace<TriPlanarMaterialTag>(dragonEntity);
-			registry.emplace_or_replace<ParallaxMaterialTag>(dragonEntity); // Add this tag to enable tessellation
-
-            if (registry.all_of<MaterialComponent>(dragonEntity)) {
-                auto& material = registry.get<MaterialComponent>(dragonEntity);
-                material.heightScale = 0.1f; // Set your desired displacement amount here
-            }
-
-            auto& transform = registry.emplace_or_replace<TransformComponent>(dragonEntity);
-            transform.translation = glm::vec3(0.0f, 0.0f, -5.0f);
+        // 1) Load once -> stable MeshID
+        MeshID lamboId = ResourceManager::instance().loadMesh(lamboPath);
+        if (lamboId == MeshID::None) {
+            qWarning() << "[Spawner] Failed to load mesh:" << lamboPath;
+            return;
         }
 
-       /* if (m_scene->getRegistry().valid(K2Entity))
-        {
-            // 3. Add the material and rendering tags to the NEW dragon entity.
-            auto& registry = m_scene->getRegistry();
-            registry.emplace<MaterialDirectoryTag>(K2Entity, "D:/Textures/Blender/ground-bl/columned-lava-rock-bl");
+        auto& registry = m_scene->getRegistry();
 
-            // You can also add other components here if needed
-            registry.emplace<BoundingBoxComponent>(K2Entity);
-            }*/
+        // --- A) SINGLE INSTANCE ---
+        TransformComponent t;
+        t.translation = glm::vec3(-1.0f, -5.0f, -1.0f);
+        t.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f); // identity (w,x,y,z)
+        t.scale = glm::vec3(1.0f);
 
+        entt::entity e = SceneBuilder::spawnMeshInstance(*m_scene, lamboId, t);
+        if (registry.valid(e)) {
+            registry.emplace_or_replace<MaterialDirectoryTag>(e, "D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl");
+            registry.emplace_or_replace<ParallaxMaterialTag>(e);
+            // SceneBuilder already tags UV vs TriPlanar for you; add TriPlanar here only if you want to force it.
+
+            auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
+            mat.heightScale = 0.1f;
+        }
+
+        // --- B) GRID OF INSTANCES ---
+        std::vector<entt::entity> ents =
+            SceneBuilder::spawnMeshInstanceRandom(*m_scene, lamboId, /*countX*/4, /*minBounds*/glm::vec3(-10), /*MaxBounds*/glm::vec3(10));
+
+        for (entt::entity ge : ents) {
+            if (!registry.valid(ge)) continue;
+
+            registry.emplace_or_replace<MaterialDirectoryTag>(ge, "D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl");
+            registry.emplace_or_replace<ParallaxMaterialTag>(ge);
+
+            auto& mat = registry.emplace_or_replace<MaterialComponent>(ge);
+            mat.heightScale = 0.1f;
+        }
     }
 
     // --- Create Splines ---

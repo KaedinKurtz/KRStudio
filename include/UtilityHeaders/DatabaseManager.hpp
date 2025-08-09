@@ -26,6 +26,7 @@
 #include <entt/entt.hpp>
 #include "Scene.hpp" 
 #include "UIHeaders/MenuFactory.hpp"
+#include "Types.hpp"
 
 namespace db {
 
@@ -268,6 +269,11 @@ public:
     void touchAsset(const QString& path);
     void performCacheCleanup(qint64 sizeLimitBytes = 50 * 1024 * 1024 * 1024LL, // 50 GB
         int ageLimitDays = 30);
+
+    // Map a mesh file path <-> numeric MeshID
+    std::optional<MeshID> getMeshIdForPath(const QString& path);
+    MeshID getOrCreateMeshIdForPath(const QString& path);
+    std::optional<QString> getPathForMeshId(MeshID id);
 
 signals:
     void databaseEvent(const DatabaseEventData& event);

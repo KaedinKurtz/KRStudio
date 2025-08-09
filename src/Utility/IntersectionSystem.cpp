@@ -8,19 +8,21 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <vector>
+#include <optional>
+#include <limits>
 #include <QDebug>
 
 namespace IntersectionSystem
 {
     // ========================================================================
-    // --- Outline Calculation Logic ---
+    // --- Outline Calculation Logic (unchanged) ---
     // ========================================================================
 
-    bool lineSegmentPlaneIntersection(const glm::vec3& p1, const glm::vec3& p2, const glm::vec4& plane, glm::vec3& outIntersectionPoint)
+    static bool lineSegmentPlaneIntersection(const glm::vec3& p1, const glm::vec3& p2, const glm::vec4& plane, glm::vec3& outIntersectionPoint)
     {
         glm::vec3 lineDir = p2 - p1;
         float dotLineNormal = glm::dot(glm::vec3(plane), lineDir);
-        if (std::abs(dotLineNormal) < 1e-6) return false;
+        if (std::abs(dotLineNormal) < 1e-6f) return false;
         float t = (-plane.w - glm::dot(glm::vec3(plane), p1)) / dotLineNormal;
         if (t >= 0.0f && t <= 1.0f) {
             outIntersectionPoint = p1 + t * lineDir;
@@ -29,7 +31,7 @@ namespace IntersectionSystem
         return false;
     }
 
-    std::vector<glm::vec2> calculateConvexHull(std::vector<glm::vec2>& points)
+    static std::vector<glm::vec2> calculateConvexHull(std::vector<glm::vec2>& points)
     {
         if (points.size() <= 3) return points;
         std::sort(points.begin(), points.end(), [](const glm::vec2& a, const glm::vec2& b) {
@@ -60,7 +62,7 @@ namespace IntersectionSystem
         return hull;
     }
 
-    // THE FIX: This function now RETURNS the calculated outlines directly.
+    // Returns all outlines for enabled grids vs “Test Cube” AABBs (as in your file)
     std::vector<std::vector<glm::vec3>> update(Scene* scene)
     {
         std::vector<std::vector<glm::vec3>> allOutlines;
@@ -86,12 +88,13 @@ namespace IntersectionSystem
 
                 glm::mat4 meshModelMatrix = sliceableView.get<TransformComponent>(meshEntity).getTransform();
                 glm::vec3 p[8] = {
-                    glm::vec3(-0.5f,-0.5f,-0.5f), glm::vec3(0.5f,-0.5f,-0.5f), glm::vec3(0.5f,0.5f,-0.5f), glm::vec3(-0.5f,0.5f,-0.5f),
-                    glm::vec3(-0.5f,-0.5f, 0.5f), glm::vec3(0.5f,-0.5f, 0.5f), glm::vec3(0.5f,0.5f, 0.5f), glm::vec3(-0.5f,0.5f, 0.5f)
+                    {-0.5f,-0.5f,-0.5f}, {0.5f,-0.5f,-0.5f}, {0.5f,0.5f,-0.5f}, {-0.5f,0.5f,-0.5f},
+                    {-0.5f,-0.5f, 0.5f}, {0.5f,-0.5f, 0.5f}, {0.5f,0.5f, 0.5f}, {-0.5f,0.5f, 0.5f}
                 };
                 int edges[12][2] = { {0,1},{1,2},{2,3},{3,0}, {4,5},{5,6},{6,7},{7,4}, {0,4},{1,5},{2,6},{3,7} };
 
                 std::vector<glm::vec3> intersectionPoints3D;
+                intersectionPoints3D.reserve(12);
                 for (int i = 0; i < 12; ++i) {
                     glm::vec3 p1 = glm::vec3(meshModelMatrix * glm::vec4(p[edges[i][0]], 1.0f));
                     glm::vec3 p2 = glm::vec3(meshModelMatrix * glm::vec4(p[edges[i][1]], 1.0f));
@@ -103,160 +106,154 @@ namespace IntersectionSystem
 
                 if (intersectionPoints3D.size() > 2) {
                     std::vector<glm::vec2> points2D;
+                    points2D.reserve(intersectionPoints3D.size());
                     for (const auto& p3d : intersectionPoints3D) {
                         glm::vec4 localPoint = worldToGrid * glm::vec4(p3d, 1.0f);
-                        points2D.push_back(glm::vec2(localPoint.x, localPoint.z));
+                        points2D.emplace_back(localPoint.x, localPoint.z);
                     }
                     std::vector<glm::vec2> hullPoints2D = calculateConvexHull(points2D);
                     std::vector<glm::vec3> finalOutlinePoints3D;
+                    finalOutlinePoints3D.reserve(hullPoints2D.size());
                     for (const auto& p2d : hullPoints2D) {
-                        finalOutlinePoints3D.push_back(glm::vec3(gridModelMatrix * glm::vec4(p2d.x, 0.0f, p2d.y, 1.0f)));
+                        finalOutlinePoints3D.emplace_back(glm::vec3(gridModelMatrix * glm::vec4(p2d.x, 0.0f, p2d.y, 1.0f)));
                     }
-                    allOutlines.push_back(finalOutlinePoints3D);
+                    allOutlines.push_back(std::move(finalOutlinePoints3D));
                 }
             }
         }
         return allOutlines;
     }
 
-
     // ========================================================================
-    // --- Object Selection Logic (Unchanged) ---
+    // --- CPU picking helpers (NEW) ---
     // ========================================================================
 
-    inline bool rayTriangleIntersect(const glm::vec3& rayOrigin,
-        glm::vec3       rayDir,
-        const glm::vec3& v0,
-        const glm::vec3& v1,
-        const glm::vec3& v2,
-        float& tHit,
-        glm::vec3& pHit)
+    struct CpuRay { glm::vec3 origin; glm::vec3 dir; };
+
+    static CpuRay makeRayFromScreen(int px, int py, int vpW, int vpH, const Camera& cam)
     {
-        rayDir = glm::normalize(rayDir);               // 1) length-independent t
+        // Screen -> NDC
+        float x = (2.0f * float(px) / float(vpW)) - 1.0f;
+        float y = 1.0f - (2.0f * float(py) / float(vpH)); // flip Y
 
-        constexpr float kEps = 1e-6f;
-        glm::vec3  edge1 = v1 - v0;
-        glm::vec3  edge2 = v2 - v0;
-        glm::vec3  pvec = glm::cross(rayDir, edge2);
-        float det = glm::dot(edge1, pvec);
+        glm::mat4 P = cam.getProjectionMatrix(float(vpW) / float(vpH));
+        glm::mat4 V = cam.getViewMatrix();
+        glm::mat4 invVP = glm::inverse(P * V);
 
-        if (std::abs(det) < kEps) return false;        // ray parallel to tri
-        float invDet = 1.0f / det;
+        glm::vec4 nearW = invVP * glm::vec4(x, y, -1.0f, 1.0f);
+        glm::vec4 farW = invVP * glm::vec4(x, y, 1.0f, 1.0f);
+        nearW /= nearW.w; farW /= farW.w;
 
-        glm::vec3 tvec = rayOrigin - v0;
-        float u = glm::dot(tvec, pvec) * invDet;
-        if (u < 0.0f || u > 1.0f) return false;
-
-        glm::vec3 qvec = glm::cross(tvec, edge1);
-        float v = glm::dot(rayDir, qvec) * invDet;
-        if (v < 0.0f || u + v > 1.0f) return false;
-
-        float t = glm::dot(edge2, qvec) * invDet;
-        if (t < kEps) return false;                    // hit behind origin
-
-        tHit = t;
-        pHit = rayOrigin + rayDir * t;
-        return true;
+        CpuRay r;
+        r.origin = glm::vec3(nearW);
+        r.dir = glm::normalize(glm::vec3(farW - nearW));
+        return r;
     }
 
-    // thin wrapper so existing code compiles unchanged
-    inline bool rayTriangleIntersect(const glm::vec3& rayOrigin,
-        const glm::vec3& rayDir,
-        const glm::vec3& v0,
-        const glm::vec3& v1,
-        const glm::vec3& v2,
-        float& tHit)
+    // Robust slab test (no glm::compMax/Min dependency)
+    static bool intersectRayAABB(const glm::vec3& ro, const glm::vec3& rd,
+        const glm::vec3& bmin, const glm::vec3& bmax,
+        float& tEnter, float& tExit)
     {
-        glm::vec3 dummy;
-        return rayTriangleIntersect(rayOrigin, rayDir, v0, v1, v2, tHit, dummy);
+        glm::vec3 invD(1.0f / rd.x, 1.0f / rd.y, 1.0f / rd.z);
+
+        glm::vec3 t0 = (bmin - ro) * invD;
+        glm::vec3 t1 = (bmax - ro) * invD;
+
+        glm::vec3 tminVec(std::min(t0.x, t1.x),
+            std::min(t0.y, t1.y),
+            std::min(t0.z, t1.z));
+
+        glm::vec3 tmaxVec(std::max(t0.x, t1.x),
+            std::max(t0.y, t1.y),
+            std::max(t0.z, t1.z));
+
+        tEnter = std::max(std::max(tminVec.x, tminVec.y), tminVec.z);
+        tExit = std::min(std::min(tmaxVec.x, tmaxVec.y), tmaxVec.z);
+
+        return (tExit >= tEnter) && (tExit >= 0.0f);
     }
+
+    struct CpuPickHit {
+        entt::entity entity{ entt::null };
+        glm::vec3    worldPos{ 0 };
+        float        worldT{ std::numeric_limits<float>::max() };
+    };
+
+    static std::optional<CpuPickHit>
+        cpuPickAABB(Scene& scene, const Camera& cam, int px, int py, int vpW, int vpH)
+    {
+        CpuRay ray = makeRayFromScreen(px, py, vpW, vpH, cam);
+
+        auto& reg = scene.getRegistry();
+        auto view = reg.view<TransformComponent, RenderableMeshComponent>();
+
+        CpuPickHit best;
+
+        for (auto [e, xform, mesh] : view.each())
+        {
+            // Skip non-renderables if needed (optional)
+            // if (!reg.all_of<RenderableTag>(e)) continue;
+
+            const glm::mat4 M = reg.all_of<WorldTransformComponent>(e)
+                ? reg.get<WorldTransformComponent>(e).matrix
+                : xform.getTransform();
+
+            glm::mat4 invM = glm::inverse(M);
+
+            // Transform ray to local space
+            glm::vec3 roL = glm::vec3(invM * glm::vec4(ray.origin, 1.0f));
+            glm::vec3 rdL = glm::normalize(glm::vec3(invM * glm::vec4(ray.dir, 0.0f)));
+
+            float t0, t1;
+            if (!intersectRayAABB(roL, rdL, mesh.aabbMin, mesh.aabbMax, t0, t1))
+                continue;
+
+            float tLocal = (t0 < 0.0f) ? t1 : t0; // handle origin inside box
+
+            glm::vec3 localHit = roL + rdL * tLocal;
+            glm::vec3 worldHit = glm::vec3(M * glm::vec4(localHit, 1.0f));
+            float      worldDist = glm::length(worldHit - ray.origin);
+
+            if (worldDist < best.worldT) {
+                best.entity = e;
+                best.worldPos = worldHit;
+                best.worldT = worldDist;
+            }
+        }
+
+        if (best.entity != entt::null) return best;
+        return std::nullopt;
+    }
+
+    // ========================================================================
+    // --- Object Selection Logic (REWRITTEN: CPU AABB) ---
+    // ========================================================================
 
     void selectObjectAt(Scene& scene, ViewportWidget& viewport, int mouseX, int mouseY)
     {
-        auto& registry = scene.getRegistry();
-        auto& camera = viewport.getCamera();
-        float x = (2.0f * mouseX) / viewport.width() - 1.0f;
-        float y = 1.0f - (2.0f * mouseY) / viewport.height();
-        float z = 1.0f;
-        glm::vec3 ray_nds = glm::vec3(x, y, z);
-        glm::vec4 ray_clip(ray_nds.x, ray_nds.y, -1.0f, 1.0f);
-        glm::vec4 ray_eye = glm::inverse(camera.getProjectionMatrix(viewport.width() / static_cast<float>(viewport.height()))) * ray_clip;
-        ray_eye = glm::vec4(ray_eye.x, ray_eye.y, -1.0f, 0.0f);
-        glm::vec3 ray_wor = glm::normalize(glm::vec3(glm::inverse(camera.getViewMatrix()) * ray_eye));
+        auto& reg = scene.getRegistry();
+        Camera& cam = viewport.getCamera();
 
-        entt::entity selectedEntity = entt::null;
-        float closest_distance = std::numeric_limits<float>::max();
-        auto view = registry.view<RenderableMeshComponent, TransformComponent>();
-        for (auto entity : view)
-        {
-            auto [mesh, transform] = view.get<RenderableMeshComponent, TransformComponent>(entity);
-            glm::mat4 modelMatrix = transform.getTransform();
-            for (size_t i = 0; i < mesh.indices.size(); i += 3)
-            {
-                const glm::vec3& p0 = mesh.vertices[mesh.indices[i]].position;
-                const glm::vec3& p1 = mesh.vertices[mesh.indices[i + 1]].position;
-                const glm::vec3& p2 = mesh.vertices[mesh.indices[i + 2]].position;
-                glm::vec3 v0 = glm::vec3(modelMatrix * glm::vec4(p0, 1.0f));
-                glm::vec3 v1 = glm::vec3(modelMatrix * glm::vec4(p1, 1.0f));
-                glm::vec3 v2 = glm::vec3(modelMatrix * glm::vec4(p2, 1.0f));
-                float distance;
-                if (rayTriangleIntersect(camera.getPosition(), ray_wor, v0, v1, v2, distance))
-                {
-                    if (distance < closest_distance)
-                    {
-                        closest_distance = distance;
-                        selectedEntity = entity;
-                    }
-                }
-            }
-        }
-        registry.clear<SelectedComponent>();
-        if (registry.valid(selectedEntity))
-        {
-            registry.emplace<SelectedComponent>(selectedEntity);
+        // nearest AABB hit
+        auto hit = cpuPickAABB(scene, cam, mouseX, mouseY, viewport.width(), viewport.height());
+
+        // clear previous selection
+        for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+
+        if (hit && reg.valid(hit->entity)) {
+            reg.emplace<SelectedComponent>(hit->entity);
+            // Optional: also recenter orbit right here:
+            // float keepDist = glm::length(cam.getPosition() - hit->worldPos);
+            // cam.focusOn(hit->worldPos, keepDist);
         }
     }
+
     std::optional<glm::vec3> pickPoint(Scene& scene, ViewportWidget& vp, int mouseX, int mouseY)
     {
-        auto& reg = scene.getRegistry();
         Camera& cam = vp.getCamera();
-
-        // ----- build world-space ray ------------------------------------------------
-        float nx = (2.0f * mouseX) / vp.width() - 1.0f;
-        float ny = -(2.0f * mouseY) / vp.height() + 1.0f;
-        glm::vec4 rayClip(nx, ny, -1.0f, 1.0f);
-
-        glm::mat4 invProj = glm::inverse(
-            cam.getProjectionMatrix(vp.width() / float(vp.height())));
-        glm::vec4 rayEye = invProj * rayClip;
-        rayEye.z = -1.0f;  rayEye.w = 0.0f;
-
-        glm::vec3 rayDir = glm::normalize(glm::vec3(
-            glm::inverse(cam.getViewMatrix()) * rayEye));
-
-        // ----- traverse scene ------------------------------------------------------
-        float bestT = std::numeric_limits<float>::max();
-        glm::vec3 bestPt;
-
-        auto view = reg.view<RenderableMeshComponent, TransformComponent>();
-        for (auto e : view) {
-            auto [mesh, xf] = view.get<RenderableMeshComponent, TransformComponent>(e);
-            glm::mat4 M = reg.all_of<WorldTransformComponent>(e)
-                ? reg.get<WorldTransformComponent>(e).matrix
-                : xf.getTransform();
-            for (size_t i = 0; i < mesh.indices.size(); i += 3) {
-                glm::vec3 v0 = glm::vec3(M * glm::vec4(mesh.vertices[mesh.indices[i]].position, 1));
-                glm::vec3 v1 = glm::vec3(M * glm::vec4(mesh.vertices[mesh.indices[i + 1]].position, 1));
-                glm::vec3 v2 = glm::vec3(M * glm::vec4(mesh.vertices[mesh.indices[i + 2]].position, 1));
-                float t; glm::vec3 p;
-                if (rayTriangleIntersect(cam.getPosition(), rayDir, v0, v1, v2, t, p)
-                    && t < bestT) {
-                    bestT = t; bestPt = p;
-                }
-            }
-        }
-        if (bestT < std::numeric_limits<float>::max())
-            return bestPt;                        // hit found
-        return std::nullopt;                      // nothing under cursor
+        auto hit = cpuPickAABB(scene, cam, mouseX, mouseY, vp.width(), vp.height());
+        if (hit) return hit->worldPos;
+        return std::nullopt;
     }
 }

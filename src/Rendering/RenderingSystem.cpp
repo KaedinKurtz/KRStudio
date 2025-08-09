@@ -222,6 +222,21 @@ void RenderingSystem::initializeSharedResources()
             (shaderDir + "gbuffer_pom_vert.glsl").toStdString(),
             (shaderDir + "gbuffer_triplanar_pom_frag.glsl").toStdString()
         );
+        loadAndStoreShader("pp_mesh_mask",
+            (shaderDir + "pp_mesh_mask_vert.glsl").toStdString(),
+            (shaderDir + "pp_mesh_mask_frag.glsl").toStdString());
+
+        loadAndStoreShader("mask_flat",
+            (shaderDir + "mask_flat_vert.glsl").toStdString(),
+            (shaderDir + "mask_flat_frag.glsl").toStdString());
+
+        loadAndStoreShader("solid_mask",
+            (shaderDir + "vertex_shader_vert.glsl").toStdString(),
+            (shaderDir + "mask_flat_frag.glsl").toStdString());
+
+        loadAndStoreShader("mask_depthcompare",
+            (shaderDir + "post_process_vert.glsl").toStdString(),
+            (shaderDir + "mask_depthcompare_frag.glsl").toStdString());
 
         // Load all other shaders as before
         loadAndStoreShader("lighting", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "lighting_frag.glsl").toStdString());
@@ -238,6 +253,8 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("flow_vector_compute", std::vector<std::string>{ (shaderDir + "flow_vector_update_comp.glsl").toStdString() });
         loadAndStoreShader("blur", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "gaussian_blur_frag.glsl").toStdString());
         loadAndStoreShader("skybox", (shaderDir + "skybox_vert.glsl").toStdString(), (shaderDir + "skybox_frag.glsl").toStdString());
+        loadAndStoreShader("outline_edge", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "outline_edge_frag.glsl").toStdString());
+        loadAndStoreShader("composite_simple", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "composite_simple_frag.glsl").toStdString());
     }
     catch (const std::runtime_error& e) {
         qFatal("[RenderingSystem] Shader init failed: %s", e.what());
@@ -621,148 +638,76 @@ void RenderingSystem::lightingPass(ViewportWidget* viewport)
 void RenderingSystem::postProcessingPass(ViewportWidget* viewport)
 {
     if (m_postProcessingPasses.empty()) return;
-    if (m_postProcessingPasses.size() == 1 /* and it’s a no-op */) {
-        qDebug() << "[postProcessingPass] No real effects—skipping.";
-        return;
-    }
+
     qDebug() << "--- 3. POST-PROCESSING PASS for viewport:" << viewport << "---";
 
+    // GL funcs
     m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(
         QOpenGLContext::currentContext());
     if (!m_gl) {
-        qDebug() << "[postProcessingPass] GL funcs unavailable!";
+        qWarning() << "[postProcessingPass] GL funcs unavailable!";
         return;
     }
 
-    auto& target = m_targets[viewport];
+    // Resolve target FBOs for this viewport
+    auto it = m_targets.find(viewport);
+    if (it == m_targets.end()) {
+        qWarning() << "[postProcessingPass] No target FBO for viewport";
+        return;
+    }
+    TargetFBOs& target = it.value();
     const auto* ppFBOs = getPPFBOs();
-    int readIdx = 0, writeIdx = 1;  // ping?pong indices
 
-    m_postProcessingPasses.clear();
-    m_postProcessingPasses.push_back(
-        std::make_unique<EdgeDetectPass>()
-    );
+    // --- IMPORTANT: build correct camera + matrices for THIS viewport ---
+    Camera& cam = viewport->getCamera();
+    const int vpW = target.w;
+    const int vpH = target.h;
+    const float aspect = (vpH > 0) ? (vpW / float(vpH)) : 1.0f;
 
+    const glm::mat4 view = cam.getViewMatrix();
+    const glm::mat4 projection = cam.getProjectionMatrix(aspect);
+
+    // Sanity logs so we can see if anything is identity/zero
+    auto mat4_summary = [](const glm::mat4& M) {
+        return QString::asprintf(
+            "[%.2f %.2f %.2f %.2f | %.2f %.2f %.2f %.2f | %.2f %.2f %.2f %.2f | %.2f %.2f %.2f %.2f]",
+            M[0][0], M[1][0], M[2][0], M[3][0],
+            M[0][1], M[1][1], M[2][1], M[3][1],
+            M[0][2], M[1][2], M[2][2], M[3][2],
+            M[0][3], M[1][3], M[2][3], M[3][3]
+        );
+    };
+
+    qDebug() << "[postProcessingPass] view =" << mat4_summary(view);
+    qDebug() << "[postProcessingPass] proj =" << mat4_summary(projection);
+    qDebug() << "[postProcessingPass] vp size =" << vpW << "x" << vpH;
+
+    // Build the RenderFrameContext ONCE and reuse for each post pass
+    RenderFrameContext ctx{
+        m_gl,
+        m_scene->getRegistry(),
+        *this,
+        cam,
+        view,
+        projection,
+        target,            // TargetFBOs&
+        vpW,
+        vpH,
+        0.0f,              // deltaTime (if you want)
+        0.0f,              // elapsedTime
+        viewport
+    };
+
+    // Execute each post-processing pass in sequence
     for (size_t i = 0; i < m_postProcessingPasses.size(); ++i) {
-        GLuint dstFBO = ppFBOs[writeIdx].fbo;
-        qDebug() << "[postProc #" << i << "] === Binding WRITE FBO =" << dstFBO;
-
-        // A) bind and set draw buffer
-        m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dstFBO);
-        GLenum drawBufs[1] = { GL_COLOR_ATTACHMENT0 };
-        m_gl->glDrawBuffers(1, drawBufs);
-        qDebug() << "[postProc #" << i << "] Set DRAW_BUFFERS[0] =" << drawBufs[0];
-
-        // B) status before clear
-        GLenum status = m_gl->glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
-        qDebug() << "[postProc #" << i << "] pre?clear FBO status =" << status;
-
-        // C) read back a sample pixel before clear
-        {
-            int cx = ppFBOs[writeIdx].w / 2, cy = ppFBOs[writeIdx].h / 2;
-            unsigned char before[4] = {};
-            m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
-            m_gl->glReadPixels(cx, cy, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, before);
-            qDebug() << "[postProc #" << i << "] pre?clear center pixel ="
-                << (int)before[0] << (int)before[1]
-                << (int)before[2] << (int)before[3];
-        }
-
-        // D) clear only on first pass (to mimic your existing logic)
-        if (i > 0) {
-            qDebug() << "[postProc #" << i << "] Clearing COLOR buffer";
-            m_gl->glClear(GL_COLOR_BUFFER_BIT);
-        }
-        else {
-            qDebug() << "[postProc #" << i << "] Skipping clear (i==0)";
-        }
-
-        // E) read back a sample pixel after clear
-        {
-            int cx = ppFBOs[writeIdx].w / 2, cy = ppFBOs[writeIdx].h / 2;
-            unsigned char after[4] = {};
-            m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
-            m_gl->glReadPixels(cx, cy, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, after);
-            qDebug() << "[postProc #" << i << "] post?clear center pixel ="
-                << (int)after[0] << (int)after[1]
-                << (int)after[2] << (int)after[3];
-        }
-
-        // F) bind the source texture (your lighting result)
-        GLuint srcTex = (i == 0)
-            ? target.finalColorTexture
-            : ppFBOs[readIdx].colorTexture;
-        qDebug() << "[postProc #" << i << "] Binding SRC texture =" << srcTex;
-        m_gl->glActiveTexture(GL_TEXTURE0);
-        m_gl->glBindTexture(GL_TEXTURE_2D, srcTex);
-
-        // G) run the pass
-        RenderFrameContext ctx{
-            m_gl,
-            m_scene->getRegistry(),
-            *this,
-            Camera(), glm::mat4(1.0f), glm::mat4(1.0f),
-            target, target.w, target.h,
-            0.0f, 0.0f, viewport
-        };
-        qDebug() << "[postProc #" << i << "] Executing postProc pass";
+        qDebug() << "[postProcessingPass] Executing pass # " << int(i)
+            << " type=" << typeid(*m_postProcessingPasses[i]).name();
         m_postProcessingPasses[i]->execute(ctx);
-
-        std::swap(readIdx, writeIdx);
     }
 
-    // --- Final blit back to target.finalFBO ---
-    GLuint srcFBO = ppFBOs[readIdx].fbo;
-    GLuint dstFBO = target.finalFBO;
-    qDebug() << "[postProc final] Blitting from FBO" << srcFBO << "?" << dstFBO;
-
-    // A) Bind read & draw
-    m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, srcFBO);
-    m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
-    m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dstFBO);
-    m_gl->glDrawBuffer(GL_COLOR_ATTACHMENT0);
-
-    // B) status before blit
-    {
-        GLenum status = m_gl->glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
-        qDebug() << "[postProc final] pre?blit FBO status =" << status;
-    }
-
-    // C) sample pixel in target.finalFBO *before* blit
-    {
-        int cx = target.w / 2, cy = target.h / 2;
-        unsigned char before[4] = {};
-        m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
-        m_gl->glReadPixels(cx, cy, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, before);
-        qDebug() << "[postProc final] pre?blit center pixel ="
-            << (int)before[0] << (int)before[1]
-            << (int)before[2] << (int)before[3];
-    }
-
-    // D) Perform blit
-    m_gl->glBlitFramebuffer(
-        0, 0, ppFBOs[readIdx].w, ppFBOs[readIdx].h,
-        0, 0, target.w, target.h,
-        GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT,
-        GL_NEAREST
-    );
-    qDebug() << "[postProc final] Blitted COLOR+DEPTH from ppFBO[" << readIdx << "]";
-
-    // E) sample pixel in target.finalFBO *after* blit
-    {
-        int cx = target.w / 2, cy = target.h / 2;
-        unsigned char after[4] = {};
-        m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
-        m_gl->glReadPixels(cx, cy, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, after);
-        qDebug() << "[postProc final] post?blit center pixel ="
-            << (int)after[0] << (int)after[1]
-            << (int)after[2] << (int)after[3];
-    }
-
-    // F) cleanup
-    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
     qDebug() << "[postProcessingPass] Complete.";
 }
+
 
 void RenderingSystem::overlayPass(ViewportWidget* viewport)
 {
@@ -1316,36 +1261,55 @@ void RenderingSystem::initOrResizeGBuffer(QOpenGLFunctions_4_3_Core* gl, int w, 
 
 void RenderingSystem::initOrResizePPFBOs(QOpenGLFunctions_4_3_Core* gl, int w, int h)
 {
-    // --- Delete old resources ---
+    // Destroy old
     for (int i = 0; i < 2; ++i) {
-        if (m_ppFBOs[i].fbo) gl->glDeleteFramebuffers(1, &m_ppFBOs[i].fbo);
+        if (m_ppFBOs[i].fbo)         gl->glDeleteFramebuffers(1, &m_ppFBOs[i].fbo);
         if (m_ppFBOs[i].colorTexture) gl->glDeleteTextures(1, &m_ppFBOs[i].colorTexture);
+        // If you previously added a depthTexture in PostProcessingFBO, delete here too.
     }
-    if (w == 0 || h == 0) {
-        m_ppFBOs[0] = {}; m_ppFBOs[1] = {};
-        return;
-    }
+    if (w <= 0 || h <= 0) { m_ppFBOs[0] = {}; m_ppFBOs[1] = {}; return; }
 
-    // --- Create new resources ---
     for (int i = 0; i < 2; ++i) {
-        m_ppFBOs[i].w = w; m_ppFBOs[i].h = h;
-        gl->glGenFramebuffers(1, &m_ppFBOs[i].fbo);
-        gl->glBindFramebuffer(GL_FRAMEBUFFER, m_ppFBOs[i].fbo);
+        auto& pp = m_ppFBOs[i];
+        pp.w = w; pp.h = h;
 
-        gl->glGenTextures(1, &m_ppFBOs[i].colorTexture);
-        gl->glBindTexture(GL_TEXTURE_2D, m_ppFBOs[i].colorTexture);
-        gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, NULL);
-        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // THE FIX
-        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); // THE FIX
+        gl->glGenFramebuffers(1, &pp.fbo);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, pp.fbo);
+
+        // Color
+        gl->glGenTextures(1, &pp.colorTexture);
+        gl->glBindTexture(GL_TEXTURE_2D, pp.colorTexture);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, nullptr);
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pp.colorTexture, 0);
 
-        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_ppFBOs[i].colorTexture, 0);
-        if (gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-            qWarning() << "Post-Processing FBO " << i << " is not complete!";
+        // Depth (texture!) – use 32F so we can blit from a depth texture source
+        GLuint depthTex = 0;
+        gl->glGenTextures(1, &depthTex);
+        gl->glBindTexture(GL_TEXTURE_2D, depthTex);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+        gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, w, h, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTex, 0);
+
+        GLenum status = gl->glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE) {
+            qWarning() << "[PPFBO] Incomplete:" << QString("0x%1").arg(uint(status), 0, 16).toUpper();
+        }
+        else {
+            qDebug() << "[PPFBO] OK fbo=" << pp.fbo << " size=(" << w << "x" << h << ")";
+        }
     }
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
 
 void RenderingSystem::initOrResizeFinalFBO(QOpenGLFunctions_4_3_Core* gl_base, TargetFBOs& target, int w, int h)
 {
