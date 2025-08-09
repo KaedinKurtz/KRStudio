@@ -36,8 +36,54 @@ It’s not just a visualization tool — it’s a full **development environment
   - Refraction, reflectance, anisotropy (WIP)
 - Debug-friendly: every pass is isolated for RenderDoc capture.
 
-![Rendering Pipeline Diagram](docs/rendering_pipeline.png)
+flowchart LR
+    subgraph Geometry Pass (per-viewport FBO)
+      M[Meshes\n(materials, transforms)]
+      V[Camera & Matrices\n(view, proj)]
+      ShG[[G-Buffer Shader]]
+      M --> ShG
+      V --> ShG
 
+      ShG --> P[gPosition (RGB16F)]
+      ShG --> N[gNormal (RGB16F)]
+      ShG --> A[gAlbedo+AO (RGBA8)]
+      ShG --> MR[gMetalRough (RG8)]
+      ShG --> E[gEmissive (RGB8)]
+      ShG --> D[Depth (D24/32)]
+    end
+
+    subgraph Lighting Pass (HDR)
+      P --> LSh[[Lighting Shader\n(PBR + IBL)]]
+      N --> LSh
+      A --> LSh
+      MR --> LSh
+      E --> LSh
+      Irr[(irradianceMap cubemap)]
+      Pref[(prefilteredEnv cubemap)]
+      BRDF[(brdfLUT 2D)]
+      Irr --> LSh
+      Pref --> LSh
+      BRDF --> LSh
+      LSh --> HDR[HDR Scene Color (RGBA16F)]
+    end
+
+    subgraph Post-Processing Chain
+      HDR --> SelMask[[Selection Mask Pass\n(ID/stencil to mask tex)]]
+      SelMask --> GlowPrep[[Glow Threshold]]
+      GlowPrep --> DS[Downsample Pyramid]
+      DS --> Blur[[Separable Blur (ping-pong)]]
+      Blur --> GlowComposite[[Additive Composite to HDR]]
+
+      GlowComposite --> TAA[[Temporal AA\n(history + motion)]]
+      TAA --> ToneMap[[Tone Map + Exposure + Gamma]]
+      ToneMap --> LDR[LDR Color (RGBA8)]
+    end
+
+    subgraph UI Composite & Present
+      LDR --> UI[[UI Layer (Qt/ImGui)\nSRGB-aware compose]]
+      UI --> Backbuffer[(Swapchain)]
+      Backbuffer --> Present>Present]
+    end
 ---
 
 ### 🧩 Multi-Viewport UI
