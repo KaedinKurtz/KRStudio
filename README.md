@@ -36,63 +36,11 @@ It’s not just a visualization tool — it’s a full **development environment
   - Refraction, reflectance, anisotropy (WIP)
 - Debug-friendly: every pass is isolated for RenderDoc capture.
 
-flowchart LR
-    subgraph Geometry Pass (per-viewport FBO)
-      M[Meshes\n(materials, transforms)]
-      V[Camera & Matrices\n(view, proj)]
-      ShG[[G-Buffer Shader]]
-      M --> ShG
-      V --> ShG
-
-      ShG --> P[gPosition (RGB16F)]
-      ShG --> N[gNormal (RGB16F)]
-      ShG --> A[gAlbedo+AO (RGBA8)]
-      ShG --> MR[gMetalRough (RG8)]
-      ShG --> E[gEmissive (RGB8)]
-      ShG --> D[Depth (D24/32)]
-    end
-
-    subgraph Lighting Pass (HDR)
-      P --> LSh[[Lighting Shader\n(PBR + IBL)]]
-      N --> LSh
-      A --> LSh
-      MR --> LSh
-      E --> LSh
-      Irr[(irradianceMap cubemap)]
-      Pref[(prefilteredEnv cubemap)]
-      BRDF[(brdfLUT 2D)]
-      Irr --> LSh
-      Pref --> LSh
-      BRDF --> LSh
-      LSh --> HDR[HDR Scene Color (RGBA16F)]
-    end
-
-    subgraph Post-Processing Chain
-      HDR --> SelMask[[Selection Mask Pass\n(ID/stencil to mask tex)]]
-      SelMask --> GlowPrep[[Glow Threshold]]
-      GlowPrep --> DS[Downsample Pyramid]
-      DS --> Blur[[Separable Blur (ping-pong)]]
-      Blur --> GlowComposite[[Additive Composite to HDR]]
-
-      GlowComposite --> TAA[[Temporal AA\n(history + motion)]]
-      TAA --> ToneMap[[Tone Map + Exposure + Gamma]]
-      ToneMap --> LDR[LDR Color (RGBA8)]
-    end
-
-    subgraph UI Composite & Present
-      LDR --> UI[[UI Layer (Qt/ImGui)\nSRGB-aware compose]]
-      UI --> Backbuffer[(Swapchain)]
-      Backbuffer --> Present>Present]
-    end
----
-
 ### 🧩 Multi-Viewport UI
 - Built on **Qt** + **Advanced Docking System (ADS)**.
 - Multiple independent viewports with separate cameras and rendering states.
 - Persistent dock layouts per workspace.
 - Toolbar/menu synchronization.
-
-![Multi-Viewport Example](docs/multi_viewport_demo.gif)
 
 ---
 
@@ -102,8 +50,6 @@ flowchart LR
 - Hybrid CPU/GPU cache with automatic cleanup.
 - Scene graph with fast lookup and lazy asset binding.
 
-![Asset Database Screenshot](docs/asset_database_ui.png)
-
 ---
 
 ### 🛠 Node-Based Editing
@@ -111,20 +57,18 @@ flowchart LR
 - For logic graphs, material graphs, and procedural asset pipelines.
 - Real-time updates directly in the viewport.
 
-![Node Editor Screenshot](docs/node_editor_demo.png)
-
 ---
 
 ## 🧠 Architecture
 
-```text
-[ UI Layer (Qt/ADS) ]
-        ↓
-[ Scene/Asset System (SQLite + Importers) ]
-        ↓
-[ Rendering System (OpenGL 4.5, Deferred Pipeline) ]
-        ↓
-[ Simulation Layer (Physics, Robotics Control) ]
+    App Shell (Qt/ADS) --> Asset & Scene
+    App Shell (Qt/ADS) --> Rendering System (OpenGL 4.5)
+    Asset & Scene --> Rendering System (OpenGL 4.5)
+    Asset & Scene --> Simulation & Robotics (WIP)
+    Simulation & Robotics (WIP) --> Rendering System (OpenGL 4.5)
+    Persistence & Services --> App Shell (Qt/ADS)
+    Persistence & Services --> Asset & Scene
+    Persistence & Services --> Rendering System (OpenGL 4.5)
 
 📈 Development Roadmap
 ✅ Completed
@@ -167,18 +111,28 @@ OpenGL ≥ 4.5 capable GPU
 
 vcpkg for dependencies
 
-git clone https://github.com/yourusername/KRStudio.git
+git clone https://github.com/KaedinKurtz/KRStudio.git
+
 cd KRStudio
+
 cmake --preset windows-msvc-debug
+
 cmake --build build
 
+
+
 🔗 Related Projects
+
 Bipedal Digitigrade Robot – Hardware platform KR Studio is built to simulate/control.
 
 Actuator Test Bench – Standalone module for validating gearbox and motor designs.
 
+
+
 📜 License
 TBD — finalized on beta release.
+
+
 
 📬 Contact
 Author: Kaedin Kurtz
