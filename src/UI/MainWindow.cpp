@@ -520,6 +520,8 @@ MainWindow::MainWindow(QWidget* parent)
         this, [this](bool on) { handleMenuToggle(MenuType::Database, on); });
     connect(m_fixedTopToolbar, &StaticToolbar::gridMenuToggled, // Connect the new signal for the grid properties
         this, [this](bool on) { handleMenuToggle(MenuType::GridProperties, on); });
+    connect(m_fixedTopToolbar, &StaticToolbar::objectPropertiesMenuToggled,
+        this, [this](bool on) { handleMenuToggle(MenuType::ObjectProperties, on); });
 
     //========================= Start the SLAM Manager =========================
     m_slamManager = new SlamManager(this);
@@ -1125,30 +1127,26 @@ void MainWindow::ensurePropertiesArea()
     placeholder->deleteLater();
 }
 
+// In MainWindow.cpp
+
 void MainWindow::showMenu(MenuType type)
 {
-    qDebug() << "\n––– showMenu for" << int(type);
+    qDebug() << "\n--- showMenu for" << int(type);
 
-    // find existing tab-area...
     ads::CDockAreaWidget* existingArea = nullptr;
     for (auto it = m_menus.constBegin(); it != m_menus.constEnd(); ++it) {
         auto* d = it.value().dock;
         if (d && !d->isHidden()) {
             existingArea = d->dockAreaWidget();
-            qDebug() << "  found existing dock:" << d->windowTitle()
-                << "area ptr =" << static_cast<void*>(existingArea);
             break;
         }
     }
-    if (!existingArea)
-        qDebug() << "  no existing area – will create a new side-panel";
 
-    // create the menu + dock if needed
     auto& entry = m_menus[type];
     if (!entry.menu) {
         entry.menu = MenuFactory::create(type, m_scene.get(), this);
         if (!entry.menu) {
-            qWarning() << "  factory failed for" << int(type);
+            qWarning() << "Factory failed for" << int(type);
             return;
         }
 
@@ -1157,45 +1155,41 @@ void MainWindow::showMenu(MenuType type)
         entry.dock->setWidget(entry.menu->widget());
         entry.dock->setStyleSheet(sidePanelStyle);
 
-        // tabify or new widget area
         if (existingArea) {
-            qDebug() << "  tabifying into existingArea via CenterDockWidgetArea";
-            m_dockManager->addDockWidget(
-                ads::CenterDockWidgetArea,
-                entry.dock,
-                existingArea
-            );
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, entry.dock, existingArea);
         }
         else {
-            qDebug() << "  creating brand-new RightDockWidgetArea";
-            existingArea = m_dockManager->addDockWidget(
-                ads::RightDockWidgetArea,
-                entry.dock
-            );
-            qDebug() << "  new area ptr =" << static_cast<void*>(existingArea);
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, entry.dock);
         }
 
-        // **on close: first save, then tear down**
+        // *** START OF NEW CONNECTION LOGIC ***
+        if (type == MenuType::ObjectProperties) {
+            if (auto* propertiesPanel = dynamic_cast<ObjectPropertiesWidget*>(entry.menu->widget())) {
+                // Connect the new panel to ALL existing viewports
+                for (auto* dock : m_dockContainers) {
+                    if (auto* viewport = qobject_cast<ViewportWidget*>(dock->widget())) {
+                        connect(viewport, &ViewportWidget::selectionChanged, propertiesPanel, &ObjectPropertiesWidget::setEntity);
+                    }
+                }
+            }
+        }
+        // *** END OF NEW CONNECTION LOGIC ***
+
         connect(entry.dock, &ads::CDockWidget::closed, this, [this, type]() {
             auto it = m_menus.find(type);
             if (it != m_menus.end()) {
-                // 1) serialize & save all your grids to the DB
                 it->menu->shutdownAndSave();
-                // 2) uncheck the toolbar button
                 m_fixedTopToolbar->uncheckButtonForMenu(type);
-                // 3) remove it so next showMenu() will recreate
                 m_menus.remove(type);
             }
             });
 
-        // load from DB if exists, else fresh
         if (db::DatabaseManager::instance().menuConfigExists(title))
             entry.menu->initializeFromDatabase();
         else
             entry.menu->initializeFresh();
     }
 
-    // toolbar state + bring to front
     if (m_fixedTopToolbar) m_fixedTopToolbar->checkButtonForMenu(type);
     entry.dock->show();
     entry.dock->setAsCurrentTab();

@@ -326,6 +326,7 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
                     // Select the new entity
                     reg.emplace<SelectedComponent>(hitEntity);
                 }
+                emit selectionChanged(hitEntity);
             }
             else {
                 // We clicked on empty space: Deselect all
@@ -333,6 +334,7 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
                     for (auto eSel : reg.view<SelectedComponent>()) {
                         reg.remove<SelectedComponent>(eSel);
                     }
+                    emit selectionChanged(entt::null);
                 }
             }
             update(); // Trigger a repaint to show the change

@@ -2379,7 +2379,7 @@ Boxes</string>
               </widget>
              </item>
              <item row="2" column="16">
-              <widget class="QToolButton" name="show_object_axes_button">
+              <widget class="QToolButton" name="show_object_properties">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                  <horstretch>0</horstretch>
@@ -2393,15 +2393,16 @@ Boxes</string>
                 </size>
                </property>
                <property name="text">
-                <string>Object Origins</string>
+                <string>Object
+Properties</string>
                </property>
                <property name="icon">
                 <iconset resource="../../resources.qrc">
-                 <normaloff>:/icons/coordinateAxesMulti.png</normaloff>:/icons/coordinateAxesMulti.png</iconset>
+                 <normaloff>:/icons/icons8-wacom-tablet-48.png</normaloff>:/icons/icons8-wacom-tablet-48.png</iconset>
                </property>
                <property name="iconSize">
                 <size>
-                 <width>56</width>
+                 <width>42</width>
                  <height>56</height>
                 </size>
                </property>
@@ -10747,8 +10748,8 @@ Inspector</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="control_button_group"/>
   <buttongroup name="viewport_shading_button_group"/>
+  <buttongroup name="control_button_group"/>
   <buttongroup name="view_button_group"/>
  </buttongroups>
 </ui>

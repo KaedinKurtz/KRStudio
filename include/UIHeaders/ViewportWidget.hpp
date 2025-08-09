@@ -3,6 +3,7 @@
 #include <QOpenGLFunctions_4_3_Core>
 #include <memory>
 #include <entt/fwd.hpp>
+#include <entt/entity/registry.hpp>
 #include <QLabel> // Include QLabel for stats overlay
 
 class Scene;
@@ -92,4 +93,5 @@ private:
 signals: // <<< ADD THIS SECTION
     void viewportReady();
     void glContextReady();
+    void selectionChanged(entt::entity selectedEntity); // <-- ADD THIS SIGNAL
 };

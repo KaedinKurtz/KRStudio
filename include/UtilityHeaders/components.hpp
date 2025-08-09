@@ -154,6 +154,74 @@ struct MaterialComponent
     std::shared_ptr<Texture2D> brdfLUT = nullptr;
 };
 
+// --- soft Body components ---
+
+/**
+ * @brief Enables deformable physics for an entity, turning its mesh into a soft body.
+ * This component holds all parameters needed by a Position-Based Dynamics (PBD)
+ * or Finite Element Method (FEM) solver.
+ */
+struct SoftBodyComponent {
+    // --- Core Physical Properties ---
+
+    /** @brief Total mass of the soft body, which will be distributed among its vertices. */
+    float totalMass = 1.0f;
+
+    /**
+     * @brief Damping factor for internal material forces. Controls how quickly the object stops jiggling.
+     * Maps to the "Material Damping" input field.
+     */
+    float materialDamping = 0.2f;
+
+    /**
+     * @brief Internal pressure in Pascals. Positive values make the object inflate; negative values make it collapse.
+     * Maps to the "Pressure" input field.
+     */
+    float pressure = 0.0f;
+
+    // --- Stiffness Parameters ---
+    // These are often derived from the material's Young's Modulus and Poisson's Ratio
+    // by the physics system but can be exposed for direct tweaking.
+
+    /** @brief Resistance of the material to stretching or compressing. */
+    float stretchStiffness = 1.0f;
+
+    /** @brief Resistance of the material to bending. */
+    float bendStiffness = 0.8f;
+
+    // --- Solver Configuration ---
+
+    /**
+     * @brief The number of iterations the solver performs per step to enforce constraints.
+     * Higher values increase accuracy and stiffness but reduce performance.
+     * Maps to the "Constraint Iterations" input field.
+     */
+    int positionSolverIterations = 8;
+
+    /**
+     * @brief The fixed time step for the physics sub-steps, in seconds.
+     * Maps to the "Integration Timestep" input field.
+     */
+    float integrationTimeStep = 0.016f;
+
+    // --- Collision & Interaction ---
+
+    /** @brief Friction coefficient when the soft body slides against other objects. */
+    float dynamicFriction = 0.5f;
+
+    /** @brief If true, allows different parts of the soft body to collide with each other. This is computationally expensive. */
+    bool selfCollision = false;
+
+    // --- Internal State (Managed by the Physics System) ---
+
+    /** @brief A list of vertex indices that are "pinned" or attached to the object's main transform, preventing them from moving freely. */
+    std::vector<int> pinnedVertexIndices;
+
+    /** @brief A flag for the physics system to know when it needs to rebuild its internal data structures for this body. */
+    bool isDirty = true;
+};
+
+
 // --- FIELD-SPECIFIC COMPONENTS ---
 
 struct FieldSourceTag {};

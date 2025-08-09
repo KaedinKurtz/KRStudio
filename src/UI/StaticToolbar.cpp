@@ -27,7 +27,7 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
     connect(ui->realsense_config_button, &QToolButton::toggled, this, &StaticToolbar::realSenseMenuToggled); // This signal shows/hides the RealSense configuration panel.
     connect(ui->databaseManagerButton, &QToolButton::toggled, this, &StaticToolbar::databaseMenuToggled); // This signal shows/hides the Database management panel.
     connect(ui->gridPropertiesButton, &QToolButton::toggled, this, &StaticToolbar::gridMenuToggled); // This signal shows/hides the Grid Properties panel.
-
+    connect(ui->show_object_properties, &QToolButton::toggled, this, &StaticToolbar::objectPropertiesMenuToggled);
     // Create the viewport manager popup
     m_viewportManagerPopup = new ViewportManagerPopup(this);
 

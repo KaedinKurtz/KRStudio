@@ -34,7 +34,7 @@ signals:
     void realSenseMenuToggled(bool checked);
     void databaseMenuToggled(bool checked);
 	void gridMenuToggled(bool checked);
-
+    void objectPropertiesMenuToggled(bool checked);
 
 private:
     Ui::toolbarContainer* ui; // Pointer to the generated UI class

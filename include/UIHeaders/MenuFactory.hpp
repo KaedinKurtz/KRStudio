@@ -5,6 +5,7 @@
 #include "RealSenseConfigMenu.hpp"
 #include "DatabasePanel.hpp"
 #include "gridPropertiesWidget.hpp"
+#include "ObjectPropertiesWidget.hpp" // assuming this is the object properties menu
 #include "PropertiesPanel.hpp" // assuming this is a grid properties menu
 #include <memory>
 
@@ -24,6 +25,7 @@ enum class MenuType {
     RealSense,
     GridProperties,    // if you implement a GridPropertiesMenu
     Database,
+    ObjectProperties
     // add more as you go
 };
 
@@ -50,6 +52,9 @@ struct MenuFactory
         case MenuType::Database:
             // DatabasePanel(Scene* scene, QWidget* parent)
             return std::unique_ptr<IMenu>(new DatabasePanel(scene, parent));
+
+        case MenuType::ObjectProperties: // <-- ADD THIS CASE
+            return std::unique_ptr<IMenu>(new ObjectPropertiesWidget(scene, parent));
 
         default:
             return nullptr;

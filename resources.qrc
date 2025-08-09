@@ -180,6 +180,8 @@
         <file>icons/Realsense Logo.png</file>
         <file>icons/icons8-wind-48.png</file>
         <file>icons/icons8-grid-48.png</file>
+        <file>icons/icons8-locked-48.png</file>
+        <file>icons/icons8-unlocked-48.png</file>
     </qresource>
     <qresource prefix="/styles">
         <file>dark_style.qss</file>

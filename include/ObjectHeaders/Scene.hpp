@@ -17,6 +17,7 @@ public:
     // to support multiple independent viewports and cameras.
     void setPrimaryCamera(entt::entity camera);
     entt::entity getPrimaryCamera() const;
+    entt::sigh<void(entt::entity)> onSelectionChanged;
 
 private:
     entt::registry m_registry;
