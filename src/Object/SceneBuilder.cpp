@@ -27,6 +27,42 @@ namespace {
         std::uniform_real_distribution<float> dist(min, max);
         return dist(getRandomGenerator());
     }
+
+    // Build an ONB where local + Z looks along dir; upHint defines roll if not parallel.
+        inline glm::mat3 basisLookZ(const glm::vec3 & dirWorld, const glm::vec3 & upHintWorld = glm::vec3(0, 1, 0)) {
+        glm::vec3 Z = glm::length2(dirWorld) > 0 ? glm::normalize(dirWorld) : glm::vec3(0, 0, 1);
+        glm::vec3 Uhint = (glm::length2(upHintWorld) > 0) ? glm::normalize(upHintWorld) : glm::vec3(0, 1, 0);
+        // If parallel, pick a safe hint
+        if (std::abs(glm::dot(Z, Uhint)) > 0.999f) Uhint = std::abs(Z.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+        glm::vec3 X = glm::normalize(glm::cross(Uhint, Z));
+        glm::vec3 Y = glm::normalize(glm::cross(Z, X));
+        return glm::mat3(X, Y, Z); // columns
+    }
+
+    inline glm::quat quatFromBasis(const glm::mat3 & R) {
+        return glm::quat_cast(R);
+    }
+
+    // Compute local half-extents from mesh data (centered AABB).
+    inline glm::vec3 meshLocalHalfExtents(MeshID meshId) {
+        const RenderableMeshComponent* mesh = ResourceManager::instance().getMesh(meshId);
+        if (!mesh || mesh->vertices.empty()) return glm::vec3(0.5f);
+        glm::vec3 mn(std::numeric_limits<float>::max());
+        glm::vec3 mx(-std::numeric_limits<float>::max());
+        for (const auto& v : mesh->vertices) {
+            mn = glm::min(mn, v.position);
+            mx = glm::max(mx, v.position);
+        }
+        return 0.5f * (mx - mn);
+    }
+
+    // Raycast helper (returns whatever your SceneQuery function returns)
+    template <typename HitT>
+    inline std::optional<HitT> castInDirection(const glm::vec3 & origin, const glm::vec3 & dir,
+        const SceneQuery::SurfaceQueryFunction & query) {
+        // Your existing spawnOnSurface calls queryFunc(origin, dir) and expects optional hit
+        return query(origin, dir);
+    }
 }
 
 
@@ -222,6 +258,106 @@ std::vector<entt::entity> SceneBuilder::spawnMeshInstanceRandom(Scene& scene, Me
     return spawnedEntities;
 }
 
+std::vector<entt::entity> SceneBuilder::spawnOrientedRandom(
+    Scene& scene, MeshID meshId, int count,
+    const glm::vec3& areaMin, const glm::vec3& areaMax,
+    const glm::vec3& targetZ_World,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomRollRangeDegrees)
+{
+    std::vector<entt::entity> out;
+    out.reserve(std::max(0, count));
+
+    glm::vec3 Z = glm::normalize(targetZ_World);
+    glm::mat3 R = basisLookZ(Z);               // columns = X,Y,Z
+    glm::quat baseQ = quatFromBasis(R);
+
+    for (int i = 0; i < count; ++i) {
+        glm::vec3 p(
+            randomFloat(areaMin.x, areaMax.x),
+            randomFloat(areaMin.y, areaMax.y),
+            randomFloat(areaMin.z, areaMax.z)
+        );
+
+        float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+        float rr = glm::radians(randomFloat(randomRollRangeDegrees.x, randomRollRangeDegrees.y));
+        glm::quat rollQ = glm::angleAxis(rr, Z);
+
+        auto e = spawnMeshInstance(scene, meshId, p, rollQ * baseQ, glm::vec3(s));
+        if (e != entt::null) out.push_back(e);
+    }
+    return out;
+}
+
+std::vector<entt::entity> SceneBuilder::spawnOrientedRandom(
+    Scene& scene, MeshID meshId, int count,
+    const glm::vec3& areaMin, const glm::vec3& areaMax,
+    const glm::mat3& rotationBasisWorld,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomRollRangeDegrees)
+{
+    std::vector<entt::entity> out;
+    out.reserve(std::max(0, count));
+
+    glm::mat3 R = rotationBasisWorld;
+    // Keep it orthonormal-ish
+    glm::vec3 X = glm::normalize(R[0]);
+    glm::vec3 Y = glm::normalize(R[1]);
+    glm::vec3 Z = glm::normalize(R[2]);
+    // Re-orthogonalize quickly
+    X = glm::normalize(glm::cross(Y, Z));
+    Y = glm::normalize(glm::cross(Z, X));
+    R = glm::mat3(X, Y, Z);
+    glm::quat baseQ = quatFromBasis(R);
+
+    for (int i = 0; i < count; ++i) {
+        glm::vec3 p(
+            randomFloat(areaMin.x, areaMax.x),
+            randomFloat(areaMin.y, areaMax.y),
+            randomFloat(areaMin.z, areaMax.z)
+        );
+
+        float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+        float rr = glm::radians(randomFloat(randomRollRangeDegrees.x, randomRollRangeDegrees.y));
+        glm::quat rollQ = glm::angleAxis(rr, Z);
+
+        auto e = spawnMeshInstance(scene, meshId, p, rollQ * baseQ, glm::vec3(s));
+        if (e != entt::null) out.push_back(e);
+    }
+    return out;
+}
+
+
+entt::entity SceneBuilder::spawnPrimitive(
+    Scene& scene,
+    Primitive type,
+    const TransformComponent& transform,
+    const std::string& name)
+{
+    auto& registry = scene.getRegistry();
+    entt::entity e = registry.create();
+
+    // Transform + tag
+    registry.emplace_or_replace<TransformComponent>(e, transform);
+    registry.emplace_or_replace<TagComponent>(e, name);
+
+    // Mesh
+    auto& mesh = registry.emplace_or_replace<RenderableMeshComponent>(e);
+    switch (type) {
+    case Primitive::Cube:      buildUnitCube(mesh.vertices, mesh.indices); registry.emplace_or_replace<TagComponent>(e, name + "_Cube"); break;
+    case Primitive::Quad:      buildQuad(mesh.vertices, mesh.indices);     registry.emplace_or_replace<TagComponent>(e, name + "_Quad"); break;
+    case Primitive::Cylinder:  buildCylinder(mesh.vertices, mesh.indices); registry.emplace_or_replace<TagComponent>(e, name + "_Cylinder"); break;
+    case Primitive::Cone:      buildCone(mesh.vertices, mesh.indices);     registry.emplace_or_replace<TagComponent>(e, name + "_Cone"); break;
+    case Primitive::Torus:     buildTorus(mesh.vertices, mesh.indices);    registry.emplace_or_replace<TagComponent>(e, name + "_Torus"); break;
+    case Primitive::IcoSphere: buildIcoSphere(mesh.vertices, mesh.indices); registry.emplace_or_replace<TagComponent>(e, name + "_IcoSphere"); break;
+    }
+
+    // Material tag parity with imported meshes: prefer tri-planar when UVs/tangents are absent
+    registry.emplace_or_replace<TriPlanarMaterialTag>(e);
+
+    return e;
+}
+
 // ===================================================================
 // ==                     ADVANCED SPAWNING                         ==
 // ===================================================================
@@ -273,6 +409,81 @@ std::vector<entt::entity> SceneBuilder::spawnOnSurface(Scene& scene, MeshID mesh
     }
     return spawnedEntities;
 }
+
+std::vector<entt::entity> SceneBuilder::spawnOrientedRandomOnSurface(
+    Scene& scene, MeshID meshId, int count,
+    const glm::vec3& boundsMin, const glm::vec3& boundsMax,
+    const SurfaceQueryFunction& queryFunc,
+    const glm::vec3& modelUp_Local,
+    const glm::vec3& surfaceUp_World,
+    float upToleranceDegrees,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomYawRangeDegrees,
+    bool alignToSurfaceNormal)
+{
+    std::vector<entt::entity> out;
+    out.reserve(std::max(0, count));
+
+    const glm::vec3 worldUp = glm::normalize(surfaceUp_World);
+    const float cosTol = std::cos(glm::radians(std::max(0.0f, upToleranceDegrees)));
+
+    // Precompute mesh half extents to lift by local up
+    const glm::vec3 he = meshLocalHalfExtents(meshId);
+    const glm::vec3 mUpL = glm::normalize(modelUp_Local);
+
+    int attempts = 0, maxAttempts = std::max(count * 10, 100);
+
+    while ((int)out.size() < count && attempts++ < maxAttempts) {
+        // 1) sample horizontal within bounds (project onto plane orthogonal to surfaceUp)
+        float rx = randomFloat(boundsMin.x, boundsMax.x);
+        float rz = randomFloat(boundsMin.z, boundsMax.z);
+        // We’ll cast from the top bound along -surfaceUp
+        glm::vec3 castOrigin = glm::vec3(rx, boundsMax.y, rz);
+        glm::vec3 castDir = -worldUp;
+
+        // 2) raycast
+        auto hit = queryFunc(castOrigin, castDir);
+        if (!hit) continue;
+
+        // 3) up tolerance check: only accept surfaces whose normal is near surfaceUp
+        glm::vec3 n = glm::normalize(hit->normal);
+        if (glm::dot(n, worldUp) < cosTol) continue;
+
+        // 4) build rotation
+        // Choose the "target up" we will align modelUp to
+        glm::vec3 targetUp = alignToSurfaceNormal ? n : worldUp;
+
+        // Create a basis where model local +Y (or provided modelUp) maps to targetUp
+        // We'll use "lookZ" with Z from a sideways yaw, then swap to align up
+        // Better: directly rotate modelUp_Local to targetUp.
+        glm::quat alignQ = glm::rotation(mUpL, targetUp); // local->world up
+
+        // Add random yaw about the chosen up axis
+        float yaw = glm::radians(randomFloat(randomYawRangeDegrees.x, randomYawRangeDegrees.y));
+        glm::quat yawQ = glm::angleAxis(yaw, targetUp);
+
+        glm::quat finalQ = yawQ * alignQ;
+
+        // 5) choose scale
+        float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+        glm::vec3 scale(s);
+
+        // 6) lift by half-extent along modelUp, which now maps to targetUp
+        // Local AABB extent along modelUp = dot(|modelUp|, halfExtents)
+        glm::vec3 absUpL = glm::abs(glm::normalize(mUpL));
+        float halfAlongUpLocal = he.x * absUpL.x + he.y * absUpL.y + he.z * absUpL.z;
+        float lift = halfAlongUpLocal * s; // uniform scale
+
+        glm::vec3 pos = hit->position + targetUp * lift;
+
+        // 7) spawn
+        auto e = spawnMeshInstance(scene, meshId, pos, finalQ, scale);
+        if (e != entt::null) out.push_back(e);
+    }
+
+    return out;
+}
+
 
 std::vector<entt::entity> SceneBuilder::spawnInClumps(Scene& scene, const std::vector<MeshID>& meshIds,
     const std::vector<float>& weights,
@@ -545,4 +756,60 @@ entt::entity SceneBuilder::makeBezier(entt::registry& r,
     sp.thickness = glowThickness;
     r.emplace<SplineComponent>(e, std::move(sp));
     return e;
+}
+
+/**
+ * @brief Spawns a procedurally generated primitive mesh as a child of another entity.
+ * @param scene The scene to spawn the entity in.
+ * @param type The type of primitive to generate (e.g., Cube, Cylinder).
+ * @param parent The entity that will be the parent of the new primitive.
+ * @return The newly created entity handle.
+ */
+entt::entity SceneBuilder::spawnPrimitiveAsChild(Scene& scene, Primitive type, entt::entity parent)
+{
+    auto& registry = scene.getRegistry();
+
+    // 1. Create a new entity that will hold our primitive mesh.
+    auto newEntity = registry.create();
+
+    // 2. Add the core components that every scene object needs.
+    registry.emplace<TransformComponent>(newEntity);
+    registry.emplace<ParentComponent>(newEntity, parent);
+
+    // 3. Create a mesh component and populate it based on the requested primitive type.
+    auto& meshComp = registry.emplace<RenderableMeshComponent>(newEntity);
+
+    switch (type)
+    {
+    case Primitive::Cube:
+        buildUnitCube(meshComp.vertices, meshComp.indices);
+        registry.emplace<TagComponent>(newEntity, "Gizmo_Cube");
+        break;
+    case Primitive::Quad:
+        buildQuad(meshComp.vertices, meshComp.indices);
+        registry.emplace<TagComponent>(newEntity, "Gizmo_Quad");
+        break;
+    case Primitive::Cylinder:
+        buildCylinder(meshComp.vertices, meshComp.indices);
+        registry.emplace<TagComponent>(newEntity, "Gizmo_Cylinder");
+        break;
+    case Primitive::Cone:
+        buildCone(meshComp.vertices, meshComp.indices);
+        registry.emplace<TagComponent>(newEntity, "Gizmo_Cone");
+        break;
+    case Primitive::Torus:
+        // Using default parameters for the torus here.
+        buildTorus(meshComp.vertices, meshComp.indices);
+        registry.emplace<TagComponent>(newEntity, "Gizmo_Torus");
+        break;
+    case Primitive::IcoSphere:
+        buildIcoSphere(meshComp.vertices, meshComp.indices);
+        registry.emplace<TagComponent>(newEntity, "Gizmo_IcoSphere");
+        break;
+    }
+
+    // 4. Since these are simple primitives, we'll tag them for tri-planar mapping by default.
+    registry.emplace<TriPlanarMaterialTag>(newEntity);
+
+    return newEntity;
 }

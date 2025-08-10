@@ -3,6 +3,7 @@
 #include "Scene.hpp" // Needs to know about the scene
 #include "Types.hpp"
 #include "Components.hpp" // Needs to know about components it will add
+#include "PrimitiveBuilders.hpp"
 #include "SceneQuery.hpp"
 #include <vector>          
 #include <functional>
@@ -31,6 +32,8 @@ public:
     // Takes a scene and a robot description, and creates all the necessary
     // entities and components in the scene's registry.
     static void spawnRobot(Scene& scene, const RobotDescription& description);
+
+    static entt::entity spawnPrimitiveAsChild(Scene& scene, Primitive type, entt::entity parent);
 
     static entt::entity spawnMesh(Scene& scene, const QString& meshPath,
         const TransformComponent& transform = TransformComponent{});
@@ -129,6 +132,61 @@ public:
         Scene& scene,
         const std::vector<SpawnCommand>& commands
     );
+
+    // ---- Orientation/random placement in a volume ----
+    static std::vector<entt::entity> spawnOrientedRandom(
+        Scene& scene,
+        MeshID meshId,
+        int count,
+        const glm::vec3& areaMin,
+        const glm::vec3& areaMax,
+        // Option A: align local +Z to this world direction (normalized inside)
+        const glm::vec3& targetZ_World,
+        // Optional jitter
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomRollRangeDegrees = { 0.0f, 0.0f }
+    );
+
+    // Overload Option B: provide a full rotation basis for the instances
+    static std::vector<entt::entity> spawnOrientedRandom(
+        Scene& scene,
+        MeshID meshId,
+        int count,
+        const glm::vec3& areaMin,
+        const glm::vec3& areaMax,
+        const glm::mat3& rotationBasisWorld,
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomRollRangeDegrees = { 0.0f, 0.0f }
+    );
+
+    // ---- Oriented placement ON a surface with tolerance ----
+    static std::vector<entt::entity> spawnOrientedRandomOnSurface(
+        Scene& scene,
+        MeshID meshId,
+        int count,
+        const glm::vec3& boundsMin,
+        const glm::vec3& boundsMax,
+        const SurfaceQueryFunction& queryFunc,
+        // Local axis in the MODEL we consider "up" (e.g., {0,1,0})
+        const glm::vec3& modelUp_Local,
+        // The desired world "up" for the SURFACE (e.g., {0,1,0})
+        const glm::vec3& surfaceUp_World,
+        float upToleranceDegrees,
+        // Placement options
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomYawRangeDegrees = { 0.0f, 0.0f },
+        bool alignToSurfaceNormal = false // if true, align to hit.normal; else align to surfaceUp_World
+    );
+
+    // ---- Primitives: same treatment as imported meshes ----
+    static entt::entity spawnPrimitive(
+        Scene& scene,
+        Primitive type,
+        const TransformComponent& transform = TransformComponent{},
+        const std::string& name = "Primitive"
+    );
+
+
 
 	// --- Camera Creation ---
     static entt::entity createCamera(Scene& scene,

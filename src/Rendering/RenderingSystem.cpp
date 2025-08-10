@@ -22,6 +22,7 @@
 #include "SplinePass.hpp"
 #include "FieldVisualizerPass.hpp"
 #include "PointCloudPass.hpp"
+#include "GizmoPass.hpp"
 
 #include <QOpenGLContext>
 #include <QOpenGLVersionFunctionsFactory>
@@ -246,6 +247,14 @@ void RenderingSystem::initializeSharedResources()
             (shaderDir + "post_process_vert.glsl").toStdString(),
             (shaderDir + "edge_detect_advanced_frag.glsl").toStdString());
 
+        loadAndStoreShader("gizmo_flat",
+            (shaderDir + "gizmo_flat_vert.glsl").toStdString(),
+			(shaderDir + "gizmo_flat_frag.glsl").toStdString());
+
+        loadAndStoreShader("gizmo_highlight",
+            (shaderDir + "gizmo_highlight_vert.glsl").toStdString(),
+            (shaderDir + "gizmo_highlight_frag.glsl").toStdString());
+
         // Load all other shaders as before
         loadAndStoreShader("lighting", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "lighting_frag.glsl").toStdString());
         loadAndStoreShader("phong", (shaderDir + "vertex_shader_vert.glsl").toStdString(), (shaderDir + "fragment_shader_frag.glsl").toStdString());
@@ -380,6 +389,7 @@ void RenderingSystem::initializeSharedResources()
     m_overlayPasses.push_back(std::make_unique<SplinePass>());
     m_overlayPasses.push_back(std::make_unique<FieldVisualizerPass>());
     m_overlayPasses.push_back(std::make_unique<PointCloudPass>());
+    m_overlayPasses.push_back(std::make_unique<GizmoPass>());
 
     // 4) Initialize all passes
     qDebug() << "[RenderingSystem] Initializing passes for context" << ctx;

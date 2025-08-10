@@ -15,6 +15,15 @@
 #include <QOpenGLFunctions_4_3_Core>
 #include "components.hpp" // This header should contain your updated Vertex struct definition
 
+enum class Primitive {
+    Cube,
+    Quad,
+    Cylinder,
+    Cone,
+    Torus,
+    IcoSphere
+};
+
 /* ------------------------------------------------------------------------- */
 /* buildUnitCube – 24 verts, 12 triangles                                    */
 /* ------------------------------------------------------------------------- */
@@ -23,7 +32,6 @@ inline void buildUnitCube(std::vector<Vertex>& verts,
 {
     verts.clear();
     verts.reserve(24);
-    // THE FIX: Provide default uv, tangent, and bitangent for each vertex.
     glm::vec2 defaultUV(0.0f);
     glm::vec3 defaultTangent(0.0f);
     glm::vec3 defaultBitangent(0.0f);
@@ -45,6 +53,119 @@ inline void buildUnitCube(std::vector<Vertex>& verts,
         16,17,18, 16,18,19, // +Z
         20,21,22, 20,22,23  // -Z
     };
+}
+
+
+/* ------------------------------------------------------------------------- */
+/* buildQuad – 4 verts, 2 triangles, facing +Z                               */
+/* ------------------------------------------------------------------------- */
+inline void buildQuad(std::vector<Vertex>& verts, std::vector<uint32_t>& idx)
+{
+    verts = {
+        { {-0.5f, -0.5f, 0.0f}, {0,0,1}, {0,0}, {1,0,0}, {0,1,0} },
+        { { 0.5f, -0.5f, 0.0f}, {0,0,1}, {1,0}, {1,0,0}, {0,1,0} },
+        { { 0.5f,  0.5f, 0.0f}, {0,0,1}, {1,1}, {1,0,0}, {0,1,0} },
+        { {-0.5f,  0.5f, 0.0f}, {0,0,1}, {0,1}, {1,0,0}, {0,1,0} }
+    };
+    idx = { 0, 1, 2, 2, 3, 0 };
+}
+
+/* ------------------------------------------------------------------------- */
+/* buildCylinder – Parametric cylinder oriented along the Y axis             */
+/* ------------------------------------------------------------------------- */
+inline void buildCylinder(std::vector<Vertex>& verts, std::vector<uint32_t>& idx,
+    float height = 1.0f, float radius = 0.5f, int segments = 16)
+{
+    verts.clear();
+    idx.clear();
+    float halfHeight = height / 2.0f;
+
+    // Side vertices
+    for (int i = 0; i <= segments; ++i) {
+        float angle = (float)i / (float)segments * 2.0f * glm::pi<float>();
+        float x = cos(angle) * radius;
+        float z = sin(angle) * radius;
+        glm::vec3 normal = glm::normalize(glm::vec3(x, 0, z));
+        verts.push_back({ {x, -halfHeight, z}, normal, {}, {}, {} });
+        verts.push_back({ {x,  halfHeight, z}, normal, {}, {}, {} });
+    }
+
+    // Indices for sides
+    for (int i = 0; i < segments; ++i) {
+        int i0 = i * 2;
+        int i1 = i0 + 1;
+        int i2 = i0 + 2;
+        int i3 = i0 + 3;
+        idx.push_back(i0); idx.push_back(i2); idx.push_back(i1);
+        idx.push_back(i1); idx.push_back(i2); idx.push_back(i3);
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+/* buildCone – Parametric cone oriented along the Y axis                     */
+/* ------------------------------------------------------------------------- */
+inline void buildCone(std::vector<Vertex>& verts, std::vector<uint32_t>& idx,
+    float height = 1.0f, float radius = 0.5f, int segments = 16)
+{
+    verts.clear();
+    idx.clear();
+    glm::vec3 tip = { 0, height, 0 };
+    verts.push_back({ tip, {0, 1, 0}, {}, {}, {} }); // Tip vertex
+
+    // Base vertices
+    for (int i = 0; i <= segments; ++i) {
+        float angle = (float)i / (float)segments * 2.0f * glm::pi<float>();
+        float x = cos(angle) * radius;
+        float z = sin(angle) * radius;
+        verts.push_back({ {x, 0, z}, {0, -1, 0}, {}, {}, {} });
+    }
+
+    // Indices for sides and base
+    for (int i = 1; i <= segments; ++i) {
+        idx.push_back(0); // Tip
+        idx.push_back(i);
+        idx.push_back(i + 1);
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+/* buildTorus – Parametric torus in the XY plane                             */
+/* ------------------------------------------------------------------------- */
+inline void buildTorus(std::vector<Vertex>& verts, std::vector<uint32_t>& idx,
+    float majorRadius = 1.0f, float minorRadius = 0.02f,
+    int majorSegments = 24, int minorSegments = 12,
+    float startAngleDegrees = 0.0f, float sweepAngleDegrees = 360.0f)
+{
+    verts.clear();
+    idx.clear();
+
+    // Correctly calculate the number of major segments for the sweep angle
+    int numMajorSegments = static_cast<int>(std::ceil(majorSegments * (sweepAngleDegrees / 360.0f)));
+    if (numMajorSegments == 0) return;
+
+    for (int i = 0; i <= numMajorSegments; i++) {
+        float majorFraction = (float)i / (float)numMajorSegments;
+        float majorAngle = glm::radians(startAngleDegrees + majorFraction * sweepAngleDegrees);
+        glm::vec3 majorPos(cos(majorAngle) * majorRadius, sin(majorAngle) * majorRadius, 0);
+
+        for (int j = 0; j <= minorSegments; j++) {
+            float minorAngle = (float)j / (float)minorSegments * 2.0f * glm::pi<float>();
+            glm::vec3 normal = glm::vec3(cos(majorAngle) * cos(minorAngle), sin(majorAngle) * cos(minorAngle), sin(minorAngle));
+            glm::vec3 pos = majorPos + normal * minorRadius;
+            verts.push_back({ pos, normal, {}, {}, {} });
+        }
+    }
+
+    for (int i = 0; i < numMajorSegments; i++) {
+        for (int j = 0; j < minorSegments; j++) {
+            int i0 = i * (minorSegments + 1) + j;
+            int i1 = i0 + 1;
+            int i2 = (i + 1) * (minorSegments + 1) + j;
+            int i3 = i2 + 1;
+            idx.push_back(i0); idx.push_back(i2); idx.push_back(i1);
+            idx.push_back(i1); idx.push_back(i2); idx.push_back(i3);
+        }
+    }
 }
 
 /* ------------------------------------------------------------------------- */

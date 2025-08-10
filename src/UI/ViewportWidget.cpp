@@ -27,12 +27,59 @@
 #include "LedTweakDialog.hpp"
 #include "FieldSolver.hpp"
 #include "BlackBox.hpp"
+#include "GizmoSystem.hpp"
+#include <entt/entt.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 int ViewportWidget::s_instanceCounter = 0;
 
 static GLuint s_testTextureId = 0;
 static bool s_isFirstContextInit = true;
-struct CpuRay { glm::vec3 origin; glm::vec3 dir; };
+
+// ---- Local ray builder (no dependency on IntersectionSystem internals) ----
+static CpuRay makeCpuRay(const Camera& cam, int px, int py, int vpW, int vpH) {
+    float x = (2.0f * float(px) / float(vpW)) - 1.0f;
+    float y = 1.0f - (2.0f * float(py) / float(vpH)); // flip Y
+    glm::mat4 P = cam.getProjectionMatrix(float(vpW) / float(vpH));
+    glm::mat4 V = cam.getViewMatrix();
+    glm::mat4 invVP = glm::inverse(P * V);
+    glm::vec4 nW = invVP * glm::vec4(x, y, -1.0f, 1.0f);
+    glm::vec4 fW = invVP * glm::vec4(x, y, 1.0f, 1.0f);
+    nW /= nW.w; fW /= fW.w;
+    CpuRay r; r.origin = glm::vec3(nW); r.dir = glm::normalize(glm::vec3(fW - nW)); return r;
+}
+
+// ---- Minimal math helpers (dup of GizmoSystem’s internal ones) ----
+static bool rayPlane(const glm::vec3& ro, const glm::vec3& rd,
+    const glm::vec3& O, const glm::vec3& N,
+    float& tOut, glm::vec3& H) {
+    float denom = glm::dot(rd, N);
+    if (std::abs(denom) < 1e-8f) return false;
+    float t = glm::dot(O - ro, N) / denom;
+    if (t < 0.0f) return false;
+    tOut = t; H = ro + rd * t; return true;
+}
+
+static void closestRayLine(const glm::vec3& ro, const glm::vec3& rd,
+    const glm::vec3& lo, const glm::vec3& ld,
+    float& tRayOut, float& tLineOut) {
+    glm::vec3 r = rd; glm::vec3 l = glm::normalize(ld);
+    glm::vec3 w0 = ro - lo;
+    float a = glm::dot(r, r);
+    float b = glm::dot(r, l);
+    float c = 1.0f;
+    float d = glm::dot(r, w0);
+    float e = glm::dot(l, w0);
+    float denom = a * c - b * b;
+    float u = 0.0f, v = 0.0f;
+    if (std::abs(denom) > 1e-8f) { u = (b * e - c * d) / denom; v = (a * e - b * d) / denom; }
+    else { u = 0.0f; v = e; }
+    if (u < 0.0f) { u = 0.0f; v = e; }
+    tRayOut = u;
+    tLineOut = v;
+}
 
 static CpuRay makeRayFromScreen(int px, int py, int vpW, int vpH, const Camera& cam)
 {
@@ -270,19 +317,78 @@ Camera& ViewportWidget::getCamera()
 void ViewportWidget::mousePressEvent(QMouseEvent* ev)
 {
     m_lastMousePos = ev->pos();
+
     if (ev->button() == Qt::RightButton) {
         setFocus(Qt::OtherFocusReason);
         getCamera().setNavMode(Camera::NavMode::FLY);
         setCursor(Qt::BlankCursor);
     }
+
     if (ev->button() == Qt::LeftButton) {
-        m_clickStartPos = ev->pos();   // <-- remember down position
-        // DO NOT call IntersectionSystem here anymore
+        m_clickStartPos = ev->pos();
+        m_maybeClick = true;
+        setFocus();                                 // was setFocus(Qt::ClickFocus)
+
+        if (m_gizmo && m_scene) {
+            Camera& cam = getCamera();
+            CpuRay ray = makeCpuRay(cam, ev->pos().x(), ev->pos().y(), width(), height());
+
+            entt::entity h = m_gizmo->pickHandle(ray);
+            if (h != entt::null) {
+                auto& reg = m_scene->getRegistry();
+                entt::entity target = entt::null;
+                for (auto eSel : reg.view<SelectedComponent>()) { target = eSel; break; }
+                if (target != entt::null) {
+                    glm::vec3 hitPoint = glm::vec3(0);
+
+                    // get gizmo origin/rotation
+                    const entt::entity gizRoot = m_gizmo->getRootEntity();
+                    const auto& rxf = reg.get<TransformComponent>(gizRoot);
+                    const glm::vec3 O = rxf.translation;
+
+                    const auto& gh = reg.get<GizmoHandleComponent>(h);
+                    if (gh.mode == GizmoMode::Rotate) {
+                        glm::vec3 axis = (gh.axis == GizmoAxis::X) ? glm::vec3(1, 0, 0)
+                            : (gh.axis == GizmoAxis::Y) ? glm::vec3(0, 1, 0)
+                            : glm::vec3(0, 0, 1);
+                        glm::vec3 N = glm::normalize(glm::mat3_cast(rxf.rotation) * axis);
+                        float t; glm::vec3 H;
+                        if (rayPlane(ray.origin, ray.dir, O, N, t, H)) hitPoint = H;
+                        else hitPoint = O;
+                    }
+                    else if (gh.mode == GizmoMode::Translate || gh.mode == GizmoMode::Scale) {
+                        if (gh.axis == GizmoAxis::X || gh.axis == GizmoAxis::Y || gh.axis == GizmoAxis::Z) {
+                            glm::vec3 axis = (gh.axis == GizmoAxis::X) ? glm::vec3(1, 0, 0)
+                                : (gh.axis == GizmoAxis::Y) ? glm::vec3(0, 1, 0)
+                                : glm::vec3(0, 0, 1);
+                            glm::vec3 A = glm::normalize(glm::mat3_cast(rxf.rotation) * axis);
+                            float tRay, tLine; closestRayLine(ray.origin, ray.dir, O, A, tRay, tLine);
+                            hitPoint = O + A * tLine;
+                        }
+                        else {
+                            glm::vec3 N = (gh.axis == GizmoAxis::XY) ? glm::vec3(0, 0, 1)
+                                : (gh.axis == GizmoAxis::YZ) ? glm::vec3(1, 0, 0)
+                                : glm::vec3(0, 1, 0);
+                            N = glm::normalize(glm::mat3_cast(rxf.rotation) * N);
+                            float t; glm::vec3 H;
+                            if (rayPlane(ray.origin, ray.dir, O, N, t, H)) hitPoint = H;
+                            else hitPoint = O;
+                        }
+                    }
+
+                    m_activeGizmo = h;
+                    m_gizmoDragging = true;
+                    m_suppressClickThisRelease = true;
+                    m_gizmo->startDrag(m_activeGizmo, target, hitPoint, ray.dir);
+                }
+            }
+        }
     }
 
     update();
     QOpenGLWidget::mousePressEvent(ev);
 }
+
 
 void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
 {
@@ -292,57 +398,64 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
     }
 
     if (ev->button() == Qt::LeftButton) {
-        if (m_suppressClickThisRelease) {
-            m_suppressClickThisRelease = false;
-            return; // Suppress click after a double-click
+
+        if (m_gizmoDragging) {
+            m_gizmoDragging = false;
+            if (m_gizmo) m_gizmo->endDrag();       // clears Active tags
+            unsetCursor();
+            update();
+            // Don't early-return here; we still allow "click vs drag" logic below
         }
 
-        const int delta = (ev->pos() - m_clickStartPos).manhattanLength();
-        if (delta < m_ClickSlop) { // It's a click, not a drag
-            auto& reg = m_scene->getRegistry();
-            const bool isCtrlPressed = ev->modifiers() & Qt::ControlModifier;
+        if (m_gizmoDragging && m_gizmo) {
+            m_gizmo->endDrag();
+            m_gizmoDragging = false;
+            m_activeGizmo = entt::null;
+            m_suppressClickThisRelease = true;
+            update();
+            QOpenGLWidget::mouseReleaseEvent(ev);
+            return;
+        }
 
-            // Perform the raycast
+
+
+        if (m_suppressClickThisRelease) {
+            m_suppressClickThisRelease = false;
+            QOpenGLWidget::mouseReleaseEvent(ev);
+            return;
+        }
+
+        // --- existing selection click ---
+        const int delta = (ev->pos() - m_clickStartPos).manhattanLength();
+        if (delta < m_ClickSlop) {
+            auto& reg = m_scene->getRegistry();
+            const bool isShiftPressed = ev->modifiers() & Qt::ShiftModifier;
+
             auto hit = cpuPickAABB(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(), width(), height());
 
+            if (!isShiftPressed) {
+                for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+            }
             if (hit) {
-                // We clicked on an object
-                entt::entity hitEntity = hit->entity;
-                if (isCtrlPressed) {
-                    // CTRL is pressed: Toggle selection
-                    if (reg.all_of<SelectedComponent>(hitEntity)) {
-                        reg.remove<SelectedComponent>(hitEntity);
-                    }
-                    else {
-                        reg.emplace<SelectedComponent>(hitEntity);
-                    }
+                entt::entity e = hit->entity;
+                if (reg.all_of<SelectedComponent>(e)) {
+                    if (isShiftPressed) reg.remove<SelectedComponent>(e);
                 }
                 else {
-                    // CTRL is NOT pressed: Standard selection
-                    // Clear previous selection first
-                    for (auto eSel : reg.view<SelectedComponent>()) {
-                        reg.remove<SelectedComponent>(eSel);
-                    }
-                    // Select the new entity
-                    reg.emplace<SelectedComponent>(hitEntity);
-                }
-                emit selectionChanged(hitEntity);
-            }
-            else {
-                // We clicked on empty space: Deselect all
-                if (!isCtrlPressed) { // Only deselect all if Ctrl isn't held
-                    for (auto eSel : reg.view<SelectedComponent>()) {
-                        reg.remove<SelectedComponent>(eSel);
-                    }
-                    emit selectionChanged(entt::null);
+                    reg.emplace<SelectedComponent>(e);
                 }
             }
-            update(); // Trigger a repaint to show the change
+
+            QVector<entt::entity> currentSelection;
+            for (auto eSel : reg.view<SelectedComponent>()) currentSelection.push_back(eSel);
+            emit selectionChanged(currentSelection, getCamera());
+            update();
         }
     }
 
     QOpenGLWidget::mouseReleaseEvent(ev);
 }
+
 
 void ViewportWidget::mouseMoveEvent(QMouseEvent* ev)
 {
@@ -350,20 +463,47 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* ev)
     int dy = ev->pos().y() - m_lastMousePos.y();
     Camera& cam = getCamera();
 
-    // If user moved more than slop, this isn't a click
-    if (m_maybeClick && (ev->pos() - m_pressPos).manhattanLength() > m_ClickSlop) {
+    if (m_maybeClick && (ev->pos() - m_clickStartPos).manhattanLength() > m_ClickSlop)
         m_maybeClick = false;
+
+    // ----- DRAG GIZMO -----
+    if (m_gizmoDragging && m_gizmo) {
+        CpuRay ray = makeCpuRay(cam, ev->pos().x(), ev->pos().y(), width(), height());
+        m_gizmo->updateDrag(ray, cam);
+
+        auto& reg = m_scene->getRegistry();
+        QVector<entt::entity> currentSelection;
+        for (auto eSel : reg.view<SelectedComponent>()) currentSelection.push_back(eSel);
+        emit selectionChanged(currentSelection, cam);
+
+        // Suppress camera motion while dragging
+        m_lastMousePos = ev->pos();
+        update();
+        return;
     }
 
+    // ----- HOVER (only when not dragging) -----
+    if (m_gizmo) {
+        CpuRay ray = makeCpuRay(cam, ev->pos().x(), ev->pos().y(), width(), height());
+        entt::entity newHover = m_gizmo->pickHandle(ray);
+        if (newHover != m_hoverGizmo) {
+            m_hoverGizmo = newHover;
+            m_gizmo->setHoveredHandle(m_hoverGizmo);
+        }
+    }
+
+    // ----- CAMERA NAV -----
     if (cam.navMode() == Camera::NavMode::FLY)            cam.freeLook(dx, dy);
-    else if (ev->buttons() & Qt::MiddleButton ||
-        (ev->buttons() & Qt::LeftButton && ev->modifiers() & Qt::ShiftModifier))
+    else if ((ev->buttons() & Qt::MiddleButton) ||
+        ((ev->buttons() & Qt::LeftButton) && (ev->modifiers() & Qt::ShiftModifier)))
         cam.pan(dx, dy, width(), height());
-    else if (ev->buttons() & Qt::LeftButton)              cam.orbit(dx, dy);  // unchanged
+    else if ((ev->buttons() & Qt::LeftButton) && !m_gizmoDragging)
+        cam.orbit(dx, dy);
 
     m_lastMousePos = ev->pos();
     update();
 }
+
 
 void ViewportWidget::wheelEvent(QWheelEvent* event) {
     getCamera().dolly(event->angleDelta().y());
@@ -395,6 +535,16 @@ void ViewportWidget::keyPressEvent(QKeyEvent* ev)
         case Qt::Key_E: cam.move(Camera::UP, s); break;
         case Qt::Key_Q: cam.move(Camera::DOWN, s); break;
         case Qt::Key_P: cam.toggleProjection();       break;
+        case Qt::Key_T: emit gizmoModeRequested(0); break; // Translate
+        case Qt::Key_R: emit gizmoModeRequested(1); break; // Rotate
+        case Qt::Key_Y: emit gizmoModeRequested(2); break; // Scale
+        case Qt::Key_Space:
+        {
+            static int m = 0;           // local cycle
+            m = (m + 1) % 3;
+            emit gizmoModeRequested(m);
+            break;
+        }
         }
     }
     update();
@@ -406,11 +556,26 @@ void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* ev)
 
     Camera& cam = getCamera();
     if (auto hit = cpuPickAABB(*m_scene, cam, ev->pos().x(), ev->pos().y(), width(), height())) {
+
+        auto& reg = m_scene->getRegistry();
+        if (reg.all_of<GizmoHandleComponent>(hit->entity)) {
+            const auto& gh = reg.get<GizmoHandleComponent>(hit->entity);
+            // Modes as 0/1/2 to avoid including enum header in widget
+            int mode = (gh.mode == GizmoMode::Translate) ? 0 :
+                (gh.mode == GizmoMode::Rotate) ? 1 : 2;
+            int axis = int(gh.axis);
+            emit gizmoHandleDoubleClicked(mode, axis);
+
+            // Don’t also do camera focus on gizmo double-click:
+            m_suppressClickThisRelease = true;
+            return;
+        }
+
+        // Non-gizmo: keep your existing focus behavior
         float keepDist = glm::length(cam.getPosition() - hit->worldPos);
         cam.focusOn(hit->worldPos, keepDist);
         update();
     }
 
-    // Prevent the following release from being treated as a single click
     m_suppressClickThisRelease = true;
 }

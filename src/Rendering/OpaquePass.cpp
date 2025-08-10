@@ -5,6 +5,7 @@
 #include "components.hpp"
 #include "RenderUtils.hpp"
 #include "Texture2D.hpp"
+#include "GizmoSystem.hpp"
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <QDebug>
@@ -156,7 +157,11 @@ void OpaquePass::execute(const RenderFrameContext& context)
     Shader* tessTriplanarShader = context.renderer.getShader("gbuffer_tessellated_triplanar");
     Shader* pomShader = context.renderer.getShader("gbuffer_triplanar_pom");
     // --- Render all entities ---
-    auto view = context.registry.view<RenderableMeshComponent, TransformComponent>();
+    auto view = context.registry.view<
+        RenderableMeshComponent,
+        TransformComponent
+    >(OpaquePass::DeferredExclusionTags{});
+
     for (auto ent : view)
     {
         if (context.registry.any_of<CameraGizmoTag>(ent))

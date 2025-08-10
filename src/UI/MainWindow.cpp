@@ -28,6 +28,7 @@
 #include "MaterialLoader.hpp"
 #include "MeshUtils.hpp"
 #include "ResourceManager.hpp"
+#include "GizmoSystem.hpp"
 
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/DataFlowGraphModel>
@@ -37,6 +38,8 @@
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
 #include <QtNodes/GraphicsViewStyle>
+#include <QShortcut>
+#include <QKeySequence>
 
 #include "NodeDelegate.hpp"          // ADD THIS
 #include "NodeCatalogWidget.hpp"   // ADD THIS if you haven't already
@@ -275,6 +278,8 @@ MainWindow::MainWindow(QWidget* parent)
     m_scene = std::make_unique<Scene>();
     auto& registry = m_scene->getRegistry();
 
+    m_gizmoSystem = std::make_unique<GizmoSystem>(*m_scene);
+
     ads::CDockManager::setConfigFlag(ads::CDockManager::ActiveTabHasCloseButton, true);
     ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaHasCloseButton, true);
     ads::CDockManager::setConfigFlag(ads::CDockManager::TabCloseButtonIsToolButton, true);
@@ -439,6 +444,34 @@ MainWindow::MainWindow(QWidget* parent)
     m_dockContainers << viewportDock1;
     applyCameraColorToDock(viewportDock1, cameraEntity1);
 
+    viewport1->setGizmoSystem(m_gizmoSystem.get());
+
+    connect(
+        viewport1,
+        &ViewportWidget::selectionChanged,
+        this,
+        &MainWindow::onSelectionChanged
+    );
+
+    connect(viewport1, &ViewportWidget::gizmoModeRequested, this, [this](int m) {
+        if (!m_gizmoSystem) return;
+        switch (m) {
+        case 0: m_gizmoSystem->setMode(GizmoMode::Translate); break;
+        case 1: m_gizmoSystem->setMode(GizmoMode::Rotate);    break;
+        case 2: m_gizmoSystem->setMode(GizmoMode::Scale);     break;
+        }
+        });
+
+    connect(viewport1, &ViewportWidget::gizmoHandleDoubleClicked,
+        this, [this](int mode, int axis) {
+            if (!m_gizmoSystem) return;
+            switch (mode) {
+            case 0: m_gizmoSystem->onTranslateDoubleClick(static_cast<GizmoAxis>(axis)); break;
+            case 2: m_gizmoSystem->onScaleDoubleClick(static_cast<GizmoAxis>(axis));     break;
+            default: break; // rotation: no-op for now
+            }
+        });
+
     connect(viewportDock1, &ads::CDockWidget::closed, this, [this, viewportDock1]() {
         if (auto* vp = qobject_cast<ViewportWidget*>(viewportDock1->widget())) {
             destroyCameraRig(vp->getCameraEntity());
@@ -585,7 +618,24 @@ MainWindow::MainWindow(QWidget* parent)
         m_fixedTopToolbar->gridMenuToggled(true);
     }
 
+
+
     showMenu(MenuType::GridProperties);
+
+    m_gizmoSystem->onAfterCommandApplied = [this] {
+        this->refreshGizmoAndProperties(); // picks primary viewport automatically
+        };
+
+    auto undoSc = new QShortcut(QKeySequence::Undo, this);
+    connect(undoSc, &QShortcut::activated, this, [this] {
+        this->m_gizmoSystem->undo();   // adjust path to reach your gizmo system
+        });
+
+    auto redoSc = new QShortcut(QKeySequence::Redo, this);
+    connect(redoSc, &QShortcut::activated, this, [this] {
+        this->m_gizmoSystem->redo();
+        });
+
 
     popup->updateUi(m_dockContainers, m_scene.get());
     syncViewportManagerPopup();
@@ -894,6 +944,9 @@ void MainWindow::addViewport() {
     dock->setWidget(vp);
     m_dockContainers.append(dock);
 
+    vp->setGizmoSystem(m_gizmoSystem.get());
+    connect(vp, &ViewportWidget::selectionChanged, this, &MainWindow::onSelectionChanged);
+
     ads::CDockAreaWidget* anchor = nullptr;
     if (m_dockContainers.size() > 1)
         anchor = m_dockContainers[m_dockContainers.size() - 2]->dockAreaWidget();
@@ -1165,10 +1218,11 @@ void MainWindow::showMenu(MenuType type)
         // *** START OF NEW CONNECTION LOGIC ***
         if (type == MenuType::ObjectProperties) {
             if (auto* propertiesPanel = dynamic_cast<ObjectPropertiesWidget*>(entry.menu->widget())) {
-                // Connect the new panel to ALL existing viewports
+                // When the properties panel is created, connect it to ALL existing viewports.
                 for (auto* dock : m_dockContainers) {
                     if (auto* viewport = qobject_cast<ViewportWidget*>(dock->widget())) {
-                        connect(viewport, &ViewportWidget::selectionChanged, propertiesPanel, &ObjectPropertiesWidget::setEntity);
+                        // This connection is now valid because the slot and signal match via the onSelectionChanged hub
+                        // We will connect it in the onSelectionChanged function instead.
                     }
                 }
             }
@@ -1206,4 +1260,55 @@ void MainWindow::hideMenu(MenuType type)
     m_dockManager->removeDockWidget(entry.dock);
     // 3) finally erase from our map so both dock+menu are destroyed
     m_menus.erase(it);
+}
+
+void MainWindow::onSelectionChanged(const QVector<entt::entity>& selectedEntities, const Camera& camera)
+{
+    // This slot acts as the central hub.
+    if (m_gizmoSystem) {
+        m_gizmoSystem->update(selectedEntities, camera);
+    }
+
+    // Update the properties panel to show the FIRST selected object's properties.
+    auto it = m_menus.find(MenuType::ObjectProperties);
+    if (it != m_menus.end()) {
+        if (auto* propertiesPanel = dynamic_cast<ObjectPropertiesWidget*>(it->menu->widget())) {
+            // If the selection is empty, pass null. Otherwise, pass the first entity.
+            entt::entity firstEntity = selectedEntities.isEmpty() ? entt::null : selectedEntities.first();
+            propertiesPanel->setEntity(firstEntity);
+        }
+    }
+}
+
+ViewportWidget* MainWindow::primaryViewport() const
+{
+    // Prefer the focused viewport; else first available
+    for (auto* dock : m_dockContainers) {
+        if (auto* vp = qobject_cast<ViewportWidget*>(dock->widget())) {
+            if (vp->hasFocus()) return vp;
+        }
+    }
+    for (auto* dock : m_dockContainers) {
+        if (auto* vp = qobject_cast<ViewportWidget*>(dock->widget())) {
+            return vp;
+        }
+    }
+    return nullptr;
+}
+
+void MainWindow::refreshGizmoAndProperties(ViewportWidget* vp)
+{
+    if (!vp) vp = primaryViewport();
+    if (!vp || !m_scene || !m_gizmoSystem) return;
+
+    // Rebuild current selection
+    QVector<entt::entity> selected;
+    auto& reg = m_scene->getRegistry();
+    for (auto eSel : reg.view<SelectedComponent>()) selected.push_back(eSel);
+
+    // Reuse your existing slot to update gizmo + properties panel
+    onSelectionChanged(selected, vp->getCamera());
+
+    // Trigger a redraw
+    vp->update();
 }

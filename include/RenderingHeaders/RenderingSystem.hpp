@@ -27,6 +27,7 @@ class Scene;
 class OpaquePass;
 class LightingPass;
 class PointCloudPass;
+class GizmoPass;
 
 // G-Buffer struct: Holds textures for geometry, normals, and material properties.
 // Generated once per frame and shared by all viewports.

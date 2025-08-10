@@ -29,6 +29,14 @@ struct ColorIndexComponent {
     int paletteIndex;
 };
 
+struct CpuRay {
+    glm::vec3 origin;
+    glm::vec3 dir;
+}; // Assuming you have a ray struct for intersection
+
+struct HoveredGizmoTag {};
+struct ActiveGizmoTag {};
+
 /**
  * @brief A structure that wraps any published value with profiling and tracing information.
  * This is the fundamental data packet within the ObservableDataManager.
@@ -41,9 +49,11 @@ struct ProfiledData {
     std::map<std::string, std::shared_ptr<const std::any>> dependencies;
 };
 
-// --- Material & Texture Components ---
+// --- SCENE MANIPULATION COMPONENTS ---
 
 // --- Rendering Type Tag Components ---
+
+struct HiddenComponent {};
 
 struct TriPlanarMaterialTag {};
 struct UVTexturedMaterialTag {};

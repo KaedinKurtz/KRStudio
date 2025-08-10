@@ -1,5 +1,7 @@
 #pragma once
 #include "IRenderPass.hpp"
+#include "components.hpp"
+#include "GizmoSystem.hpp"
 
 class Shader; // Forward declaration
 
@@ -10,6 +12,12 @@ public:
 
     // Renders all RenderableMeshComponent entities.
     void execute(const RenderFrameContext& context) override;
+
+    using DeferredExclusionTags = entt::exclude_t<
+        GizmoHandleComponent          // add more tags here later
+        // , NoDeferredDrawTag
+        // , AnotherSkipTag
+    >;
 
 private:
 };

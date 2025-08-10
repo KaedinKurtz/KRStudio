@@ -3,6 +3,7 @@
 #include <QPushButton>
 #include <QMainWindow>
 #include <QTimer>
+#include <QVector>
 #include <QResizeEvent>
 #include <memory> // Required for std::unique_ptr
 #include <entt/entt.hpp> 
@@ -20,12 +21,14 @@ class QWidget;
 class StaticToolbar;
 class ViewportWidget;
 class Scene;
+class Camera;
 class RenderingSystem;
 class QTimer;
 class FlowVisualizerMenu; // Forward-declare our new menu
 class SlamManager; // Forward-declare SlamManager
 class RealSenseManager; // Forward-declare RealSenseManager
 class ViewportManagerPopup; // Forward-declare ViewportManagerPopup
+class GizmoSystem;
 
 namespace ads {
     class CDockManager;
@@ -49,6 +52,9 @@ public:
     entt::entity cameraEntity() const { return m_cameraEntity; }
     void disableFloatingForAllDockWidgets();
     void updateAllDockStyles();
+
+    ViewportWidget* primaryViewport() const;
+    void refreshGizmoAndProperties(ViewportWidget* vp = nullptr);
 protected:
     // No changes needed here
     void setDockManagerBaseStyle();
@@ -90,6 +96,7 @@ private:
     QTimer* m_rsPollTimer;
     std::unique_ptr<RealSenseManager> m_realSenseManager;
     std::unique_ptr<rs2::pointcloud> m_pointCloud;
+    std::unique_ptr<GizmoSystem> m_gizmoSystem;
 
     entt::entity m_cameraEntity;
 
@@ -133,6 +140,7 @@ private slots:
     void onShowViewportRequested(ads::CDockWidget* dock); // Add this
     void onResetViewports(); // Add this
     void onViewportDockClosed(ads::CDockWidget* closedDock); // Add this
+    void onSelectionChanged(const QVector<entt::entity>& selectedEntities, const Camera& camera); // <-- ADD THIS NEW SLOT
 
 protected slots:
     void onLoadRobotClicked();

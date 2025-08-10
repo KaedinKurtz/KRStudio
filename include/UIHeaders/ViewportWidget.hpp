@@ -5,6 +5,10 @@
 #include <entt/fwd.hpp>
 #include <entt/entity/registry.hpp>
 #include <QLabel> // Include QLabel for stats overlay
+#include <QVector>
+#include "components.hpp"
+#include "GizmoSystem.hpp" // Include GizmoSystem header for gizmo functionality
+
 
 class Scene;
 class Camera;
@@ -37,6 +41,8 @@ public:
 
     void resizeTargetFbos(QOpenGLWidget* vp, int fbW, int fbH);
     QOpenGLDebugLogger* m_logger = nullptr;
+
+    void setGizmoSystem(GizmoSystem* g) { m_gizmo = g; }
 
 protected:
     void initializeGL() override;
@@ -90,8 +96,17 @@ private:
     QPoint m_clickStartPos;
     bool   m_suppressClickThisRelease = false;
 
+    GizmoSystem* m_gizmo = nullptr;
+
+    // Gizmo interaction state
+    bool         m_gizmoDragging = false;
+    entt::entity m_hoverGizmo = entt::null;
+    entt::entity m_activeGizmo = entt::null;
+
 signals: // <<< ADD THIS SECTION
     void viewportReady();
     void glContextReady();
-    void selectionChanged(entt::entity selectedEntity); // <-- ADD THIS SIGNAL
+    void selectionChanged(const QVector<entt::entity>& selectedEntities, const Camera& camera);
+    void gizmoModeRequested(int mode);
+    void gizmoHandleDoubleClicked(int mode, int axis);
 };
