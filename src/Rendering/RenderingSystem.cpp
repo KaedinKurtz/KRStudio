@@ -98,16 +98,36 @@ static GLuint getFullscreenQuadVAO(QOpenGLFunctions_4_3_Core* gl) {
 
 QString RenderingSystem::shadersRootDir()
 {
-    // •  Release build:   <app.exe>/shaders
-    // •  Debug   build:   <build-dir>/../shaders  (one level up)
-#ifdef NDEBUG
-    return QCoreApplication::applicationDirPath()
-        + QLatin1String("/shaders/");
-#else
-    //  “…/build/<config>/RoboticsSoftware.exe”  ?  “…/shaders/”
-    QDir exeDir{ QCoreApplication::applicationDirPath() };
-    return exeDir.absoluteFilePath(QStringLiteral("../shaders/"));
-#endif
+    // Allow manual override, e.g. RS_SHADERS=D:/RoboticsSoftware/shaders
+    if (qEnvironmentVariableIsSet("RS_SHADERS")) {
+        const QString envDir = qEnvironmentVariable("RS_SHADERS");
+        QDir d(envDir);
+        if (d.exists())
+            return d.absoluteFilePath(QStringLiteral("./"));
+    }
+
+    const QString exeDir = QCoreApplication::applicationDirPath();
+
+    // Try the most sensible location first: beside the EXE.
+    QStringList candidates = {
+        exeDir + QLatin1String("/shaders/"),
+        exeDir + QLatin1String("/../shaders/"),
+        exeDir + QLatin1String("/../../shaders/")
+    };
+
+    // Use a sentinel file we know should exist
+    const QString sentinel = QStringLiteral("gbuffer_vert.glsl");
+
+    for (const QString& dir : candidates) {
+        if (QFileInfo::exists(QDir(dir).filePath(sentinel))) {
+            return QDir(dir).absoluteFilePath(QStringLiteral("./"));
+        }
+    }
+
+    qWarning() << "[RenderingSystem] Could not find shaders. Tried:"
+        << candidates << " (missing" << sentinel << ")";
+    // Fallback (still return something sane)
+    return QDir(exeDir + QLatin1String("/shaders/")).absoluteFilePath(QStringLiteral("./"));
 }
 
 RenderingSystem::RenderingSystem(QObject* parent) : QObject(parent)
@@ -311,7 +331,7 @@ void RenderingSystem::initializeSharedResources()
 
     // --- 2) Build IBL resources ---
     {
-        QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/../assets/");
+        QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/assets/");
         std::string hdrPath = (assetDir + "env2.hdr").toStdString();
 
         auto hdrTex = std::make_shared<Texture2D>();

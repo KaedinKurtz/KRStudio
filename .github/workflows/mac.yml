@@ -1,77 +1,53 @@
-name: macOS Build & Package
+name: ci-mac
+
 on:
-  push: { branches: [main] }
+  push:
   pull_request:
-  workflow_dispatch:
-  release: { types: [created] }
 
 jobs:
-  mac:
-    runs-on: macos-14       # Apple-Silicon runner
+  build:
+    runs-on: macos-14
     env:
-     BUILD_TYPE: Release
-     VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-cache,readwrite"
-     VCPKG_ROOT: ${{ github.workspace }}/vcpkg     # <- add this
-     CMAKE_GENERATOR: Ninja
-     VCPKG_FORCE_NINJA: 1
-
+      VCPKG_DEFAULT_TRIPLET: arm64-osx
     steps:
-    # 1. Checkout
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    # 2. Cache vcpkg binaries
-    - name: Cache vcpkg binaries
-      uses: actions/cache@v4
-      with:
-        path: ${{ github.workspace }}/vcpkg-cache
-        key: vcpkg-bins-macos-${{ hashFiles('**/vcpkg.json') }}
-        restore-keys: vcpkg-bins-macos-
+      - uses: lukka/run-vcpkg@v11
+        with:
+          setupOnly: true
 
-    # 3. Cache our own build directory
-    - name: Cache CMake build directory
-      uses: actions/cache@v4
-      with:
-        path: ${{ github.workspace }}/build
-        key: cmake-build-macos-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**', 'shaders/**') }}
-        restore-keys: cmake-build-macos-
+      - name: Configure (Release)
+        run: cmake --preset macos-ninja-release
 
-    # 4. Homebrew deps (add ninja, drop explicit make/gmake)
-    - name: Install build tools via Homebrew
-      run: brew install ninja autoconf automake libtool pkg-config bison
+      - name: Build
+        run: cmake --build --preset mac-release --parallel
 
-    # 5. vcpkg – bump to a recent commit that has ICU patches
-    - name: Run vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-       vcpkgDirectory: vcpkg            # ← was ${{ github.workspace }}/vcpkg
-       vcpkgGitCommitId: 4f719951ca65909c91d16afdced2805c3ea2d5f7
-       doNotCheckoutSubmodules: true 
-    # 6. Qt (unchanged, still via Homebrew)
-    - name: Install Qt via Homebrew
-      run: brew install qt@6
+      - name: Try macdeployqt (optional)
+        shell: bash
+        run: |
+          APP_BUNDLE="build/macos-release/RoboticsSoftware.app"
+          if [ -d "$APP_BUNDLE" ]; then
+            TOOLS_ARM="$VCPKG_ROOT/installed/arm64-osx/tools/Qt6/bin/macdeployqt"
+            TOOLS_X64="$VCPKG_ROOT/installed/x64-osx/tools/Qt6/bin/macdeployqt"
+            if [ -x "$TOOLS_ARM" ]; then
+              "$TOOLS_ARM" "$APP_BUNDLE" -verbose=2 || true
+            elif [ -x "$TOOLS_X64" ]; then
+              "$TOOLS_X64" "$APP_BUNDLE" -verbose=2 || true
+            else
+              echo "macdeployqt not found in vcpkg tools; skipping."
+            fi
+          else
+            echo "No .app bundle found; skipping deploy."
+          fi
 
-    # 7. Configure & build with Ninja
-    - name: Configure
-      run: |
-        cmake -B build -S . \
-              -G Ninja \
-              -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-              -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake \
-              -DCMAKE_PREFIX_PATH=$(brew --prefix qt@6)
+      - name: Archive
+        run: |
+          cd build/macos-release
+          /usr/bin/zip -r KRStudio-macOS.zip .
 
-    - name: Build
-      run: cmake --build build --config ${{ env.BUILD_TYPE }}
-
-    # 8. Bundle, sign, package  (unchanged)
-    - name: macdeployqt (plus ad-hoc codesign)
-      run: |
-        macdeployqt build/RoboticsSoftware.app -always-overwrite -verbose=2
-        codesign --force --deep --sign - build/RoboticsSoftware.app
-
-    - name: Create DMG
-      run: packaging/create-dmg.sh
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: KRStudio-mac
-        path: KRStudio-mac.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KRStudio-macOS
+          path: build/macos-release/KRStudio-macOS.zip

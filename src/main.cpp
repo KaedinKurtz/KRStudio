@@ -66,8 +66,20 @@ int main(int argc, char* argv[])
     initShareRoot();
 
     // launch main window
-    MainWindow w;
-    w.show();
+    try {
+        MainWindow w;
+        qInfo() << ">>> MainWindow constructed OK";
+        w.show();
+        return app.exec();
+    }
+    catch (const std::exception& e) {
+        qCritical() << "MainWindow threw std::exception:" << e.what();
+        return -1;
+    }
+    catch (...) {
+        qCritical() << "MainWindow threw an unknown exception";
+        return -1;
+    }
 
     int result = app.exec();
 

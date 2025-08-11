@@ -10,8 +10,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/norm.hpp>
+#include <glm/gtx/compatibility.hpp>
+#include <glm/gtc/constants.hpp>
 #include <QDebug>
-
 #include <random>    // For high-quality random number generation
 #include <QFileInfo> // For getting base names from paths
 
@@ -27,6 +29,9 @@ namespace {
         std::uniform_real_distribution<float> dist(min, max);
         return dist(getRandomGenerator());
     }
+    static std::mt19937& rng() { static std::mt19937 gen{ std::random_device{}() }; return gen; }
+    static int   randomInt(int a, int b) { std::uniform_int_distribution<int> d(a, b); return d(rng()); }
+
 
     // Build an ONB where local + Z looks along dir; upHint defines roll if not parallel.
         inline glm::mat3 basisLookZ(const glm::vec3 & dirWorld, const glm::vec3 & upHintWorld = glm::vec3(0, 1, 0)) {
@@ -38,6 +43,15 @@ namespace {
         glm::vec3 Y = glm::normalize(glm::cross(Z, X));
         return glm::mat3(X, Y, Z); // columns
     }
+
+        inline glm::mat3 basisLookDir(const glm::vec3& forward, const glm::vec3& upHint = glm::vec3(0, 1, 0)) {
+            glm::vec3 Z = glm::length2(forward) > 0 ? glm::normalize(forward) : glm::vec3(0, 0, 1);
+            glm::vec3 U = glm::length2(upHint) > 0 ? glm::normalize(upHint) : glm::vec3(0, 1, 0);
+            if (std::abs(glm::dot(Z, U)) > 0.999f) U = std::abs(Z.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+            glm::vec3 X = glm::normalize(glm::cross(U, Z));
+            glm::vec3 Y = glm::normalize(glm::cross(Z, X));
+            return glm::mat3(X, Y, Z);
+        }
 
     inline glm::quat quatFromBasis(const glm::mat3 & R) {
         return glm::quat_cast(R);
@@ -58,10 +72,21 @@ namespace {
 
     // Raycast helper (returns whatever your SceneQuery function returns)
     template <typename HitT>
-    inline std::optional<HitT> castInDirection(const glm::vec3 & origin, const glm::vec3 & dir,
-        const SceneQuery::SurfaceQueryFunction & query) {
-        // Your existing spawnOnSurface calls queryFunc(origin, dir) and expects optional hit
+    inline std::optional<SurfaceHit>
+        castInDirection(const glm::vec3& origin,
+            const glm::vec3& dir,
+            const SurfaceQueryFunction& query)
+    {
         return query(origin, dir);
+    }
+
+    inline glm::vec3 bezier(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3, float t) {
+        float u = 1.0f - t;
+        return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+    }
+    inline glm::vec3 bezierTangent(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3, float t) {
+        float u = 1.0f - t;
+        return 3.0f * u * u * (p1 - p0) + 6.0f * u * t * (p2 - p1) + 3.0f * t * t * (p3 - p2);
     }
 }
 
@@ -484,6 +509,502 @@ std::vector<entt::entity> SceneBuilder::spawnOrientedRandomOnSurface(
     return out;
 }
 
+// ---- Grid in box ----
+std::vector<entt::entity> SceneBuilder::spawnGridInBox(
+    Scene& scene, MeshID meshId,
+    const glm::vec3& boxMin, const glm::vec3& boxMax,
+    const glm::ivec3& counts,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomYawRangeDegrees,
+    const glm::mat3* worldBasisOptional)
+{
+    std::vector<entt::entity> out;
+    if (counts.x <= 0 || counts.y <= 0 || counts.z <= 0) return out;
+
+    glm::vec3 step = (boxMax - boxMin) / glm::vec3(counts - glm::ivec3(1));
+    glm::mat3 B = worldBasisOptional ? *worldBasisOptional : glm::mat3(1);
+
+    for (int ix = 0; ix < counts.x; ++ix) {
+        for (int iy = 0; iy < counts.y; ++iy) {
+            for (int iz = 0; iz < counts.z; ++iz) {
+                glm::vec3 p = boxMin + glm::vec3(ix * step.x, iy * step.y, iz * step.z);
+                float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+                float yaw = glm::radians(randomFloat(randomYawRangeDegrees.x, randomYawRangeDegrees.y));
+                glm::quat q = glm::angleAxis(yaw, glm::vec3(0, 1, 0));
+                glm::mat3 R = glm::mat3_cast(q) * B;
+
+                auto e = spawnMeshInstance(scene, meshId, p, glm::quat_cast(R), glm::vec3(s));
+                if (e != entt::null) out.push_back(e);
+            }
+        }
+    }
+    return out;
+}
+
+// ---- Grid on surface (raycast) ----
+std::vector<entt::entity> SceneBuilder::spawnGridOnSurface(
+    Scene& scene,
+    MeshID meshId,
+    const glm::vec2& areaMinXZ,
+    const glm::vec2& areaMaxXZ,
+    const glm::ivec2& countsXZ,
+    const SurfaceQueryFunction& queryFunc,
+    const glm::vec3& modelUp_Local,
+    const glm::vec3& surfaceUp_World,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomYawRangeDegrees,
+    bool alignToSurfaceNormal)
+{
+    std::vector<entt::entity> out;
+    if (countsXZ.x <= 0 || countsXZ.y <= 0) return out;
+
+    glm::vec2 step = (areaMaxXZ - areaMinXZ) / glm::vec2(countsXZ - glm::ivec2(1));
+    glm::vec3 he = meshLocalHalfExtents(meshId);
+    glm::vec3 wUp = glm::normalize(surfaceUp_World);
+    glm::vec3 mUpL = glm::normalize(modelUp_Local);
+    float cosTol = std::cos(glm::radians(90.0f)); // accept any facing in this API
+
+    for (int ix = 0; ix < countsXZ.x; ++ix) {
+        for (int iz = 0; iz < countsXZ.y; ++iz) {
+            glm::vec2 xz = areaMinXZ + glm::vec2(ix * step.x, iz * step.y);
+            glm::vec3 origin(xz.x, 1e6f, xz.y);
+            glm::vec3 dir = -wUp;
+
+            auto hit = queryFunc(origin, dir);
+            if (!hit) continue;
+
+            glm::vec3 n = glm::normalize(hit->normal);
+            if (glm::dot(n, wUp) < cosTol) continue;
+
+            glm::vec3 targetUp = alignToSurfaceNormal ? n : wUp;
+            glm::quat alignQ = glm::rotation(mUpL, targetUp);
+
+            float yawDeg = randomFloat(randomYawRangeDegrees.x, randomYawRangeDegrees.y);
+            glm::quat yawQ = glm::angleAxis(glm::radians(yawDeg), targetUp);
+            glm::quat q = yawQ * alignQ;
+
+            float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+
+            // lift by half extent along modelUp mapped axis
+            glm::vec3 absUpL = glm::abs(mUpL);
+            float halfAlongUpLocal = he.x * absUpL.x + he.y * absUpL.y + he.z * absUpL.z;
+            glm::vec3 pos = hit->position + targetUp * (halfAlongUpLocal * s);
+
+            auto e = spawnMeshInstance(scene, meshId, pos, q, glm::vec3(s));
+            if (e != entt::null) out.push_back(e);
+        }
+    }
+    return out;
+}
+
+// ---- Poisson disk 2D on surface ----
+std::vector<entt::entity> SceneBuilder::spawnPoissonDisk2DOnSurface(
+    Scene& scene,
+    MeshID meshId,
+    const glm::vec2& areaMinXZ,
+    const glm::vec2& areaMaxXZ,
+    float minDistance,
+    int   newPointTries,
+    int   maxInstances,
+    const SurfaceQueryFunction& queryFunc,
+    const glm::vec3& modelUp_Local,
+    const glm::vec3& surfaceUp_World,
+    float upToleranceDegrees,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomYawRangeDegrees,
+    bool alignToSurfaceNormal,
+    DensityFn2D densityFn)
+{
+    std::vector<entt::entity> out;
+    if (minDistance <= 0.0f || maxInstances <= 0) return out;
+
+    const glm::vec2 size = areaMaxXZ - areaMinXZ;
+    const float cell = minDistance / glm::sqrt(2.0f);
+    const glm::ivec2 gridSize = glm::max(glm::ivec2(1), glm::ivec2(glm::ceil(size / cell)));
+
+    std::vector<int> grid(gridSize.x * gridSize.y, -1);
+    std::vector<glm::vec2> points;
+    points.reserve(maxInstances);
+
+    auto gridIndex = [&](const glm::vec2& p)->glm::ivec2 {
+        glm::vec2 rel = (p - areaMinXZ) / size;
+        glm::ivec2 idx = glm::clamp(glm::ivec2(rel * glm::vec2(gridSize)), glm::ivec2(0), gridSize - glm::ivec2(1));
+        return idx;
+        };
+    auto fits = [&](const glm::vec2& p)->bool {
+        glm::ivec2 gi = gridIndex(p);
+        for (int dz = -2; dz <= 2; ++dz) for (int dx = -2; dx <= 2; ++dx) {
+            glm::ivec2 nb = gi + glm::ivec2(dx, dz);
+            if (nb.x < 0 || nb.y < 0 || nb.x >= gridSize.x || nb.y >= gridSize.y) continue;
+            int id = grid[nb.y * gridSize.x + nb.x];
+            if (id >= 0 && glm::length(points[id] - p) < minDistance) return false;
+        }
+        return true;
+        };
+    auto pushPoint = [&](const glm::vec2& p) {
+        glm::ivec2 gi = gridIndex(p);
+        int id = (int)points.size();
+        points.push_back(p);
+        grid[gi.y * gridSize.x + gi.x] = id;
+        };
+
+    // Seed
+    glm::vec2 seed(randomFloat(areaMinXZ.x, areaMaxXZ.x), randomFloat(areaMinXZ.y, areaMaxXZ.y));
+    pushPoint(seed);
+    std::vector<int> active = { 0 };
+
+    // Bridson
+    while (!active.empty() && (int)points.size() < maxInstances) {
+        int idx = active[randomInt(0, (int)active.size() - 1)];
+        glm::vec2 base = points[idx];
+        bool found = false;
+
+        for (int k = 0; k < newPointTries; ++k) {
+            float r = randomFloat(minDistance, 2.0f * minDistance);
+            float a = randomFloat(0.0f, glm::two_pi<float>());
+            glm::vec2 cand = base + r * glm::vec2(std::cos(a), std::sin(a));
+            if (cand.x < areaMinXZ.x || cand.x > areaMaxXZ.x ||
+                cand.y < areaMinXZ.y || cand.y > areaMaxXZ.y) continue;
+
+            if (densityFn) {
+                float relx = (cand.x - areaMinXZ.x) / size.x;
+                float relz = (cand.y - areaMinXZ.y) / size.y;
+                if (randomFloat(0.0f, 1.0f) > glm::clamp(densityFn(glm::vec2(relx, relz)), 0.0f, 1.0f))
+                    continue;
+            }
+
+            if (fits(cand)) { pushPoint(cand); active.push_back((int)points.size() - 1); found = true; break; }
+        }
+        if (!found) {
+            active.erase(std::remove(active.begin(), active.end(), idx), active.end());
+        }
+    }
+
+    // Project to surface
+    glm::vec3 wUp = glm::normalize(surfaceUp_World);
+    glm::vec3 mUpL = glm::normalize(modelUp_Local);
+    float cosTol = std::cos(glm::radians(std::max(0.0f, upToleranceDegrees)));
+    glm::vec3 he = meshLocalHalfExtents(meshId);
+
+    for (auto& xz : points) {
+        glm::vec3 origin(xz.x, 1e6f, xz.y);
+        glm::vec3 dir = -wUp;
+
+        auto hit = queryFunc(origin, dir);
+        if (!hit) continue;
+        glm::vec3 n = glm::normalize(hit->normal);
+        if (glm::dot(n, wUp) < cosTol) continue;
+
+        glm::vec3 targetUp = alignToSurfaceNormal ? n : wUp;
+        glm::quat alignQ = glm::rotation(mUpL, targetUp);
+        float yawDeg = randomFloat(randomYawRangeDegrees.x, randomYawRangeDegrees.y);
+        glm::quat yawQ = glm::angleAxis(glm::radians(yawDeg), targetUp);
+        glm::quat q = yawQ * alignQ;
+
+        float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+        glm::vec3 absUpL = glm::abs(mUpL);
+        float halfAlongUpLocal = he.x * absUpL.x + he.y * absUpL.y + he.z * absUpL.z;
+        glm::vec3 pos = hit->position + targetUp * (halfAlongUpLocal * s);
+
+        auto e = spawnMeshInstance(scene, meshId, pos, q, glm::vec3(s));
+        if (e != entt::null) out.push_back(e);
+    }
+    return out;
+}
+
+// ---- Clusters on surface ----
+std::vector<entt::entity> SceneBuilder::spawnClustersOnSurface(
+    Scene& scene,
+    MeshID meshId,
+    int clusterCount,
+    int minPerCluster,
+    int maxPerCluster,
+    float clusterRadius,
+    const glm::vec2& areaMinXZ,
+    const glm::vec2& areaMaxXZ,
+    const SurfaceQueryFunction& queryFunc,
+    const glm::vec3& modelUp_Local,
+    const glm::vec3& surfaceUp_World,
+    float upToleranceDegrees,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomYawRangeDegrees,
+    bool alignToSurfaceNormal)
+{
+    std::vector<entt::entity> out;
+    if (clusterCount <= 0) return out;
+
+    // Choose cluster centers via Poisson-like spacing
+    auto centers = spawnPoissonDisk2DOnSurface(
+        scene, meshId, areaMinXZ, areaMaxXZ,
+        clusterRadius * 0.75f, 15, clusterCount, // spacing a bit smaller than radius
+        queryFunc, modelUp_Local, surfaceUp_World, upToleranceDegrees,
+        { 1.0f,1.0f }, { 0.0f,0.0f }, alignToSurfaceNormal);
+
+    // Extract positions of their first entity to use as centers
+    std::vector<glm::vec3> centerPos;
+    centerPos.reserve(centers.size());
+    auto& reg = scene.getRegistry();
+    for (auto e : centers) {
+        if (!reg.valid(e) || !reg.all_of<TransformComponent>(e)) continue;
+        centerPos.push_back(reg.get<TransformComponent>(e).translation);
+    }
+
+    // For each center, populate around with gaussian jitter (raycast down again)
+    glm::vec3 wUp = glm::normalize(surfaceUp_World);
+    glm::vec3 mUpL = glm::normalize(modelUp_Local);
+    float cosTol = std::cos(glm::radians(std::max(0.0f, upToleranceDegrees)));
+    glm::vec3 he = meshLocalHalfExtents(meshId);
+
+    std::normal_distribution<float> gauss(0.0f, clusterRadius * 0.35f);
+
+    for (const auto& c : centerPos) {
+        int n = randomInt(minPerCluster, maxPerCluster);
+        for (int i = 0; i < n; ++i) {
+            glm::vec2 offset(gauss(rng()), gauss(rng()));
+            glm::vec2 xz(c.x + offset.x, c.z + offset.y);
+            glm::vec3 origin(xz.x, 1e6f, xz.y);
+            glm::vec3 dir = -wUp;
+
+            auto hit = queryFunc(origin, dir);
+            if (!hit) continue;
+            glm::vec3 nrm = glm::normalize(hit->normal);
+            if (glm::dot(nrm, wUp) < cosTol) continue;
+
+            glm::vec3 targetUp = alignToSurfaceNormal ? nrm : wUp;
+            glm::quat alignQ = glm::rotation(mUpL, targetUp);
+            float yawDeg = randomFloat(randomYawRangeDegrees.x, randomYawRangeDegrees.y);
+            glm::quat yawQ = glm::angleAxis(glm::radians(yawDeg), targetUp);
+            glm::quat q = yawQ * alignQ;
+
+            float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+            glm::vec3 absUpL = glm::abs(mUpL);
+            float halfAlongUpLocal = he.x * absUpL.x + he.y * absUpL.y + he.z * absUpL.z;
+            glm::vec3 pos = hit->position + targetUp * (halfAlongUpLocal * s);
+
+            auto e = spawnMeshInstance(scene, meshId, pos, q, glm::vec3(s));
+            if (e != entt::null) out.push_back(e);
+        }
+    }
+    return out;
+}
+
+// ---- Along polyline ----
+std::vector<entt::entity> SceneBuilder::spawnAlongPolyline(
+    Scene& scene,
+    MeshID meshId,
+    const std::vector<glm::vec3>& points,
+    float spacing,
+    const glm::vec3& modelForward_Local,
+    const glm::vec3& worldUp,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomRollRangeDegrees)
+{
+    std::vector<entt::entity> out;
+    if (points.size() < 2 || spacing <= 0.0f) return out;
+
+    glm::vec3 wU = glm::normalize(worldUp);
+
+    float distAccum = 0.0f;
+    glm::vec3 last = points.front();
+
+    auto place = [&](const glm::vec3& pos, const glm::vec3& dir) {
+        glm::vec3 fwd = glm::normalize(dir);
+        glm::mat3 R = basisLookDir(fwd, wU);
+        glm::quat q = quatFromBasis(R);
+        float roll = glm::radians(randomFloat(randomRollRangeDegrees.x, randomRollRangeDegrees.y));
+        q = glm::angleAxis(roll, fwd) * q;
+        float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+        auto e = spawnMeshInstance(scene, meshId, pos, q, glm::vec3(s));
+        if (e != entt::null) out.push_back(e);
+        };
+
+    for (size_t i = 1; i < points.size(); ++i) {
+        glm::vec3 a = last, b = points[i];
+        glm::vec3 ab = b - a;
+        float seg = glm::length(ab);
+        if (seg < 1e-6f) continue;
+        glm::vec3 dir = ab / seg;
+
+        float t = 0.0f;
+        while (distAccum + spacing <= seg + 1e-6f) {
+            float step = spacing - distAccum;
+            t += step / seg;
+            glm::vec3 p = glm::mix(a, b, t);
+            place(p, dir);
+            distAccum = 0.0f;
+            a = p; seg = glm::length(b - a);
+            if (seg < 1e-6f) break;
+        }
+        distAccum = glm::clamp(spacing - seg, 0.0f, spacing);
+        last = b;
+    }
+    return out;
+}
+
+// ---- Along Bezier ----
+std::vector<entt::entity> SceneBuilder::spawnAlongBezier(
+    Scene& scene,
+    MeshID meshId,
+    const glm::vec3& p0,
+    const glm::vec3& p1,
+    const glm::vec3& p2,
+    const glm::vec3& p3,
+    int   count,
+    const glm::vec3& modelForward_Local,
+    const glm::vec3& worldUp,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomRollRangeDegrees)
+{
+    std::vector<entt::entity> out;
+    if (count <= 0) return out;
+
+    glm::vec3 wU = glm::normalize(worldUp);
+    for (int i = 0; i < count; ++i) {
+        float t = (count == 1) ? 0.5f : (float(i) / (count - 1));
+        glm::vec3 p = bezier(p0, p1, p2, p3, t);
+        glm::vec3 d = bezierTangent(p0, p1, p2, p3, t);
+        if (glm::length2(d) < 1e-8f) d = glm::vec3(0, 0, 1);
+        glm::mat3 R = basisLookDir(glm::normalize(d), wU);
+        glm::quat q = quatFromBasis(R);
+        float roll = glm::radians(randomFloat(randomRollRangeDegrees.x, randomRollRangeDegrees.y));
+        q = glm::angleAxis(roll, glm::normalize(d)) * q;
+        float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+        auto e = spawnMeshInstance(scene, meshId, p, q, glm::vec3(s));
+        if (e != entt::null) out.push_back(e);
+    }
+    return out;
+}
+
+// ---- Stacks on surface ----
+std::vector<entt::entity> SceneBuilder::spawnStacksOnSurface(
+    Scene& scene,
+    MeshID meshId,
+    int   stackCount,
+    const glm::ivec2& stackHeightRange,
+    const glm::vec2& areaMinXZ,
+    const glm::vec2& areaMaxXZ,
+    const SurfaceQueryFunction& queryFunc,
+    const glm::vec3& modelUp_Local,
+    const glm::vec3& surfaceUp_World,
+    float upToleranceDegrees,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomYawRangeDegrees,
+    bool alignToSurfaceNormal)
+{
+    std::vector<entt::entity> out;
+    if (stackCount <= 0) return out;
+
+    glm::vec3 wUp = glm::normalize(surfaceUp_World);
+    glm::vec3 mUpL = glm::normalize(modelUp_Local);
+    float cosTol = std::cos(glm::radians(std::max(0.0f, upToleranceDegrees)));
+    glm::vec3 he = meshLocalHalfExtents(meshId);
+
+    for (int k = 0; k < stackCount; ++k) {
+        // find a base
+        glm::vec2 xz(randomFloat(areaMinXZ.x, areaMaxXZ.x), randomFloat(areaMinXZ.y, areaMaxXZ.y));
+        glm::vec3 origin(xz.x, 1e6f, xz.y);
+        glm::vec3 dir = -wUp;
+        auto hit = queryFunc(origin, dir);
+        if (!hit) continue;
+        glm::vec3 n = glm::normalize(hit->normal);
+        if (glm::dot(n, wUp) < cosTol) continue;
+
+        glm::vec3 targetUp = alignToSurfaceNormal ? n : wUp;
+        glm::quat alignQ = glm::rotation(mUpL, targetUp);
+        float yawDeg = randomFloat(randomYawRangeDegrees.x, randomYawRangeDegrees.y);
+        glm::quat yawQ = glm::angleAxis(glm::radians(yawDeg), targetUp);
+        glm::quat qBase = yawQ * alignQ;
+
+        float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+        glm::vec3 absUpL = glm::abs(mUpL);
+        float halfAlongUpLocal = he.x * absUpL.x + he.y * absUpL.y + he.z * absUpL.z;
+        glm::vec3 basePos = hit->position + targetUp * (halfAlongUpLocal * s);
+
+        // number in this stack
+        int h = glm::clamp(randomInt(stackHeightRange.x, stackHeightRange.y), 1, 1000);
+        glm::vec3 step = targetUp * (2.0f * halfAlongUpLocal * s);
+
+        for (int i = 0; i < h; ++i) {
+            glm::vec3 pos = basePos + float(i) * step;
+            auto e = spawnMeshInstance(scene, meshId, pos, qBase, glm::vec3(s));
+            if (e != entt::null) out.push_back(e);
+        }
+    }
+    return out;
+}
+
+// ---- Non-overlapping in box (sphere approx) ----
+std::vector<entt::entity> SceneBuilder::spawnInBoxNoOverlap(
+    Scene& scene,
+    MeshID meshId,
+    int count,
+    const glm::vec3& boxMin,
+    const glm::vec3& boxMax,
+    float minCenterDistance,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomYawRangeDegrees,
+    const glm::mat3* worldBasisOptional)
+{
+    std::vector<entt::entity> out;
+    if (count <= 0) return out;
+
+    std::vector<glm::vec3> placed;
+    placed.reserve(count);
+
+    glm::mat3 B = worldBasisOptional ? *worldBasisOptional : glm::mat3(1);
+    int attempts = 0, maxAttempts = count * 100;
+
+    while ((int)placed.size() < count && attempts++ < maxAttempts) {
+        glm::vec3 p(randomFloat(boxMin.x, boxMax.x),
+            randomFloat(boxMin.y, boxMax.y),
+            randomFloat(boxMin.z, boxMax.z));
+        bool ok = true;
+        for (auto& q : placed) {
+            if (glm::distance2(p, q) < minCenterDistance * minCenterDistance) { ok = false; break; }
+        }
+        if (!ok) continue;
+
+        float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+        float yaw = glm::radians(randomFloat(randomYawRangeDegrees.x, randomYawRangeDegrees.y));
+        glm::quat qrot = glm::angleAxis(yaw, glm::vec3(0, 1, 0));
+        glm::mat3 R = glm::mat3_cast(qrot) * B;
+
+        auto e = spawnMeshInstance(scene, meshId, p, glm::quat_cast(R), glm::vec3(s));
+        if (e != entt::null) {
+            out.push_back(e);
+            placed.push_back(p);
+        }
+    }
+    return out;
+}
+
+// ---- From points (with jitter) ----
+std::vector<entt::entity> SceneBuilder::spawnFromPoints(
+    Scene& scene,
+    MeshID meshId,
+    const std::vector<glm::vec3>& anchors,
+    const glm::vec3& jitterXYZ,
+    const glm::vec2& randomScaleRange,
+    const glm::vec2& randomYawRangeDegrees,
+    const glm::mat3* worldBasisOptional)
+{
+    std::vector<entt::entity> out; out.reserve(anchors.size());
+    glm::mat3 B = worldBasisOptional ? *worldBasisOptional : glm::mat3(1);
+
+    for (auto a : anchors) {
+        glm::vec3 p = a + glm::vec3(randomFloat(-jitterXYZ.x, jitterXYZ.x),
+            randomFloat(-jitterXYZ.y, jitterXYZ.y),
+            randomFloat(-jitterXYZ.z, jitterXYZ.z));
+        float s = randomFloat(randomScaleRange.x, randomScaleRange.y);
+        float yaw = glm::radians(randomFloat(randomYawRangeDegrees.x, randomYawRangeDegrees.y));
+        glm::quat q = glm::angleAxis(yaw, glm::vec3(0, 1, 0));
+        glm::mat3 R = glm::mat3_cast(q) * B;
+
+        auto e = spawnMeshInstance(scene, meshId, p, glm::quat_cast(R), glm::vec3(s));
+        if (e != entt::null) out.push_back(e);
+    }
+    return out;
+}
 
 std::vector<entt::entity> SceneBuilder::spawnInClumps(Scene& scene, const std::vector<MeshID>& meshIds,
     const std::vector<float>& weights,

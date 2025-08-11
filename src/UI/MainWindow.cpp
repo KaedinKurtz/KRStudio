@@ -273,6 +273,7 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
     m_colorInUse(kPalette.size(), false)
 {
+    qInfo() << ">>> ENTER MainWindow ctor";
     setNodeEditorStyle();
     // --- 1. Create the Scene and Initial Entities ---
     m_scene = std::make_unique<Scene>();
@@ -306,14 +307,13 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     {
-        QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/../assets/");
+        QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/assets/");
         QString lamboPath = assetDir + "lambo.stl";
 
         // 1) Load once -> stable MeshID
         MeshID lamboId = ResourceManager::instance().loadMesh(lamboPath);
         if (lamboId == MeshID::None) {
             qWarning() << "[Spawner] Failed to load mesh:" << lamboPath;
-            return;
         }
 
         auto& registry = m_scene->getRegistry();

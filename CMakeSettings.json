@@ -1,0 +1,29 @@
+{
+  "configurations": [
+    {
+      "name": "x64-debug",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "-DVCPKG_FEATURE_FLAGS=manifests",
+      "variables": [
+        {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "name": "x64-release",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "-DVCPKG_FEATURE_FLAGS=manifests -DCMAKE_TOOLCHAIN_FILE=\"%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake\"",
+    }
+  ]
+}

@@ -15,6 +15,20 @@ public:
     void update(double deltaTime);
     void draw(Shader& shader, Mesh& link_mesh) const;
     std::map<std::string, double> getJointStates() const;
+
+    enum class State {
+        Idle,
+        Moving,
+        ExecutingTask,
+        Error
+    };
+
+    enum class OperatingMode {
+        Manual,
+        Autonomous,
+        Simulation
+    };
+
 private:
     struct Joint;
     struct Link {

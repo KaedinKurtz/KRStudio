@@ -1,57 +1,85 @@
 {
-  "version": 3,
+  "version": 5,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 24,
-    "patch": 0
+    "minor": 24
   },
   "configurePresets": [
     {
-      "name": "windows-msvc-debug",
-      "displayName": "Windows MSVC Debug",
-      "description": "Debug build with Ninja and vcpkg toolchain",
+      "name": "windows-ninja-debug",
+      "displayName": "Windows + vcpkg (Debug)",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build/debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_TOOLCHAIN_FILE": "C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_FEATURE_FLAGS": "manifests"
       }
     },
     {
-      "name": "windows-msvc-release",
-      "displayName": "Windows MSVC Release",
-      "description": "Release build with Ninja and vcpkg toolchain",
+      "name": "windows-ninja-release",
+      "displayName": "Windows + vcpkg (Release)",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_TOOLCHAIN_FILE": "C:/Users/kaedi/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_FEATURE_FLAGS": "manifests"
       }
     },
     {
-      "hidden": true,
-      "name": "Qt",
-      "displayName": "Qt via QTDIR",
-      "description": "Fallback: set CMAKE_PREFIX_PATH from QTDIR env var",
+      "name": "macos-ninja-debug",
+      "displayName": "macOS + vcpkg (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/macos-debug",
       "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_FEATURE_FLAGS": "manifests"
+      }
+    },
+    {
+      "name": "macos-ninja-release",
+      "displayName": "macOS + vcpkg (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/macos-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_FEATURE_FLAGS": "manifests"
+      }
+    },
+    {
+      "name": "qt-qtdir-fallback",
+      "displayName": "Qt via QTDIR (fallback only)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/qt-fallback",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_PREFIX_PATH": "$env{QTDIR}"
-      },
-      "vendor": {
-        "qt-project.org/Qt": {
-          "checksum": "wVa86FgEkvdCTVp1/nxvrkaemJc="
-        }
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "default",
-      "configurePreset": "windows-msvc-debug"
+      "name": "debug",
+      "configurePreset": "windows-ninja-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "windows-ninja-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "mac-debug",
+      "configurePreset": "macos-ninja-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "mac-release",
+      "configurePreset": "macos-ninja-release",
+      "configuration": "Release"
     }
-  ],
-  "vendor": {
-    "qt-project.org/Presets": {
-      "checksum": "MT4JaJaKDwFJ7iCi8T/9NDliISg="
-    }
-  }
+  ]
 }

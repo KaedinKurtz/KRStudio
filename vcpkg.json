@@ -2,20 +2,27 @@
   "name": "krstudio",
   "version-string": "0.1.0",
   "builtin-baseline": "c6f09fc73ebfbfddd769f8fac9f33f95304c77e5",
-
   "dependencies": [
     {
       "name": "qtbase",
-      "features": [ "opengl", "gui", "widgets", "sql"]
+      "features": [ "opengl", "gui", "widgets", "sql", "network" ]
     },
+    "imgui",
+    "qttools",
+    "qtimageformats",
     "opencv4",
     "assimp",
-    {
-      "name": "realsense2"
-    },
     "glm",
+    "realsense2",
+    "openvdb",
+    "tbb",
+    "zlib",
+    "blosc",
+    "physx",
+    "fcl",
+    "ccd",
+    "libigl",
     "urdfdom",
-    "sqlite3"
+    "urdfdom-headers"
   ]
-
 }

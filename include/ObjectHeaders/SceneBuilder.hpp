@@ -186,6 +186,135 @@ public:
         const std::string& name = "Primitive"
     );
 
+    // ===== SceneBuilder.hpp additions =====
+
+// Optional density function for 2D scattering (returns [0,1] probability)
+    using DensityFn2D = std::function<float(const glm::vec2&)>;
+
+    // Grid (in 3D box)
+    static std::vector<entt::entity> spawnGridInBox(
+        Scene& scene,
+        MeshID meshId,
+        const glm::vec3& boxMin,
+        const glm::vec3& boxMax,
+        const glm::ivec3& counts,
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomYawRangeDegrees = { 0.0f, 0.0f },
+        const glm::mat3* worldBasisOptional = nullptr);
+
+    // Grid projected onto a surface via raycast along -surfaceUp
+    static std::vector<entt::entity> spawnGridOnSurface(
+        Scene& scene,
+        MeshID meshId,
+        const glm::vec2& areaMinXZ,
+        const glm::vec2& areaMaxXZ,
+        const glm::ivec2& countsXZ,
+        const SurfaceQueryFunction& queryFunc,
+        const glm::vec3& modelUp_Local,
+        const glm::vec3& surfaceUp_World,
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomYawRangeDegrees = { 0.0f, 0.0f },
+        bool alignToSurfaceNormal = false);
+
+    // Poisson-disk sampling on a surface (XZ domain) with Bridson’s algorithm
+    static std::vector<entt::entity> spawnPoissonDisk2DOnSurface(
+        Scene& scene,
+        MeshID meshId,
+        const glm::vec2& areaMinXZ,
+        const glm::vec2& areaMaxXZ,
+        float minDistance,
+        int   newPointTries,
+        int   maxInstances,
+        const SurfaceQueryFunction& queryFunc,
+        const glm::vec3& modelUp_Local,
+        const glm::vec3& surfaceUp_World,
+        float upToleranceDegrees,
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomYawRangeDegrees = { 0.0f, 0.0f },
+        bool alignToSurfaceNormal = false,
+        DensityFn2D densityFn = nullptr); // optional density mask
+
+    // Clustered (clumps) distribution on a surface
+    static std::vector<entt::entity> spawnClustersOnSurface(
+        Scene& scene,
+        MeshID meshId,
+        int   clusterCount,
+        int   minPerCluster,
+        int   maxPerCluster,
+        float clusterRadius,
+        const glm::vec2& areaMinXZ,
+        const glm::vec2& areaMaxXZ,
+        const SurfaceQueryFunction& queryFunc,
+        const glm::vec3& modelUp_Local,
+        const glm::vec3& surfaceUp_World,
+        float upToleranceDegrees,
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomYawRangeDegrees = { 0.0f, 0.0f },
+        bool alignToSurfaceNormal = false);
+
+    // Place along a polyline at fixed spacing, aligned to tangent (+ optional up)
+    static std::vector<entt::entity> spawnAlongPolyline(
+        Scene& scene,
+        MeshID meshId,
+        const std::vector<glm::vec3>& points,
+        float spacing,
+        const glm::vec3& modelForward_Local = glm::vec3(0, 0, 1),
+        const glm::vec3& worldUp = glm::vec3(0, 1, 0),
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomRollRangeDegrees = { 0.0f, 0.0f });
+
+    // Place along a cubic Bezier (4 control points) at fixed count/spacing
+    static std::vector<entt::entity> spawnAlongBezier(
+        Scene& scene,
+        MeshID meshId,
+        const glm::vec3& p0,
+        const glm::vec3& p1,
+        const glm::vec3& p2,
+        const glm::vec3& p3,
+        int   count,
+        const glm::vec3& modelForward_Local = glm::vec3(0, 0, 1),
+        const glm::vec3& worldUp = glm::vec3(0, 1, 0),
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomRollRangeDegrees = { 0.0f, 0.0f });
+
+    // Stacks: spawn N vertical stacks at random surface points
+    static std::vector<entt::entity> spawnStacksOnSurface(
+        Scene& scene,
+        MeshID meshId,
+        int   stackCount,
+        const glm::ivec2& stackHeightRange,     // [min,max] per stack
+        const glm::vec2& areaMinXZ,
+        const glm::vec2& areaMaxXZ,
+        const SurfaceQueryFunction& queryFunc,
+        const glm::vec3& modelUp_Local,
+        const glm::vec3& surfaceUp_World,
+        float upToleranceDegrees,
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomYawRangeDegrees = { 0.0f, 0.0f },
+        bool alignToSurfaceNormal = false);
+
+    // Non-overlapping placement inside a box using simple rejection (sphere approx)
+    static std::vector<entt::entity> spawnInBoxNoOverlap(
+        Scene& scene,
+        MeshID meshId,
+        int count,
+        const glm::vec3& boxMin,
+        const glm::vec3& boxMax,
+        float minCenterDistance,
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomYawRangeDegrees = { 0.0f, 0.0f },
+        const glm::mat3* worldBasisOptional = nullptr);
+
+    // From fixed anchor points (with jitter)
+    static std::vector<entt::entity> spawnFromPoints(
+        Scene& scene,
+        MeshID meshId,
+        const std::vector<glm::vec3>& anchors,
+        const glm::vec3& jitterXYZ = glm::vec3(0.0f),
+        const glm::vec2& randomScaleRange = { 1.0f, 1.0f },
+        const glm::vec2& randomYawRangeDegrees = { 0.0f, 0.0f },
+        const glm::mat3* worldBasisOptional = nullptr);
+
 
 
 	// --- Camera Creation ---

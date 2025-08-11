@@ -39,13 +39,13 @@ Grid::Grid(QOpenGLFunctions_4_3_Core* glFunctions)
     }
 
     try {
-        m_gridShader = std::make_unique<Shader>(m_gl, "shaders/grid_vert.glsl", "shaders/grid_frag.glsl");
+        m_gridShader = Shader::build(m_gl, "shaders/grid_vert.glsl", "shaders/grid_frag.glsl");
         if (!m_gridShader || m_gridShader->ID == 0) {
             qWarning() << "Grid: Failed to load or compile grid shaders.";
             // No return here, allow sphere to load
         }
 
-        m_sphereShader = std::make_unique<Shader>(m_gl, "shaders/sphere_vert.glsl", "shaders/sphere_frag.glsl");
+        m_sphereShader = Shader::build(m_gl, "shaders/sphere_vert.glsl", "shaders/sphere_frag.glsl");
         if (!m_sphereShader || m_sphereShader->ID == 0) {
             qWarning() << "Grid: Failed to load or compile sphere shaders.";
         }
@@ -166,7 +166,7 @@ void Grid::createSphereMesh(float radius, int sectorCount, int stackCount) {
 
 void Grid::draw(const Camera& camera, float aspectRatio) {
     if (m_gridShader && m_gridShader->ID != 0 && m_gridMesh && m_gridVAO != 0 && !m_levels.empty()) {
-        m_gridShader->use();
+        m_gridShader->use(m_gl);
         updateGridShaderUniforms(camera, aspectRatio);
         m_gl->glBindVertexArray(m_gridVAO);
         m_gl->glDrawArrays(GL_TRIANGLES, 0, static_cast<int>(m_gridMesh->vertices().size() / 3));
@@ -174,7 +174,7 @@ void Grid::draw(const Camera& camera, float aspectRatio) {
     }
 
     if (m_showOriginSphere && m_sphereShader && m_sphereShader->ID != 0 && m_sphereMesh && m_sphereVAO != 0) {
-        m_sphereShader->use();
+        m_sphereShader->use(m_gl);
         updateSphereShaderUniforms(camera, aspectRatio);
         m_gl->glBindVertexArray(m_sphereVAO);
         m_gl->glDrawElements(GL_TRIANGLES, static_cast<int>(m_sphereMesh->indices().size()), GL_UNSIGNED_INT, 0);
@@ -183,51 +183,51 @@ void Grid::draw(const Camera& camera, float aspectRatio) {
 }
 
 void Grid::updateGridShaderUniforms(const Camera& camera, float aspectRatio) { // Added aspectRatio
-    m_gridShader->setMat4("u_gridModelMatrix", m_transform);
-    m_gridShader->setMat4("u_viewMatrix", camera.getViewMatrix());
-    m_gridShader->setMat4("u_projectionMatrix", camera.getProjectionMatrix(aspectRatio)); // Use passed aspectRatio
-    m_gridShader->setVec3("u_cameraPos", camera.getPosition());
-    m_gridShader->setFloat("u_cameraDistanceToFocal", camera.getDistance());
+    m_gridShader->setMat4(m_gl, "u_gridModelMatrix", m_transform);
+    m_gridShader->setMat4(m_gl, "u_viewMatrix", camera.getViewMatrix());
+    m_gridShader->setMat4(m_gl, "u_projectionMatrix", camera.getProjectionMatrix(aspectRatio)); // Use passed aspectRatio
+    m_gridShader->setVec3(m_gl, "u_cameraPos", camera.getPosition());
+    m_gridShader->setFloat(m_gl, "u_cameraDistanceToFocal", camera.getDistance());
 
     int numLevelsToSend = static_cast<int>(m_levels.size());
     numLevelsToSend = std::min(numLevelsToSend, MAX_GRID_LEVELS); // Clamp to shader max
-    m_gridShader->setInt("u_numLevels", numLevelsToSend);
+    m_gridShader->setInt(m_gl, "u_numLevels", numLevelsToSend);
 
     for (int i = 0; i < numLevelsToSend; ++i) {
         std::string base = "u_levels[" + std::to_string(i) + "].";
-        m_gridShader->setFloat((base + "spacing").c_str(), m_levels[i].spacing);
-        m_gridShader->setVec3((base + "color").c_str(), m_levels[i].color);
-        m_gridShader->setFloat((base + "fadeInCameraDistanceEnd").c_str(), m_levels[i].fadeInCameraDistanceEnd);
-        m_gridShader->setFloat((base + "fadeInCameraDistanceStart").c_str(), m_levels[i].fadeInCameraDistanceStart);
+        m_gridShader->setFloat(m_gl, (base + "spacing").c_str(), m_levels[i].spacing);
+        m_gridShader->setVec3(m_gl, (base + "color").c_str(), m_levels[i].color);
+        m_gridShader->setFloat(m_gl, (base + "fadeInCameraDistanceEnd").c_str(), m_levels[i].fadeInCameraDistanceEnd);
+        m_gridShader->setFloat(m_gl, (base + "fadeInCameraDistanceStart").c_str(), m_levels[i].fadeInCameraDistanceStart);
     }
 
-    m_gridShader->setFloat("u_baseLineWidthPixels", m_baseLineWidthPixels);
+    m_gridShader->setFloat(m_gl, "u_baseLineWidthPixels", m_baseLineWidthPixels);
 
-    m_gridShader->setBool("u_showAxes", m_showAxes);
-    m_gridShader->setVec3("u_xAxisColor", m_xAxisColor);
-    m_gridShader->setVec3("u_zAxisColor", m_zAxisColor);
-    m_gridShader->setFloat("u_axisLineWidthPixels", m_axisLineWidthPixels);
+    m_gridShader->setBool(m_gl, "u_showAxes", m_showAxes);
+    m_gridShader->setVec3(m_gl, "u_xAxisColor", m_xAxisColor);
+    m_gridShader->setVec3(m_gl, "u_zAxisColor", m_zAxisColor);
+    m_gridShader->setFloat(m_gl, "u_axisLineWidthPixels", m_axisLineWidthPixels);
 
-    m_gridShader->setBool("u_useFog", m_useFog);
-    m_gridShader->setVec3("u_fogColor", m_fogColor);
-    m_gridShader->setFloat("u_fogStartDistance", m_fogStartDistance);
-    m_gridShader->setFloat("u_fogEndDistance", m_fogEndDistance);
+    m_gridShader->setBool(m_gl, "u_useFog", m_useFog);
+    m_gridShader->setVec3(m_gl, "u_fogColor", m_fogColor);
+    m_gridShader->setFloat(m_gl, "u_fogStartDistance", m_fogStartDistance);
+    m_gridShader->setFloat(m_gl, "u_fogEndDistance", m_fogEndDistance);
 }
 
 void Grid::updateSphereShaderUniforms(const Camera& camera, float aspectRatio) {
     glm::mat4 sphereModelMatrix = glm::translate(m_transform, glm::vec3(0.0f)); // Position sphere at grid's origin
     sphereModelMatrix = glm::scale(sphereModelMatrix, glm::vec3(m_originSphereRadius));
 
-    m_sphereShader->setMat4("u_modelMatrix", sphereModelMatrix);
-    m_sphereShader->setMat4("u_viewMatrix", camera.getViewMatrix());
-    m_sphereShader->setMat4("u_projectionMatrix", camera.getProjectionMatrix(aspectRatio));
-    m_sphereShader->setVec3("u_color", m_originSphereColor);
-    m_sphereShader->setVec3("u_cameraPos", camera.getPosition()); // For sphere fog
+    m_sphereShader->setMat4(m_gl, "u_modelMatrix", sphereModelMatrix);
+    m_sphereShader->setMat4(m_gl, "u_viewMatrix", camera.getViewMatrix());
+    m_sphereShader->setMat4(m_gl, "u_projectionMatrix", camera.getProjectionMatrix(aspectRatio));
+    m_sphereShader->setVec3(m_gl, "u_color", m_originSphereColor);
+    m_sphereShader->setVec3(m_gl, "u_cameraPos", camera.getPosition()); // For sphere fog
 
-    m_sphereShader->setBool("u_useFog", m_useFog);
-    m_sphereShader->setVec3("u_fogColor", m_fogColor);
-    m_sphereShader->setFloat("u_fogStartDistance", m_fogStartDistance);
-    m_sphereShader->setFloat("u_fogEndDistance", m_fogEndDistance);
+    m_sphereShader->setBool(m_gl, "u_useFog", m_useFog);
+    m_sphereShader->setVec3(m_gl, "u_fogColor", m_fogColor);
+    m_sphereShader->setFloat(m_gl, "u_fogStartDistance", m_fogStartDistance);
+    m_sphereShader->setFloat(m_gl, "u_fogEndDistance", m_fogEndDistance);
 }
 
 // --- Transform Customization ---
