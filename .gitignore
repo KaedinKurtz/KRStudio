@@ -6,6 +6,8 @@
 *.VC.db
 *.VC.opendb
 
+
+
 # ----- CMake / Build trees -----
 /build/
 /build*/
