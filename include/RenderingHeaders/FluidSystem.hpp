@@ -1,8 +1,11 @@
 #pragma once
 
+#include "IFluidSolver.hpp"
+
 #include <QtGui/qopengl.h>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <memory>
 #include <vector>
 
 class QOpenGLFunctions_4_3_Core;
@@ -59,8 +62,15 @@ public:
     {
         if (playing && !m_playing) m_sdfsBaked = false; // re-bake on each play
         m_playing = playing;
+        if (m_externalSolver) m_externalSolver->setPlaying(playing);
     }
-    void reset() { m_particleCount = 0; m_volumesSeeded = false; m_emitAccumulator = 0.0f; }
+    void reset()
+    {
+        m_particleCount = 0;
+        m_volumesSeeded = false;
+        m_emitAccumulator = 0.0f;
+        if (m_externalSolver) m_externalSolver->reset();
+    }
 
     int particleCount() const { return m_particleCount; }
     GLuint particleBuffer() const { return m_particleSSBO; }
@@ -75,6 +85,16 @@ public:
     const FluidParams& params() const { return m_params; }
     FluidAppearance& appearance() { return m_appearance; }
     const FluidAppearance& appearance() const { return m_appearance; }
+
+    // --- Solver backend selection ---
+    /// Requested tier ("Auto" by default); resolved against hardware caps.
+    FluidBackend requestedBackend() const { return m_requestedBackend; }
+    void setRequestedBackend(FluidBackend b) { m_requestedBackend = b; }
+    /// The tier actually stepping this frame.
+    FluidBackend activeBackend() const;
+    /// Install an external solver (e.g. the DFSPH reference backend).
+    void setExternalSolver(FluidBackend tier, std::unique_ptr<IFluidSolver> solver);
+    IFluidSolver* externalSolver() const { return m_externalSolver.get(); }
 
 private:
     struct SdfCollider {
@@ -103,6 +123,11 @@ private:
     float m_h = 0.10f;              // smoothing radius (m); fixed (grid-coupled)
     FluidParams m_params;
     FluidAppearance m_appearance;
+
+    // --- Backend selection ---
+    FluidBackend m_requestedBackend = FluidBackend::Auto;
+    FluidBackend m_externalTier = FluidBackend::Auto; // tier m_externalSolver implements
+    std::unique_ptr<IFluidSolver> m_externalSolver;
 
     // Simulation domain (uniform grid bounds)
     glm::vec3 m_domainMin = { -8.0f, 0.0f, -8.0f };

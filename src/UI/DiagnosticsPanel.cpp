@@ -1,5 +1,7 @@
 #include "DiagnosticsPanel.hpp"
 #include "RenderingSystem.hpp"
+#include "FluidSystem.hpp"
+#include "HardwareCaps.hpp"
 #include "Robot.hpp" // Include Robot to use its data
 
 #include <QVBoxLayout>
@@ -23,6 +25,13 @@ DiagnosticsPanel::DiagnosticsPanel(QWidget* parent)
     m_layout = new QVBoxLayout(this);
     m_layout->setSpacing(4);
     m_layout->setAlignment(Qt::AlignTop);
+
+    // --- Hardware / solver tiers ---
+    m_layout->addWidget(makeHeader("Hardware", this));
+    m_hardwareLabel = new QLabel("GPU compute: probing...", this);
+    m_backendLabel = new QLabel("Fluid solver: --", this);
+    m_layout->addWidget(m_hardwareLabel);
+    m_layout->addWidget(m_backendLabel);
 
     // --- Frame stats ---
     m_layout->addWidget(makeHeader("Frame", this));
@@ -65,6 +74,14 @@ void DiagnosticsPanel::setRenderingSystem(RenderingSystem* renderingSystem)
 void DiagnosticsPanel::refreshTimings()
 {
     if (!m_renderingSystem || !isVisible()) return;
+
+    const auto& caps = krs::hardwareCaps();
+    m_hardwareLabel->setText(caps.cudaPhysics
+        ? QString("CUDA: %1 (GPU physics tiers on)").arg(QString::fromStdString(caps.cudaDeviceName))
+        : QStringLiteral("CUDA: none (CPU/GL-compute tiers)"));
+    if (FluidSystem* fluid = m_renderingSystem->getFluidSystem())
+        m_backendLabel->setText(QString("Fluid solver: %1")
+                                    .arg(fluidBackendName(fluid->activeBackend())));
 
     const GpuTimings t = m_renderingSystem->getGpuTimings();
     m_fpsLabel->setText(QString("FPS: %1").arg(m_renderingSystem->getFPS(), 0, 'f', 1));

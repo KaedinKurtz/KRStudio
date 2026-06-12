@@ -235,10 +235,48 @@ void FluidSystem::uploadColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry&
     gl->glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
+const char* fluidBackendName(FluidBackend backend)
+{
+    switch (backend) {
+    case FluidBackend::Auto:     return "Auto";
+    case FluidBackend::PbfGpu:   return "PBF (GPU compute)";
+    case FluidBackend::DfsphCpu: return "DFSPH (CPU reference, SPlisHSPlasH)";
+    case FluidBackend::PhysxGpu: return "PBD (PhysX GPU)";
+    }
+    return "?";
+}
+
+FluidBackend FluidSystem::activeBackend() const
+{
+    if (m_requestedBackend == FluidBackend::Auto) {
+        // Highest interactive tier the hardware offers. PhysX GPU PBD will
+        // slot in here for CUDA machines once implemented; the GL-compute
+        // PBF runs interactively on any GL 4.3 GPU.
+        return FluidBackend::PbfGpu;
+    }
+    if (m_requestedBackend == m_externalTier && m_externalSolver
+        && m_externalSolver->available())
+        return m_externalTier;
+    if (m_requestedBackend == FluidBackend::PbfGpu) return FluidBackend::PbfGpu;
+    // Requested tier isn't available (no solver installed / no hardware).
+    return FluidBackend::PbfGpu;
+}
+
+void FluidSystem::setExternalSolver(FluidBackend tier, std::unique_ptr<IFluidSolver> solver)
+{
+    m_externalTier = tier;
+    m_externalSolver = std::move(solver);
+}
+
 void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
                          entt::registry& registry, float dt)
 {
     if (!m_initialized || !m_playing) return;
+
+    if (activeBackend() == m_externalTier && m_externalSolver) {
+        m_particleCount = m_externalSolver->update(renderer, gl, registry, dt);
+        return;
+    }
 
     if (!m_sdfsBaked) bakeSdfColliders(gl, registry);
     if (!m_volumesSeeded) seedVolumes(gl, registry);

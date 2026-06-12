@@ -2,6 +2,7 @@
 #include "Scene.hpp"
 #include "components.hpp"
 #include "CollisionCookingService.hpp"
+#include "HardwareCaps.hpp"
 
 #include <QDebug>
 #include <algorithm>
@@ -11,6 +12,9 @@
 
 #if defined(KR_WITH_PHYSX)
 #include <PxPhysicsAPI.h>
+#if PX_SUPPORT_GPU_PHYSX
+#include <gpu/PxGpu.h>
+#endif
 using namespace physx;
 #endif
 
@@ -67,7 +71,44 @@ struct SimulationController::PxImpl
     PxScene* scene = nullptr;
     PxMaterial* defaultMaterial = nullptr;
     PxRigidStatic* groundPlane = nullptr;
+#if PX_SUPPORT_GPU_PHYSX
+    PxCudaContextManager* cudaContextManager = nullptr;
+#endif
     std::unordered_map<entt::entity, PxRigidActor*> actors;
+
+    /// One-time CUDA probe: decides the GPU tiers (PhysX GPU dynamics, SDF
+    /// dynamic trimeshes, GPU PBD fluids). Returns -1 path silently on
+    /// non-NVIDIA hardware — no DLLs touched, CPU tiers stay default.
+    void probeCuda()
+    {
+        auto& caps = krs::hardwareCaps();
+        caps.probed = true;
+#if PX_SUPPORT_GPU_PHYSX
+        const int ordinal = PxGetSuggestedCudaDeviceOrdinal(errorCallback);
+        if (ordinal < 0) {
+            qInfo() << "[Sim] No CUDA-capable GPU — CPU solver tiers selected";
+            return;
+        }
+        PxCudaContextManagerDesc cudaDesc;
+        cudaDesc.deviceOrdinal = ordinal;
+        cudaContextManager = PxCreateCudaContextManager(*foundation, cudaDesc, PxGetProfilerCallback());
+        if (cudaContextManager && !cudaContextManager->contextIsValid()) {
+            cudaContextManager->release(); // driver/DLL missing despite NVIDIA GPU
+            cudaContextManager = nullptr;
+        }
+        if (cudaContextManager) {
+            caps.cudaPhysics = true;
+            caps.cudaDeviceName = cudaContextManager->getDeviceName();
+            qInfo() << "[Sim] CUDA GPU available:" << caps.cudaDeviceName.c_str()
+                    << "— GPU dynamics + SDF collision + GPU fluid tiers enabled";
+        }
+        else {
+            qInfo() << "[Sim] CUDA device found but context invalid — CPU tiers selected";
+        }
+#else
+        qInfo() << "[Sim] Built without PhysX GPU support — CPU solver tiers selected";
+#endif
+    }
 
     bool ensureCore()
     {
@@ -78,6 +119,7 @@ struct SimulationController::PxImpl
         if (!physics) { qCritical() << "[Sim] PxCreatePhysics failed"; return false; }
         dispatcher = PxDefaultCpuDispatcherCreate(std::max(1u, std::thread::hardware_concurrency() - 2));
         CollisionCookingService::instance().initialize(physics);
+        probeCuda();
         qInfo() << "[Sim] PhysX" << PX_PHYSICS_VERSION_MAJOR << "." << PX_PHYSICS_VERSION_MINOR << "initialized";
         return true;
     }
@@ -86,6 +128,9 @@ struct SimulationController::PxImpl
     {
         if (dispatcher) { dispatcher->release(); dispatcher = nullptr; }
         if (physics) { physics->release(); physics = nullptr; }
+#if PX_SUPPORT_GPU_PHYSX
+        if (cudaContextManager) { cudaContextManager->release(); cudaContextManager = nullptr; }
+#endif
         if (foundation) { foundation->release(); foundation = nullptr; }
     }
 
@@ -425,6 +470,19 @@ void SimulationController::buildPhysicsWorld()
         sceneDesc.solverType = PxSolverType::ePGS;
     if (qEnvironmentVariableIsSet("KRS_NO_PCM"))
         sceneDesc.flags &= ~PxSceneFlags(PxSceneFlag::eENABLE_PCM); // legacy SAT contact gen
+
+#if PX_SUPPORT_GPU_PHYSX
+    // NVIDIA tier: GPU rigid dynamics (Omniverse-class). Enables SDF
+    // collision for dynamic triangle meshes once cooking provides them.
+    // Opt out with KRS_NO_GPU_PHYSICS while the tier matures.
+    if (m_px->cudaContextManager && krs::hardwareCaps().cudaPhysics
+        && !qEnvironmentVariableIsSet("KRS_NO_GPU_PHYSICS")) {
+        sceneDesc.cudaContextManager = m_px->cudaContextManager;
+        sceneDesc.flags |= PxSceneFlag::eENABLE_GPU_DYNAMICS;
+        sceneDesc.broadPhaseType = PxBroadPhaseType::eGPU;
+        qInfo() << "[Sim] GPU rigid dynamics ON:" << krs::hardwareCaps().cudaDeviceName.c_str();
+    }
+#endif
     if (qEnvironmentVariableIsSet("KRS_BENCH")) {
         sceneDesc.filterShader = benchFilterShader;
         sceneDesc.simulationEventCallback = &g_benchContactLogger;

@@ -34,6 +34,10 @@ private:
     QTimer* m_refreshTimer = nullptr;
     RenderingSystem* m_renderingSystem = nullptr;
 
+    // Hardware / solver tier labels
+    QLabel* m_hardwareLabel = nullptr;
+    QLabel* m_backendLabel = nullptr;
+
     // GPU timing labels
     QLabel* m_fpsLabel = nullptr;
     QLabel* m_cpuFrameLabel = nullptr;
