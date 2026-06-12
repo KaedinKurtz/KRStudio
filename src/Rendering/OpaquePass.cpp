@@ -176,44 +176,35 @@ void OpaquePass::execute(const RenderFrameContext& context)
         Shader* activeShader = nullptr;
 
         // ===================================================================
-        // ## STEP 1: VERBOSE SHADER SELECTION LOGIC
+        // ## STEP 1: SHADER SELECTION
         // ===================================================================
-        qDebug().noquote() << "\n--- Selecting shader for entity" << (uint32_t)ent << "---";
         const bool isTessellated = context.registry.all_of<TessellatedMaterialTag>(ent);
         const bool isTriPlanar = context.registry.all_of<TriPlanarMaterialTag>(ent);
         const bool hasTexture = mat && mat->albedoMap;
         const bool isParallax = context.registry.all_of<ParallaxMaterialTag>(ent);
-        qDebug().noquote() << "  [Check] Tags -> isTessellated:" << isTessellated
-            << "| isTriPlanar:" << isTriPlanar << "| hasTexture:" << hasTexture;
         if (isParallax && isTriPlanar && hasTexture) {
             activeShader = pomShader;
         }
         else if (isTessellated && isTriPlanar && hasTexture) {
-            qDebug() << "  [Path 1] Condition met. Selecting 'gbuffer_tessellated_triplanar'.";
             activeShader = tessTriplanarShader;
         }
         else if (isTessellated && hasTexture) {
-            qDebug() << "  [Path 2] Condition met. Selecting 'gbuffer_tessellated'.";
             activeShader = tessShader;
         }
         else if (isTriPlanar && hasTexture) {
-            qDebug() << "  [Path 3] Condition met. Selecting 'gbuffer_triplanar'.";
             activeShader = triplanarShader;
         }
         else if (hasTexture) {
-            qDebug() << "  [Path 4] Condition met. Selecting 'gbuffer_textured'.";
             activeShader = uvShader;
         }
         else {
-            qDebug() << "  [Path 5] Condition met. Selecting 'gbuffer_untextured'.";
             activeShader = untexturedShader;
         }
 
         if (!activeShader) {
-            qWarning() << "  [!!!] FATAL: activeShader is nullptr. Skipping entity.";
+            qWarning() << "[OpaquePass] activeShader is nullptr. Skipping entity" << (uint32_t)ent;
             continue;
         }
-        qDebug() << "  [OK] Final shader program ID:" << activeShader->ID;
 
 
         // ===================================================================

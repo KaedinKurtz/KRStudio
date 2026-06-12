@@ -25,6 +25,7 @@
 #include "GizmoPass.hpp"
 
 #include <QOpenGLContext>
+#include <QOffscreenSurface>
 #include <QOpenGLVersionFunctionsFactory>
 #include <QOpenGLFunctions_4_5_Core>
 #include <QDebug>
@@ -148,11 +149,45 @@ void RenderingSystem::initialize(Scene* scene)
     if (m_isInitialized) return;
     m_scene = scene;
 
-    // Start the logic timer. Rendering is now driven by external calls to renderFrame().
+    // Create the engine's own GL context + offscreen surface. All engine
+    // rendering happens here; Qt's RHI compositor context is never touched.
+    // The two share objects (textures, buffers, programs, sync objects) via
+    // the application-wide share group (Qt::AA_ShareOpenGLContexts).
+    if (!m_engineContext) {
+        m_engineSurface = new QOffscreenSurface(nullptr, this);
+        m_engineSurface->setFormat(QSurfaceFormat::defaultFormat());
+        m_engineSurface->create();
+
+        m_engineContext = new QOpenGLContext(this);
+        m_engineContext->setFormat(QSurfaceFormat::defaultFormat());
+        m_engineContext->setShareContext(QOpenGLContext::globalShareContext());
+        if (!m_engineContext->create())
+            qCritical() << "[RenderingSystem] Failed to create engine GL context!";
+        else
+            qDebug() << "[RenderingSystem] Engine GL context created, sharing with"
+                     << QOpenGLContext::globalShareContext();
+    }
+
+    // Start the logic timer. Rendering is driven by renderAllViewports().
     m_frameTimer.start(16); // Run scene logic at a steady ~60hz.
     m_clock.start();
 
     qDebug() << "[RenderingSystem] Initialized. Waiting for first OpenGL context.";
+}
+
+bool RenderingSystem::makeEngineCurrent(QOpenGLContext*& prevCtx, QSurface*& prevSurf)
+{
+    prevCtx = QOpenGLContext::currentContext();
+    prevSurf = prevCtx ? prevCtx->surface() : nullptr;
+    if (!m_engineContext) return false;
+    return m_engineContext->makeCurrent(m_engineSurface);
+}
+
+void RenderingSystem::doneEngineCurrent(QOpenGLContext* prevCtx, QSurface* prevSurf)
+{
+    if (m_engineContext) m_engineContext->doneCurrent();
+    // Restore whatever context Qt had current (it may be mid-paint-cycle).
+    if (prevCtx && prevSurf) prevCtx->makeCurrent(prevSurf);
 }
 
 void RenderingSystem::onMasterUpdate()
@@ -350,9 +385,18 @@ void RenderingSystem::initializeSharedResources()
             std::string fsBRDF = (shaderDir + "brdf_integration_frag.glsl").toStdString();
             std::string fsTriPref = (shaderDir + "trilinear_prefilter_frag.glsl").toStdString();
             std::string vsPref = (shaderDir + "prefilter_vert.glsl").toStdString();
+            // IBL bake resolution. 2048 float cubemaps (env + prefiltered,
+            // each ~200+ MB with mips) caused VRAM pressure that broke window
+            // composition on integrated GPUs. 512/128 is visually equivalent
+            // for irradiance/reflection probes at far lower memory cost.
+            // KRS_IBL_SIZE overrides for experimentation.
+            const int iblSize = qEnvironmentVariableIsSet("KRS_IBL_SIZE")
+                ? qEnvironmentVariableIntValue("KRS_IBL_SIZE") : 512;
+            const int prefilterSize = std::max(64, iblSize / 4);
+
             // 2.1 Equirect ? Cubemap
             try {
-                m_envCubemap = Cubemap::fromEquirectangular(*hdrTex, m_gl, vsCube, fsCube, 2048);
+                m_envCubemap = Cubemap::fromEquirectangular(*hdrTex, m_gl, vsCube, fsCube, iblSize);
                 if (!m_envCubemap) throw std::runtime_error("null ptr");
                 qDebug() << "[IBL] Environment cubemap created.";
             }
@@ -377,7 +421,7 @@ void RenderingSystem::initializeSharedResources()
             // 2.3 Specular prefilter
             if (m_envCubemap) {
                 try {
-                    m_prefilteredEnvMap = Cubemap::prefilter(*m_envCubemap, m_gl, vsPref, fsPref, 2048, 5);
+                    m_prefilteredEnvMap = Cubemap::prefilter(*m_envCubemap, m_gl, vsPref, fsPref, prefilterSize, 5);
                     if (!m_prefilteredEnvMap) throw std::runtime_error("null ptr");
                     qDebug() << "[IBL] Prefiltered env map ready.";
                 }
@@ -442,11 +486,30 @@ void RenderingSystem::resizeGLResources()
     }
 }
 
-void RenderingSystem::renderFrame()
+void RenderingSystem::requestViewportUpdates()
 {
+    // Schedule a repaint of every viewport. The actual rendering happens in
+    // ViewportWidget::paintGL -> renderViewport(), inside Qt's paint cycle,
+    // where external GL commands are sanctioned by the RHI compositor.
+    for (auto* vp : m_targets.keys()) {
+        if (vp) vp->update();
+    }
+}
+
+void RenderingSystem::renderAllViewports()
+{
+    // Runs on the ENGINE context (offscreen). Never touches Qt's RHI context.
     if (!m_isInitialized || m_targets.isEmpty()) return;
 
-    // --- STATS UPDATE (unchanged) ---
+    QOpenGLContext* prevCtx = nullptr; QSurface* prevSurf = nullptr;
+    if (!makeEngineCurrent(prevCtx, prevSurf)) {
+        qWarning() << "[RenderingSystem] Engine context makeCurrent failed!";
+        return;
+    }
+    m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(m_engineContext);
+    if (!m_gl) { doneEngineCurrent(prevCtx, prevSurf); return; }
+
+    // --- Frame stats ---
     const float dt = m_clock.restart() * 0.001f;
     m_frameTimeHistory.push_back(dt);
     if (m_frameTimeHistory.size() > m_historySize) m_frameTimeHistory.pop_front();
@@ -460,67 +523,97 @@ void RenderingSystem::renderFrame()
 
     resizeGLResources();
 
-    QElapsedTimer timer;
-
-    // --- PIPELINE STAGE 1: Geometry Pass (Once per frame) ---
-    timer.start();
+    // --- Geometry pass (once per frame), then per-viewport passes ---
     geometryPass();
-    qDebug() << "[Timing] geometryPass took" << timer.elapsed() << "ms";
 
-    // --- PIPELINE STAGES 2-4: Per-Viewport Rendering ---
     for (auto* viewport : m_targets.keys()) {
         if (!viewport) continue;
+        auto& target = m_targets[viewport];
+        if (target.w <= 0 || target.h <= 0) continue;
 
-        viewport->makeCurrent();
-        m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport->context());
-        if (!m_gl) continue;
-
-        // Lighting
-        timer.restart();
         lightingPass(viewport);
-        qDebug() << "[Timing]" << "lightingPass (vp" << viewport << ") took" << timer.elapsed() << "ms";
-
-        // Post-process
-        timer.restart();
         postProcessingPass(viewport);
-        qDebug() << "[Timing]" << "postProcessingPass (vp" << viewport << ") took" << timer.elapsed() << "ms";
-
-        // Overlay
-        timer.restart();
         overlayPass(viewport);
-        qDebug() << "[Timing]" << "overlayPass (vp" << viewport << ") took" << timer.elapsed() << "ms";
-
-        // Final blit
-        timer.restart();
-        {
-            auto& target = m_targets[viewport];
-            m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, target.finalFBO);
-            m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
-            m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, viewport->defaultFramebufferObject());
-            m_gl->glDrawBuffer(GL_BACK);
-            m_gl->glBlitFramebuffer(
-                0, 0, target.w, target.h,
-                0, 0, target.w, target.h,
-                GL_COLOR_BUFFER_BIT, GL_NEAREST
-            );
-            m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        }
-        qDebug() << "[Timing]" << "finalBlit (vp" << viewport << ") took" << timer.elapsed() << "ms";
-
-        viewport->doneCurrent();
     }
+
+    // Publish this frame to the widgets: fence guarantees the engine's writes
+    // are visible to the RHI contexts before they blit (sync objects are
+    // shared across the share group).
+    if (m_frameFence) m_gl->glDeleteSync(m_frameFence);
+    m_frameFence = m_gl->glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    m_gl->glFlush();
+
+    doneEngineCurrent(prevCtx, prevSurf);
+
+    // Ask Qt to repaint the viewports; each paintGL calls presentViewport().
+    requestViewportUpdates();
+}
+
+void RenderingSystem::presentViewport(ViewportWidget* viewport)
+{
+    // PRECONDITION: called from ViewportWidget::paintGL with that widget's
+    // (RHI compositor) context current. Touch as little GL state as possible
+    // and restore what we touch.
+    if (!m_isInitialized || !m_targets.contains(viewport)) return;
+    auto& target = m_targets[viewport];
+    if (target.w <= 0 || target.h <= 0 || target.finalColorTexture == 0) return;
+
+    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(QOpenGLContext::currentContext());
+    if (!gl) return;
+
+    // Wait (server-side) for the engine frame to be complete.
+    if (m_frameFence) gl->glWaitSync(m_frameFence, 0, GL_TIMEOUT_IGNORED);
+
+    // Read-FBO on THIS context wrapping the shared engine-rendered color
+    // texture (FBOs are not shared across contexts).
+    PresentFBO& pf = m_presentFBOs[viewport];
+    if (pf.fbo == 0) gl->glGenFramebuffers(1, &pf.fbo);
+
+    GLint prevReadFbo = 0;
+    gl->glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
+
+    gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, pf.fbo);
+    // Re-bind + re-attach EVERY frame: cross-context texture writes only
+    // become visible to this context when the texture object is re-bound
+    // here, and after a resize the texture id can be reused for a new
+    // object — a one-time attachment would keep showing the stale first frame.
+    GLint prevTex2D = 0;
+    gl->glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex2D);
+    gl->glBindTexture(GL_TEXTURE_2D, target.finalColorTexture);
+    gl->glBindTexture(GL_TEXTURE_2D, prevTex2D);
+    gl->glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, target.finalColorTexture, 0);
+    pf.wrappedTexture = target.finalColorTexture;
+    gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
+    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, viewport->defaultFramebufferObject());
+    gl->glBlitFramebuffer(
+        0, 0, target.w, target.h,
+        0, 0, target.w, target.h,
+        GL_COLOR_BUFFER_BIT, GL_NEAREST
+    );
+
+    // Restore the bindings Qt had.
+    gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFbo);
+    gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, viewport->defaultFramebufferObject());
 }
 
 void RenderingSystem::onViewportAdded(ViewportWidget* viewport)
 {
     if (m_targets.contains(viewport)) return;
-    qDebug() << "[RenderingSystem] Viewport added. Context:" << viewport->context();
-    ensureContextIsTracked(viewport->context());
+    qDebug() << "[RenderingSystem] Viewport added. Engine context:" << m_engineContext;
     m_targets.insert(viewport, TargetFBOs());
 
-    viewport->makeCurrent();
+    // ALL engine GL initialization happens on the engine's own context, never
+    // on the widget's (Qt RHI) context — see renderAllViewports().
+    QOpenGLContext* prevCtx = nullptr; QSurface* prevSurf = nullptr;
+    if (!makeEngineCurrent(prevCtx, prevSurf)) {
+        qCritical() << "[RenderingSystem] Engine context makeCurrent failed in onViewportAdded!";
+        return;
+    }
+    ensureContextIsTracked(m_engineContext);
+
     if (!m_isInitialized) {
-        m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport->context());
+        m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(m_engineContext);
         if (!m_gl) throw std::runtime_error("Failed to get QOpenGLFunctions_4_3_Core");
         initializeSharedResources();
         m_isInitialized = true;
@@ -534,18 +627,22 @@ void RenderingSystem::onViewportAdded(ViewportWidget* viewport)
         m_scene->getRegistry().emplace_or_replace<MaterialComponent>(ent, std::move(mat));
     }
 
-
-    viewport->doneCurrent();
+    doneEngineCurrent(prevCtx, prevSurf);
 }
 
 void RenderingSystem::onViewportWillBeDestroyed(ViewportWidget* viewport)
 {
     if (!viewport || !m_targets.contains(viewport)) return;
     qDebug() << "[CLEANUP] Releasing GPU resources for viewport" << viewport;
-    viewport->makeCurrent();
-    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(viewport->context());
-    if (gl) initOrResizeFinalFBO(gl, m_targets[viewport], 0, 0);
-    viewport->doneCurrent();
+    // The viewport's target FBO lives on the ENGINE context.
+    QOpenGLContext* prevCtx = nullptr; QSurface* prevSurf = nullptr;
+    if (makeEngineCurrent(prevCtx, prevSurf)) {
+        auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(m_engineContext);
+        if (gl) initOrResizeFinalFBO(gl, m_targets[viewport], 0, 0);
+        doneEngineCurrent(prevCtx, prevSurf);
+    }
+    // The present FBO lives on the widget's context and dies with it.
+    m_presentFBOs.remove(viewport);
     m_targets.remove(viewport);
 }
 
@@ -555,18 +652,17 @@ void RenderingSystem::onViewportWillBeDestroyed(ViewportWidget* viewport)
 
 void RenderingSystem::geometryPass()
 {
+    // PRECONDITION: the engine context is current (called from
+    // renderAllViewports). No makeCurrent/doneCurrent here.
     // 0) Early-out if no size or no viewports
-    if (m_gBuffer.w == 0 || m_gBuffer.h == 0 || m_targets.isEmpty()) {
+    if (!m_geometryPass || m_gBuffer.w == 0 || m_gBuffer.h == 0 || m_targets.isEmpty()) {
         return;
     }
 
-    // 1) Acquire the primary viewport and GL funcs
     auto* vp = m_targets.firstKey();
-    vp->makeCurrent();
-    m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(vp->context());
+    m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(QOpenGLContext::currentContext());
     if (!m_gl) {
         qWarning() << "[geometryPass] Failed to acquire GL functions.";
-        vp->doneCurrent();
         return;
     }
 
@@ -576,7 +672,6 @@ void RenderingSystem::geometryPass()
     if (fbStatus != GL_FRAMEBUFFER_COMPLETE) {
         qWarning() << "[geometryPass] Aborting: FBO not complete! Status:" << fbStatus;
         m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        vp->doneCurrent();
         return;
     }
 
@@ -624,12 +719,11 @@ void RenderingSystem::geometryPass()
 
     // 7) Unbind & done
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    vp->doneCurrent();
 }
 
 void RenderingSystem::lightingPass(ViewportWidget* viewport)
 {
-    qDebug() << "--- 2. LIGHTING PASS for viewport:" << viewport << "---";
+    if (!m_lightingPass) return;
     // grab our GL functions
     m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(QOpenGLContext::currentContext());
     if (!m_gl) return;
@@ -670,14 +764,11 @@ void RenderingSystem::lightingPass(ViewportWidget* viewport)
     
         // Let the LightingPass do *its* binding of gPosition,gNormal,gAlbedoSpec
         m_lightingPass->execute(ctx);
-    qDebug() << "  - LightingPass executed.";
 }
 
 void RenderingSystem::postProcessingPass(ViewportWidget* viewport)
 {
     if (m_postProcessingPasses.empty()) return;
-
-    qDebug() << "--- 3. POST-PROCESSING PASS for viewport:" << viewport << "---";
 
     // GL funcs
     m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(
@@ -705,21 +796,6 @@ void RenderingSystem::postProcessingPass(ViewportWidget* viewport)
     const glm::mat4 view = cam.getViewMatrix();
     const glm::mat4 projection = cam.getProjectionMatrix(aspect);
 
-    // Sanity logs so we can see if anything is identity/zero
-    auto mat4_summary = [](const glm::mat4& M) {
-        return QString::asprintf(
-            "[%.2f %.2f %.2f %.2f | %.2f %.2f %.2f %.2f | %.2f %.2f %.2f %.2f | %.2f %.2f %.2f %.2f]",
-            M[0][0], M[1][0], M[2][0], M[3][0],
-            M[0][1], M[1][1], M[2][1], M[3][1],
-            M[0][2], M[1][2], M[2][2], M[3][2],
-            M[0][3], M[1][3], M[2][3], M[3][3]
-        );
-    };
-
-    qDebug() << "[postProcessingPass] view =" << mat4_summary(view);
-    qDebug() << "[postProcessingPass] proj =" << mat4_summary(projection);
-    qDebug() << "[postProcessingPass] vp size =" << vpW << "x" << vpH;
-
     // Build the RenderFrameContext ONCE and reuse for each post pass
     RenderFrameContext ctx{
         m_gl,
@@ -738,22 +814,17 @@ void RenderingSystem::postProcessingPass(ViewportWidget* viewport)
 
     // Execute each post-processing pass in sequence
     for (size_t i = 0; i < m_postProcessingPasses.size(); ++i) {
-        qDebug() << "[postProcessingPass] Executing pass # " << int(i)
-            << " type=" << typeid(*m_postProcessingPasses[i]).name();
         m_postProcessingPasses[i]->execute(ctx);
     }
-
-    qDebug() << "[postProcessingPass] Complete.";
 }
 
 
 void RenderingSystem::overlayPass(ViewportWidget* viewport)
 {
-    qDebug() << "--- 4. OVERLAY PASS for viewport:" << viewport << "---";
     m_gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(
         QOpenGLContext::currentContext());
     if (!m_gl) {
-        qDebug() << "[overlayPass] GL funcs unavailable!";
+        qWarning() << "[overlayPass] GL funcs unavailable!";
         return;
     }
 
@@ -763,28 +834,16 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
     const int   w = target.w;
     const int   h = target.h;
 
-    QElapsedTimer tTotal;
-    tTotal.start();
-
     // --- A) Depth-Only Blit ---
     {
-        QElapsedTimer t; t.start();
-
-        // 1) Bind and check BOTH FBOs
         m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, gFBO);
-        GLenum readStatus = m_gl->glCheckFramebufferStatus(GL_READ_FRAMEBUFFER);
-        qDebug() << "[overlayPass] READ_FRAMEBUFFER status =" << readStatus;
-
         m_gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, finalFBO);
-        GLenum drawStatus = m_gl->glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
-        qDebug() << "[overlayPass] DRAW_FRAMEBUFFER status =" << drawStatus;
 
-        // 2) Disable color writes on the DRAW side
-        //    (for a depth?only blit the color buffer is irrelevant)
+        // Disable color writes on the DRAW side
+        // (for a depth-only blit the color buffer is irrelevant)
         m_gl->glDrawBuffer(GL_NONE);
         m_gl->glReadBuffer(GL_NONE);
 
-        // 3) Perform the depth blit
         m_gl->glBlitFramebuffer(
             0, 0, w, h,
             0, 0, w, h,
@@ -792,33 +851,19 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
             GL_NEAREST
         );
 
-        // 4) Restore the draw buffer so subsequent color draws work
+        // Restore the draw buffer so subsequent color draws work
         GLenum buf = GL_COLOR_ATTACHMENT0;
         m_gl->glDrawBuffers(1, &buf);
-
-        // 5) Error check & timing
-        GLenum err = m_gl->glGetError();
-        qDebug() << "[Timing] overlay-depthBlit took" << t.elapsed() << "ms"
-            << (err != GL_NO_ERROR ? QString("GL_ERR=0x%1").arg(err, 0, 16) : "");
     }
 
     // --- B) Prepare for color overlays ---
     {
-        QElapsedTimer t; t.start();
-
         m_gl->glBindFramebuffer(GL_FRAMEBUFFER, finalFBO);
         m_gl->glViewport(0, 0, w, h);
         GLenum drawBufs[1] = { GL_COLOR_ATTACHMENT0 };
         m_gl->glDrawBuffers(1, drawBufs);
-        qDebug() << "[overlayPass] Restored DRAW_BUFFERS[0] =" << drawBufs[0];
         m_gl->glEnable(GL_DEPTH_TEST);
         m_gl->glDepthMask(GL_TRUE);
-
-        GLenum err = m_gl->glGetError();
-        qDebug() << "[Timing] overlay-prepColor took" << t.elapsed() << "ms"
-            << (err != GL_NO_ERROR
-                ? QString("GL_ERR=0x%1").arg(err, 0, 16)
-                : QString());
     }
 
     // --- C) Build shared RenderFrameContext ---
@@ -848,8 +893,6 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
         Shader* skyboxShader = getShader("skybox");
         auto   envCubemap = getEnvCubemap();
         if (skyboxShader && envCubemap) {
-            QElapsedTimer t; t.start();
-
             m_gl->glDepthFunc(GL_LEQUAL);
 
             skyboxShader->use(m_gl);
@@ -865,36 +908,17 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
             m_gl->glBindVertexArray(0);
 
             m_gl->glDepthFunc(GL_LESS);
-
-            GLenum err = m_gl->glGetError();
-            qDebug() << "[Timing] overlay-skybox took" << t.elapsed() << "ms"
-                << (err != GL_NO_ERROR
-                    ? QString("GL_ERR=0x%1").arg(err, 0, 16)
-                    : QString());
         }
     }
 
     // --- C2) Other overlay passes ---
     for (auto& pass : m_overlayPasses) {
-        QElapsedTimer t; t.start();
-
-        qDebug() << "[overlayPass] Executing overlay pass:" << typeid(*pass).name();
         pass->execute(ctx);
-
-        GLenum err = m_gl->glGetError();
-        qDebug() << "[Timing] overlay-" << typeid(*pass).name()
-            << "took" << t.elapsed() << "ms"
-            << (err != GL_NO_ERROR
-                ? QString("GL_ERR=0x%1").arg(err, 0, 16)
-                : QString());
     }
 
-    // --- D) Cleanup & total time ---
+    // --- D) Cleanup ---
     m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
     m_gl->glDrawBuffer(GL_BACK);
-    qDebug() << "[overlayPass] Unbound all FBOs; RESET draw buffer to GL_BACK";
-    qDebug() << "--------------------------------- FRAME END ---------------------------------";
-    qDebug() << "[Timing] overlay total took" << tTotal.elapsed() << "ms";
 }
 
 void RenderingSystem::shutdown()
@@ -903,10 +927,11 @@ void RenderingSystem::shutdown()
     qDebug() << "[LIFECYCLE] Shutting down all GPU resources...";
     if (m_targets.isEmpty()) return;
 
-    ViewportWidget* vp = m_targets.firstKey();
-    vp->makeCurrent();
-    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(vp->context());
-    if (!gl) return;
+    // All engine GPU resources live on the engine context.
+    QOpenGLContext* prevCtx = nullptr; QSurface* prevSurf = nullptr;
+    if (!makeEngineCurrent(prevCtx, prevSurf)) return;
+    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(m_engineContext);
+    if (!gl) { doneEngineCurrent(prevCtx, prevSurf); return; }
 
     // Delete all our custom FBOs
     initOrResizeGBuffer(gl, 0, 0);
@@ -936,7 +961,8 @@ void RenderingSystem::shutdown()
         res.perContext.clear();
     }
 
-    vp->doneCurrent();
+    if (m_frameFence) { gl->glDeleteSync(m_frameFence); m_frameFence = nullptr; }
+    doneEngineCurrent(prevCtx, prevSurf);
     m_isInitialized = false;
     qDebug() << "[LIFECYCLE] GPU resources shut down successfully.";
 }
@@ -1324,7 +1350,7 @@ void RenderingSystem::initOrResizePPFBOs(QOpenGLFunctions_4_3_Core* gl, int w, i
         gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, nullptr);
         gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pp.colorTexture, 0);
 
-        // Depth (texture!) � use 32F so we can blit from a depth texture source
+        // Depth (texture!) � use 32F so we can blit from a depth texture source
         GLuint depthTex = 0;
         gl->glGenTextures(1, &depthTex);
         gl->glBindTexture(GL_TEXTURE_2D, depthTex);

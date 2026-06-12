@@ -37,18 +37,11 @@ namespace {
 
         const GLint count = std::min<int>(grad.size(), 8);
 
-        // --- START OF INSTRUMENTATION ---
-        qDebug() << "[DEBUG] Uploading Gradient to Shader Program:" << prog;
-        qDebug() << "  - Stop Count Sent to Shader:" << count;
-        // --- END OF INSTRUMENTATION ---
-
-        // ?? scalar uniform ????????????????????????????????????????????????????
         GLint loc = gl->glGetUniformLocation(prog, "u_stopCount");
         if (loc != -1) {
             gl->glUniform1i(loc, count);
         }
 
-        // --- More Instrumentation ---
         if (count > 0) {
             std::array<float, 8> pos{};
             std::array<glm::vec4, 8> col{};
@@ -57,13 +50,7 @@ namespace {
                 col[i] = grad[i].color;
             }
 
-            // Print the arrays we are about to send
-            for (int i = 0; i < count; ++i) {
-                qDebug() << "  - Stop" << i << ": Pos =" << pos[i]
-                    << "Color = (" << col[i].r << "," << col[i].g << "," << col[i].b << "," << col[i].a << ")";
-            }
-
-            // ?? array uniforms: MUST use [0] in the query ?????????????????????????
+            // array uniforms: MUST use [0] in the query
             loc = gl->glGetUniformLocation(prog, "u_stopPos[0]");
             if (loc != -1) {
                 gl->glUniform1fv(loc, count, pos.data());
@@ -409,45 +396,10 @@ void FieldVisualizerPass::renderParticles(const RenderFrameContext& context, Fie
     else if (settings.coloringMode == FieldVisualizerComponent::ColoringMode::Lifetime)
         uploadGradientToCurrentProgram(gl, settings.lifetimeGradient);
 
-    // ========================================================================
-    // --- DEBUG_READBACK (PRE-COMPUTE) ---
-    // Log the most important uniforms being sent to the compute shader.
-    // ========================================================================
-    qDebug() << "--- [DEBUG] Uniforms Sent to Particle Compute Shader ---";
-    qDebug() << "  - DeltaTime:" << context.deltaTime << "ElapsedTime:" << context.elapsedTime;
-    qDebug() << "  - Bounds Min:" << vis.bounds.min.x << vis.bounds.min.y << vis.bounds.min.z;
-    qDebug() << "  - Effector Counts (P/D/T):" << m_pointEffectors.size()
-        << "/" << m_directionalEffectors.size() << "/" << m_triangleEffectors.size();
-    qDebug() << "----------------------------------------------------";
-
-
     gl->glDispatchCompute(settings.particleCount / 256 + 1, 1, 1);
-    gl->glMemoryBarrier(GL_ALL_BARRIER_BITS);
+    gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
-    // ========================================================================
-   // --- DEBUG_READBACK: START ---
-   // This block reads the output of the compute shader for inspection.
-   // ========================================================================
-    {
-        GLuint outputBuffer = res.particleBuffer[1 - res.currentReadBuffer];
-        Particle p = {};
-        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, outputBuffer);
-        gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle), &p);
-        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-        qDebug() << "--- [DEBUG] Particle 0 State After Compute ---";
-        qDebug() << "  - Position:" << p.position.x << p.position.y << p.position.z;
-        qDebug() << "  - Velocity:" << p.velocity.x << p.velocity.y << p.velocity.z;
-        qDebug() << "  - Color:" << p.color.r << p.color.g << p.color.b << p.color.a;
-        qDebug() << "  - Age:" << p.age << "Lifetime:" << p.lifetime;
-        qDebug() << "  - Size:" << p.size;
-        qDebug() << "--------------------------------------------";
-    }
-    // ========================================================================
-    // --- DEBUG_READBACK: END ---
-    // 
-
-    /* ?????????????????????????  render pass  ????????????????????????? */
+    /* -------------------------  render pass  ------------------------- */
     gl->glEnable(GL_PROGRAM_POINT_SIZE);
     gl->glEnable(GL_BLEND);
     gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE);
@@ -643,51 +595,12 @@ void FieldVisualizerPass::renderArrows(const RenderFrameContext& context, FieldV
     computeShader->setInt(gl, "u_directionalEffectorCount", static_cast<int>(m_directionalEffectors.size()));
     computeShader->setInt(gl, "u_triangleEffectorCount", static_cast<int>(m_triangleEffectors.size()));
     gl->glDispatchCompute((GLuint)res.numSamplePoints / 256 + 1, 1, 1);
-    gl->glMemoryBarrier(GL_ALL_BARRIER_BITS);
-
-    {
-        // 1. Read the DrawElementsIndirectCommand struct back from the command UBO.
-        DrawElementsIndirectCommand cmd_readback = { 0 };
-        gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, res.commandUBO);
-        gl->glGetBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(DrawElementsIndirectCommand), &cmd_readback);
-        gl->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
-
-        // 2. Print the contents of the draw command.
-        qDebug() << "[DEBUG] Indirect Draw Command Readback:";
-        // --- ADD THIS LINE ---
-        qDebug() << "  - Index Count per Instance:" << cmd_readback.count;
-        qDebug() << "  - Instance Count Generated:" << cmd_readback.instanceCount;
-
-        // 3. If any instances were generated, read and print the data for the first one.
-        if (cmd_readback.instanceCount > 0)
-        {
-            InstanceData firstInstance_readback;
-            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, res.instanceDataSSBO);
-            gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(InstanceData), &firstInstance_readback);
-            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-            // Print the components of the first arrow's transformation matrix.
-            const glm::mat4& m = firstInstance_readback.modelMatrix;
-            qDebug() << "  - First Instance Matrix:";
-            qDebug() << "    " << m[0][0] << m[1][0] << m[2][0] << m[3][0];
-            qDebug() << "    " << m[0][1] << m[1][1] << m[2][1] << m[3][1];
-            qDebug() << "    " << m[0][2] << m[1][2] << m[2][2] << m[3][2];
-            qDebug() << "    " << m[0][3] << m[1][3] << m[2][3] << m[3][3];
-            qDebug() << "  - First Instance Color/Intensity:" << firstInstance_readback.color.x;
-        }
-    }
+    gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
     // --- Render Pass ---
     renderShader->use(gl);
     renderShader->setMat4(gl, "view", context.view);
     renderShader->setMat4(gl, "projection", context.projection);
-
-    // --- START OF NEW INSTRUMENTATION ---
-    qDebug() << "[DEBUG] Active Render Shader Program ID:" << renderShader->ID;
-    GLint location = gl->glGetUniformLocation(renderShader->ID, "u_stopCount");
-    qDebug() << "[DEBUG] Location of 'u_stopCount' uniform:" << location;
-    // --- END OF NEW INSTRUMENTATION ---
-
 
     // Set the uniforms that the vertex shader will use to calculate the color
     renderShader->setInt(gl, "u_coloringMode", static_cast<int>(vis.arrowSettings.coloringMode));

@@ -6,7 +6,7 @@
 #include "MainWindow.hpp"
 #include "DatabaseManager.hpp"
 
-// custom message handler (you can leave this out if you don�t need it)
+// custom message handler (you can leave this out if you don�t need it)
 static void qtMessageOutput(QtMsgType type, const QMessageLogContext& ctx, const QString& msg)
 {
     QByteArray local = msg.toLocal8Bit();
@@ -34,15 +34,17 @@ static QSurfaceFormat createDefaultFormat()
     f.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     f.setDepthBufferSize(24);
     f.setStencilBufferSize(8);
-    f.setSamples(4); // For MSAA
+    // No MSAA: the deferred pipeline resolves into a single-sampled FBO and
+    // blits it to the widget backbuffer — blitting into a multisampled
+    // backbuffer is GL_INVALID_OPERATION and leaves the window blank.
+    f.setSamples(0);
+    f.setSwapInterval(1); // vsync — present at most once per display refresh
 
     return f;
 }
 
 int main(int argc, char* argv[])
 {
-    // get debug plugin output (optional)
-    qputenv("QT_DEBUG_PLUGINS", QByteArrayLiteral("1"));
     qInstallMessageHandler(qtMessageOutput);
 
     // share OpenGL contexts & set our default format

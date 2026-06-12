@@ -51,7 +51,7 @@ static CpuRay makeCpuRay(const Camera& cam, int px, int py, int vpW, int vpH) {
     CpuRay r; r.origin = glm::vec3(nW); r.dir = glm::normalize(glm::vec3(fW - nW)); return r;
 }
 
-// ---- Minimal math helpers (dup of GizmoSystem’s internal ones) ----
+// ---- Minimal math helpers (dup of GizmoSystemï¿½s internal ones) ----
 static bool rayPlane(const glm::vec3& ro, const glm::vec3& rd,
     const glm::vec3& O, const glm::vec3& N,
     float& tOut, glm::vec3& H) {
@@ -201,9 +201,12 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
     m_renderingSystem(renderingSystem)
 {
     setUpdateBehavior(QOpenGLWidget::PartialUpdate);
+#ifdef KRS_GL_DEBUG
+    // Debug contexts serialize the driver and tank performance â€” opt-in only.
     QSurfaceFormat format;
     format.setOption(QSurfaceFormat::DebugContext);
     setFormat(format);
+#endif
 
     m_instanceId = s_instanceCounter++;
     qDebug() << "[LIFECYCLE] Constructing ViewportWidget instance:" << m_instanceId;
@@ -228,8 +231,8 @@ ViewportWidget::~ViewportWidget() {}
 
 void ViewportWidget::initializeGL()
 {
-    // ...
-    // ADD THIS BLOCK IF YOU DON'T HAVE IT
+#ifdef KRS_GL_DEBUG
+    // Synchronous GL debug logging stalls the pipeline on every GL call â€” opt-in only.
     m_logger = new QOpenGLDebugLogger(this);
     connect(m_logger, &QOpenGLDebugLogger::messageLogged, this, &ViewportWidget::handleLoggedMessage);
     if (m_logger->initialize()) {
@@ -239,10 +242,13 @@ void ViewportWidget::initializeGL()
     else {
         qWarning() << "Failed to initialize OpenGL Debug Logger.";
     }
-    // ...
-    if (m_renderingSystem) {
-        m_renderingSystem->onViewportAdded(this);
-    }
+#endif
+    // Engine registration is deferred out of the paint cycle entirely: it
+    // runs heavy GL on the engine's own context between events, where no Qt
+    // context is current and nothing the RHI compositor relies on is touched.
+    QTimer::singleShot(0, this, [this]() {
+        if (m_renderingSystem) m_renderingSystem->onViewportAdded(this);
+    });
     emit glContextReady();
 }
 
@@ -265,15 +271,17 @@ void ViewportWidget::shutdown()
 
 void ViewportWidget::paintGL()
 {
-    // The main render call is now in MainWindow.
-    // This function's only job is to update the stats overlay.
-    if (m_renderingSystem) {
-        QString statsText = QString("FPS: %1\nFrame: %2 ms")
-            .arg(m_renderingSystem->getFPS(), 0, 'f', 1)
-            .arg(m_renderingSystem->getFrameTime(), 0, 'f', 2);
-        m_statsOverlay->setText(statsText);
-        m_statsOverlay->adjustSize();
-    }
+    if (!m_renderingSystem) return;
+
+    // Blit the engine's latest finished frame (shared texture) into our
+    // backbuffer. The engine renders on its own context via renderAllViewports.
+    m_renderingSystem->presentViewport(this);
+
+    QString statsText = QString("FPS: %1\nFrame: %2 ms")
+        .arg(m_renderingSystem->getFPS(), 0, 'f', 1)
+        .arg(m_renderingSystem->getFrameTime(), 0, 'f', 2);
+    m_statsOverlay->setText(statsText);
+    m_statsOverlay->adjustSize();
 }
 
 void ViewportWidget::renderNow()
@@ -566,7 +574,7 @@ void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* ev)
             int axis = int(gh.axis);
             emit gizmoHandleDoubleClicked(mode, axis);
 
-            // Don’t also do camera focus on gizmo double-click:
+            // Donï¿½t also do camera focus on gizmo double-click:
             m_suppressClickThisRelease = true;
             return;
         }

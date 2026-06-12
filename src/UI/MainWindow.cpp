@@ -30,6 +30,8 @@
 #include "ResourceManager.hpp"
 #include "GizmoSystem.hpp"
 
+#include <QDir>
+
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/DataFlowGraphModel>
 #include <QtNodes/DataFlowGraphicsScene>
@@ -310,6 +312,13 @@ MainWindow::MainWindow(QWidget* parent)
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/assets/");
         QString lamboPath = assetDir + "lambo.stl";
 
+        // Demo material directory â€” only valid on machines that have it.
+        const QString demoTexDir = QStringLiteral("D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl");
+        const bool hasDemoTextures = QDir(demoTexDir).exists();
+        if (!hasDemoTextures) {
+            qWarning() << "[Spawner] Demo texture directory not found, using untextured material:" << demoTexDir;
+        }
+
         // 1) Load once -> stable MeshID
         MeshID lamboId = ResourceManager::instance().loadMesh(lamboPath);
         if (lamboId == MeshID::None) {
@@ -326,8 +335,10 @@ MainWindow::MainWindow(QWidget* parent)
 
         entt::entity e = SceneBuilder::spawnMeshInstance(*m_scene, lamboId, t);
         if (registry.valid(e)) {
-            registry.emplace_or_replace<MaterialDirectoryTag>(e, "D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl");
-            registry.emplace_or_replace<ParallaxMaterialTag>(e);
+            if (hasDemoTextures) {
+                registry.emplace_or_replace<MaterialDirectoryTag>(e, demoTexDir.toStdString());
+                registry.emplace_or_replace<ParallaxMaterialTag>(e);
+            }
             // SceneBuilder already tags UV vs TriPlanar for you; add TriPlanar here only if you want to force it.
 
             auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
@@ -341,8 +352,10 @@ MainWindow::MainWindow(QWidget* parent)
         for (entt::entity ge : ents) {
             if (!registry.valid(ge)) continue;
 
-            registry.emplace_or_replace<MaterialDirectoryTag>(ge, "D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl");
-            registry.emplace_or_replace<ParallaxMaterialTag>(ge);
+            if (hasDemoTextures) {
+                registry.emplace_or_replace<MaterialDirectoryTag>(ge, demoTexDir.toStdString());
+                registry.emplace_or_replace<ParallaxMaterialTag>(ge);
+            }
 
             auto& mat = registry.emplace_or_replace<MaterialComponent>(ge);
             mat.heightScale = 0.1f;
@@ -389,7 +402,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_fixedTopToolbar = new StaticToolbar(this);
     mainLayout->addWidget(m_fixedTopToolbar, 0);
 
-    // Grab the toolbar’s embedded popup
+    // Grab the toolbarï¿½s embedded popup
     auto* popup = m_fixedTopToolbar->viewportManagerPopup();
     m_viewportManagerPopup = popup;
     // Wire up its buttons to your slots
@@ -583,14 +596,18 @@ MainWindow::MainWindow(QWidget* parent)
     // --- 5. FINAL, ROBUST INITIALIZATION AND RENDER LOOP START ---
     m_masterRenderTimer = new QTimer(this);
     connect(m_masterRenderTimer, &QTimer::timeout, this, [this]() {
-        // The new render loop is just one simple call.
+        // Render all viewports on the engine's own GL context, then schedule
+        // widget repaints (each paintGL blits the shared result texture).
         if (m_renderingSystem) {
-            m_renderingSystem->renderFrame();
+            m_renderingSystem->renderAllViewports();
         }
         });
 
     m_renderingSystem->initialize(m_scene.get());
-    m_masterRenderTimer->start(0); // Start rendering as fast as possible.
+    // Pace the render loop instead of spinning the event loop at 100% CPU.
+    // ~8 ms â‰ˆ 120 FPS target; actual presentation is gated by vsync.
+    m_masterRenderTimer->setTimerType(Qt::PreciseTimer);
+    m_masterRenderTimer->start(8);
 
 
     connect(m_dockManager, &ads::CDockManager::focusedDockWidgetChanged, this, &MainWindow::updateViewportLayouts);
@@ -1167,7 +1184,7 @@ void MainWindow::ensurePropertiesArea()
     if (m_propertiesArea)
         return;
 
-    // 2) Drop in a dummy dock so ADS will create a CDockAreaWidget for us…
+    // 2) Drop in a dummy dock so ADS will create a CDockAreaWidget for usï¿½
     auto* placeholder = new ads::CDockWidget(QString(), this);
     placeholder->setFeatures(ads::CDockWidget::NoDockWidgetFeatures);
     m_propertiesArea = m_dockManager->addDockWidget(
@@ -1175,7 +1192,7 @@ void MainWindow::ensurePropertiesArea()
         placeholder
     );
 
-    // 3) Immediately remove the dummy—area remains behind, ready for real tabs
+    // 3) Immediately remove the dummyï¿½area remains behind, ready for real tabs
     m_dockManager->removeDockWidget(placeholder);
     placeholder->deleteLater();
 }

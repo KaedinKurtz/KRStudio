@@ -21,6 +21,8 @@
 
 // Forward declarations
 class QOpenGLContext;
+class QOffscreenSurface;
+class QSurface;
 class ViewportWidget;
 class Shader;
 class Scene;
@@ -81,7 +83,16 @@ public:
     // --- Core Lifecycle & Pipeline ---
     void initialize(Scene* scene);
     void shutdown();
-    void renderFrame(); // The new main entry point for rendering
+    // Renders all viewports into their offscreen targets on the engine's own
+    // GL context, then schedules widget repaints. Driven by the master timer.
+    // All engine GL stays off Qt's RHI context so the compositor state cache
+    // and context currency are never disturbed.
+    void renderAllViewports();
+    // Blits a viewport's finished frame (shared texture) into the widget's
+    // backbuffer. MUST be called from ViewportWidget::paintGL.
+    void presentViewport(ViewportWidget* viewport);
+    // Schedules a repaint of all viewports (presentation happens in paintGL).
+    void requestViewportUpdates();
     void drawFullscreenQuadWithDepthTest();
     // --- Viewport Management ---
     void onViewportAdded(ViewportWidget* viewport);
@@ -144,6 +155,19 @@ private:
     bool m_isInitialized = false;
     Scene* m_scene = nullptr;
     QOpenGLFunctions_4_3_Core* m_gl = nullptr; // Cached pointer to GL functions
+
+    // --- Engine GL context (isolated from Qt's RHI compositor context) ---
+    // All engine rendering happens on this context against an offscreen
+    // surface; widgets only blit the shared finalColorTexture in paintGL.
+    QOpenGLContext* m_engineContext = nullptr;
+    QOffscreenSurface* m_engineSurface = nullptr;
+    GLsync m_frameFence = nullptr; // engine->widget visibility sync (shared object)
+    struct PresentFBO { GLuint fbo = 0; GLuint wrappedTexture = 0; };
+    QHash<ViewportWidget*, PresentFBO> m_presentFBOs; // owned by each widget's RHI context
+    // Makes the engine context current; returns the previously current
+    // context/surface so the caller can restore them (Qt may be mid-paint).
+    bool makeEngineCurrent(QOpenGLContext*& prevCtx, QSurface*& prevSurf);
+    void doneEngineCurrent(QOpenGLContext* prevCtx, QSurface* prevSurf);
 
     // --- Render Passes (Organized by stage) ---
     std::unique_ptr<IRenderPass> m_geometryPass;
