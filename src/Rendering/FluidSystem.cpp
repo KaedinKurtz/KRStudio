@@ -53,6 +53,9 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     const float turbidityEnv = qEnvironmentVariable("KRS_FLUID_TURBIDITY").toFloat(&turbidityOk);
     if (turbidityOk) m_appearance.turbidity = turbidityEnv;
     if (qEnvironmentVariableIsSet("KRS_FLUID_RECORD")) setRecording(true);
+    bool foamOk = false;
+    const float foamEnv = qEnvironmentVariable("KRS_FLUID_FOAM").toFloat(&foamOk);
+    if (foamOk) m_appearance.foaminess = foamEnv;
 
     gl->glGenBuffers(1, &m_particleSSBO);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
@@ -532,7 +535,9 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
                                  || qEnvironmentVariableIsSet("KRS_BENCH");
     static int s_frames = 0;
     if (s_telemetry && (++s_frames % 30) == 0) {
-        const int n = std::min(m_particleCount, 16384);
+        // FULL population: sampling the first N was just the bottom seeded
+        // slab — it reported "contained" while upper layers escaped.
+        const int n = m_particleCount;
         std::vector<GpuParticle> sample(n);
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
         gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GpuParticle) * n, sample.data());
@@ -552,8 +557,23 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         }
         if (!ys.empty()) {
             std::sort(ys.begin(), ys.end());
+            int firstDead = -1, lastDead = -1, deadCount = 0;
+            float deadW = 0.0f;
+            glm::vec3 deadPos(0.0f);
+            for (int i = 0; i < n; ++i) {
+                if (sample[size_t(i)].posLife.w > 0.0f) continue;
+                if (firstDead < 0) {
+                    firstDead = i;
+                    deadW = sample[size_t(i)].posLife.w;
+                    deadPos = glm::vec3(sample[size_t(i)].posLife);
+                }
+                lastDead = i;
+                ++deadCount;
+            }
             qInfo() << "[Fluid][autoplay] p95Y" << ys[size_t(ys.size() * 0.95)]
-                    << "maxXZ" << maxR << "live" << ys.size();
+                    << "maxXZ" << maxR << "live" << ys.size() << "dead" << deadCount
+                    << "range" << firstDead << ".." << lastDead << "w" << deadW
+                    << "at" << deadPos.x << deadPos.y << deadPos.z;
         }
 
         if (qEnvironmentVariableIsSet("KRS_AUTOPLAY") && (s_frames % 120) == 0) {

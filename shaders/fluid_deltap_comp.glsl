@@ -70,7 +70,7 @@ vec3 rotateByQuatInv(vec3 v, vec4 q)
     return rotateByQuat(v, qc);
 }
 
-vec3 collide(vec3 pos)
+vec3 collide(vec3 pos, vec3 prevPos)
 {
     float r = u_particleRadius;
 
@@ -80,16 +80,22 @@ vec3 collide(vec3 pos)
     pos.z = clamp(pos.z, u_domainMin.z + r, u_domainMax.z - r);
     pos.y = min(pos.y, u_domainMax.y - r);
 
-    // Oriented boxes: push the particle out along the smallest-penetration axis
+    // Oriented boxes: push the particle out along the smallest-penetration
+    // axis, toward the side it STARTED the step on. Using the current side
+    // leaks through thin walls: once the pressure solve carries a particle
+    // past the wall midplane it would be ejected out the far side.
     for (int b = 0; b < counts.x; ++b) {
         vec3 local = rotateByQuatInv(pos - boxes[b].center.xyz, boxes[b].rotation);
         vec3 he = boxes[b].halfExtents.xyz + vec3(r);
         vec3 d = he - abs(local);
         if (all(greaterThan(d, vec3(0.0)))) {
-            // inside: exit along the axis with least penetration
-            if (d.x < d.y && d.x < d.z)      local.x = sign(local.x) * he.x;
-            else if (d.y < d.z)              local.y = sign(local.y) * he.y;
-            else                             local.z = sign(local.z) * he.z;
+            vec3 prevLocal = rotateByQuatInv(prevPos - boxes[b].center.xyz, boxes[b].rotation);
+            vec3 side = vec3(prevLocal.x >= 0.0 ? 1.0 : -1.0,
+                             prevLocal.y >= 0.0 ? 1.0 : -1.0,
+                             prevLocal.z >= 0.0 ? 1.0 : -1.0);
+            if (d.x < d.y && d.x < d.z)      local.x = side.x * he.x;
+            else if (d.y < d.z)              local.y = side.y * he.y;
+            else                             local.z = side.z * he.z;
             pos = boxes[b].center.xyz + rotateByQuat(local, boxes[b].rotation);
         }
     }
@@ -161,6 +167,7 @@ void main()
     float dpLen = length(dp);
     if (dpLen > 0.2 * u_h) dp *= (0.2 * u_h) / dpLen;
 
-    vec3 corrected = collide(pi + dp);
+    // prevPos = position at the start of the step: the side-of-wall truth.
+    vec3 corrected = collide(pi + dp, p[i].posLife.xyz);
     p[i].pred.xyz = corrected;
 }
