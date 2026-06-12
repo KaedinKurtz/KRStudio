@@ -73,23 +73,29 @@ It’s not just a visualization tool — it’s a full **development environment
 📈 Development Roadmap
 ✅ Completed
 
-Stable deferred rendering core
+Stable deferred rendering core (engine renders on a dedicated GL context)
 Multi-viewport rendering
 HDR cubemap + BRDF LUT generation
 SQLite asset management
 Docking system persistence
+PhysX 5.5 rigid-body simulation (play/pause/stop/step, box/sphere/capsule/convex colliders, snapshot-restore)
+GPU position-based fluids (compute-shader PBF, emitters/volumes, collider interaction)
+Blender-style editing: Add menu, outliner, per-object physics/collision/fluid properties panel
+Per-pass GPU profiling in the Diagnostics dock
+Mesh import (Assimp), material pack system (assets/materials)
 
 🛠 In Progress
 
-Parallax occlusion mapping (POM)
+Screen-space fluid surface rendering
 Selection outline without Z-fighting
 Expanded material effects (refraction, translucency)
-TAA refinement
 
 📅 Planned
 
-Physics integration (Bullet / PhysX)
-Robotics IK & kinematics visualization
+Convex decomposition (CoACD) for concave dynamic colliders
+Mesh-SDF fluid collision via OpenVDB
+Robotics IK & kinematics visualization (MoveIt2 / RViz-style integration)
+Hardware interface emulators (OPC UA bridge, CAN bus traffic)
 Procedural asset/material tools
 
 📂 Repository Structure
