@@ -2,8 +2,11 @@
 
 #include <cstdint>
 #include <future>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include <glm/glm.hpp>
 
 struct Vertex; // components.hpp
 
@@ -57,6 +60,16 @@ public:
 
     static uint64_t hashGeometry(const std::vector<Vertex>& vertices,
                                  const std::vector<unsigned int>& indices);
+
+    /// Debug visualization: unique edges of the COOKED collision geometry
+    /// (trimesh or hull) as a GL_LINES list in local unscaled space — the
+    /// truth the solver collides with, not the render mesh. Returns nullptr
+    /// while the cook is still in flight (callers retry next frame).
+    /// Extraction is cached per cooked mesh, so repeated calls are cheap.
+    std::shared_ptr<const std::vector<glm::vec3>>
+    debugEdges(const std::vector<Vertex>& vertices,
+               const std::vector<unsigned int>& indices,
+               bool exactTrimesh);
 
 private:
     CollisionCookingService();

@@ -309,6 +309,8 @@ MainWindow::MainWindow(QWidget* parent)
     sceneProps.fogColor = glm::vec3(0.1f, 0.1f, 0.15f);
     sceneProps.fogStartDistance = 15.0f;
     sceneProps.fogEndDistance = 100.0f;
+    // Test hook: boot with the collision wireframe overlay on.
+    sceneProps.showCollisionShapes = qEnvironmentVariableIsSet("KRS_SHOW_COLLISION");
 
     // --- Create a default grid ---
     {
@@ -1700,6 +1702,21 @@ void MainWindow::buildMenuBar()
         auto& mat = reg.get<MaterialComponent>(e);
         mat.albedoColor = glm::vec3(0.2f, 0.8f, 0.9f);
         if (m_physicsPanel) m_physicsPanel->setEntity(e);
+    });
+
+    // --- View ---
+    QMenu* viewMenu = bar->addMenu(QStringLiteral("&View"));
+    QAction* showCollision = viewMenu->addAction(QStringLiteral("Show Collision Shapes"));
+    showCollision->setCheckable(true);
+    if (m_scene)
+        showCollision->setChecked(
+            m_scene->getRegistry().ctx().get<SceneProperties>().showCollisionShapes);
+    showCollision->setToolTip(QStringLiteral(
+        "Wireframe of the geometry the physics solver actually collides with:\n"
+        "green = static, orange = dynamic, cyan = kinematic, red = AABB fallback"));
+    connect(showCollision, &QAction::toggled, this, [this](bool on) {
+        if (!m_scene) return;
+        m_scene->getRegistry().ctx().get<SceneProperties>().showCollisionShapes = on;
     });
 
     // --- Simulation ---

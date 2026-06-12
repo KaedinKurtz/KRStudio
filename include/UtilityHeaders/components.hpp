@@ -496,6 +496,7 @@ struct SceneProperties
     float fogStartDistance = 10.0f;
     float fogEndDistance = 75.0f;
     float deltaTime = 0.016f;
+    bool showCollisionShapes = false; // wireframe overlay of cooked collision geometry
 };
 
 enum class SplineType { Linear, CatmullRom, Bezier, Parametric };
