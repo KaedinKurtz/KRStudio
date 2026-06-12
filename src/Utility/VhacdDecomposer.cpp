@@ -38,6 +38,10 @@ decomposeMesh(const std::vector<Vertex>& vertices,
     params.m_minimumVolumePercentErrorAllowed = 1.0;
     params.m_maxNumVerticesPerCH = uint32_t(maxVertsPerHull); // PhysX hull limit
     params.m_shrinkWrap = true;
+    // KNOWN LIMIT: on NON-MANIFOLD compounds (overlapping shells) V-HACD's
+    // voxel classification can partially fill open cavities regardless of
+    // fill mode — single manifold meshes (typical imports) decompose
+    // correctly. Exact containers should prefer static trimesh collision.
     params.m_fillMode = VHACD::FillMode::FLOOD_FILL;
     params.m_asyncACD = false; // we are already on a worker thread
 
