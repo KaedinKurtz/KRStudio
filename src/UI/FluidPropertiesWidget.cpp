@@ -338,7 +338,15 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
 void FluidPropertiesWidget::syncFromSystem()
 {
     FluidSystem* fluid = m_renderer ? m_renderer->getFluidSystem() : nullptr;
-    if (!fluid) { setEnabled(false); return; }
+    if (!fluid) {
+        // The FluidSystem is created on the engine GL context AFTER this
+        // panel is constructed — retry until it exists instead of leaving
+        // the whole panel permanently disabled (it used to brick the menu).
+        setEnabled(false);
+        QTimer::singleShot(500, this, &FluidPropertiesWidget::syncFromSystem);
+        return;
+    }
+    setEnabled(true);
     m_updating = true;
     const auto& p = fluid->params();
     m_density->setValue(p.restDensity);
