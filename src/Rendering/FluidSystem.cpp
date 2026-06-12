@@ -269,25 +269,32 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     gl->glDispatchCompute(groups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
-    // Diagnostic readback under the autoplay test hook: containment timeline
-    // around the demo glass at (-2, 0, 0) proves the water stays inside.
+    // Telemetry mirror: refresh a CPU copy of particle positions for the
+    // benchmark suite / autoplay diagnostics.
+    static const bool s_telemetry = qEnvironmentVariableIsSet("KRS_AUTOPLAY")
+                                 || qEnvironmentVariableIsSet("KRS_BENCH");
     static int s_frames = 0;
-    if (qEnvironmentVariableIsSet("KRS_AUTOPLAY") && (++s_frames % 120) == 0) {
-        const int n = std::min(m_particleCount, 8192);
+    if (s_telemetry && (++s_frames % 30) == 0) {
+        const int n = std::min(m_particleCount, 16384);
         std::vector<GpuParticle> sample(n);
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
         gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GpuParticle) * n, sample.data());
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-        int inside = 0, outside = 0; float maxYIn = 0.0f; bool nan = false;
-        for (const auto& q : sample) {
-            if (q.posLife.w <= 0.0f) continue;
-            const glm::vec3 pp(q.posLife);
-            if (glm::any(glm::isnan(pp))) { nan = true; continue; }
-            const bool inGlass = std::abs(pp.x + 2.0f) < 0.62f && std::abs(pp.z) < 0.62f;
-            if (inGlass) { ++inside; maxYIn = std::max(maxYIn, pp.y); }
-            else ++outside;
+        m_positionMirror.resize(n);
+        for (int i = 0; i < n; ++i) m_positionMirror[i] = sample[i].posLife;
+
+        if (qEnvironmentVariableIsSet("KRS_AUTOPLAY") && (s_frames % 120) == 0) {
+            int inside = 0, outside = 0; float maxYIn = 0.0f; bool nan = false;
+            for (const auto& q : m_positionMirror) {
+                if (q.w <= 0.0f) continue;
+                const glm::vec3 pp(q);
+                if (glm::any(glm::isnan(pp))) { nan = true; continue; }
+                const bool inGlass = std::abs(pp.x + 2.0f) < 0.62f && std::abs(pp.z) < 0.62f;
+                if (inGlass) { ++inside; maxYIn = std::max(maxYIn, pp.y); }
+                else ++outside;
+            }
+            qInfo() << "[Fluid][autoplay] t=" << s_frames << "inGlass" << inside
+                    << "out" << outside << "maxY(in)" << maxYIn << (nan ? "NAN" : "");
         }
-        qInfo() << "[Fluid][autoplay] t=" << s_frames << "inGlass" << inside
-                << "out" << outside << "maxY(in)" << maxYIn << (nan ? "NAN" : "");
     }
 }

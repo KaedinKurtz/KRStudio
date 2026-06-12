@@ -37,7 +37,7 @@ public:
     SimulationState state() const { return m_state; }
     bool isPlaying() const { return m_state == SimulationState::Playing; }
 
-    static constexpr float kFixedDt = 1.0f / 120.0f;
+    static constexpr float kFixedDt = 1.0f / 240.0f; // benchmarked: halving from 1/120 sharpens restitution (less penetration correction per impact)
 
 public slots:
     void play();

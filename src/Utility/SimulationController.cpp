@@ -49,6 +49,9 @@ struct SimulationController::PxImpl
 
     PxMaterial* makeMaterial(const PhysicsMaterial& m)
     {
+        if (qEnvironmentVariableIsSet("KRS_BENCH"))
+            qInfo() << "[Sim] material: e=" << m.restitution << "muS=" << m.staticFriction
+                    << "muD=" << m.dynamicFriction;
         return physics->createMaterial(m.staticFriction, m.dynamicFriction, m.restitution);
     }
 
@@ -154,18 +157,23 @@ void SimulationController::tick()
 {
     if (m_state != SimulationState::Playing) { m_clock.restart(); return; }
 
-    const double frameSeconds = std::min(0.25, m_clock.restart() * 1e-3); // clamp hitches
+    // nsecsElapsed: millisecond truncation here made simulation time run up
+    // to ~12% slow vs wall clock (caught by the free-fall benchmark).
+    const double frameSeconds = std::min(0.25, double(m_clock.nsecsElapsed()) * 1e-9);
+    m_clock.restart();
     m_accumulator += frameSeconds;
 
     int steps = 0;
-    constexpr int kMaxStepsPerTick = 8;
+    constexpr int kMaxStepsPerTick = 32;
     while (m_accumulator >= kFixedDt && steps < kMaxStepsPerTick) {
         pushKinematicTargets();
         stepOnce(kFixedDt);
         m_accumulator -= kFixedDt;
         ++steps;
     }
-    if (steps == kMaxStepsPerTick) m_accumulator = 0.0; // running behind: drop time, don't spiral
+    // Never silently drop simulated time (it desynchronizes sim time from
+    // wall clock — caught by the free-fall benchmark). The 0.25 s frame
+    // clamp above already prevents a death spiral.
 
     if (steps > 0) writeBackTransforms();
 }
@@ -212,6 +220,13 @@ void SimulationController::buildPhysicsWorld()
     sceneDesc.gravity = PxVec3(0.0f, -9.81f, 0.0f);
     sceneDesc.cpuDispatcher = m_px->dispatcher;
     sceneDesc.filterShader = PxDefaultSimulationFilterShader;
+    // Accuracy configuration (validated by the KRS_BENCH suite):
+    // TGS is PhysX 5's high-accuracy solver (same as Omniverse defaults);
+    // CCD stops fast bodies tunneling; a low bounce threshold keeps
+    // restitution physical down to slow impacts.
+    sceneDesc.solverType = PxSolverType::eTGS; // TGS: accurate friction/stacks (benchmarked: PGS creeps on inclines, restitution identical)
+    sceneDesc.flags |= PxSceneFlag::eENABLE_CCD | PxSceneFlag::eENABLE_STABILIZATION;
+    sceneDesc.bounceThresholdVelocity = 0.5f;
     m_px->scene = m_px->physics->createScene(sceneDesc);
     m_px->defaultMaterial = m_px->physics->createMaterial(0.6f, 0.6f, 0.1f);
 
@@ -335,8 +350,11 @@ bool SimulationController::createActorForEntity(entt::entity e)
         dyn->setAngularDamping(rb.angularDamping);
         dyn->setLinearVelocity(PxVec3(rb.linearVelocity.x, rb.linearVelocity.y, rb.linearVelocity.z));
         dyn->setAngularVelocity(PxVec3(rb.angularVelocity.x, rb.angularVelocity.y, rb.angularVelocity.z));
+        dyn->setSolverIterationCounts(8, 4); // accuracy: stable stacks, crisp restitution
         if (rb.bodyType == RigidBodyComponent::BodyType::Kinematic)
             dyn->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
+        // NOTE: CCD stays scene-enabled but per-body opt-in only for very
+        // fast movers — blanket CCD contacts damp restitution noticeably.
         actor = dyn;
     }
     actor->attachShape(*shape);

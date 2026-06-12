@@ -34,6 +34,7 @@
 #include "PrimitiveBuilders.hpp"
 #include "PhysicsPropertiesWidget.hpp"
 #include "OutlinerWidget.hpp"
+#include "BenchmarkRunner.hpp"
 
 #include <QDir>
 #include <QDirIterator>
@@ -354,9 +355,13 @@ MainWindow::MainWindow(QWidget* parent)
                        << "— using untextured material.";
 
         // Demo mesh: the dragon, centered in front of the default camera.
+        // (Skipped under KRS_BENCH: its convex hull at the origin would
+        // intercept benchmark projectiles — found the hard way.)
         QString dragonPath = assetDir + "Dragon.stl";
-        MeshID dragonId = ResourceManager::instance().loadMesh(dragonPath);
-        if (dragonId == MeshID::None) {
+        MeshID dragonId = qEnvironmentVariableIsSet("KRS_BENCH")
+            ? MeshID::None
+            : ResourceManager::instance().loadMesh(dragonPath);
+        if (dragonId == MeshID::None && !qEnvironmentVariableIsSet("KRS_BENCH")) {
             qWarning() << "[Spawner] Failed to load mesh:" << dragonPath;
         }
 
@@ -384,7 +389,8 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     // --- Physics demo: a small stack of primitives that falls on Play ---
-    {
+    // (Skipped under KRS_BENCH: benchmarks need a clean world.)
+    if (!qEnvironmentVariableIsSet("KRS_BENCH")) {
         auto& registry = m_scene->getRegistry();
         auto addRigidPrimitive = [&](Primitive prim, const char* name, glm::vec3 pos,
                                      glm::vec3 scale, bool sphere) {
@@ -742,6 +748,14 @@ MainWindow::MainWindow(QWidget* parent)
             this->grab().save(path);
             qInfo() << "[UI] window grabbed to" << path;
         });
+    }
+
+    // First-principles physics validation: KRS_BENCH=1 runs the analytic
+    // benchmark suite and exits with the number of failed checks.
+    if (qEnvironmentVariableIsSet("KRS_BENCH")) {
+        auto* bench = new BenchmarkRunner(m_scene.get(), m_simulation.get(),
+                                          m_renderingSystem.get(), this);
+        QTimer::singleShot(4000, this, [bench]() { bench->start(); });
     }
 
     // Test hook: KRS_AUTOPLAY=1 starts the simulation shortly after boot and

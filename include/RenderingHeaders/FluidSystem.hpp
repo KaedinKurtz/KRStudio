@@ -42,6 +42,10 @@ public:
     GLuint particleBuffer() const { return m_particleSSBO; }
     float particleRadius() const { return m_particleRadius; }
 
+    /// CPU mirror of particle positions (xyz, w=life), refreshed periodically
+    /// when KRS_BENCH or KRS_AUTOPLAY is set. Used by telemetry/benchmarks.
+    const std::vector<glm::vec4>& sampledPositions() const { return m_positionMirror; }
+
 private:
     void seedVolumes(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
     void emitFromEmitters(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry, float dt);
@@ -65,6 +69,8 @@ private:
     glm::vec3 m_domainMin = { -8.0f, 0.0f, -8.0f };
     glm::vec3 m_domainMax = { 8.0f, 10.0f, 8.0f };
     glm::ivec3 m_gridDim = { 0, 0, 0 };
+
+    std::vector<glm::vec4> m_positionMirror;
 
     // --- GPU resources (engine context) ---
     GLuint m_particleSSBO = 0;  // {vec4 posLife; vec4 vel; vec4 pred;} * kMaxParticles
