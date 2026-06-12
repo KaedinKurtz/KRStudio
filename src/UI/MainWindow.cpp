@@ -32,9 +32,12 @@
 #include "GizmoSystem.hpp"
 #include "SimulationController.hpp"
 #include "PrimitiveBuilders.hpp"
+#include "PhysicsPropertiesWidget.hpp"
 
 #include <QDir>
 #include <QDirIterator>
+#include <QMenuBar>
+#include <QMenu>
 
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/DataFlowGraphModel>
@@ -725,6 +728,17 @@ MainWindow::MainWindow(QWidget* parent)
     m_masterRenderTimer->setTimerType(Qt::PreciseTimer);
     m_masterRenderTimer->start(8);
 
+    // Dev aid: KRS_GRAB=<path.png> software-renders the whole widget tree to
+    // a file 8s after boot — screen captures lie under DPI virtualization,
+    // this never does.
+    if (qEnvironmentVariableIsSet("KRS_GRAB")) {
+        QTimer::singleShot(8000, this, [this]() {
+            const QString path = qEnvironmentVariable("KRS_GRAB");
+            this->grab().save(path);
+            qInfo() << "[UI] window grabbed to" << path;
+        });
+    }
+
     // Test hook: KRS_AUTOPLAY=1 starts the simulation shortly after boot and
     // logs settled body positions (used by automated verification).
     if (qEnvironmentVariableIsSet("KRS_AUTOPLAY")) {
@@ -775,8 +789,28 @@ MainWindow::MainWindow(QWidget* parent)
         diagPanel->setRenderingSystem(m_renderingSystem.get());
         auto* diagDock = new ads::CDockWidget(QStringLiteral("Diagnostics"), this);
         diagDock->setWidget(diagPanel);
+        diagDock->setStyleSheet(sidePanelStyle);
         m_dockManager->addDockWidget(ads::BottomDockWidgetArea, diagDock);
     }
+
+    // --- Physics properties dock: right column, below GridProperties ---
+    {
+        m_physicsPanel = new PhysicsPropertiesWidget(m_scene.get(), this);
+        auto* physDock = new ads::CDockWidget(QStringLiteral("Physics"), this);
+        physDock->setWidget(m_physicsPanel);
+        physDock->setStyleSheet(sidePanelStyle);
+        ads::CDockAreaWidget* rightArea = nullptr;
+        auto gridIt = m_menus.find(MenuType::GridProperties);
+        if (gridIt != m_menus.end() && gridIt->dock)
+            rightArea = gridIt->dock->dockAreaWidget();
+        if (rightArea)
+            m_dockManager->addDockWidget(ads::BottomDockWidgetArea, physDock, rightArea);
+        else
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, physDock);
+    }
+
+    // --- Application menu bar (File / Add / Simulation) ---
+    buildMenuBar();
 
     m_gizmoSystem->onAfterCommandApplied = [this] {
         this->refreshGizmoAndProperties(); // picks primary viewport automatically
@@ -807,6 +841,25 @@ MainWindow::MainWindow(QWidget* parent)
 
     disableFloatingForAllDockWidgets();
     QTimer::singleShot(0, this, &MainWindow::updateViewportLayouts);
+
+    // Blender-style proportions: give the 3D viewport the lion's share once
+    // all docks have been inserted (each insertion re-splits the layout).
+    QTimer::singleShot(0, this, [this]() {
+        if (m_dockContainers.isEmpty()) return;
+        auto* area = m_dockContainers.first()->dockAreaWidget();
+        if (!area) return;
+        if (auto* split = area->parentSplitter()) {
+            QList<int> sizes = split->sizes();
+            if (sizes.size() < 2) return;
+            int total = 0;
+            for (int s : sizes) total += s;
+            const int viewportShare = total * 60 / 100;
+            const int rest = (total - viewportShare) / (sizes.size() - 1);
+            sizes[0] = viewportShare;
+            for (int i = 1; i < sizes.size(); ++i) sizes[i] = rest;
+            split->setSizes(sizes);
+        }
+    });
 }
 
 // The destructor orchestrates a clean shutdown.
@@ -1425,6 +1478,9 @@ void MainWindow::onSelectionChanged(const QVector<entt::entity>& selectedEntitie
         m_gizmoSystem->update(selectedEntities, camera);
     }
 
+    if (m_physicsPanel)
+        m_physicsPanel->setEntity(selectedEntities.isEmpty() ? entt::null : selectedEntities.first());
+
     // Update the properties panel to show the FIRST selected object's properties.
     auto it = m_menus.find(MenuType::ObjectProperties);
     if (it != m_menus.end()) {
@@ -1450,6 +1506,102 @@ ViewportWidget* MainWindow::primaryViewport() const
         }
     }
     return nullptr;
+}
+
+entt::entity MainWindow::addObjectFromMenu(int primitive, const QString& baseName,
+                                           const glm::vec3& pos, const glm::vec3& scale)
+{
+    auto& reg = m_scene->getRegistry();
+
+    // Auto-number: Cube.001, Cube.002 ... (Blender style)
+    int count = 1;
+    for (auto e : reg.view<TagComponent>()) {
+        const auto& t = reg.get<TagComponent>(e).tag;
+        if (QString::fromStdString(t).startsWith(baseName + QLatin1Char('.'))) ++count;
+    }
+    const QString name = QStringLiteral("%1.%2").arg(baseName).arg(count, 3, 10, QLatin1Char('0'));
+
+    entt::entity e = SceneBuilder::spawnPrimitive(*m_scene, primitive, pos, scale, name.toStdString());
+    auto& mat = reg.emplace_or_replace<MaterialComponent>(e);
+    mat.albedoColor = glm::vec3(0.62f, 0.62f, 0.66f);
+
+    // Select the new object so the gizmo and properties pick it up.
+    for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+    reg.emplace<SelectedComponent>(e);
+    refreshGizmoAndProperties();
+    return e;
+}
+
+void MainWindow::buildMenuBar()
+{
+    auto* bar = menuBar();
+    bar->setStyleSheet(
+        "QMenuBar { background-color: #2c313a; color: #d5d5d5; }"
+        "QMenuBar::item:selected { background-color: #4a5260; }"
+        "QMenu { background-color: #353b46; color: #d5d5d5; border: 1px solid #4a5260; }"
+        "QMenu::item:selected { background-color: #0078d7; color: white; }"
+        "QMenu::separator { height: 1px; background: #4a5260; margin: 4px 8px; }");
+
+    // --- File ---
+    QMenu* fileMenu = bar->addMenu(QStringLiteral("&File"));
+    QAction* quitAct = fileMenu->addAction(QStringLiteral("Quit"));
+    quitAct->setShortcut(QKeySequence::Quit);
+    connect(quitAct, &QAction::triggered, this, &QWidget::close);
+
+    // --- Add (Blender's Shift+A spirit) ---
+    QMenu* addMenu = bar->addMenu(QStringLiteral("&Add"));
+    QMenu* meshMenu = addMenu->addMenu(QStringLiteral("Mesh"));
+    auto addPrim = [this, meshMenu](const QString& label, Primitive prim, glm::vec3 scale) {
+        QAction* a = meshMenu->addAction(label);
+        connect(a, &QAction::triggered, this, [this, label, prim, scale]() {
+            addObjectFromMenu(int(prim), label, glm::vec3(0.0f, 0.5f, 0.0f), scale);
+        });
+    };
+    addPrim(QStringLiteral("Cube"), Primitive::Cube, glm::vec3(1.0f));
+    addPrim(QStringLiteral("Sphere"), Primitive::IcoSphere, glm::vec3(0.5f));
+    addPrim(QStringLiteral("Cylinder"), Primitive::Cylinder, glm::vec3(0.5f, 1.0f, 0.5f));
+    addPrim(QStringLiteral("Cone"), Primitive::Cone, glm::vec3(0.5f, 1.0f, 0.5f));
+    addPrim(QStringLiteral("Torus"), Primitive::Torus, glm::vec3(0.6f));
+    addPrim(QStringLiteral("Plane"), Primitive::Quad, glm::vec3(2.0f, 1.0f, 2.0f));
+
+    addMenu->addSeparator();
+    QAction* addEmitter = addMenu->addAction(QStringLiteral("Fluid Emitter"));
+    connect(addEmitter, &QAction::triggered, this, [this]() {
+        // Small marker sphere so the emitter is visible, pickable and movable.
+        entt::entity e = addObjectFromMenu(int(Primitive::IcoSphere), QStringLiteral("Emitter"),
+                                           glm::vec3(0.0f, 1.5f, 0.0f), glm::vec3(0.08f));
+        auto& reg = m_scene->getRegistry();
+        reg.emplace<FluidEmitterComponent>(e);
+        auto& mat = reg.get<MaterialComponent>(e);
+        mat.albedoColor = glm::vec3(0.15f, 0.55f, 0.95f);
+        if (m_physicsPanel) m_physicsPanel->setEntity(e);
+    });
+    QAction* addVolume = addMenu->addAction(QStringLiteral("Fluid Volume"));
+    connect(addVolume, &QAction::triggered, this, [this]() {
+        entt::entity e = addObjectFromMenu(int(Primitive::IcoSphere), QStringLiteral("FluidVolume"),
+                                           glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.08f));
+        auto& reg = m_scene->getRegistry();
+        reg.emplace<FluidVolumeComponent>(e);
+        auto& mat = reg.get<MaterialComponent>(e);
+        mat.albedoColor = glm::vec3(0.2f, 0.8f, 0.9f);
+        if (m_physicsPanel) m_physicsPanel->setEntity(e);
+    });
+
+    // --- Simulation ---
+    QMenu* simMenu = bar->addMenu(QStringLiteral("&Simulation"));
+    QAction* playAct = simMenu->addAction(QStringLiteral("Play / Pause"));
+    playAct->setShortcut(Qt::Key_Space);
+    connect(playAct, &QAction::triggered, this, [this]() {
+        if (!m_simulation) return;
+        if (m_simulation->state() == SimulationState::Playing) m_simulation->pause();
+        else m_simulation->play();
+    });
+    QAction* stopAct = simMenu->addAction(QStringLiteral("Stop && Reset"));
+    stopAct->setShortcut(Qt::SHIFT | Qt::Key_Space);
+    connect(stopAct, &QAction::triggered, this, [this]() { if (m_simulation) m_simulation->stop(); });
+    QAction* stepAct = simMenu->addAction(QStringLiteral("Step One Frame"));
+    stepAct->setShortcut(Qt::CTRL | Qt::Key_Space);
+    connect(stepAct, &QAction::triggered, this, [this]() { if (m_simulation) m_simulation->singleStep(); });
 }
 
 void MainWindow::refreshGizmoAndProperties(ViewportWidget* vp)

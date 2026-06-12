@@ -30,6 +30,7 @@ class RealSenseManager; // Forward-declare RealSenseManager
 class ViewportManagerPopup; // Forward-declare ViewportManagerPopup
 class GizmoSystem;
 class SimulationController;
+class PhysicsPropertiesWidget;
 
 namespace ads {
     class CDockManager;
@@ -99,6 +100,11 @@ private:
     std::unique_ptr<rs2::pointcloud> m_pointCloud;
     std::unique_ptr<GizmoSystem> m_gizmoSystem;
     std::unique_ptr<SimulationController> m_simulation;
+    PhysicsPropertiesWidget* m_physicsPanel = nullptr;
+
+    void buildMenuBar();
+    entt::entity addObjectFromMenu(int primitive, const QString& baseName,
+                                   const glm::vec3& pos, const glm::vec3& scale);
 
     entt::entity m_cameraEntity;
 
