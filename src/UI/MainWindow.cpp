@@ -385,6 +385,20 @@ MainWindow::MainWindow(QWidget* parent)
             registry.emplace_or_replace<TagComponent>(e, std::string("Dragon"));
             // Static convex hull: rigid bodies collide with the dragon.
             registry.emplace_or_replace<ConvexMeshCollider>(e);
+            // Exact-shape fluid collision: SDF baked from the mesh at Play.
+            registry.emplace_or_replace<SDFColliderComponent>(e);
+
+            // A tap above the dragon: water flows over the actual sculpture.
+            entt::entity dragonTap = registry.create();
+            registry.emplace<TransformComponent>(dragonTap, glm::vec3(0.0f, 3.5f, 0.0f),
+                                                 glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+            auto& dem = registry.emplace<FluidEmitterComponent>(dragonTap);
+            dem.ratePerSecond = 400.0f;
+            dem.initialSpeed = 1.0f;
+            dem.spreadDegrees = 8.0f;
+            dem.emitterRadius = 0.08f;
+            dem.particleLifetime = 25.0f;
+            registry.emplace<TagComponent>(dragonTap, std::string("Dragon.Tap"));
         }
     }
 

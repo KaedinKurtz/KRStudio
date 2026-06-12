@@ -70,6 +70,7 @@ private:
     QDoubleSpinBox* m_colCapRadius = nullptr;
     QDoubleSpinBox* m_colCapHeight = nullptr;
     QPushButton* m_colAutoFit = nullptr;
+    QCheckBox* m_sdfFluidCollider = nullptr;
 
     // fluid
     QCheckBox* m_emEnabled = nullptr;

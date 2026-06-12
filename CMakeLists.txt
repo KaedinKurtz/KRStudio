@@ -102,6 +102,10 @@ set(CMAKE_AUTORCC ON)
 # On MSVC, enable the /bigobj flag to handle large object files.
 if(MSVC)
   add_compile_options(/bigobj)
+  # OpenVDB 12 headers require a standards-conformant compiler; only the
+  # SDF baking TU includes them, so scope /permissive- to that file.
+  set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Rendering/SdfBaker.cpp"
+    PROPERTIES COMPILE_OPTIONS "/permissive-;/Zc:__cplusplus")
 endif()
 
 

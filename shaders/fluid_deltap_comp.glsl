@@ -30,6 +30,12 @@ uniform int u_gridNx;
 uniform int u_gridNy;
 uniform int u_gridNz;
 
+// Signed distance field colliders (baked from meshes via OpenVDB)
+uniform int u_sdfCount;
+uniform sampler3D u_sdf[4];
+uniform vec3 u_sdfMin[4];
+uniform vec3 u_sdfMax[4];
+
 const float PI = 3.14159265358979;
 
 float wPoly6(float r2, float h)
@@ -95,6 +101,23 @@ vec3 collide(vec3 pos)
         float len = length(d);
         if (len < minDist && len > 1e-6)
             pos = spheres[s].centerRadius.xyz + d * (minDist / len);
+    }
+
+    // SDF colliders: exact mesh shapes. Distance sampled in world units;
+    // surface normal from central differences.
+    for (int k = 0; k < u_sdfCount; ++k) {
+        vec3 ext = u_sdfMax[k] - u_sdfMin[k];
+        vec3 uvw = (pos - u_sdfMin[k]) / ext;
+        if (any(lessThan(uvw, vec3(0.0))) || any(greaterThan(uvw, vec3(1.0)))) continue;
+        float d = texture(u_sdf[k], uvw).r;
+        if (d < r) {
+            vec3 eps = vec3(1.0) / vec3(textureSize(u_sdf[k], 0));
+            vec3 n = normalize(vec3(
+                texture(u_sdf[k], uvw + vec3(eps.x, 0, 0)).r - texture(u_sdf[k], uvw - vec3(eps.x, 0, 0)).r,
+                texture(u_sdf[k], uvw + vec3(0, eps.y, 0)).r - texture(u_sdf[k], uvw - vec3(0, eps.y, 0)).r,
+                texture(u_sdf[k], uvw + vec3(0, 0, eps.z)).r - texture(u_sdf[k], uvw - vec3(0, 0, eps.z)).r) + vec3(1e-9));
+            pos += n * (r - d);
+        }
     }
     return pos;
 }

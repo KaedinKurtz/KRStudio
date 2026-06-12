@@ -3,6 +3,8 @@
 #include "Shader.hpp"
 #include "components.hpp"
 
+#include "SdfBaker.hpp"
+
 #include <QOpenGLFunctions_4_3_Core>
 #include <QDebug>
 #include <glm/gtc/quaternion.hpp>
@@ -66,6 +68,9 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
 void FluidSystem::shutdown(QOpenGLFunctions_4_3_Core* gl)
 {
     if (!m_initialized) return;
+    for (auto& s : m_sdfColliders)
+        if (s.texture) gl->glDeleteTextures(1, &s.texture);
+    m_sdfColliders.clear();
     gl->glDeleteBuffers(1, &m_particleSSBO);
     gl->glDeleteBuffers(1, &m_gridHeadSSBO);
     gl->glDeleteBuffers(1, &m_gridNextSSBO);
@@ -91,6 +96,48 @@ void FluidSystem::appendParticles(QOpenGLFunctions_4_3_Core* gl,
                         sizeof(GpuParticle) * n, staging.data());
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     m_particleCount += n;
+}
+
+void FluidSystem::bakeSdfColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry)
+{
+    // Release previous bakes
+    for (auto& s : m_sdfColliders)
+        if (s.texture) gl->glDeleteTextures(1, &s.texture);
+    m_sdfColliders.clear();
+    m_sdfsBaked = true;
+
+    for (auto e : registry.view<SDFColliderComponent, RenderableMeshComponent, TransformComponent>()) {
+        if (int(m_sdfColliders.size()) >= kMaxSdfColliders) {
+            qWarning() << "[Fluid] SDF collider cap reached (" << kMaxSdfColliders << ")";
+            break;
+        }
+        const auto& sdfc = registry.get<SDFColliderComponent>(e);
+        const auto& mesh = registry.get<RenderableMeshComponent>(e);
+        const auto& xf = registry.get<TransformComponent>(e);
+
+        SdfBakeResult baked;
+        if (!bakeMeshToSdf(mesh.vertices, mesh.indices, xf.getTransform(), sdfc.voxelSize, baked))
+            continue;
+
+        SdfCollider out;
+        out.aabbMin = baked.aabbMin;
+        out.aabbMax = baked.aabbMax;
+        out.dims = baked.dims;
+        out.cpuField = std::move(baked.field);
+
+        gl->glGenTextures(1, &out.texture);
+        gl->glBindTexture(GL_TEXTURE_3D, out.texture);
+        gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        gl->glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        gl->glTexImage3D(GL_TEXTURE_3D, 0, GL_R32F, out.dims.x, out.dims.y, out.dims.z,
+                         0, GL_RED, GL_FLOAT, out.cpuField.data());
+        gl->glBindTexture(GL_TEXTURE_3D, 0);
+
+        m_sdfColliders.push_back(std::move(out));
+    }
 }
 
 void FluidSystem::seedVolumes(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry)
@@ -193,6 +240,7 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
 {
     if (!m_initialized || !m_playing) return;
 
+    if (!m_sdfsBaked) bakeSdfColliders(gl, registry);
     if (!m_volumesSeeded) seedVolumes(gl, registry);
     emitFromEmitters(gl, registry, dt);
     if (m_particleCount == 0) return;
@@ -253,12 +301,27 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     Q_UNUSED(cellCount);
 
     // 3) solver iterations: lambda then position correction (+collide)
+    // SDF colliders: bind 3D distance textures + their world AABBs.
+    auto bindSdfUniforms = [&](Shader* s) {
+        const int n = std::min<int>(int(m_sdfColliders.size()), kMaxSdfColliders);
+        s->setInt(gl, "u_sdfCount", n);
+        for (int i = 0; i < n; ++i) {
+            gl->glActiveTexture(GL_TEXTURE8 + i);
+            gl->glBindTexture(GL_TEXTURE_3D, m_sdfColliders[i].texture);
+            s->setInt(gl, ("u_sdf[" + std::to_string(i) + "]").c_str(), 8 + i);
+            s->setVec3(gl, ("u_sdfMin[" + std::to_string(i) + "]").c_str(), m_sdfColliders[i].aabbMin);
+            s->setVec3(gl, ("u_sdfMax[" + std::to_string(i) + "]").c_str(), m_sdfColliders[i].aabbMax);
+        }
+        gl->glActiveTexture(GL_TEXTURE0);
+    };
+
     for (int it = 0; it < m_solverIterations; ++it) {
         bindCommon(lambda);
         gl->glDispatchCompute(groups, 1, 1);
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         bindCommon(deltap);
+        bindSdfUniforms(deltap);
         gl->glDispatchCompute(groups, 1, 1);
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
@@ -284,7 +347,22 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         for (int i = 0; i < n; ++i) m_positionMirror[i] = sample[i].posLife;
 
         if (qEnvironmentVariableIsSet("KRS_AUTOPLAY") && (s_frames % 120) == 0) {
-            int inside = 0, outside = 0; float maxYIn = 0.0f; bool nan = false;
+            int inside = 0, outside = 0, sdfPenetrating = 0;
+            float maxYIn = 0.0f; bool nan = false;
+
+            auto sdfDistance = [this](const glm::vec3& p) {
+                float best = 1e9f;
+                for (const auto& s : m_sdfColliders) {
+                    if (glm::any(glm::lessThan(p, s.aabbMin)) ||
+                        glm::any(glm::greaterThan(p, s.aabbMax))) continue;
+                    const glm::vec3 uvw = (p - s.aabbMin) / (s.aabbMax - s.aabbMin);
+                    const glm::ivec3 c = glm::clamp(glm::ivec3(uvw * glm::vec3(s.dims - glm::ivec3(1)) + 0.5f),
+                                                    glm::ivec3(0), s.dims - glm::ivec3(1));
+                    best = std::min(best, s.cpuField[(size_t(c.z) * s.dims.y + c.y) * s.dims.x + c.x]);
+                }
+                return best;
+            };
+
             for (const auto& q : m_positionMirror) {
                 if (q.w <= 0.0f) continue;
                 const glm::vec3 pp(q);
@@ -292,9 +370,12 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
                 const bool inGlass = std::abs(pp.x + 2.0f) < 0.62f && std::abs(pp.z) < 0.62f;
                 if (inGlass) { ++inside; maxYIn = std::max(maxYIn, pp.y); }
                 else ++outside;
+                if (!m_sdfColliders.empty() && sdfDistance(pp) < -2.0f * m_particleRadius)
+                    ++sdfPenetrating;
             }
             qInfo() << "[Fluid][autoplay] t=" << s_frames << "inGlass" << inside
-                    << "out" << outside << "maxY(in)" << maxYIn << (nan ? "NAN" : "");
+                    << "out" << outside << "maxY(in)" << maxYIn
+                    << "sdfPenetrating" << sdfPenetrating << (nan ? "NAN" : "");
         }
     }
 }

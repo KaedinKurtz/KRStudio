@@ -182,6 +182,20 @@ QWidget* PhysicsPropertiesWidget::buildColliderSection()
     m_colAutoFit = new QPushButton(QStringLiteral("Fit to mesh bounds"), box);
     g->addWidget(m_colAutoFit, 2, 0, 1, 2);
 
+    m_sdfFluidCollider = new QCheckBox(QStringLiteral("Exact fluid collision (SDF bake)"), box);
+    m_sdfFluidCollider->setToolTip(QStringLiteral(
+        "Bakes this mesh into a signed distance field at Play so the fluid\n"
+        "collides with the exact shape (OpenVDB). Static geometry only."));
+    g->addWidget(m_sdfFluidCollider, 3, 0, 1, 2);
+    connect(m_sdfFluidCollider, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_updating || m_entity == entt::null) return;
+        auto& reg = m_scene->getRegistry();
+        if (!reg.valid(m_entity)) return;
+        if (on) reg.get_or_emplace<SDFColliderComponent>(m_entity);
+        else reg.remove<SDFColliderComponent>(m_entity);
+        emit entityComponentsChanged(m_entity);
+    });
+
     connect(m_colShape, &QComboBox::currentIndexChanged, this, [this](int idx) {
         // shape combo: 0 none, 1 box, 2 sphere, 3 capsule, 4 convex
         const int page = (idx == 1) ? 1 : (idx == 2) ? 2 : (idx == 3) ? 3 : 0;
@@ -328,6 +342,8 @@ void PhysicsPropertiesWidget::rebuildFromEntity()
         m_colShape->setCurrentIndex(0);
         m_colStack->setCurrentIndex(0);
     }
+
+    m_sdfFluidCollider->setChecked(reg.any_of<SDFColliderComponent>(m_entity));
 
     // fluid
     if (const auto* em = reg.try_get<FluidEmitterComponent>(m_entity)) {

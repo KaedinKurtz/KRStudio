@@ -745,6 +745,16 @@ struct ConvexMeshCollider {
 };
 
 /**
+ * @brief Bakes the entity's render mesh into a signed distance field
+ * (OpenVDB meshToLevelSet) that the fluid collides against — exact-shape
+ * fluid interaction for arbitrary geometry (e.g. water poured on a statue,
+ * water inside a sculpted glass). Static geometry only (baked at Play).
+ */
+struct SDFColliderComponent {
+    float voxelSize = 0.03f;  // metres per SDF voxel (smaller = sharper, more memory)
+};
+
+/**
  * @brief Emits fluid particles from the entity's transform location.
  * Consumed by the GPU fluid system while the simulation is playing.
  */

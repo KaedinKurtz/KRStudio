@@ -35,7 +35,13 @@ public:
     void update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
                 entt::registry& registry, float dt);
 
-    void setPlaying(bool playing) { m_playing = playing; }
+    static constexpr int kMaxSdfColliders = 4;
+
+    void setPlaying(bool playing)
+    {
+        if (playing && !m_playing) m_sdfsBaked = false; // re-bake on each play
+        m_playing = playing;
+    }
     void reset() { m_particleCount = 0; m_volumesSeeded = false; m_emitAccumulator = 0.0f; }
 
     int particleCount() const { return m_particleCount; }
@@ -47,6 +53,16 @@ public:
     const std::vector<glm::vec4>& sampledPositions() const { return m_positionMirror; }
 
 private:
+    struct SdfCollider {
+        GLuint texture = 0;       // R32F 3D texture of signed distances (world units)
+        glm::vec3 aabbMin{ 0 };
+        glm::vec3 aabbMax{ 0 };
+        // CPU copy kept for telemetry/penetration checks under test hooks
+        std::vector<float> cpuField;
+        glm::ivec3 dims{ 0 };
+    };
+
+    void bakeSdfColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
     void seedVolumes(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
     void emitFromEmitters(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry, float dt);
     void uploadColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
@@ -71,6 +87,10 @@ private:
     glm::ivec3 m_gridDim = { 0, 0, 0 };
 
     std::vector<glm::vec4> m_positionMirror;
+
+    // --- SDF colliders (baked from meshes at Play via OpenVDB) ---
+    bool m_sdfsBaked = false;
+    std::vector<SdfCollider> m_sdfColliders;
 
     // --- GPU resources (engine context) ---
     GLuint m_particleSSBO = 0;  // {vec4 posLife; vec4 vel; vec4 pred;} * kMaxParticles
