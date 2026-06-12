@@ -2,12 +2,14 @@
 #include "Scene.hpp"
 #include "components.hpp"
 
+#include <QApplication>
 #include <QVBoxLayout>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QComboBox>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -70,6 +72,11 @@ PhysicsPropertiesWidget::PhysicsPropertiesWidget(Scene* scene, QWidget* parent)
 
     scroll->setWidget(content);
     outer->addWidget(scroll);
+
+    // Commit on Enter/focus-out instead of every keystroke: per-keystroke
+    // applies rebuilt live physics actors mid-typing.
+    for (auto* spin : findChildren<QDoubleSpinBox*>()) spin->setKeyboardTracking(false);
+    for (auto* spin : findChildren<QSpinBox*>()) spin->setKeyboardTracking(false);
 
     setEntity(entt::null);
 }
@@ -288,6 +295,13 @@ QWidget* PhysicsPropertiesWidget::buildFluidSection()
 // ===========================================================================
 void PhysicsPropertiesWidget::setEntity(entt::entity entity)
 {
+    // Re-selection of the same entity must NOT clobber an edit in progress:
+    // selection events re-fire while the user is typing into a field, and
+    // rebuilding setValue()s every box — making them impossible to type in.
+    if (entity == m_entity) {
+        QWidget* focus = QApplication::focusWidget();
+        if (focus && isAncestorOf(focus)) return;
+    }
     m_entity = entity;
     rebuildFromEntity();
 }

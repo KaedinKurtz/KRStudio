@@ -257,6 +257,9 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
     scroll->setWidget(content);
     outer->addWidget(scroll);
 
+    for (auto* spin : findChildren<QDoubleSpinBox*>()) spin->setKeyboardTracking(false);
+    for (auto* spin : findChildren<QSpinBox*>()) spin->setKeyboardTracking(false);
+
     syncFromSystem();
 
     connect(m_recordCheck, &QCheckBox::toggled, this, [this](bool on) {

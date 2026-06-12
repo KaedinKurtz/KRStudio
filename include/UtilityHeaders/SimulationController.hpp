@@ -63,6 +63,7 @@ private:
     void removeActorForEntity(entt::entity entity);
     void stepOnce(float dt);
     void pushKinematicTargets();
+    void syncUserEdits();
     void writeBackTransforms();
     void takeSnapshot();
     void restoreSnapshot();

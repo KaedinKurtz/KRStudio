@@ -75,6 +75,9 @@ struct SimulationController::PxImpl
     PxCudaContextManager* cudaContextManager = nullptr;
 #endif
     std::unordered_map<entt::entity, PxRigidActor*> actors;
+    // Last pose WE wrote to the ECS: any divergence means the user moved
+    // the entity (gizmo/panel) while playing — push it into the actor.
+    std::unordered_map<entt::entity, std::pair<glm::vec3, glm::quat>> lastWritten;
 
     /// One-time CUDA probe: decides the GPU tiers (PhysX GPU dynamics, SDF
     /// dynamic trimeshes, GPU PBD fluids). Returns -1 path silently on
@@ -139,7 +142,12 @@ struct SimulationController::PxImpl
         if (qEnvironmentVariableIsSet("KRS_BENCH"))
             qInfo() << "[Sim] material: e=" << m.restitution << "muS=" << m.staticFriction
                     << "muD=" << m.dynamicFriction;
-        return physics->createMaterial(m.staticFriction, m.dynamicFriction, m.restitution);
+        PxMaterial* mat = physics->createMaterial(m.staticFriction, m.dynamicFriction, m.restitution);
+        // MAX combine: "bounciness 1" on a ball should bounce on a dead
+        // floor. AVERAGE halved every user setting against the default
+        // e=0.1 ground (bounciness 1.0 felt like 0.55).
+        mat->setRestitutionCombineMode(PxCombineMode::eMAX);
+        return mat;
     }
 
     static std::string debugNameFor(entt::registry& reg, entt::entity e)
@@ -396,6 +404,8 @@ void SimulationController::tick()
     const double frameSeconds = std::min(0.25, double(m_clock.nsecsElapsed()) * 1e-9);
     m_clock.restart();
     m_accumulator += frameSeconds;
+
+    syncUserEdits(); // gizmo/panel moves while playing land in the actors
 
     int steps = 0;
     constexpr int kMaxStepsPerTick = 32;
@@ -654,6 +664,7 @@ void SimulationController::destroyPhysicsWorld()
 #if defined(KR_WITH_PHYSX)
     if (!m_px->scene) return;
     m_px->actors.clear();
+    m_px->lastWritten.clear();
     m_px->scene->release();   // releases contained actors
     m_px->scene = nullptr;
     m_px->groundPlane = nullptr;
@@ -690,6 +701,43 @@ void SimulationController::pushKinematicTargets()
 #endif
 }
 
+void SimulationController::syncUserEdits()
+{
+#if defined(KR_WITH_PHYSX)
+    auto& reg = m_scene->getRegistry();
+    for (auto& [e, actor] : m_px->actors) {
+        if (!reg.valid(e)) continue;
+        const auto* xf = reg.try_get<TransformComponent>(e);
+        if (!xf) continue;
+        auto it = m_px->lastWritten.find(e);
+        if (it == m_px->lastWritten.end()) {
+            m_px->lastWritten[e] = { xf->translation, xf->rotation };
+            continue;
+        }
+        const bool moved = glm::distance(xf->translation, it->second.first) > 1e-5f
+                           || std::abs(glm::dot(xf->rotation, it->second.second)) < 1.0f - 1e-6f;
+        if (!moved) continue;
+
+        const PxTransform pose(
+            PxVec3(xf->translation.x, xf->translation.y, xf->translation.z),
+            PxQuat(xf->rotation.x, xf->rotation.y, xf->rotation.z, xf->rotation.w));
+        if (auto* dyn = actor->is<PxRigidDynamic>();
+            dyn && (dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)) {
+            dyn->setKinematicTarget(pose);
+        }
+        else {
+            actor->setGlobalPose(pose); // teleport; drag-throw velocity is a follow-up
+            if (auto* dyn = actor->is<PxRigidDynamic>()) {
+                dyn->setLinearVelocity(PxVec3(0));
+                dyn->setAngularVelocity(PxVec3(0));
+                dyn->wakeUp();
+            }
+        }
+        it->second = { xf->translation, xf->rotation };
+    }
+#endif
+}
+
 void SimulationController::writeBackTransforms()
 {
 #if defined(KR_WITH_PHYSX)
@@ -703,6 +751,7 @@ void SimulationController::writeBackTransforms()
         auto& xf = reg.get<TransformComponent>(e);
         xf.translation = { pose.p.x, pose.p.y, pose.p.z };
         xf.rotation = glm::quat(pose.q.w, pose.q.x, pose.q.y, pose.q.z);
+        m_px->lastWritten[e] = { xf.translation, xf.rotation };
 
         if (auto* rb = reg.try_get<RigidBodyComponent>(e)) {
             const PxVec3 lv = dyn->getLinearVelocity();
