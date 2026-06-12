@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IFluidSolver.hpp"
+#include "FluidCache.hpp"
 
 #include <QtGui/qopengl.h>
 #include <entt/entt.hpp>
@@ -119,6 +120,17 @@ public:
     void setExternalSolver(FluidBackend tier, std::unique_ptr<IFluidSolver> solver);
     IFluidSolver* externalSolver() const { return m_externalSolver.get(); }
 
+    // --- Houdini-style bake & scrub ---
+    /// While recording, every rendered frame of the playing sim is written
+    /// to the cache directory; scrubbing replays frames through the same
+    /// particle SSBO the renderer consumes.
+    FluidCache& cache() { return m_cache; }
+    bool isRecording() const { return m_recording; }
+    void setRecording(bool on);
+    /// Thread-safe-enough deferred scrub: applied on the engine context at
+    /// the next update() tick.
+    void requestScrubFrame(int frame) { m_pendingScrubFrame = frame; }
+
 private:
     struct SdfCollider {
         GLuint texture = 0;       // R32F 3D texture of signed distances (world units)
@@ -171,4 +183,12 @@ private:
     GLuint m_diffuseSSBO = 0;   // {vec4 posLife; vec4 velType;} * kMaxDiffuse
     GLuint m_diffuseCounterSSBO = 0; // monotonic ring cursor
     uint32_t m_foamFrame = 0;
+
+    // --- Bake & scrub ---
+    FluidCache m_cache;
+    bool m_recording = false;
+    int m_recordFrame = 0;
+    double m_recordTime = 0.0;
+    int m_pendingScrubFrame = -1;
+    std::vector<float> m_recordScratch;
 };

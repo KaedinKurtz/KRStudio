@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include <QGridLayout>
 #include <QGroupBox>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
 #include <QDoubleSpinBox>
@@ -15,6 +16,7 @@
 #include <QFrame>
 #include <QColorDialog>
 #include <QScrollArea>
+#include <QTimer>
 
 #include <algorithm>
 
@@ -224,10 +226,68 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
         layout->addWidget(box);
     }
 
+    // ---- Sim cache (Houdini-style bake & scrub) ----
+    layout->addWidget(header(QStringLiteral("Sim Cache (bake && scrub)"), content));
+    {
+        auto* box = new QGroupBox(content);
+        auto* g = new QGridLayout(box);
+        g->setContentsMargins(6, 6, 6, 6);
+        g->setVerticalSpacing(3);
+
+        m_recordCheck = new QCheckBox(QStringLiteral("Record while playing"), box);
+        m_recordCheck->setToolTip(QStringLiteral(
+            "Writes one cache frame per rendered frame to ./fluidcache.\n"
+            "Stop the sim, then scrub the timeline below to replay the bake."));
+        g->addWidget(m_recordCheck, 0, 0, 1, 2);
+
+        g->addWidget(new QLabel(QStringLiteral("Timeline"), box), 1, 0);
+        m_scrubSlider = new QSlider(Qt::Horizontal, box);
+        m_scrubSlider->setRange(0, 0);
+        g->addWidget(m_scrubSlider, 1, 1);
+
+        m_cacheInfo = new QLabel(QStringLiteral("no baked frames"), box);
+        m_cacheInfo->setStyleSheet("color: palette(mid); font-size: 8pt;");
+        g->addWidget(m_cacheInfo, 2, 0, 1, 2);
+
+        m_clearCache = new QPushButton(QStringLiteral("Clear cache"), box);
+        g->addWidget(m_clearCache, 3, 0, 1, 2);
+        layout->addWidget(box);
+    }
+
     scroll->setWidget(content);
     outer->addWidget(scroll);
 
     syncFromSystem();
+
+    connect(m_recordCheck, &QCheckBox::toggled, this, [this](bool on) {
+        if (FluidSystem* fluid = m_renderer ? m_renderer->getFluidSystem() : nullptr)
+            fluid->setRecording(on);
+    });
+    connect(m_scrubSlider, &QSlider::valueChanged, this, [this](int frame) {
+        if (FluidSystem* fluid = m_renderer ? m_renderer->getFluidSystem() : nullptr)
+            fluid->requestScrubFrame(frame);
+    });
+    connect(m_clearCache, &QPushButton::clicked, this, [this]() {
+        if (FluidSystem* fluid = m_renderer ? m_renderer->getFluidSystem() : nullptr) {
+            fluid->cache().clear();
+            m_scrubSlider->setRange(0, 0);
+            m_cacheInfo->setText(QStringLiteral("no baked frames"));
+        }
+    });
+    auto* cacheTimer = new QTimer(this);
+    connect(cacheTimer, &QTimer::timeout, this, [this]() {
+        FluidSystem* fluid = m_renderer ? m_renderer->getFluidSystem() : nullptr;
+        if (!fluid || !isVisible()) return;
+        fluid->cache().refresh();
+        const int n = fluid->cache().frameCount();
+        if (n != m_scrubSlider->maximum() + 1) {
+            m_scrubSlider->setRange(0, std::max(0, n - 1));
+            m_cacheInfo->setText(n > 0
+                ? QStringLiteral("%1 baked frames — scrub to replay").arg(n)
+                : QStringLiteral("no baked frames"));
+        }
+    });
+    cacheTimer->start(500);
 
     connect(m_backend, &QComboBox::currentIndexChanged, this, [this](int idx) {
         if (m_updating) return;

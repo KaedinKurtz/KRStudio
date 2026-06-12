@@ -7,6 +7,7 @@
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <QDebug>
+#include <QDir>
 #include <glm/gtc/quaternion.hpp>
 #include <random>
 
@@ -51,6 +52,7 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     bool turbidityOk = false;
     const float turbidityEnv = qEnvironmentVariable("KRS_FLUID_TURBIDITY").toFloat(&turbidityOk);
     if (turbidityOk) m_appearance.turbidity = turbidityEnv;
+    if (qEnvironmentVariableIsSet("KRS_FLUID_RECORD")) setRecording(true);
 
     const glm::vec3 extent = m_domainMax - m_domainMin;
     m_gridDim = glm::ivec3(glm::ceil(extent / m_h));
@@ -298,9 +300,48 @@ void FluidSystem::setExternalSolver(FluidBackend tier, std::unique_ptr<IFluidSol
     m_externalSolver = std::move(solver);
 }
 
+void FluidSystem::setRecording(bool on)
+{
+    if (on) {
+        if (m_cache.directory().isEmpty())
+            m_cache.setDirectory(QDir::currentPath() + QStringLiteral("/fluidcache"));
+        m_cache.clear();
+        m_recordFrame = 0;
+        m_recordTime = 0.0;
+        qInfo() << "[Fluid] recording bake to" << m_cache.directory();
+    }
+    else if (m_recording) {
+        qInfo() << "[Fluid] bake stopped:" << m_recordFrame << "frames";
+    }
+    m_recording = on;
+}
+
 void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
                          entt::registry& registry, float dt)
 {
+    // Scrub playback: replay a baked frame through the live particle SSBO
+    // (engine context — works whether or not the simulation is playing).
+    if (m_initialized && m_pendingScrubFrame >= 0) {
+        FluidCache::Frame frame;
+        if (m_cache.readFrame(m_pendingScrubFrame, frame)) {
+            const int n = std::min(frame.particleCount(), int(kMaxParticles));
+            std::vector<GpuParticle> upload;
+            upload.resize(size_t(n));
+            for (int i = 0; i < n; ++i) {
+                const float* src = frame.data.data() + size_t(i) * 8;
+                upload[size_t(i)].posLife = glm::vec4(src[0], src[1], src[2], src[3]);
+                upload[size_t(i)].vel = glm::vec4(src[4], src[5], src[6], 0.0f);
+                upload[size_t(i)].pred = glm::vec4(src[0], src[1], src[2], 0.0f);
+            }
+            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
+            gl->glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                                static_cast<GLsizeiptr>(sizeof(GpuParticle)) * n, upload.data());
+            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            m_particleCount = n;
+        }
+        m_pendingScrubFrame = -1;
+    }
+
     if (!m_initialized || !m_playing) return;
 
     if (activeBackend() == m_externalTier && m_externalSolver) {
@@ -429,6 +470,27 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         foamUpdate->setVec3(gl, "u_gravity", m_params.gravity);
         gl->glDispatchCompute((kMaxDiffuse + 255) / 256, 1, 1);
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+    }
+
+    // Bake recording: one cache frame per rendered frame while playing.
+    if (m_recording && m_particleCount > 0) {
+        std::vector<GpuParticle> sample;
+        sample.resize(size_t(m_particleCount));
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
+        gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                               static_cast<GLsizeiptr>(sizeof(GpuParticle)) * m_particleCount,
+                               sample.data());
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        m_recordScratch.resize(size_t(m_particleCount) * 8);
+        for (int i = 0; i < m_particleCount; ++i) {
+            float* dst = m_recordScratch.data() + size_t(i) * 8;
+            dst[0] = sample[size_t(i)].posLife.x; dst[1] = sample[size_t(i)].posLife.y;
+            dst[2] = sample[size_t(i)].posLife.z; dst[3] = sample[size_t(i)].posLife.w;
+            dst[4] = sample[size_t(i)].vel.x; dst[5] = sample[size_t(i)].vel.y;
+            dst[6] = sample[size_t(i)].vel.z; dst[7] = 0.0f;
+        }
+        m_recordTime += dt;
+        m_cache.writeFrame(m_recordFrame++, m_recordTime, m_recordScratch);
     }
 
     // Telemetry mirror: refresh a CPU copy of particle positions for the
