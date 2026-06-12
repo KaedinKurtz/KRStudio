@@ -21,6 +21,9 @@ public:
     // If gammaCorrection is true, assumes the image is in sRGB space and converts.
     bool loadFromFile(const std::string& path, bool gammaCorrection = false);
 
+    // Load from compressed image bytes in memory (embedded glb/fbx textures).
+    bool loadFromMemory(const unsigned char* data, size_t size, bool gammaCorrection = false);
+
     // Generate an empty texture of given size and formats, optionally uploading data.
     void generate(int width, int height,
         GLenum internalFormat = GL_RGBA8,

@@ -27,6 +27,7 @@
 #include "FluidSurfacePass.hpp"
 #include "CollisionDebugPass.hpp"
 #include "TonemapPass.hpp"
+#include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
 #include "FluidSystem.hpp"
 
@@ -765,6 +766,34 @@ void RenderingSystem::processMaterialReloads()
         else if (mat.heightMap) mat.heightScale = 0.1f;
         reg.emplace_or_replace<MaterialComponent>(ent, std::move(mat));
         reg.remove<MaterialReloadRequest>(ent);
+    }
+
+    // Mesh-native (baked) textures queued by SceneBuilder at spawn time.
+    std::vector<entt::entity> pendingNative;
+    for (auto ent : reg.view<PendingMaterialData>()) pendingNative.push_back(ent);
+    for (auto ent : pendingNative) {
+        const MeshMaterialSource& src = reg.get<PendingMaterialData>(ent).source;
+        MaterialComponent mat;
+        auto build = [&](const std::optional<MeshMaterialSource::Map>& map)
+            -> std::shared_ptr<Texture2D> {
+            if (!map) return nullptr;
+            auto tex = std::make_shared<Texture2D>();
+            const bool ok = map->bytes.empty()
+                ? tex->loadFromFile(map->filePath, map->srgb)
+                : tex->loadFromMemory(map->bytes.data(), map->bytes.size(), map->srgb);
+            return ok ? tex : nullptr;
+        };
+        mat.albedoMap = build(src.albedo);
+        mat.normalMap = build(src.normal);
+        mat.roughnessMap = build(src.roughness);
+        mat.metallicMap = build(src.metallic);
+        mat.aoMap = build(src.ao);
+        mat.emissiveMap = build(src.emissive);
+        mat.heightMap = build(src.height);
+        if (mat.heightMap) mat.heightScale = 0.05f;
+        if (mat.albedoMap)
+            reg.emplace_or_replace<MaterialComponent>(ent, std::move(mat));
+        reg.remove<PendingMaterialData>(ent);
     }
 }
 

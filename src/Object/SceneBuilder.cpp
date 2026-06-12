@@ -187,6 +187,13 @@ entt::entity SceneBuilder::spawnMeshInstance(Scene& scene, MeshID meshId,
     // 4. Add the correct material rendering tag based on the mesh's data.
     if (meshData->hasUVs && meshData->hasTangents) {
         registry.emplace_or_replace<UVTexturedMaterialTag>(newEntity);
+        // Mesh-native baked textures: if the model file ships its own maps
+        // (.glb/.fbx/.obj+mtl), queue them — the renderer builds the
+        // MaterialComponent on the engine GL context next frame.
+        if (const MeshMaterialSource* src = ResourceManager::instance().getMeshMaterial(meshId);
+            src && src->any()) {
+            registry.emplace_or_replace<PendingMaterialData>(newEntity, *src);
+        }
     }
     else {
         registry.emplace_or_replace<TriPlanarMaterialTag>(newEntity);

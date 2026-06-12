@@ -49,6 +49,16 @@ MeshID ResourceManager::loadMesh(const QString& path) {
     if (meshOpt) {
         mesh = std::move(*meshOpt);
         qDebug() << "[ResourceManager] Loaded mesh from DB cache for:" << path;
+        // DB blobs don't persist the hasUVs/hasTangents metadata, but the
+        // vertex data itself survives — derive the flags or cached meshes
+        // silently fall back to triplanar and never get native materials.
+        if (!mesh.hasUVs || !mesh.hasTangents) {
+            for (const auto& v : mesh.vertices) {
+                if (!mesh.hasUVs && v.uv != glm::vec2(0.0f)) mesh.hasUVs = true;
+                if (!mesh.hasTangents && v.tangent != glm::vec3(0.0f)) mesh.hasTangents = true;
+                if (mesh.hasUVs && mesh.hasTangents) break;
+            }
+        }
     }
     else {
         // 3) Fallback: load from file, then persist into DB cache
@@ -92,6 +102,25 @@ MeshID ResourceManager::loadMesh(const QString& path) {
     dbm.touchAsset(path);  // optional, cheap :contentReference[oaicite:8]{index=8}
 
     return id;
+}
+
+const MeshMaterialSource* ResourceManager::getMeshMaterial(MeshID id) {
+    if (auto it = m_meshMaterials.find(id); it != m_meshMaterials.end())
+        return &it->second;
+
+    const RenderableMeshComponent* mesh = getMesh(id);
+    if (!mesh || mesh->sourcePath.empty()) return nullptr;
+    const QString path = QString::fromStdString(mesh->sourcePath);
+    if (path.startsWith(QLatin1String(":/")) || !QFile::exists(path)) {
+        m_meshMaterials.emplace(id, MeshMaterialSource{}); // negative cache
+        return &m_meshMaterials[id];
+    }
+
+    MeshMaterialSource src = MeshUtils::extractMaterialSource(path);
+    if (src.any())
+        qDebug() << "[ResourceManager] mesh-native material found for" << path;
+    auto [it, ok] = m_meshMaterials.emplace(id, std::move(src));
+    return &it->second;
 }
 
 const RenderableMeshComponent* ResourceManager::getMesh(MeshID id) const {

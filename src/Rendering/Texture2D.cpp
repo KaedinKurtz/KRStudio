@@ -76,6 +76,35 @@ bool Texture2D::loadFromFile(const std::string& path, bool gammaCorrection) {
     return true;
 }
 
+bool Texture2D::loadFromMemory(const unsigned char* bytes, size_t size, bool gammaCorrection) {
+    int w, h, channels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* data = stbi_load_from_memory(bytes, int(size), &w, &h, &channels, 0);
+    if (!data) {
+        qWarning() << "Texture2D: Failed to decode in-memory image (" << size << "bytes )";
+        return false;
+    }
+
+    GLenum internalFormat = 0, dataFormat = 0;
+    if (channels == 1) {
+        internalFormat = GL_RED;
+        dataFormat = GL_RED;
+    }
+    else if (channels == 3) {
+        internalFormat = gammaCorrection ? GL_SRGB : GL_RGB;
+        dataFormat = GL_RGB;
+    }
+    else if (channels == 4) {
+        internalFormat = gammaCorrection ? GL_SRGB_ALPHA : GL_RGBA;
+        dataFormat = GL_RGBA;
+    }
+
+    generate(w, h, internalFormat, dataFormat, data);
+
+    stbi_image_free(data);
+    return true;
+}
+
 void Texture2D::generate(int width, int height, GLenum internalFormat, GLenum dataFormat, const void* data) {
     _width = width;
     _height = height;

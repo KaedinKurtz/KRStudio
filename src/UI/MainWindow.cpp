@@ -857,6 +857,15 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
+    // Test hook: KRS_TEST_SPAWN_MESH=<path> spawns a mesh asset at the
+    // origin shortly after boot (headless import/material verification).
+    if (qEnvironmentVariableIsSet("KRS_TEST_SPAWN_MESH")) {
+        QTimer::singleShot(1500, this, [this]() {
+            spawnMeshAssetAt(qEnvironmentVariable("KRS_TEST_SPAWN_MESH"),
+                             glm::vec3(0.0f, 1.0f, 0.0f));
+        });
+    }
+
     // First-principles physics validation: KRS_BENCH=1 runs the analytic
     // benchmark suite and exits with the number of failed checks.
     if (qEnvironmentVariableIsSet("KRS_BENCH")) {

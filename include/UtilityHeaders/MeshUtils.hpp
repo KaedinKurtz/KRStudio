@@ -1,10 +1,13 @@
 #pragma once
 #include "components.hpp" // For RenderableMeshComponent
+#include "MeshMaterialSource.hpp"
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <QString>
 #include <QFile>
+#include <QFileInfo>
+#include <QDir>
 #include <QDebug>
 #include <stdexcept>
 
@@ -92,6 +95,69 @@ namespace MeshUtils {
             << " | Has UVs:" << mesh.hasUVs;
 
         return mesh;
+    }
+
+    // --- Mesh-native (baked) textures -----------------------------------
+    // Pulls the texture references for the FIRST mesh's material out of a
+    // model file: external paths resolve relative to the model (falling
+    // back to a filename search in the model's directory — DCC tools love
+    // baking absolute paths), embedded textures (.glb/.fbx) are copied out
+    // as compressed byte blobs. Everything is copied immediately: the
+    // aiScene dies on the next import.
+    inline MeshMaterialSource extractMaterialSource(const QString& modelPath)
+    {
+        MeshMaterialSource out;
+        Assimp::Importer importer; // local: no post-processing needed
+        const aiScene* scene = importer.ReadFile(modelPath.toStdString(), 0);
+        if (!scene || !scene->HasMeshes() || !scene->HasMaterials()) return out;
+
+        const aiMesh* mesh = scene->mMeshes[0];
+        if (mesh->mMaterialIndex >= scene->mNumMaterials) return out;
+        const aiMaterial* mat = scene->mMaterials[mesh->mMaterialIndex];
+        const QDir modelDir = QFileInfo(modelPath).dir();
+
+        auto resolve = [&](std::initializer_list<aiTextureType> types,
+                           bool srgb) -> std::optional<MeshMaterialSource::Map> {
+            for (aiTextureType type : types) {
+                aiString aiPath;
+                if (mat->GetTexture(type, 0, &aiPath) != AI_SUCCESS) continue;
+                MeshMaterialSource::Map map;
+                map.srgb = srgb;
+                if (const aiTexture* embedded = scene->GetEmbeddedTexture(aiPath.C_Str())) {
+                    if (embedded->mHeight == 0) {
+                        // Compressed blob (png/jpg) — stb decodes it later.
+                        const auto* bytes = reinterpret_cast<const uint8_t*>(embedded->pcData);
+                        map.bytes.assign(bytes, bytes + embedded->mWidth);
+                        return map;
+                    }
+                    qWarning() << "[MeshUtils] uncompressed embedded texture skipped in"
+                               << modelPath;
+                    continue;
+                }
+                const QString raw = QString::fromUtf8(aiPath.C_Str());
+                QString resolved = QFileInfo(raw).isAbsolute()
+                                       ? raw
+                                       : modelDir.filePath(raw);
+                if (!QFileInfo::exists(resolved)) {
+                    // Absolute DCC path from another machine: try by name.
+                    const QString byName = modelDir.filePath(QFileInfo(raw).fileName());
+                    if (!QFileInfo::exists(byName)) continue;
+                    resolved = byName;
+                }
+                map.filePath = resolved.toStdString();
+                return map;
+            }
+            return std::nullopt;
+        };
+
+        out.albedo = resolve({ aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE }, true);
+        out.normal = resolve({ aiTextureType_NORMALS, aiTextureType_NORMAL_CAMERA }, false);
+        out.roughness = resolve({ aiTextureType_DIFFUSE_ROUGHNESS, aiTextureType_SHININESS }, false);
+        out.metallic = resolve({ aiTextureType_METALNESS }, false);
+        out.ao = resolve({ aiTextureType_AMBIENT_OCCLUSION, aiTextureType_LIGHTMAP }, false);
+        out.emissive = resolve({ aiTextureType_EMISSIVE, aiTextureType_EMISSION_COLOR }, true);
+        out.height = resolve({ aiTextureType_HEIGHT, aiTextureType_DISPLACEMENT }, false);
+        return out;
     }
 
     // You can keep these convenience overloads if you like.

@@ -1474,8 +1474,11 @@ bool DatabaseManager::saveMeshAsset(const QString& path, const RenderableMeshCom
     QByteArray data;
     QDataStream stream(&data, QIODevice::WriteOnly);
 
-    // Version our data so we can handle changes in the future
-    stream << quint32(1); // Version 1
+    // Version our data so we can handle changes in the future.
+    // v2: + tangent/bitangent per vertex, + hasUVs/hasTangents flags
+    // (v1 silently dropped tangents, so DB-cached meshes lost UV-textured
+    // rendering on every run after the first).
+    stream << quint32(2);
 
     // Write vertices
     stream << quint32(mesh.vertices.size());
@@ -1483,12 +1486,15 @@ bool DatabaseManager::saveMeshAsset(const QString& path, const RenderableMeshCom
         stream.writeRawData(reinterpret_cast<const char*>(&v.position), sizeof(glm::vec3));
         stream.writeRawData(reinterpret_cast<const char*>(&v.normal), sizeof(glm::vec3));
         stream.writeRawData(reinterpret_cast<const char*>(&v.uv), sizeof(glm::vec2));
-        // Write tangent/bitangent if they exist
+        stream.writeRawData(reinterpret_cast<const char*>(&v.tangent), sizeof(glm::vec3));
+        stream.writeRawData(reinterpret_cast<const char*>(&v.bitangent), sizeof(glm::vec3));
     }
 
     // Write indices
     stream << quint32(mesh.indices.size());
     stream.writeRawData(reinterpret_cast<const char*>(mesh.indices.data()), mesh.indices.size() * sizeof(unsigned int));
+
+    stream << quint8(mesh.hasUVs ? 1 : 0) << quint8(mesh.hasTangents ? 1 : 0);
 
     // Now save to the database
     auto conn = getConnection();
@@ -1518,8 +1524,9 @@ std::optional<RenderableMeshComponent> DatabaseManager::loadMeshAsset(const QStr
 
         quint32 version;
         stream >> version;
-        if (version != 1) {
-            qWarning() << "Unknown mesh asset version:" << version;
+        if (version != 2) {
+            // v1 blobs lack tangents/flags — treat as a miss so the file
+            // reloads via Assimp and re-saves in the current format.
             releaseConnection(conn);
             return std::nullopt;
         }
@@ -1532,6 +1539,8 @@ std::optional<RenderableMeshComponent> DatabaseManager::loadMeshAsset(const QStr
             stream.readRawData(reinterpret_cast<char*>(&mesh.vertices[i].position), sizeof(glm::vec3));
             stream.readRawData(reinterpret_cast<char*>(&mesh.vertices[i].normal), sizeof(glm::vec3));
             stream.readRawData(reinterpret_cast<char*>(&mesh.vertices[i].uv), sizeof(glm::vec2));
+            stream.readRawData(reinterpret_cast<char*>(&mesh.vertices[i].tangent), sizeof(glm::vec3));
+            stream.readRawData(reinterpret_cast<char*>(&mesh.vertices[i].bitangent), sizeof(glm::vec3));
         }
 
         // Read indices
@@ -1539,6 +1548,11 @@ std::optional<RenderableMeshComponent> DatabaseManager::loadMeshAsset(const QStr
         stream >> indexCount;
         mesh.indices.resize(indexCount);
         stream.readRawData(reinterpret_cast<char*>(mesh.indices.data()), indexCount * sizeof(unsigned int));
+
+        quint8 hasUVs = 0, hasTangents = 0;
+        stream >> hasUVs >> hasTangents;
+        mesh.hasUVs = hasUVs != 0;
+        mesh.hasTangents = hasTangents != 0;
 
         releaseConnection(conn);
         return mesh;
