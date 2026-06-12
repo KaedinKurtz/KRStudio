@@ -34,7 +34,7 @@ private:
     struct EntityEntry {
         const void* meshData = nullptr; // vertices.data() identity check
         size_t vertexCount = 0;
-        bool exactTrimesh = false;
+        int shapeMode = -1; // CollisionCookingService::DebugShape
         std::shared_ptr<const std::vector<glm::vec3>> edges;
     };
 

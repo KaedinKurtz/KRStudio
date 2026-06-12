@@ -21,6 +21,7 @@
     "physx",
     "fcl",
     "ccd",
+    "v-hacd",
     "libigl",
     "urdfdom",
     "urdfdom-headers"

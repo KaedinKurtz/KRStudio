@@ -1,4 +1,5 @@
 #include "CollisionCookingService.hpp"
+#include "VhacdDecomposer.hpp"
 #include "components.hpp"
 
 #include <QDebug>
@@ -39,6 +40,7 @@ struct CollisionCookingService::Impl
     std::mutex creationMutex;  // serializes PxPhysics::create*Mesh calls
     std::unordered_map<uint64_t, std::shared_future<PxTriangleMesh*>> triCache;
     std::unordered_map<uint64_t, std::shared_future<PxConvexMesh*>> hullCache;
+    std::unordered_map<uint64_t, std::shared_future<std::vector<PxConvexMesh*>>> decompCache;
     // Debug-wireframe edge lists, keyed by cooked mesh pointer (stable for
     // the mesh's lifetime; shared across all instances of the geometry).
     std::unordered_map<const void*, std::shared_ptr<const std::vector<glm::vec3>>> edgeCache;
@@ -89,6 +91,31 @@ struct CollisionCookingService::Impl
                               << points.size() << " verts -> " << mesh->getNbTriangles()
                               << " tris in " << timer.elapsed() << " ms";
         return mesh;
+    }
+
+    /// Cook hull points without subsampling (V-HACD hulls are already ≤64).
+    PxConvexMesh* cookConvexPoints(const std::vector<glm::vec3>& pts)
+    {
+        if (pts.size() < 4) return nullptr;
+        std::vector<PxVec3> points;
+        points.reserve(pts.size());
+        for (const auto& p : pts) points.emplace_back(p.x, p.y, p.z);
+
+        PxConvexMeshDesc desc;
+        desc.points.count = static_cast<PxU32>(points.size());
+        desc.points.stride = sizeof(PxVec3);
+        desc.points.data = points.data();
+        desc.flags = PxConvexFlag::eCOMPUTE_CONVEX | PxConvexFlag::eQUANTIZE_INPUT;
+        desc.vertexLimit = 64;
+
+        PxCookingParams params{ PxTolerancesScale{} };
+        PxDefaultMemoryOutputStream out;
+        if (!PxCookConvexMesh(params, desc, out)) return nullptr;
+
+        std::lock_guard<std::mutex> lock(creationMutex);
+        if (!physics) return nullptr;
+        PxDefaultMemoryInputData in(out.getData(), out.getSize());
+        return physics->createConvexMesh(in);
     }
 
     PxConvexMesh* cookConvexHull(std::vector<PxVec3> points, std::string name)
@@ -189,15 +216,21 @@ void CollisionCookingService::shutdown()
     // still use a mesh keep it alive through PhysX refcounting.
     std::unordered_map<uint64_t, std::shared_future<PxTriangleMesh*>> tris;
     std::unordered_map<uint64_t, std::shared_future<PxConvexMesh*>> hulls;
+    std::unordered_map<uint64_t, std::shared_future<std::vector<PxConvexMesh*>>> decomps;
     {
         std::lock_guard<std::mutex> lock(m_impl->cacheMutex);
         tris.swap(m_impl->triCache);
         hulls.swap(m_impl->hullCache);
+        decomps.swap(m_impl->decompCache);
     }
     for (auto& [key, fut] : tris)
         if (PxTriangleMesh* m = fut.valid() ? fut.get() : nullptr) m->release();
     for (auto& [key, fut] : hulls)
         if (PxConvexMesh* m = fut.valid() ? fut.get() : nullptr) m->release();
+    for (auto& [key, fut] : decomps)
+        if (fut.valid())
+            for (PxConvexMesh* m : fut.get())
+                if (m) m->release();
     {
         std::lock_guard<std::mutex> lock(m_impl->cacheMutex);
         m_impl->edgeCache.clear(); // keys dangle once the meshes are released
@@ -318,26 +351,136 @@ CollisionCookingService::requestConvexHull(const std::vector<Vertex>& vertices,
 #endif
 }
 
+std::shared_future<std::vector<physx::PxConvexMesh*>>
+CollisionCookingService::requestConvexDecomposition(const std::vector<Vertex>& vertices,
+                                                    const std::vector<unsigned int>& indices,
+                                                    const std::string& debugName)
+{
+#if defined(KR_WITH_PHYSX)
+    if (!isInitialized() || vertices.size() < 4 || indices.size() < 3) {
+        std::promise<std::vector<PxConvexMesh*>> p;
+        p.set_value({});
+        return p.get_future().share();
+    }
+
+    const uint64_t key = hashGeometry(vertices, indices);
+    {
+        std::lock_guard<std::mutex> lock(m_impl->cacheMutex);
+        auto it = m_impl->decompCache.find(key);
+        if (it != m_impl->decompCache.end()) {
+            const bool failed = it->second.wait_for(std::chrono::seconds(0)) == std::future_status::ready
+                                && it->second.get().empty();
+            if (!failed) return it->second;
+            m_impl->decompCache.erase(it);
+        }
+
+        // Copies for the worker; V-HACD wants the full triangle soup.
+        std::vector<Vertex> verts = vertices;
+        std::vector<unsigned int> idx = indices;
+
+        Impl* impl = m_impl;
+        auto fut = std::async(std::launch::async,
+                              [impl, verts = std::move(verts), idx = std::move(idx),
+                               name = debugName]() {
+                                  std::vector<PxConvexMesh*> cooked;
+                                  for (const auto& hull : krs::decomposeMesh(verts, idx))
+                                      if (PxConvexMesh* m = impl->cookConvexPoints(hull))
+                                          cooked.push_back(m);
+                                  qInfo().nospace() << "[Cook] decomposition '" << name.c_str()
+                                                    << "': " << cooked.size() << " hulls cooked";
+                                  return cooked;
+                              })
+                       .share();
+        m_impl->decompCache.emplace(key, fut);
+        return fut;
+    }
+#else
+    Q_UNUSED(vertices); Q_UNUSED(indices); Q_UNUSED(debugName);
+    std::promise<std::vector<physx::PxConvexMesh*>> p;
+    p.set_value({});
+    return p.get_future().share();
+#endif
+}
+
+namespace {
+#if defined(KR_WITH_PHYSX)
+void collectTrimeshEdges(const PxTriangleMesh* tm,
+                         std::vector<std::pair<uint32_t, uint32_t>>& edges,
+                         std::unordered_set<uint64_t>& seen)
+{
+    const PxU32 nbTris = tm->getNbTriangles();
+    edges.reserve(nbTris * 3);
+    seen.reserve(nbTris * 3);
+    const bool sixteenBit = tm->getTriangleMeshFlags() & PxTriangleMeshFlag::e16_BIT_INDICES;
+    const void* tris = tm->getTriangles();
+    for (PxU32 i = 0; i < nbTris; ++i) {
+        uint32_t a, b, c;
+        if (sixteenBit) {
+            const PxU16* t = static_cast<const PxU16*>(tris) + i * 3;
+            a = t[0]; b = t[1]; c = t[2];
+        }
+        else {
+            const PxU32* t = static_cast<const PxU32*>(tris) + i * 3;
+            a = t[0]; b = t[1]; c = t[2];
+        }
+        addEdge(edges, seen, a, b);
+        addEdge(edges, seen, b, c);
+        addEdge(edges, seen, c, a);
+    }
+}
+
+void appendHullEdges(const PxConvexMesh* hull, std::vector<glm::vec3>& out)
+{
+    const PxU8* idx = hull->getIndexBuffer();
+    const PxVec3* verts = hull->getVertices();
+    std::vector<std::pair<uint32_t, uint32_t>> edges;
+    std::unordered_set<uint64_t> seen;
+    for (PxU32 p = 0; p < hull->getNbPolygons(); ++p) {
+        PxHullPolygon poly;
+        if (!hull->getPolygonData(p, poly)) continue;
+        for (PxU16 v = 0; v < poly.mNbVerts; ++v) {
+            const uint32_t a = idx[poly.mIndexBase + v];
+            const uint32_t b = idx[poly.mIndexBase + (v + 1) % poly.mNbVerts];
+            addEdge(edges, seen, a, b);
+        }
+    }
+    for (const auto& [a, b] : edges) {
+        out.emplace_back(verts[a].x, verts[a].y, verts[a].z);
+        out.emplace_back(verts[b].x, verts[b].y, verts[b].z);
+    }
+}
+#endif
+} // namespace
+
 std::shared_ptr<const std::vector<glm::vec3>>
 CollisionCookingService::debugEdges(const std::vector<Vertex>& vertices,
                                     const std::vector<unsigned int>& indices,
-                                    bool exactTrimesh)
+                                    DebugShape shape)
 {
 #if defined(KR_WITH_PHYSX)
     if (!isInitialized()) return nullptr;
 
+    auto ready = [](const auto& fut) {
+        return fut.valid() && fut.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    };
+
     const void* meshPtr = nullptr;
-    if (exactTrimesh) {
+    std::vector<PxConvexMesh*> decomposed;
+    if (shape == DebugShape::Trimesh) {
         auto fut = requestTriangleMesh(vertices, indices, "debug-edges");
-        if (!fut.valid() || fut.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
-            return nullptr;
+        if (!ready(fut)) return nullptr;
+        meshPtr = fut.get();
+    }
+    else if (shape == DebugShape::Hull) {
+        auto fut = requestConvexHull(vertices, "debug-edges");
+        if (!ready(fut)) return nullptr;
         meshPtr = fut.get();
     }
     else {
-        auto fut = requestConvexHull(vertices, "debug-edges");
-        if (!fut.valid() || fut.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
-            return nullptr;
-        meshPtr = fut.get();
+        auto fut = requestConvexDecomposition(vertices, indices, "debug-edges");
+        if (!ready(fut)) return nullptr;
+        decomposed = fut.get();
+        meshPtr = decomposed.empty() ? nullptr : decomposed.front();
     }
     if (!meshPtr) return nullptr;
 
@@ -347,46 +490,23 @@ CollisionCookingService::debugEdges(const std::vector<Vertex>& vertices,
         if (it != m_impl->edgeCache.end()) return it->second;
     }
 
-    std::vector<std::pair<uint32_t, uint32_t>> edges;
-    std::unordered_set<uint64_t> seen;
     std::shared_ptr<const std::vector<glm::vec3>> result;
-
-    if (exactTrimesh) {
+    if (shape == DebugShape::Trimesh) {
         const auto* tm = static_cast<const PxTriangleMesh*>(meshPtr);
-        const PxU32 nbTris = tm->getNbTriangles();
-        edges.reserve(nbTris * 3);
-        seen.reserve(nbTris * 3);
-        const bool sixteenBit = tm->getTriangleMeshFlags() & PxTriangleMeshFlag::e16_BIT_INDICES;
-        const void* tris = tm->getTriangles();
-        for (PxU32 i = 0; i < nbTris; ++i) {
-            uint32_t a, b, c;
-            if (sixteenBit) {
-                const PxU16* t = static_cast<const PxU16*>(tris) + i * 3;
-                a = t[0]; b = t[1]; c = t[2];
-            }
-            else {
-                const PxU32* t = static_cast<const PxU32*>(tris) + i * 3;
-                a = t[0]; b = t[1]; c = t[2];
-            }
-            addEdge(edges, seen, a, b);
-            addEdge(edges, seen, b, c);
-            addEdge(edges, seen, c, a);
-        }
+        std::vector<std::pair<uint32_t, uint32_t>> edges;
+        std::unordered_set<uint64_t> seen;
+        collectTrimeshEdges(tm, edges, seen);
         result = buildEdgeList(tm->getVertices(), edges);
     }
+    else if (shape == DebugShape::Hull) {
+        auto lines = std::make_shared<std::vector<glm::vec3>>();
+        appendHullEdges(static_cast<const PxConvexMesh*>(meshPtr), *lines);
+        result = lines;
+    }
     else {
-        const auto* hull = static_cast<const PxConvexMesh*>(meshPtr);
-        const PxU8* idx = hull->getIndexBuffer();
-        for (PxU32 p = 0; p < hull->getNbPolygons(); ++p) {
-            PxHullPolygon poly;
-            if (!hull->getPolygonData(p, poly)) continue;
-            for (PxU16 v = 0; v < poly.mNbVerts; ++v) {
-                const uint32_t a = idx[poly.mIndexBase + v];
-                const uint32_t b = idx[poly.mIndexBase + (v + 1) % poly.mNbVerts];
-                addEdge(edges, seen, a, b);
-            }
-        }
-        result = buildEdgeList(hull->getVertices(), edges);
+        auto lines = std::make_shared<std::vector<glm::vec3>>();
+        for (const PxConvexMesh* hull : decomposed) appendHullEdges(hull, *lines);
+        result = lines;
     }
 
     {
@@ -395,7 +515,7 @@ CollisionCookingService::debugEdges(const std::vector<Vertex>& vertices,
     }
     return result;
 #else
-    Q_UNUSED(vertices); Q_UNUSED(indices); Q_UNUSED(exactTrimesh);
+    Q_UNUSED(vertices); Q_UNUSED(indices); Q_UNUSED(shape);
     return nullptr;
 #endif
 }

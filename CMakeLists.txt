@@ -321,6 +321,17 @@ if(ENABLE_PHYSX)
   endif()
 endif()
 
+# --- V-HACD (header-only approximate convex decomposition) ---
+set(KR_HAS_VHACD 0)
+find_path(VHACD_INCLUDE_DIRS "VHACD.h")
+if(VHACD_INCLUDE_DIRS)
+  target_include_directories(RoboticsSoftware PRIVATE ${VHACD_INCLUDE_DIRS})
+  set(KR_HAS_VHACD 1)
+  message(STATUS "V-HACD found: ${VHACD_INCLUDE_DIRS}")
+else()
+  message(WARNING "V-HACD not found. Install 'v-hacd' with vcpkg for convex decomposition.")
+endif()
+
 # --- libigl ---
 set(KR_HAS_IGL 0)
 if(ENABLE_IGL)
@@ -385,6 +396,7 @@ target_compile_definitions(RoboticsSoftware PRIVATE
   NOMINMAX
   $<$<BOOL:${ENABLE_OPENVDB}>:KR_WITH_OPENVDB=1>
   $<$<BOOL:${KR_HAS_PHYSX}>:KR_WITH_PHYSX=1>
+  $<$<BOOL:${KR_HAS_VHACD}>:KR_WITH_VHACD=1>
   $<$<BOOL:${KR_HAS_IGL}>:KR_WITH_IGL=1>
   $<$<BOOL:${KR_HAS_FCL}>:KR_WITH_FCL=1>
   $<$<BOOL:${KR_HAS_CHRONO}>:KR_WITH_CHRONO=1>

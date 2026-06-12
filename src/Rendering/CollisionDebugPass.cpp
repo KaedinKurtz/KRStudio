@@ -189,19 +189,25 @@ void CollisionDebugPass::execute(const RenderFrameContext& context)
         if (autoCol && autoCol->mode == AutoCollisionComponent::Mode::None) continue;
 
         // Same resolution the backend applies: exact trimesh for statics and
-        // kinematics, hull for dynamics / explicit hull modes.
+        // kinematics, V-HACD multi-hull when requested, hull otherwise.
         const bool dynamicBody = rb && rb->bodyType == RigidBodyComponent::BodyType::Dynamic;
-        const bool exact = !legacyHull && autoCol
-                           && autoCol->mode == AutoCollisionComponent::Mode::AutoExact
-                           && !dynamicBody && !autoCol->isTrigger;
+        using Shape = CollisionCookingService::DebugShape;
+        Shape shape = Shape::Hull;
+        if (autoCol && !legacyHull) {
+            if (autoCol->mode == AutoCollisionComponent::Mode::ConvexDecomposition)
+                shape = Shape::Decomposition;
+            else if (autoCol->mode == AutoCollisionComponent::Mode::AutoExact
+                     && !dynamicBody && !autoCol->isTrigger)
+                shape = Shape::Trimesh;
+        }
 
         auto& entry = m_entityCache[e];
         if (entry.meshData != mesh->vertices.data() || entry.vertexCount != mesh->vertices.size()
-            || entry.exactTrimesh != exact || !entry.edges) {
+            || entry.shapeMode != int(shape) || !entry.edges) {
             entry.meshData = mesh->vertices.data();
             entry.vertexCount = mesh->vertices.size();
-            entry.exactTrimesh = exact;
-            entry.edges = cooking.debugEdges(mesh->vertices, mesh->indices, exact);
+            entry.shapeMode = int(shape);
+            entry.edges = cooking.debugEdges(mesh->vertices, mesh->indices, shape);
         }
         if (!entry.edges) continue; // cook still in flight — retry next frame
 

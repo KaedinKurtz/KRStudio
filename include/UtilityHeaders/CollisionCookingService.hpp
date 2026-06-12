@@ -58,18 +58,28 @@ public:
     requestConvexHull(const std::vector<Vertex>& vertices,
                       const std::string& debugName);
 
+    /// V-HACD approximate convex decomposition cooked into PhysX hulls —
+    /// dynamic concave bodies keep their cavities (a falling bowl can catch
+    /// balls). Heavy (seconds for large meshes); runs on a worker thread.
+    std::shared_future<std::vector<physx::PxConvexMesh*>>
+    requestConvexDecomposition(const std::vector<Vertex>& vertices,
+                               const std::vector<unsigned int>& indices,
+                               const std::string& debugName);
+
     static uint64_t hashGeometry(const std::vector<Vertex>& vertices,
                                  const std::vector<unsigned int>& indices);
 
+    enum class DebugShape { Trimesh, Hull, Decomposition };
+
     /// Debug visualization: unique edges of the COOKED collision geometry
-    /// (trimesh or hull) as a GL_LINES list in local unscaled space — the
-    /// truth the solver collides with, not the render mesh. Returns nullptr
-    /// while the cook is still in flight (callers retry next frame).
-    /// Extraction is cached per cooked mesh, so repeated calls are cheap.
+    /// as a GL_LINES list in local unscaled space — the truth the solver
+    /// collides with, not the render mesh. Returns nullptr while the cook
+    /// is still in flight (callers retry next frame). Extraction is cached
+    /// per cooked mesh, so repeated calls are cheap.
     std::shared_ptr<const std::vector<glm::vec3>>
     debugEdges(const std::vector<Vertex>& vertices,
                const std::vector<unsigned int>& indices,
-               bool exactTrimesh);
+               DebugShape shape);
 
 private:
     CollisionCookingService();

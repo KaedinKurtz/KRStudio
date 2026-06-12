@@ -6,6 +6,7 @@
 #include "FluidSystem.hpp"
 #include "PrimitiveBuilders.hpp"
 #include "components.hpp"
+#include "CollisionCookingService.hpp"
 
 #include <QTimer>
 #include <QDebug>
@@ -301,6 +302,64 @@ BenchmarkRunner::BenchmarkRunner(Scene* scene, SimulationController* sim,
                 qWarning() << "[BENCH]   ball sits on the hull cap — exact trimesh collision NOT active";
         },
         5.0f });
+
+    // ----------------------------------------------------------------
+    // 7) V-HACD decomposition: the SAME concave cup as a DYNAMIC body
+    //    must still catch the ball — a single convex hull caps the
+    //    cavity (ball at ~0.75); decomposed hulls preserve it (~0.25).
+    // ----------------------------------------------------------------
+    m_scenarios.push_back({
+        QStringLiteral("dynamic concave cup (V-HACD) catches a ball"),
+        [this]() {
+            auto& reg = m_scene->getRegistry();
+            entt::entity cup = reg.create();
+            auto& mesh = reg.emplace<RenderableMeshComponent>(cup);
+            auto add = [&](glm::vec3 c, glm::vec3 he) {
+                appendBoxToMesh(mesh.vertices, mesh.indices, c, he);
+            };
+            add({ 0, 0.05f, 0 }, { 0.4f, 0.05f, 0.4f });
+            add({ 0.35f, 0.325f, 0 }, { 0.05f, 0.275f, 0.4f });
+            add({ -0.35f, 0.325f, 0 }, { 0.05f, 0.275f, 0.4f });
+            add({ 0, 0.325f, 0.35f }, { 0.3f, 0.275f, 0.05f });
+            add({ 0, 0.325f, -0.35f }, { 0.3f, 0.275f, 0.05f });
+            glm::vec3 mn(1e9f), mx(-1e9f);
+            for (const auto& v : mesh.vertices) {
+                mn = glm::min(mn, v.position);
+                mx = glm::max(mx, v.position);
+            }
+            mesh.aabbMin = mn;
+            mesh.aabbMax = mx;
+            reg.emplace<TransformComponent>(cup, glm::vec3(0), glm::quat(1, 0, 0, 0), glm::vec3(1));
+            reg.emplace<TagComponent>(cup, std::string("BenchCupDyn"));
+            auto& rb = reg.emplace<RigidBodyComponent>(cup);
+            rb.bodyType = RigidBodyComponent::BodyType::Dynamic;
+            rb.mass = 2.0f;
+            rb.linearDamping = 0.0f;
+            rb.angularDamping = 0.0f;
+            auto& ac = reg.emplace<AutoCollisionComponent>(cup);
+            ac.mode = AutoCollisionComponent::Mode::ConvexDecomposition;
+            ac.material.restitution = 0.0f;
+            ac.material.staticFriction = ac.material.dynamicFriction = 0.5f;
+            m_spawned.push_back(cup);
+
+            // The actor builds at Play with a wait_for(0) check — block here
+            // so the decomposition is warm (benchmarks must be deterministic).
+            CollisionCookingService::instance()
+                .requestConvexDecomposition(mesh.vertices, mesh.indices, "BenchCupDyn")
+                .wait();
+
+            m_subject = spawnSphere({ 0, 1.2f, 0 }, 0.15f, 0.0f, 0.5f);
+        },
+        [this]() { return m_elapsed > 3.5f; },
+        [this]() {
+            auto& reg = m_scene->getRegistry();
+            const auto& t = reg.get<TransformComponent>(m_subject).translation;
+            qInfo() << "[BENCH]   final ball pos" << t.x << t.y << t.z;
+            check(QStringLiteral("ball height in dynamic cup (m)"), double(t.y), 0.25, 0.15);
+            if (t.y > 0.5)
+                qWarning() << "[BENCH]   ball sits on the hull cap — decomposition NOT active";
+        },
+        6.0f });
 }
 
 void BenchmarkRunner::start()

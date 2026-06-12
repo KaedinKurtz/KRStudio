@@ -5,6 +5,7 @@
 
 #include <QDebug>
 #include <algorithm>
+#include <chrono>
 #include <thread>
 #include <unordered_map>
 
@@ -157,17 +158,21 @@ struct SimulationController::PxImpl
 
     /// Automatic real-shape collision (AutoCollisionComponent, attached to
     /// every spawned mesh). Statics/kinematics resolve to an exact cooked
-    /// triangle mesh; dynamics to a convex hull — the CPU solver cannot
+    /// triangle mesh; dynamics to a convex hull or a V-HACD decomposition
+    /// (multiple hull shapes — concavity preserved). The CPU solver cannot
     /// simulate dynamic trimeshes (PhysX GPU SDF collision lifts this once
     /// CUDA hardware exists). rb == nullptr means static scenery.
-    PxShape* buildAutoShape(entt::registry& reg, entt::entity e,
-                            const TransformComponent& xf, const RigidBodyComponent* rb)
+    std::vector<PxShape*> buildAutoShapes(entt::registry& reg, entt::entity e,
+                                          const TransformComponent& xf,
+                                          const RigidBodyComponent* rb)
     {
+        std::vector<PxShape*> shapes;
         auto* autoCol = reg.try_get<AutoCollisionComponent>(e);
-        if (!autoCol || autoCol->mode == AutoCollisionComponent::Mode::None) return nullptr;
+        if (!autoCol || autoCol->mode == AutoCollisionComponent::Mode::None) return shapes;
         auto* mesh = reg.try_get<RenderableMeshComponent>(e);
-        if (!mesh || mesh->vertices.empty()) return nullptr;
+        if (!mesh || mesh->vertices.empty()) return shapes;
 
+        auto& cooking = CollisionCookingService::instance();
         const std::string name = debugNameFor(reg, e);
         const PxMeshScale meshScale = meshScaleFor(xf);
         const bool dynamicBody = rb && rb->bodyType == RigidBodyComponent::BodyType::Dynamic;
@@ -175,37 +180,49 @@ struct SimulationController::PxImpl
         const bool wantExact = autoCol->mode == AutoCollisionComponent::Mode::AutoExact
                                && !dynamicBody && !autoCol->isTrigger;
 
-        PxShape* shape = nullptr;
-        if (wantExact) {
-            auto fut = CollisionCookingService::instance().requestTriangleMesh(
-                mesh->vertices, mesh->indices, name);
+        if (autoCol->mode == AutoCollisionComponent::Mode::ConvexDecomposition) {
+            auto fut = cooking.requestConvexDecomposition(mesh->vertices, mesh->indices, name);
+            const bool ready = fut.valid()
+                && fut.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+            if (ready && !fut.get().empty()) {
+                PxMaterial* mat = makeMaterial(autoCol->material);
+                for (PxConvexMesh* hull : fut.get())
+                    shapes.push_back(physics->createShape(PxConvexMeshGeometry(hull, meshScale), *mat));
+            }
+            else if (!ready) {
+                qInfo() << "[Sim]" << name.c_str()
+                        << ": V-HACD still cooking — single hull this run, decomposition next rebuild";
+            }
+        }
+        else if (wantExact) {
+            auto fut = cooking.requestTriangleMesh(mesh->vertices, mesh->indices, name);
             if (PxTriangleMesh* tm = fut.valid() ? fut.get() : nullptr) {
                 PxMaterial* mat = makeMaterial(autoCol->material);
-                shape = physics->createShape(PxTriangleMeshGeometry(tm, meshScale), *mat);
+                shapes.push_back(physics->createShape(PxTriangleMeshGeometry(tm, meshScale), *mat));
             }
             else {
                 qWarning() << "[Sim]" << name.c_str()
                            << ": exact trimesh unavailable, falling back to convex hull";
             }
         }
-        if (!shape) {
-            if (autoCol->mode == AutoCollisionComponent::Mode::ConvexDecomposition)
-                qInfo() << "[Sim]" << name.c_str()
-                        << ": convex decomposition not built yet — using single hull";
-            else if (dynamicBody && autoCol->mode == AutoCollisionComponent::Mode::AutoExact)
+
+        if (shapes.empty()) {
+            if (dynamicBody && autoCol->mode == AutoCollisionComponent::Mode::AutoExact)
                 qInfo() << "[Sim] dynamic" << name.c_str()
                         << ": exact trimesh needs the GPU solver — using convex hull";
-            auto fut = CollisionCookingService::instance().requestConvexHull(mesh->vertices, name);
+            auto fut = cooking.requestConvexHull(mesh->vertices, name);
             if (PxConvexMesh* hull = fut.valid() ? fut.get() : nullptr) {
                 PxMaterial* mat = makeMaterial(autoCol->material);
-                shape = physics->createShape(PxConvexMeshGeometry(hull, meshScale), *mat);
+                shapes.push_back(physics->createShape(PxConvexMeshGeometry(hull, meshScale), *mat));
             }
         }
-        if (shape && autoCol->isTrigger) {
-            shape->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
-            shape->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+        if (autoCol->isTrigger) {
+            for (PxShape* s : shapes) {
+                s->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false);
+                s->setFlag(PxShapeFlag::eTRIGGER_SHAPE, true);
+            }
         }
-        return shape;
+        return shapes;
     }
 
     /// Collision-only scenery: entities with collision intent but no rigid
@@ -222,16 +239,19 @@ struct SimulationController::PxImpl
         const auto* xfPtr = reg.try_get<TransformComponent>(e);
         if (!xfPtr) return false;
 
-        PxShape* shape = buildExplicitShape(reg, e, *xfPtr);
-        if (!shape) shape = buildAutoShape(reg, e, *xfPtr, nullptr);
-        if (!shape) return false;
+        std::vector<PxShape*> shapes;
+        if (PxShape* s = buildExplicitShape(reg, e, *xfPtr)) shapes.push_back(s);
+        if (shapes.empty()) shapes = buildAutoShapes(reg, e, *xfPtr, nullptr);
+        if (shapes.empty()) return false;
 
         const PxTransform pose(
             PxVec3(xfPtr->translation.x, xfPtr->translation.y, xfPtr->translation.z),
             PxQuat(xfPtr->rotation.x, xfPtr->rotation.y, xfPtr->rotation.z, xfPtr->rotation.w));
         PxRigidStatic* actor = physics->createRigidStatic(pose);
-        actor->attachShape(*shape);
-        shape->release();
+        for (PxShape* s : shapes) {
+            actor->attachShape(*s);
+            s->release();
+        }
         scene->addActor(*actor);
         actors[e] = actor;
         if (qEnvironmentVariableIsSet("KRS_BENCH")) {
@@ -464,26 +484,29 @@ bool SimulationController::createActorForEntity(entt::entity e)
         PxVec3(xf.translation.x, xf.translation.y, xf.translation.z),
         PxQuat(xf.rotation.x, xf.rotation.y, xf.rotation.z, xf.rotation.w));
 
-    // --- Build the shape: explicit collider -> auto real shape -> AABB box ---
-    PxShape* shape = m_px->buildExplicitShape(reg, e, xf);
-    if (!shape) shape = m_px->buildAutoShape(reg, e, xf, &rb);
+    // --- Build the shapes: explicit collider -> auto real shape -> AABB box ---
+    std::vector<PxShape*> shapes;
+    if (PxShape* s = m_px->buildExplicitShape(reg, e, xf)) shapes.push_back(s);
+    if (shapes.empty()) shapes = m_px->buildAutoShapes(reg, e, xf, &rb);
 
     const auto* autoCol = reg.try_get<AutoCollisionComponent>(e);
     const bool optedOut = autoCol && autoCol->mode == AutoCollisionComponent::Mode::None;
 
-    if (!shape && !optedOut) {
+    if (shapes.empty() && !optedOut) {
         if (auto* mesh = reg.try_get<RenderableMeshComponent>(e)) {
             const glm::vec3 he = glm::max((mesh->aabbMax - mesh->aabbMin) * 0.5f, glm::vec3(0.01f));
             const glm::vec3 center = (mesh->aabbMax + mesh->aabbMin) * 0.5f;
-            shape = m_px->physics->createShape(
+            PxShape* shape = m_px->physics->createShape(
                 PxBoxGeometry(he.x * xf.scale.x, he.y * xf.scale.y, he.z * xf.scale.z),
                 *m_px->defaultMaterial);
             shape->setLocalPose(PxTransform(PxVec3(center.x * xf.scale.x,
                                                    center.y * xf.scale.y,
                                                    center.z * xf.scale.z)));
+            shapes.push_back(shape);
         }
         else {
-            shape = m_px->physics->createShape(PxBoxGeometry(0.1f, 0.1f, 0.1f), *m_px->defaultMaterial);
+            shapes.push_back(
+                m_px->physics->createShape(PxBoxGeometry(0.1f, 0.1f, 0.1f), *m_px->defaultMaterial));
         }
     }
 
@@ -505,13 +528,13 @@ bool SimulationController::createActorForEntity(entt::entity e)
         // fast movers — blanket CCD contacts damp restitution noticeably.
         actor = dyn;
     }
-    if (shape) {
-        actor->attachShape(*shape);
-        shape->release();
+    for (PxShape* s : shapes) {
+        actor->attachShape(*s);
+        s->release();
     }
 
     if (auto* dyn = actor->is<PxRigidDynamic>(); dyn && rb.bodyType == RigidBodyComponent::BodyType::Dynamic) {
-        if (shape) {
+        if (!shapes.empty()) {
             PxRigidBodyExt::setMassAndUpdateInertia(*dyn, std::max(0.001f, rb.mass));
         }
         else {
