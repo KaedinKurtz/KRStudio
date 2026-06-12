@@ -124,8 +124,12 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
     const int count = fluid->particleCount();
 
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, fluid->particleBuffer());
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, fluid->anisoBuffer());
     gl->glBindVertexArray(m_emptyVao);
     gl->glEnable(GL_PROGRAM_POINT_SIZE);
+
+    // Ellipsoid splats need a valid aniso buffer for the CURRENT particles.
+    const int useAniso = (look.surfaceQuality > 0 && fluid->anisoValid()) ? 1 : 0;
 
     auto bindSprites = [&](Shader* s) {
         s->use(gl);
@@ -134,6 +138,7 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
         s->setFloat(gl, "u_particleRadius", radius);
         s->setFloat(gl, "u_sizeScale", look.sizeScale);
         s->setFloat(gl, "u_viewportHeight", float(h));
+        s->setInt(gl, "u_aniso", useAniso);
         s->setInt(gl, "u_sceneDepth", 5);
         gl->glActiveTexture(GL_TEXTURE5);
         gl->glBindTexture(GL_TEXTURE_2D, context.targetFBOs.finalDepthTexture);

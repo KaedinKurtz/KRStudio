@@ -94,6 +94,14 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
 
+    // Per-particle ellipsoid fits for the anisotropic surface splats
+    // (quat + radii + smoothed centre, 3 vec4s).
+    gl->glGenBuffers(1, &m_anisoSSBO);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_anisoSSBO);
+    gl->glBufferData(GL_SHADER_STORAGE_BUFFER,
+                     GLsizeiptr(sizeof(glm::vec4)) * 3 * kMaxParticles, nullptr, GL_DYNAMIC_DRAW);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
     // Whitewater diffuse particles (zeroed: life 0 = dead slot).
     {
         std::vector<float> zeros(size_t(kMaxDiffuse) * 8, 0.0f);
@@ -126,6 +134,7 @@ void FluidSystem::shutdown(QOpenGLFunctions_4_3_Core* gl)
     gl->glDeleteBuffers(1, &m_diffuseSSBO);
     gl->glDeleteBuffers(1, &m_diffuseCounterSSBO);
     gl->glDeleteBuffers(1, &m_impulseSSBO);
+    gl->glDeleteBuffers(1, &m_anisoSSBO);
     m_initialized = false;
 }
 
@@ -328,6 +337,53 @@ void FluidSystem::setExternalSolver(FluidBackend tier, std::unique_ptr<IFluidSol
     m_externalSolver = std::move(solver);
 }
 
+void FluidSystem::dispatchAniso(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
+                                bool rebuildGridFirst)
+{
+    m_anisoValid = false;
+    if (m_appearance.surfaceQuality <= 0
+        || m_appearance.renderMode != FluidRenderMode::WaterSurface
+        || m_particleCount == 0)
+        return;
+    Shader* anisoShader = renderer.getShader("fluid_aniso");
+    if (!anisoShader) return;
+
+    const int groups = (m_particleCount + 255) / 256;
+    auto bindUniforms = [&](Shader* s) {
+        s->use(gl);
+        s->setInt(gl, "u_particleCount", m_particleCount);
+        s->setFloat(gl, "u_h", m_h);
+        s->setVec3(gl, "u_domainMin", m_domainMin);
+        s->setVec3(gl, "u_domainMax", m_domainMax);
+        s->setInt(gl, "u_gridNx", m_gridDim.x);
+        s->setInt(gl, "u_gridNy", m_gridDim.y);
+        s->setInt(gl, "u_gridNz", m_gridDim.z);
+    };
+
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_particleSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, m_gridHeadSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, m_gridNextSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, m_anisoSSBO);
+
+    if (rebuildGridFirst) {
+        Shader* gridBuild = renderer.getShader("fluid_grid");
+        if (!gridBuild) return;
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridHeadSSBO);
+        const GLint minusOne = -1;
+        gl->glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, &minusOne);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        bindUniforms(gridBuild);
+        gl->glDispatchCompute(groups, 1, 1);
+        gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    }
+
+    bindUniforms(anisoShader);
+    gl->glDispatchCompute(groups, 1, 1);
+    gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+    m_anisoValid = true;
+}
+
 void FluidSystem::rebuildGrid(QOpenGLFunctions_4_3_Core* gl)
 {
     if (m_gridHeadSSBO) gl->glDeleteBuffers(1, &m_gridHeadSSBO);
@@ -380,6 +436,9 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
                                 static_cast<GLsizeiptr>(sizeof(GpuParticle)) * n, upload.data());
             gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
             m_particleCount = n;
+            // The grid still reflects the last simulated frame — rebuild it
+            // for the scrubbed positions before fitting splat ellipsoids.
+            dispatchAniso(renderer, gl, true);
         }
         m_pendingScrubFrame = -1;
     }
@@ -515,6 +574,10 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     finalize->setFloat(gl, "u_cohesion", m_params.surfaceTensionNpm * 0.7f);
     gl->glDispatchCompute(groups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+    // 4b) ellipsoid fits for the anisotropic surface splats (grid from this
+    //     frame is still valid; positions just finalized).
+    dispatchAniso(renderer, gl, false);
 
     // 5) whitewater: emit diffuse particles where air gets trapped / crests
     //    break, then advect them by local-fluid classification.

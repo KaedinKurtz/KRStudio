@@ -103,6 +103,9 @@ public:
     // passes while the PBF backend plays; rendered by FluidSurfacePass.
     static constexpr int kMaxDiffuse = 100000;
     GLuint diffuseBuffer() const { return m_diffuseSSBO; }
+    GLuint anisoBuffer() const { return m_anisoSSBO; }
+    /// True once the anisotropy pass has run for the current particle set.
+    bool anisoValid() const { return m_anisoValid; }
 
     /// CPU mirror of particle positions (xyz, w=life), refreshed periodically
     /// when KRS_BENCH or KRS_AUTOPLAY is set. Used by telemetry/benchmarks.
@@ -172,6 +175,10 @@ private:
     FluidAppearance m_appearance;
 
     void rebuildGrid(QOpenGLFunctions_4_3_Core* gl);
+    /// Ellipsoid fits for anisotropic splats (High surface quality).
+    /// rebuildGridFirst re-inserts particles (scrub playback: grid is stale).
+    void dispatchAniso(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
+                       bool rebuildGridFirst);
 
     // --- Backend selection ---
     FluidBackend m_requestedBackend = FluidBackend::Auto;
@@ -201,6 +208,8 @@ private:
 
     // --- Two-way coupling ---
     GLuint m_impulseSSBO = 0;   // ivec4 per collider slot (fixed-point 1e7)
+    GLuint m_anisoSSBO = 0;     // {vec4 quat; vec4 radiiN; vec4 center;} * kMaxParticles
+    bool m_anisoValid = false;
     std::vector<entt::entity> m_boxEntities;    // collider slot -> entity
     std::vector<entt::entity> m_sphereEntities;
     ImpulseSink m_impulseSink;

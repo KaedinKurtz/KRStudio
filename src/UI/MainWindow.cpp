@@ -824,13 +824,30 @@ MainWindow::MainWindow(QWidget* parent)
 
     // Dev aid: KRS_GRAB=<path.png> software-renders the whole widget tree to
     // a file 8s after boot — screen captures lie under DPI virtualization,
-    // this never does.
-    if (qEnvironmentVariableIsSet("KRS_GRAB")) {
-        QTimer::singleShot(8000, this, [this]() {
-            const QString path = qEnvironmentVariable("KRS_GRAB");
-            this->grab().save(path);
-            qInfo() << "[UI] window grabbed to" << path;
-        });
+    // this never does. KRS_CAM="px,py,pz,tx,ty,tz" pins the primary camera
+    // (applied at +1s and again right before the grab) so verification
+    // screenshots frame identically run to run.
+    if (qEnvironmentVariableIsSet("KRS_GRAB") || qEnvironmentVariableIsSet("KRS_CAM")) {
+        auto applyCamEnv = [this]() {
+            const QStringList v = qEnvironmentVariable("KRS_CAM").split(',');
+            if (v.size() != 6) return;
+            if (ViewportWidget* vp = primaryViewport()) {
+                const glm::vec3 pos(v[0].toFloat(), v[1].toFloat(), v[2].toFloat());
+                const glm::vec3 tgt(v[3].toFloat(), v[4].toFloat(), v[5].toFloat());
+                vp->getCamera().forceRecalculateView(pos, tgt, glm::length(pos - tgt));
+            }
+        };
+        QTimer::singleShot(1000, this, applyCamEnv);
+        // Re-pin half a second before the grab: the engine needs a frame or
+        // two to render with the new camera before the widget tree is read.
+        QTimer::singleShot(7500, this, applyCamEnv);
+        if (qEnvironmentVariableIsSet("KRS_GRAB")) {
+            QTimer::singleShot(8000, this, [this]() {
+                const QString path = qEnvironmentVariable("KRS_GRAB");
+                this->grab().save(path);
+                qInfo() << "[UI] window grabbed to" << path;
+            });
+        }
     }
 
     // First-principles physics validation: KRS_BENCH=1 runs the analytic
