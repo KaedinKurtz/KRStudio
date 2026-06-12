@@ -7,6 +7,7 @@
 #include "ResourceManager.hpp" // For loading meshes
 #include "SceneQuery.hpp"      // For SpawnCommand, SurfaceQueryFunction, etc.
 
+#include <limits>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -95,6 +96,45 @@ namespace {
 // ==                  MASTER INSTANCING FUNCTION                   ==
 // ===================================================================
 // This is the only function that creates entities. All others call it.
+
+entt::entity SceneBuilder::spawnPrimitive(Scene& scene, int primitive,
+    const glm::vec3& position,
+    const glm::vec3& scale,
+    const std::string& name)
+{
+    auto& registry = scene.getRegistry();
+    auto e = registry.create();
+
+    auto& mesh = registry.emplace<RenderableMeshComponent>(e);
+    std::vector<uint32_t> idx;
+    switch (static_cast<Primitive>(primitive)) {
+    case Primitive::Cube:      buildUnitCube(mesh.vertices, idx); break;
+    case Primitive::Quad:      buildQuad(mesh.vertices, idx); break;
+    case Primitive::Cylinder:  buildCylinder(mesh.vertices, idx); break;
+    case Primitive::Cone:      buildCone(mesh.vertices, idx); break;
+    case Primitive::Torus:     buildTorus(mesh.vertices, idx); break;
+    case Primitive::IcoSphere: buildIcoSphere(mesh.vertices, idx, 2); break;
+    default:                   buildUnitCube(mesh.vertices, idx); break;
+    }
+    mesh.indices.assign(idx.begin(), idx.end());
+    mesh.hasUVs = false;
+    mesh.hasTangents = false;
+
+    // Compute the AABB (used by physics fallback colliders and picking).
+    glm::vec3 mn(std::numeric_limits<float>::max());
+    glm::vec3 mx(std::numeric_limits<float>::lowest());
+    for (const auto& v : mesh.vertices) {
+        mn = glm::min(mn, v.position);
+        mx = glm::max(mx, v.position);
+    }
+    mesh.aabbMin = mn;
+    mesh.aabbMax = mx;
+
+    registry.emplace<TransformComponent>(e, position, glm::quat(1, 0, 0, 0), scale);
+    registry.emplace<TriPlanarMaterialTag>(e); // primitives have no UVs
+    registry.emplace<TagComponent>(e, name.empty() ? std::string("Primitive") : name);
+    return e;
+}
 
 entt::entity SceneBuilder::spawnMeshInstance(Scene& scene, MeshID meshId,
     const glm::vec3& position,
@@ -462,7 +502,7 @@ std::vector<entt::entity> SceneBuilder::spawnOrientedRandomOnSurface(
         // 1) sample horizontal within bounds (project onto plane orthogonal to surfaceUp)
         float rx = randomFloat(boundsMin.x, boundsMax.x);
         float rz = randomFloat(boundsMin.z, boundsMax.z);
-        // We’ll cast from the top bound along -surfaceUp
+        // Weï¿½ll cast from the top bound along -surfaceUp
         glm::vec3 castOrigin = glm::vec3(rx, boundsMax.y, rz);
         glm::vec3 castDir = -worldUp;
 
@@ -1104,13 +1144,13 @@ entt::entity SceneBuilder::createCamera(Scene& scene,
 {
     auto& registry = scene.getRegistry();
 
-    // 1 – Create the main camera entity (which is invisible).
+    // 1 ï¿½ Create the main camera entity (which is invisible).
     entt::entity camE = registry.create();
     registry.emplace<CameraComponent>(camE, colour);
     registry.emplace<TransformComponent>(camE, position);
     registry.emplace<TagComponent>(camE, "Camera");
 
-    // 2 – Spawn the visible camera model (gizmo) as a child of the main entity.
+    // 2 ï¿½ Spawn the visible camera model (gizmo) as a child of the main entity.
     MeshID gizmoMeshId = ResourceManager::instance().loadMesh(":/external/miniViewportCamera.stl");
     if (gizmoMeshId != MeshID::None) {
         glm::vec3 localPos(0.0f, 0.0f, -0.35f);
@@ -1130,7 +1170,7 @@ entt::entity SceneBuilder::createCamera(Scene& scene,
         }
     }
 
-    // 3 – Spawn the blinking "REC" LED as a child of the GIZMO.
+    // 3 ï¿½ Spawn the blinking "REC" LED as a child of the GIZMO.
     entt::entity ledE = registry.create();
     registry.emplace<ParentComponent>(ledE, camE);
     registry.emplace<RecordLedTag>(ledE);

@@ -30,6 +30,8 @@
 #include "MeshUtils.hpp"
 #include "ResourceManager.hpp"
 #include "GizmoSystem.hpp"
+#include "SimulationController.hpp"
+#include "PrimitiveBuilders.hpp"
 
 #include <QDir>
 #include <QDirIterator>
@@ -374,6 +376,37 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
+    // --- Physics demo: a small stack of primitives that falls on Play ---
+    {
+        auto& registry = m_scene->getRegistry();
+        auto addRigidPrimitive = [&](Primitive prim, const char* name, glm::vec3 pos,
+                                     glm::vec3 scale, bool sphere) {
+            entt::entity e = SceneBuilder::spawnPrimitive(*m_scene, int(prim), pos, scale, name);
+            auto& rb = registry.emplace<RigidBodyComponent>(e);
+            rb.bodyType = RigidBodyComponent::BodyType::Dynamic;
+            rb.mass = 1.0f;
+            if (sphere) {
+                auto& col = registry.emplace<SphereCollider>(e);
+                col.radius = 0.5f * scale.x; // unit primitives are ~1m across
+                col.material.restitution = 0.45f;
+            }
+            else {
+                auto& col = registry.emplace<BoxCollider>(e);
+                col.halfExtents = glm::vec3(0.5f);
+                col.material.restitution = 0.15f;
+            }
+            auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
+            mat.albedoColor = sphere ? glm::vec3(0.75f, 0.35f, 0.2f) : glm::vec3(0.3f, 0.5f, 0.8f);
+            return e;
+        };
+
+        addRigidPrimitive(Primitive::Cube, "Cube.001", { 2.0f, 0.5f, 0.0f }, glm::vec3(1.0f), false);
+        addRigidPrimitive(Primitive::Cube, "Cube.002", { 2.05f, 1.6f, 0.05f }, glm::vec3(1.0f), false);
+        addRigidPrimitive(Primitive::Cube, "Cube.003", { 1.95f, 2.7f, -0.05f }, glm::vec3(1.0f), false);
+        addRigidPrimitive(Primitive::IcoSphere, "Sphere.001", { 2.3f, 4.2f, 0.1f }, glm::vec3(0.5f), true);
+        addRigidPrimitive(Primitive::IcoSphere, "Sphere.002", { 1.7f, 5.2f, -0.1f }, glm::vec3(0.5f), true);
+    }
+
     // --- Create Splines ---
     {
         /*
@@ -401,6 +434,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     // --- 2. Create the SINGLE Shared Rendering System ---
     m_renderingSystem = std::make_unique<RenderingSystem>(nullptr);
+    m_simulation = std::make_unique<SimulationController>(m_scene.get(), this);
 
     // ---------------------------------------------------------------------------
     // 3.  Core UI layout & dock setup
@@ -581,6 +615,22 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_fixedTopToolbar, &StaticToolbar::objectPropertiesMenuToggled,
         this, [this](bool on) { handleMenuToggle(MenuType::ObjectProperties, on); });
 
+    // --- Simulation lifecycle (play/pause checkable button + stop + step) ---
+    connect(m_fixedTopToolbar, &StaticToolbar::simulationPlayPauseToggled, this, [this](bool play) {
+        if (!m_simulation) return;
+        if (play) m_simulation->play();
+        else      m_simulation->pause();
+    });
+    connect(m_fixedTopToolbar, &StaticToolbar::simulationResetClicked, this, [this]() {
+        if (m_simulation) m_simulation->stop();
+    });
+    connect(m_fixedTopToolbar, &StaticToolbar::simulationStepClicked, this, [this]() {
+        if (m_simulation) m_simulation->singleStep();
+    });
+    connect(m_simulation.get(), &SimulationController::stateChanged, this, [this](SimulationState s) {
+        m_fixedTopToolbar->setSimulationPlaying(s == SimulationState::Playing);
+    });
+
     //========================= Start the SLAM Manager =========================
     m_slamManager = new SlamManager(this);
     m_realSenseManager = std::make_unique<RealSenseManager>();
@@ -608,8 +658,11 @@ MainWindow::MainWindow(QWidget* parent)
     // --- 5. FINAL, ROBUST INITIALIZATION AND RENDER LOOP START ---
     m_masterRenderTimer = new QTimer(this);
     connect(m_masterRenderTimer, &QTimer::timeout, this, [this]() {
-        // Render all viewports on the engine's own GL context, then schedule
-        // widget repaints (each paintGL blits the shared result texture).
+        // Step the simulation (fixed-timestep physics), then render all
+        // viewports on the engine's own GL context and schedule repaints.
+        if (m_simulation) {
+            m_simulation->tick();
+        }
         if (m_renderingSystem) {
             m_renderingSystem->renderAllViewports();
         }
@@ -620,6 +673,20 @@ MainWindow::MainWindow(QWidget* parent)
     // ~8 ms ≈ 120 FPS target; actual presentation is gated by vsync.
     m_masterRenderTimer->setTimerType(Qt::PreciseTimer);
     m_masterRenderTimer->start(8);
+
+    // Test hook: KRS_AUTOPLAY=1 starts the simulation shortly after boot and
+    // logs settled body positions (used by automated verification).
+    if (qEnvironmentVariableIsSet("KRS_AUTOPLAY")) {
+        QTimer::singleShot(3000, this, [this]() { if (m_simulation) m_simulation->play(); });
+        QTimer::singleShot(9000, this, [this]() {
+            auto& reg = m_scene->getRegistry();
+            for (auto e : reg.view<RigidBodyComponent, TransformComponent, TagComponent>()) {
+                const auto& xf = reg.get<TransformComponent>(e);
+                qInfo() << "[Sim][autoplay]" << QString::fromStdString(reg.get<TagComponent>(e).tag)
+                        << "pos" << xf.translation.x << xf.translation.y << xf.translation.z;
+            }
+        });
+    }
 
 
     connect(m_dockManager, &ads::CDockManager::focusedDockWidgetChanged, this, &MainWindow::updateViewportLayouts);

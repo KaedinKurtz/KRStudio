@@ -78,7 +78,7 @@ struct ParallaxMaterialTag {};
 
 struct MaterialComponent
 {
-    // — Base Layer —
+    // ï¿½ Base Layer ï¿½
     glm::vec3  albedoColor = glm::vec3(0.8f, 0.8f, 0.8f);
     glm::vec2  albedoTiling = glm::vec2(1.0f, 1.0f);
     glm::vec2  albedoOffset = glm::vec2(0.0f, 0.0f);
@@ -90,7 +90,7 @@ struct MaterialComponent
     glm::vec2  opacityOffset = glm::vec2(0.0f, 0.0f);
     std::shared_ptr<Texture2D> opacityMap = nullptr;
 
-    // — Surface Detail —
+    // ï¿½ Surface Detail ï¿½
     std::shared_ptr<Texture2D> normalMap = nullptr;
     float      normalScale = 1.0f;
 
@@ -101,7 +101,7 @@ struct MaterialComponent
     int        parallaxSteps = 8;
     float      parallaxScale = 0.02f;
 
-    // — Microfacet / PBR —
+    // ï¿½ Microfacet / PBR ï¿½
     float      metallic = 0.0f;
     std::shared_ptr<Texture2D> metallicMap = nullptr;
 
@@ -112,22 +112,22 @@ struct MaterialComponent
     float      glossiness = 0.5f;
     std::shared_ptr<Texture2D> specularMap = nullptr;
 
-    // — Ambient Occlusion —
+    // ï¿½ Ambient Occlusion ï¿½
     float      ao = 1.0f;
     std::shared_ptr<Texture2D> aoMap = nullptr;
 
-    // — Clearcoat —
+    // ï¿½ Clearcoat ï¿½
     float      clearcoat = 0.0f;
     float      clearcoatRoughness = 0.03f;
     std::shared_ptr<Texture2D> clearcoatNormalMap = nullptr;
 
-    // — Sheen —
+    // ï¿½ Sheen ï¿½
     float      sheen = 0.0f;
     glm::vec3  sheenColor = glm::vec3(0.0f, 0.0f, 0.0f);
     float      sheenRoughness = 0.5f;
     std::shared_ptr<Texture2D> sheenMap = nullptr;
 
-    // — Transmission / Refraction —
+    // ï¿½ Transmission / Refraction ï¿½
     float      transmission = 0.0f;
     std::shared_ptr<Texture2D> transmissionMap = nullptr;
     float      ior = 1.0f;
@@ -135,30 +135,30 @@ struct MaterialComponent
     glm::vec3  attenuationColor = glm::vec3(1.0f, 1.0f, 1.0f);
     float      attenuationDistance = 1e6f;
 
-    // — Subsurface Scattering —
+    // ï¿½ Subsurface Scattering ï¿½
     bool       sssEnabled = false;
     glm::vec3  sssColor = glm::vec3(0.8f, 0.8f, 0.8f);
     glm::vec3  sssRadius = glm::vec3(0.1f, 0.1f, 0.1f);
     std::shared_ptr<Texture2D> sssMap = nullptr;
 
-    // — Anisotropy —
-    float      anisotropy = 0.0f;   // –1 ? 1
+    // ï¿½ Anisotropy ï¿½
+    float      anisotropy = 0.0f;   // ï¿½1 ? 1
     float      anisotropyRotation = 0.0f;   // radians
     std::shared_ptr<Texture2D> anisotropyMap = nullptr;
 
-    // — Emissive —
+    // ï¿½ Emissive ï¿½
     glm::vec3  emissiveColor = glm::vec3(0.0f, 0.0f, 0.0f);
     float      emissiveStrength = 0.0f;
     std::shared_ptr<Texture2D> emissiveMap = nullptr;
 
-    // — Detail / Secondary —
+    // ï¿½ Detail / Secondary ï¿½
     std::shared_ptr<Texture2D> detailAlbedoMap = nullptr;
     float      detailAlbedoBlend = 0.0f;
 
     std::shared_ptr<Texture2D> detailNormalMap = nullptr;
     float      detailNormalBlend = 0.0f;
 
-    // — Environment / IBL —
+    // ï¿½ Environment / IBL ï¿½
     std::shared_ptr<Cubemap> envMap = nullptr;
     std::shared_ptr<Cubemap> prefilteredEnvMap = nullptr;
     std::shared_ptr<Texture2D> brdfLUT = nullptr;
@@ -732,6 +732,39 @@ struct TriangleMeshCollider {
     uint64_t meshDataId = 0;
     bool isTrigger = false;
     PhysicsMaterial material;
+};
+
+/**
+ * @brief Convex-hull collider cooked from the entity's render mesh.
+ * The hull is computed by the physics backend (vertex-limited convex
+ * approximation) â€” the right default for dynamic mesh objects.
+ */
+struct ConvexMeshCollider {
+    bool isTrigger = false;
+    PhysicsMaterial material;
+};
+
+/**
+ * @brief Emits fluid particles from the entity's transform location.
+ * Consumed by the GPU fluid system while the simulation is playing.
+ */
+struct FluidEmitterComponent {
+    bool enabled = true;
+    float ratePerSecond = 2000.0f;   // particles per second
+    float initialSpeed = 2.0f;       // m/s along `direction`
+    glm::vec3 direction = { 0.0f, -1.0f, 0.0f }; // local emission direction
+    float spreadDegrees = 10.0f;     // cone half-angle
+    float emitterRadius = 0.05f;     // disc radius particles spawn across
+    float particleLifetime = 20.0f;  // seconds (0 = immortal)
+};
+
+/**
+ * @brief A box volume pre-filled with fluid particles when the simulation
+ * starts â€” e.g. the water already sitting in a glass.
+ */
+struct FluidVolumeComponent {
+    glm::vec3 halfExtents = { 0.25f, 0.25f, 0.25f };
+    float particleSpacing = 0.035f;  // metres between seeded particles
 };
 
 struct Pose6D                // or using Pose6D = glm::mat4;

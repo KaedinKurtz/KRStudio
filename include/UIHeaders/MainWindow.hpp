@@ -29,6 +29,7 @@ class SlamManager; // Forward-declare SlamManager
 class RealSenseManager; // Forward-declare RealSenseManager
 class ViewportManagerPopup; // Forward-declare ViewportManagerPopup
 class GizmoSystem;
+class SimulationController;
 
 namespace ads {
     class CDockManager;
@@ -97,6 +98,7 @@ private:
     std::unique_ptr<RealSenseManager> m_realSenseManager;
     std::unique_ptr<rs2::pointcloud> m_pointCloud;
     std::unique_ptr<GizmoSystem> m_gizmoSystem;
+    std::unique_ptr<SimulationController> m_simulation;
 
     entt::entity m_cameraEntity;
 
@@ -119,7 +121,7 @@ private:
         QColor::fromRgb(0, 130, 200),
         QColor::fromRgb(245, 130,  48),
         QColor::fromRgb(145,  30, 180),
-        // …add more as needed…
+        // ï¿½add more as neededï¿½
     };
 
     QVector<bool> m_colorInUse;

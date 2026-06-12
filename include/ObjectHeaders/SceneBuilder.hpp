@@ -43,6 +43,14 @@ public:
         const glm::quat& rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
         const glm::vec3& scale = glm::vec3(1.0f));
 
+    // --- Procedural primitives (cube, sphere, cylinder, ...) ---
+    // Builds the geometry in-place on a new entity, names it, and computes
+    // its AABB. `primitive` matches the Primitive enum in PrimitiveBuilders.hpp.
+    static entt::entity spawnPrimitive(Scene& scene, int primitive,
+        const glm::vec3& position,
+        const glm::vec3& scale = glm::vec3(1.0f),
+        const std::string& name = {});
+
     // --- Spawning from MeshID (Faster, for instancing) ---
     // These functions assume the mesh is already loaded and work with its ID.
 
@@ -216,7 +224,7 @@ public:
         const glm::vec2& randomYawRangeDegrees = { 0.0f, 0.0f },
         bool alignToSurfaceNormal = false);
 
-    // Poisson-disk sampling on a surface (XZ domain) with Bridson’s algorithm
+    // Poisson-disk sampling on a surface (XZ domain) with Bridsonï¿½s algorithm
     static std::vector<entt::entity> spawnPoissonDisk2DOnSurface(
         Scene& scene,
         MeshID meshId,

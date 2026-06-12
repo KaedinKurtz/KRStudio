@@ -22,6 +22,9 @@ public:
     ViewportManagerPopup* viewportManagerPopup() const { return m_viewportManagerPopup; }
 
     void uncheckButtonForMenu(MenuType type);
+
+    /// Reflect the simulation state on the play/pause button (checked = playing).
+    void setSimulationPlaying(bool playing);
     // StaticToolbar.hpp
 public slots:
     void checkButtonForMenu(MenuType type);
@@ -35,6 +38,11 @@ signals:
     void databaseMenuToggled(bool checked);
 	void gridMenuToggled(bool checked);
     void objectPropertiesMenuToggled(bool checked);
+
+    // Simulation lifecycle (play/pause is one checkable button)
+    void simulationPlayPauseToggled(bool play);
+    void simulationResetClicked();
+    void simulationStepClicked();
 
 private:
     Ui::toolbarContainer* ui; // Pointer to the generated UI class

@@ -1,0 +1,81 @@
+#pragma once
+
+#include <QObject>
+#include <QElapsedTimer>
+#include <entt/entt.hpp>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <memory>
+#include <vector>
+
+class Scene;
+
+/// Lifecycle state of the scene simulation (physics + fluids).
+enum class SimulationState { Stopped, Playing, Paused };
+
+/**
+ * @brief Owns the rigid-body physics world (PhysX) and the simulation
+ * lifecycle driven by the toolbar play/pause/stop/step buttons.
+ *
+ * Play  -> snapshots all simulated transforms, builds the PhysX world from
+ *          RigidBodyComponent + collider components, starts stepping.
+ * Pause -> stops stepping but keeps the world alive (step button advances
+ *          one fixed timestep at a time).
+ * Stop  -> destroys the world and restores the pre-play snapshot.
+ *
+ * Stepping uses a fixed timestep with an accumulator: rendering rate and
+ * physics rate stay decoupled. tick() is called from the master timer.
+ */
+class SimulationController : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit SimulationController(Scene* scene, QObject* parent = nullptr);
+    ~SimulationController() override;
+
+    SimulationState state() const { return m_state; }
+    bool isPlaying() const { return m_state == SimulationState::Playing; }
+
+    static constexpr float kFixedDt = 1.0f / 120.0f;
+
+public slots:
+    void play();
+    void pause();
+    void stop();
+    void singleStep(); // one fixed step; implies pause if currently stopped
+
+    /// Advance the accumulator / step physics. Call once per frame.
+    void tick();
+
+signals:
+    void stateChanged(SimulationState newState);
+
+private:
+    void buildPhysicsWorld();
+    void destroyPhysicsWorld();
+    void stepOnce(float dt);
+    void pushKinematicTargets();
+    void writeBackTransforms();
+    void takeSnapshot();
+    void restoreSnapshot();
+    void setState(SimulationState s);
+
+    struct TransformSnapshot {
+        entt::entity entity;
+        glm::vec3 translation;
+        glm::quat rotation;
+        glm::vec3 scale;
+    };
+
+    Scene* m_scene = nullptr;
+    SimulationState m_state = SimulationState::Stopped;
+    QElapsedTimer m_clock;
+    double m_accumulator = 0.0;
+    std::vector<TransformSnapshot> m_snapshot;
+
+    // PhysX lives behind a pimpl so PhysX headers stay out of the project's
+    // include graph (and the class still compiles when KR_WITH_PHYSX is off).
+    struct PxImpl;
+    std::unique_ptr<PxImpl> m_px;
+};

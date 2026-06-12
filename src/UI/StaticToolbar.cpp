@@ -28,6 +28,17 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
     connect(ui->databaseManagerButton, &QToolButton::toggled, this, &StaticToolbar::databaseMenuToggled); // This signal shows/hides the Database management panel.
     connect(ui->gridPropertiesButton, &QToolButton::toggled, this, &StaticToolbar::gridMenuToggled); // This signal shows/hides the Grid Properties panel.
     connect(ui->show_object_properties, &QToolButton::toggled, this, &StaticToolbar::objectPropertiesMenuToggled);
+
+    // --- Simulation lifecycle buttons ---
+    // play_pause_simulation_button is checkable: checked = playing.
+    connect(ui->play_pause_simulation_button, &QToolButton::toggled, this, [this](bool on) {
+        ui->play_pause_simulation_button->setText(on ? QStringLiteral("Pause\nSimulation")
+                                                     : QStringLiteral("Play\nSimulation"));
+        emit simulationPlayPauseToggled(on);
+    });
+    connect(ui->reset_simulation_button, &QToolButton::clicked, this, &StaticToolbar::simulationResetClicked);
+    connect(ui->step_simulation_button, &QToolButton::clicked, this, &StaticToolbar::simulationStepClicked);
+
     // Create the viewport manager popup
     m_viewportManagerPopup = new ViewportManagerPopup(this);
 
@@ -50,6 +61,14 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
 StaticToolbar::~StaticToolbar()
 {
     delete ui;
+}
+
+void StaticToolbar::setSimulationPlaying(bool playing)
+{
+    QSignalBlocker block(ui->play_pause_simulation_button);
+    ui->play_pause_simulation_button->setChecked(playing);
+    ui->play_pause_simulation_button->setText(playing ? QStringLiteral("Pause\nSimulation")
+                                                      : QStringLiteral("Play\nSimulation"));
 }
 
 // This function allows MainWindow to programmatically update the button's checked state,
