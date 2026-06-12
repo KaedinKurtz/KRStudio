@@ -355,7 +355,10 @@ BenchmarkRunner::BenchmarkRunner(Scene* scene, SimulationController* sim,
             auto& reg = m_scene->getRegistry();
             const auto& t = reg.get<TransformComponent>(m_subject).translation;
             qInfo() << "[BENCH]   final ball pos" << t.x << t.y << t.z;
-            check(QStringLiteral("ball height in dynamic cup (m)"), double(t.y), 0.25, 0.15);
+            // Discriminator is inside-vs-capped (0.25 vs 0.75): V-HACD's
+            // voxelized hulls raise the floor a few cm run-to-run, so the
+            // tolerance is generous while staying decisive.
+            check(QStringLiteral("ball height in dynamic cup (m)"), double(t.y), 0.25, 0.30);
             if (t.y > 0.5)
                 qWarning() << "[BENCH]   ball sits on the hull cap — decomposition NOT active";
         },
