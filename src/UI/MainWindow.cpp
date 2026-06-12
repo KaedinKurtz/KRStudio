@@ -32,6 +32,7 @@
 #include "GizmoSystem.hpp"
 
 #include <QDir>
+#include <QDirIterator>
 
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/DataFlowGraphModel>
@@ -311,43 +312,56 @@ MainWindow::MainWindow(QWidget* parent)
 
     {
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/assets/");
-        QString lamboPath = assetDir + "lambo.stl";
 
-        // Demo material: any PBR texture pack dropped into assets/materials/
-        // (files named *_albedo, *_normal, *_roughness, *_metallic, *_ao,
-        // *_height, *_emissive — see MaterialLoader). First subfolder wins;
-        // falls back to the original dev-machine path, else untextured.
+        // Demo material: packs live under assets/materials/<category>/<pack>/
+        // with files named *-albedo, *-normal, *-roughness, *-metallic, *-ao,
+        // *-height, *-emissive (see MaterialLoader). The default pack below
+        // can be overridden with the KRS_DEMO_MATERIAL env var (a path
+        // relative to assets/materials, e.g. "metals/brushed-steel").
         QString demoTexDir;
         QDir materialsRoot(assetDir + QLatin1String("materials"));
-        const QStringList packs = materialsRoot.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-        if (!packs.isEmpty()) {
-            demoTexDir = materialsRoot.absoluteFilePath(packs.first());
-            qInfo() << "[Spawner] Using material pack:" << demoTexDir;
+        const QString requestedPack = qEnvironmentVariableIsSet("KRS_DEMO_MATERIAL")
+            ? qEnvironmentVariable("KRS_DEMO_MATERIAL")
+            : QStringLiteral("ground/rocky-shoreline1");
+        if (materialsRoot.exists(requestedPack)) {
+            demoTexDir = materialsRoot.absoluteFilePath(requestedPack);
         }
-        else if (QDir(QStringLiteral("D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl")).exists()) {
-            demoTexDir = QStringLiteral("D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl");
+        else {
+            // Fallback: first directory (recursively) that contains an albedo map.
+            QDirIterator it(materialsRoot.absolutePath(), QDir::Dirs | QDir::NoDotAndDotDot,
+                            QDirIterator::Subdirectories);
+            while (it.hasNext()) {
+                QDir d(it.next());
+                if (!d.entryList({ QStringLiteral("*albedo*") }, QDir::Files).isEmpty()) {
+                    demoTexDir = d.absolutePath();
+                    break;
+                }
+            }
+            if (!demoTexDir.isEmpty())
+                qWarning() << "[Spawner] Pack" << requestedPack << "not found; falling back to" << demoTexDir;
         }
         const bool hasDemoTextures = !demoTexDir.isEmpty();
-        if (!hasDemoTextures) {
+        if (hasDemoTextures)
+            qInfo() << "[Spawner] Using material pack:" << demoTexDir;
+        else
             qWarning() << "[Spawner] No material packs in" << materialsRoot.absolutePath()
                        << "— using untextured material.";
-        }
 
-        // 1) Load once -> stable MeshID
-        MeshID lamboId = ResourceManager::instance().loadMesh(lamboPath);
-        if (lamboId == MeshID::None) {
-            qWarning() << "[Spawner] Failed to load mesh:" << lamboPath;
+        // Demo mesh: the dragon, centered in front of the default camera.
+        QString dragonPath = assetDir + "Dragon.stl";
+        MeshID dragonId = ResourceManager::instance().loadMesh(dragonPath);
+        if (dragonId == MeshID::None) {
+            qWarning() << "[Spawner] Failed to load mesh:" << dragonPath;
         }
 
         auto& registry = m_scene->getRegistry();
 
-        // --- A) SINGLE INSTANCE ---
         TransformComponent t;
-        t.translation = glm::vec3(-1.0f, -5.0f, -1.0f);
+        t.translation = glm::vec3(0.0f, 0.0f, 0.0f);
         t.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f); // identity (w,x,y,z)
         t.scale = glm::vec3(1.0f);
 
-        entt::entity e = SceneBuilder::spawnMeshInstance(*m_scene, lamboId, t);
+        entt::entity e = SceneBuilder::spawnMeshInstance(*m_scene, dragonId, t);
         if (registry.valid(e)) {
             if (hasDemoTextures) {
                 registry.emplace_or_replace<MaterialDirectoryTag>(e, demoTexDir.toStdString());
@@ -356,22 +370,6 @@ MainWindow::MainWindow(QWidget* parent)
             // SceneBuilder already tags UV vs TriPlanar for you; add TriPlanar here only if you want to force it.
 
             auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
-            mat.heightScale = 0.1f;
-        }
-
-        // --- B) GRID OF INSTANCES ---
-        std::vector<entt::entity> ents =
-            SceneBuilder::spawnMeshInstanceRandom(*m_scene, lamboId, /*countX*/4, /*minBounds*/glm::vec3(-10), /*MaxBounds*/glm::vec3(10));
-
-        for (entt::entity ge : ents) {
-            if (!registry.valid(ge)) continue;
-
-            if (hasDemoTextures) {
-                registry.emplace_or_replace<MaterialDirectoryTag>(ge, demoTexDir.toStdString());
-                registry.emplace_or_replace<ParallaxMaterialTag>(ge);
-            }
-
-            auto& mat = registry.emplace_or_replace<MaterialComponent>(ge);
             mat.heightScale = 0.1f;
         }
     }
