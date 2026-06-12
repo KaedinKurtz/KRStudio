@@ -273,6 +273,9 @@ void ViewportWidget::paintGL()
 {
     if (!m_renderingSystem) return;
 
+    // Keep the gizmo a constant screen size as the camera moves.
+    if (m_gizmo) m_gizmo->updateScreenScale(getCamera());
+
     // Blit the engine's latest finished frame (shared texture) into our
     // backbuffer. The engine renders on its own context via renderAllViewports.
     m_renderingSystem->presentViewport(this);

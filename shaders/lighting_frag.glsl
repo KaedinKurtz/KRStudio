@@ -119,7 +119,13 @@ void main()
     prefilteredColor = mix(prefilteredColor, prefilteredColor * albedo, (1.0 - metallic) * 0.5);
     vec2 brdf = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
     vec3 specularIBL = prefilteredColor * (F_ambient * brdf.x + brdf.y);
-    
+
+    // Firefly clamp: isolated ultra-bright HDR env texels (e.g. the sun)
+    // otherwise saturate single pixels to white through the tonemapper.
+    float specLum = dot(specularIBL, vec3(0.2126, 0.7152, 0.0722));
+    const float kMaxSpecLum = 4.0;
+    if (specLum > kMaxSpecLum) specularIBL *= kMaxSpecLum / specLum;
+
     // --- 5. FINAL ASSEMBLY ---
     vec3 ambient = (diffuseIBL + specularIBL) * ao;
     vec3 color = ambient + Lo + emissive*10;

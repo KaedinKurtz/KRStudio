@@ -404,7 +404,7 @@ void GizmoSystem::update(const QVector<entt::entity>& selectedEntities, const Ca
         }
         };
 
-    // If nothing is selected, hide everything; else show only the active mode’s set
+    // If nothing is selected, hide everything; else show only the active modeï¿½s set
     if (!hasSelection) {
         setVisible(m_translateHandles, false);
         setVisible(m_rotateHandles, false);
@@ -440,10 +440,9 @@ void GizmoSystem::update(const QVector<entt::entity>& selectedEntities, const Ca
         auto& gizmoTransform = registry.get<TransformComponent>(m_gizmoRoot);
         gizmoTransform.translation = averagePosition;
 
-        constexpr float kBaseGizmoDiameter = 2.0f;   // your handles are built ~±1.0
-        constexpr float kTargetGizmoDiameter = 1.5f;   // 20 cm across
-        const float scaleFactor = kTargetGizmoDiameter / kBaseGizmoDiameter; // = 0.1
-        gizmoTransform.scale = glm::vec3(scaleFactor);
+        // Scale follows camera distance so the gizmo keeps a constant
+        // apparent (screen-space) size; see updateScreenScale().
+        updateScreenScale(camera);
 
         switch (m_currentFrame) {
         case Frame::Body:
@@ -510,7 +509,7 @@ void GizmoSystem::startDrag(entt::entity handleEntity,
 
     // Seed rotation / axis param
     if (m_dragMode == GizmoMode::Rotate) {
-        // Use the HANDLE’s own plane normal (+Z in child-local mapped to world)
+        // Use the HANDLEï¿½s own plane normal (+Z in child-local mapped to world)
         const auto& rootXf = R.get<TransformComponent>(m_gizmoRoot);
         const glm::mat4 Mroot = rootXf.getTransform();
         const auto& hXf = R.get<TransformComponent>(handleEntity);
@@ -524,7 +523,7 @@ void GizmoSystem::startDrag(entt::entity handleEntity,
     }
     else {
         // Param along axis at start (for axis translate/scale).
-        // For plane translate we’ll work directly from plane hits.
+        // For plane translate weï¿½ll work directly from plane hits.
         m_t0 = projectPointOnAxis(m_dragStartPoint, m_gizmoOriginWorld, m_dragAxisWorld);
     }
 
@@ -811,7 +810,7 @@ void GizmoSystem::updateDrag(const CpuRay& ray, const Camera& camera)
             if (m_snap.scaleStep > 0.0f) { s = m_snap.scaleStep * std::round(s / m_snap.scaleStep); if (s <= 0.0f) s = m_snap.scaleStep; }
 
             if (!useLocal) {
-                // WORLD frame: move objects farther/closer along that world axis (don’t resize objects)
+                // WORLD frame: move objects farther/closer along that world axis (donï¿½t resize objects)
                 glm::vec3 A = glm::normalize(m_dragAxisWorld);
                 for (auto& di : m_group) {
                     auto& t = R.get<TransformComponent>(di.e);
@@ -1005,6 +1004,28 @@ void GizmoSystem::onScaleDoubleClick(GizmoAxis axis) {
     // TODO: uniform/axis snap etc.
 }
 
+void GizmoSystem::updateScreenScale(const Camera& camera)
+{
+    // Keep the gizmo a constant fraction of the viewport height regardless
+    // of camera distance. Skipped while dragging so the world-space handle
+    // geometry the active drag is solving against stays stable.
+    if (!m_isVisible || m_isDragging) return;
+
+    auto& registry = m_scene.getRegistry();
+    if (!registry.valid(m_gizmoRoot)) return;
+    auto& xf = registry.get<TransformComponent>(m_gizmoRoot);
+
+    const float dist = glm::length(camera.getPosition() - xf.translation);
+    if (dist <= 0.0f) return;
+
+    constexpr float kVFovRadians = glm::radians(45.0f); // matches Camera::getProjectionMatrix
+    constexpr float kScreenFraction = 0.16f;  // gizmo diameter as a fraction of viewport height
+    constexpr float kBaseGizmoDiameter = 2.0f; // handles are built spanning ~Â±1.0
+
+    const float worldDiameter = 2.0f * dist * std::tan(kVFovRadians * 0.5f) * kScreenFraction;
+    xf.scale = glm::vec3(worldDiameter / kBaseGizmoDiameter);
+}
+
 entt::entity GizmoSystem::pickHandle(const CpuRay& ray)
 {
     auto& R = m_scene.getRegistry();
@@ -1056,9 +1077,6 @@ entt::entity GizmoSystem::pickHandle(const CpuRay& ray)
 
     entt::entity best = entt::null;
     float bestMetric = std::numeric_limits<float>::max();
-
-    // Camera-to-gizmo direction (for plane facing test)
-    const glm::vec3 camDir = glm::normalize(O - ray.origin);
 
     for (entt::entity h : *handles) {
         if (!R.valid(h) || !R.all_of<GizmoHandleComponent, TransformComponent>(h))
@@ -1122,10 +1140,10 @@ entt::entity GizmoSystem::pickHandle(const CpuRay& ray)
                 if (d <= AXIS_GRAB_RADIUS && tRay < bestMetric) { bestMetric = tRay; best = h; }
             }
             else {
-                // === Plane patches: only face the camera; then local AABB ===
-                // Plane normal in world: local +Z transformed
-                glm::vec3 planeN = glm::normalize(glm::vec3(Mchild * glm::vec4(0, 0, 1, 0)));
-                if (glm::dot(planeN, camDir) <= 0.0f) continue; // back-facing, skip
+                // === Plane patches: double-sided local AABB test ===
+                // (No camera-facing rejection: the patch is meaningful from
+                // both sides, and rejecting back-faces made the gizmo dead
+                // from half of all view directions.)
 
                 // Unit quad in local XY, with small thickness in Z
                 const glm::vec3 bmin(-0.5f, -0.5f, -PLANE_THICK);

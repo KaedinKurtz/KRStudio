@@ -168,6 +168,16 @@ void RenderingSystem::initialize(Scene* scene)
                      << QOpenGLContext::globalShareContext();
     }
 
+    // Supersampling factor: internal targets render at native * scale and are
+    // downsampled on present. 1.0 = native. Try 1.5-2.0 for smoother edges on
+    // GPUs with headroom (cost grows with the square of the factor).
+    if (qEnvironmentVariableIsSet("KRS_RENDER_SCALE")) {
+        bool ok = false;
+        const float s = qEnvironmentVariable("KRS_RENDER_SCALE").toFloat(&ok);
+        if (ok) m_renderScale = std::clamp(s, 0.5f, 4.0f);
+    }
+    qInfo() << "[RenderingSystem] Render scale:" << m_renderScale;
+
     // Start the logic timer. Rendering is driven by renderAllViewports().
     m_frameTimer.start(16); // Run scene logic at a steady ~60hz.
     m_clock.start();
@@ -465,10 +475,12 @@ void RenderingSystem::initializeSharedResources()
 
 void RenderingSystem::resizeGLResources()
 {
+    // Internal targets render at native pixel size * m_renderScale (SSAA);
+    // presentViewport downsamples back to native with a linear blit.
     int maxW = 0, maxH = 0;
     for (auto* vp : m_targets.keys()) {
-        maxW = std::max(maxW, int(vp->width() * vp->devicePixelRatioF()));
-        maxH = std::max(maxH, int(vp->height() * vp->devicePixelRatioF()));
+        maxW = std::max(maxW, int(vp->width() * vp->devicePixelRatioF() * m_renderScale));
+        maxH = std::max(maxH, int(vp->height() * vp->devicePixelRatioF() * m_renderScale));
     }
     if (maxW == 0 || maxH == 0) return;
 
@@ -478,8 +490,8 @@ void RenderingSystem::resizeGLResources()
     }
     for (auto* vp : m_targets.keys()) {
         auto& target = m_targets[vp];
-        int targetW = int(vp->width() * vp->devicePixelRatioF());
-        int targetH = int(vp->height() * vp->devicePixelRatioF());
+        int targetW = int(vp->width() * vp->devicePixelRatioF() * m_renderScale);
+        int targetH = int(vp->height() * vp->devicePixelRatioF() * m_renderScale);
         if (target.w != targetW || target.h != targetH) {
             initOrResizeFinalFBO(m_gl, target, targetW, targetH);
         }
@@ -586,10 +598,15 @@ void RenderingSystem::presentViewport(ViewportWidget* viewport)
     pf.wrappedTexture = target.finalColorTexture;
     gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
     gl->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, viewport->defaultFramebufferObject());
+    // Downsample from the (possibly supersampled) engine target to the
+    // widget's native pixel size. GL_LINEAR averages when m_renderScale > 1.
+    const int dstW = int(viewport->width() * viewport->devicePixelRatioF());
+    const int dstH = int(viewport->height() * viewport->devicePixelRatioF());
     gl->glBlitFramebuffer(
         0, 0, target.w, target.h,
-        0, 0, target.w, target.h,
-        GL_COLOR_BUFFER_BIT, GL_NEAREST
+        0, 0, dstW, dstH,
+        GL_COLOR_BUFFER_BIT,
+        (target.w == dstW && target.h == dstH) ? GL_NEAREST : GL_LINEAR
     );
 
     // Restore the bindings Qt had.

@@ -1,7 +1,4 @@
 #include "DatabaseManager.hpp"
-#include "DatabaseBackupManager.hpp"
-#include "DatabaseMigrationManager.hpp"
-#include "DatabaseQueryOptimizer.hpp"
 #include "DatabaseIndexManager.hpp"
 #include "DatabaseReplicationManager.hpp"
 #include "Scene.hpp"
@@ -53,9 +50,6 @@ DatabaseManager& DatabaseManager::instance() {
 DatabaseManager::DatabaseManager() 
     : QObject(nullptr)
     , m_connectionPool(nullptr)
-    , m_backupManager(nullptr)
-    , m_migrationManager(nullptr)
-    , m_queryOptimizer(nullptr)
     , m_indexManager(nullptr)
     , m_replicationManager(nullptr)
     , m_initialized(false)
@@ -129,20 +123,9 @@ bool DatabaseManager::initialize(const DatabaseConfig& config) {
     releaseConnection(connection);
 
     // Create specialized managers
-    m_backupManager = std::make_unique<db::DatabaseBackupManager>(this);
-    m_migrationManager = std::make_unique<db::DatabaseMigrationManager>(this);
-    m_queryOptimizer = std::make_unique<db::DatabaseQueryOptimizer>(this);
     m_indexManager = std::make_unique<db::DatabaseIndexManager>(this);
     m_replicationManager = std::make_unique<db::DatabaseReplicationManager>(this);
-    
-    // Connect signals
-    connect(m_backupManager.get(), &DatabaseBackupManager::backupCompleted,
-            this, &DatabaseManager::onBackupCompleted);
-    connect(m_migrationManager.get(), &DatabaseMigrationManager::migrationCompleted,
-            this, &DatabaseManager::onMigrationCompleted);
-    connect(m_queryOptimizer.get(), &DatabaseQueryOptimizer::slowQueryDetected,
-            this, &DatabaseManager::onSlowQueryDetected);
-    
+
     m_initialized = true;
     m_maintenanceTimer.start();
     m_statsTimer.start();
@@ -175,9 +158,6 @@ void DatabaseManager::shutdown() {
     }
     
     // Shutdown managers
-    m_backupManager.reset();
-    m_migrationManager.reset();
-    m_queryOptimizer.reset();
     m_indexManager.reset();
     m_replicationManager.reset();
     m_connectionPool.reset();
@@ -1209,18 +1189,6 @@ void DatabaseManager::onQueryCompleted() {
     // Handle query completion
 }
 
-void DatabaseManager::onBackupCompleted() {
-    // Handle backup completion
-}
-
-void DatabaseManager::onRestoreCompleted() {
-    // Handle restore completion
-}
-
-void DatabaseManager::onOptimizationCompleted() {
-    // Handle optimization completion
-}
-
 void DatabaseManager::onReplicationSync() {
     // Handle replication sync
 }
@@ -1359,14 +1327,6 @@ void DatabaseManager::clearErrors() {}
 void DatabaseManager::resetStats() {}
 void DatabaseManager::exportStats(const QString& filePath) {}
 
-void db::DatabaseManager::onMigrationCompleted() {
-    // Stub implementation
-}
-
-void db::DatabaseManager::onSlowQueryDetected() {
-    // Stub implementation
-}
-
 QStringList db::DatabaseManager::listScenes() {
     // Stub implementation - you can fill this in later
     return QStringList();
@@ -1460,7 +1420,7 @@ QString DatabaseManager::menuTypeToString(MenuType type)
     case MenuType::RealSense:      return QStringLiteral("RealSense");
     case MenuType::Database:       return QStringLiteral("Database");
     case MenuType::GridProperties: return QStringLiteral("GridProperties");
-        // …add any others…
+        // ï¿½add any othersï¿½
     default:                       return QString();
     }
 }

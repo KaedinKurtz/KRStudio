@@ -85,6 +85,12 @@ public:
     void update(const QVector<entt::entity>& selectedEntities, const Camera& camera);
 
     /**
+     * @brief Rescales the gizmo root from camera distance so it keeps a
+     * constant screen-space size. Call once per frame with the viewing camera.
+     */
+    void updateScreenScale(const Camera& camera);
+
+    /**
      * @brief Sets the active transformation mode (Translate, Rotate, Scale).
      * @param mode The new mode to activate.
      */

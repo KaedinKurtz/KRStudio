@@ -162,6 +162,9 @@ private:
     QOpenGLContext* m_engineContext = nullptr;
     QOffscreenSurface* m_engineSurface = nullptr;
     GLsync m_frameFence = nullptr; // engine->widget visibility sync (shared object)
+    // Supersampling: internal render resolution = native * m_renderScale,
+    // downsampled to native on present (KRS_RENDER_SCALE env override).
+    float m_renderScale = 1.0f;
     struct PresentFBO { GLuint fbo = 0; GLuint wrappedTexture = 0; };
     QHash<ViewportWidget*, PresentFBO> m_presentFBOs; // owned by each widget's RHI context
     // Makes the engine context current; returns the previously current

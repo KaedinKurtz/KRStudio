@@ -32,9 +32,6 @@ namespace db {
 
 // Forward declarations
 class DatabaseTransaction;
-class DatabaseBackupManager;
-class DatabaseMigrationManager;
-class DatabaseQueryOptimizer;
 class DatabaseIndexManager;
 class DatabaseReplicationManager;
 
@@ -288,12 +285,7 @@ signals:
 
 private slots:
     void onQueryCompleted();
-    void onBackupCompleted();
-    void onRestoreCompleted();
-    void onOptimizationCompleted();
     void onReplicationSync();
-    void onMigrationCompleted();
-    void onSlowQueryDetected();
 
 private:
     DatabaseManager();
@@ -316,9 +308,6 @@ private:
     // Member variables
     DatabaseConfig m_config;
     std::unique_ptr<ConnectionPool> m_connectionPool;
-    std::unique_ptr<DatabaseBackupManager> m_backupManager;
-    std::unique_ptr<DatabaseMigrationManager> m_migrationManager;
-    std::unique_ptr<DatabaseQueryOptimizer> m_queryOptimizer;
     std::unique_ptr<DatabaseIndexManager> m_indexManager;
     std::unique_ptr<DatabaseReplicationManager> m_replicationManager;
     

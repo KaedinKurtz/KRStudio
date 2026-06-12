@@ -312,11 +312,24 @@ MainWindow::MainWindow(QWidget* parent)
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/assets/");
         QString lamboPath = assetDir + "lambo.stl";
 
-        // Demo material directory — only valid on machines that have it.
-        const QString demoTexDir = QStringLiteral("D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl");
-        const bool hasDemoTextures = QDir(demoTexDir).exists();
+        // Demo material: any PBR texture pack dropped into assets/materials/
+        // (files named *_albedo, *_normal, *_roughness, *_metallic, *_ao,
+        // *_height, *_emissive — see MaterialLoader). First subfolder wins;
+        // falls back to the original dev-machine path, else untextured.
+        QString demoTexDir;
+        QDir materialsRoot(assetDir + QLatin1String("materials"));
+        const QStringList packs = materialsRoot.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        if (!packs.isEmpty()) {
+            demoTexDir = materialsRoot.absoluteFilePath(packs.first());
+            qInfo() << "[Spawner] Using material pack:" << demoTexDir;
+        }
+        else if (QDir(QStringLiteral("D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl")).exists()) {
+            demoTexDir = QStringLiteral("D:/Textures/Blender/synthetic-bl/carbon-fiber-smooth-bl");
+        }
+        const bool hasDemoTextures = !demoTexDir.isEmpty();
         if (!hasDemoTextures) {
-            qWarning() << "[Spawner] Demo texture directory not found, using untextured material:" << demoTexDir;
+            qWarning() << "[Spawner] No material packs in" << materialsRoot.absolutePath()
+                       << "— using untextured material.";
         }
 
         // 1) Load once -> stable MeshID

@@ -1,0 +1,38 @@
+# KR Studio code style — matched to the codebase's prevailing conventions.
+# Format changed lines only (e.g. `git clang-format`); avoid repo-wide reformat
+# commits that destroy blame history.
+---
+Language: Cpp
+Standard: c++17
+BasedOnStyle: LLVM
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+AccessModifierOffset: -4
+
+# Functions open braces on their own line; control flow keeps them attached.
+BreakBeforeBraces: Linux
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AllowShortBlocksOnASingleLine: Empty
+
+# Don't reorder includes — several headers are order-sensitive (GL, Qt, Windows).
+SortIncludes: false
+
+NamespaceIndentation: None
+IndentCaseLabels: false
+AlignAfterOpenBracket: Align
+BinPackArguments: true
+BinPackParameters: true
+SpaceAfterTemplateKeyword: true
+SpacesBeforeTrailingComments: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 2
+FixNamespaceComments: true
