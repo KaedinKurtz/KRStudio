@@ -535,18 +535,58 @@ void RenderingSystem::renderAllViewports()
 
     resizeGLResources();
 
-    // --- Geometry pass (once per frame), then per-viewport passes ---
-    geometryPass();
-
-    for (auto* viewport : m_targets.keys()) {
-        if (!viewport) continue;
-        auto& target = m_targets[viewport];
-        if (target.w <= 0 || target.h <= 0) continue;
-
-        lightingPass(viewport);
-        postProcessingPass(viewport);
-        overlayPass(viewport);
+    // --- GPU stage timing: ring of GL_TIME_ELAPSED queries (engine ctx). ---
+    // Write index this frame, read the slot written kGpuQueryRing-1 frames
+    // ago — old enough that the result is available without stalling.
+    if (!m_gpuQueriesInitialized) {
+        m_gl->glGenQueries(kGpuStages * kGpuQueryRing, &m_gpuQueries[0][0]);
+        m_gpuQueriesInitialized = true;
     }
+    const int qWrite = int(m_gpuQueryFrame % kGpuQueryRing);
+    const int qRead = int((m_gpuQueryFrame + 1) % kGpuQueryRing); // oldest slot
+    if (m_gpuQueryFrame >= kGpuQueryRing - 1) {
+        float* dst[kGpuStages] = { &m_gpuTimings.geometryMs, &m_gpuTimings.lightingMs,
+                                   &m_gpuTimings.postMs, &m_gpuTimings.overlayMs };
+        for (int s = 0; s < kGpuStages; ++s) {
+            GLuint available = 0;
+            m_gl->glGetQueryObjectuiv(m_gpuQueries[s][qRead], GL_QUERY_RESULT_AVAILABLE, &available);
+            if (available) {
+                GLuint64 ns = 0;
+                m_gl->glGetQueryObjectui64v(m_gpuQueries[s][qRead], GL_QUERY_RESULT, &ns);
+                *dst[s] = float(double(ns) * 1e-6); // ns -> ms
+            }
+        }
+    }
+    ++m_gpuQueryFrame;
+
+    // --- Geometry pass (once per frame), then per-viewport passes. ---
+    // Stage-major order (all lighting, then all post, then all overlays) so
+    // each stage sits inside a single timer query; per-viewport ordering
+    // within a stage is independent (each writes only its own target).
+    m_gl->glBeginQuery(GL_TIME_ELAPSED, m_gpuQueries[0][qWrite]);
+    geometryPass();
+    m_gl->glEndQuery(GL_TIME_ELAPSED);
+
+    auto validTarget = [this](ViewportWidget* vp) {
+        if (!vp) return false;
+        const auto& t = m_targets[vp];
+        return t.w > 0 && t.h > 0;
+    };
+
+    m_gl->glBeginQuery(GL_TIME_ELAPSED, m_gpuQueries[1][qWrite]);
+    for (auto* viewport : m_targets.keys())
+        if (validTarget(viewport)) lightingPass(viewport);
+    m_gl->glEndQuery(GL_TIME_ELAPSED);
+
+    m_gl->glBeginQuery(GL_TIME_ELAPSED, m_gpuQueries[2][qWrite]);
+    for (auto* viewport : m_targets.keys())
+        if (validTarget(viewport)) postProcessingPass(viewport);
+    m_gl->glEndQuery(GL_TIME_ELAPSED);
+
+    m_gl->glBeginQuery(GL_TIME_ELAPSED, m_gpuQueries[3][qWrite]);
+    for (auto* viewport : m_targets.keys())
+        if (validTarget(viewport)) overlayPass(viewport);
+    m_gl->glEndQuery(GL_TIME_ELAPSED);
 
     // Publish this frame to the widgets: fence guarantees the engine's writes
     // are visible to the RHI contexts before they blit (sync objects are
@@ -979,6 +1019,10 @@ void RenderingSystem::shutdown()
     }
 
     if (m_frameFence) { gl->glDeleteSync(m_frameFence); m_frameFence = nullptr; }
+    if (m_gpuQueriesInitialized) {
+        gl->glDeleteQueries(kGpuStages * kGpuQueryRing, &m_gpuQueries[0][0]);
+        m_gpuQueriesInitialized = false;
+    }
     doneEngineCurrent(prevCtx, prevSurf);
     m_isInitialized = false;
     qDebug() << "[LIFECYCLE] GPU resources shut down successfully.";

@@ -68,6 +68,16 @@ struct TargetFBOs {
     GLuint finalDepthTexture = 0; // This will now be depth-only
 };
 
+// Per-stage GPU times for one frame, in milliseconds (measured with
+// GL_TIME_ELAPSED queries on the engine context; ~2 frames of latency).
+struct GpuTimings {
+    float geometryMs = 0.0f;
+    float lightingMs = 0.0f;
+    float postMs = 0.0f;
+    float overlayMs = 0.0f;
+    float totalMs() const { return geometryMs + lightingMs + postMs + overlayMs; }
+};
+
 namespace rs2 {
     class points;
     class video_frame;
@@ -108,6 +118,7 @@ public:
     const PostProcessingFBO* getPPFBOs() const { return m_ppFBOs; }
     float getFPS() const { return m_fps; }
     float getFrameTime() const { return m_frameTime; }
+    GpuTimings getGpuTimings() const { return m_gpuTimings; }
 
     const TargetFBOs* getTargetFBO(ViewportWidget* vp) const;
 
@@ -165,6 +176,14 @@ private:
     // Supersampling: internal render resolution = native * m_renderScale,
     // downsampled to native on present (KRS_RENDER_SCALE env override).
     float m_renderScale = 1.0f;
+
+    // --- GPU stage timing (engine-context GL_TIME_ELAPSED query rings) ---
+    static constexpr int kGpuStages = 4;     // geometry, lighting, post, overlay
+    static constexpr int kGpuQueryRing = 3;  // written frame N, read frame N+2
+    GLuint m_gpuQueries[kGpuStages][kGpuQueryRing] = {};
+    bool m_gpuQueriesInitialized = false;
+    quint64 m_gpuQueryFrame = 0;
+    GpuTimings m_gpuTimings;
     struct PresentFBO { GLuint fbo = 0; GLuint wrappedTexture = 0; };
     QHash<ViewportWidget*, PresentFBO> m_presentFBOs; // owned by each widget's RHI context
     // Makes the engine context current; returns the previously current

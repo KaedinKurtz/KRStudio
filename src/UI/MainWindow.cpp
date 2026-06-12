@@ -24,6 +24,7 @@
 #include "ExecutionControlWidget.hpp"
 #include "DatabasePanel.hpp"
 #include "DatabaseManager.hpp"
+#include "DiagnosticsPanel.hpp"
 #include "ViewportManagerPopup.hpp"
 #include "MaterialLoader.hpp"
 #include "MeshUtils.hpp"
@@ -651,6 +652,15 @@ MainWindow::MainWindow(QWidget* parent)
 
 
     showMenu(MenuType::GridProperties);
+
+    // --- Diagnostics dock: live GPU/CPU frame timings ---
+    {
+        auto* diagPanel = new DiagnosticsPanel(this);
+        diagPanel->setRenderingSystem(m_renderingSystem.get());
+        auto* diagDock = new ads::CDockWidget(QStringLiteral("Diagnostics"), this);
+        diagDock->setWidget(diagPanel);
+        m_dockManager->addDockWidget(ads::BottomDockWidgetArea, diagDock);
+    }
 
     m_gizmoSystem->onAfterCommandApplied = [this] {
         this->refreshGizmoAndProperties(); // picks primary viewport automatically
