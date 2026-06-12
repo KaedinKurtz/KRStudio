@@ -27,6 +27,11 @@ public slots:
     /// Point the panel at an entity (entt::null clears it).
     void setEntity(entt::entity entity);
 
+signals:
+    /// Fired after any edit is written to the ECS — lets the simulation
+    /// hot-apply the change to a live physics actor.
+    void entityComponentsChanged(entt::entity entity);
+
 private slots:
     void applyRigidBody();
     void applyCollider();

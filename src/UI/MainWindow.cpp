@@ -801,6 +801,11 @@ MainWindow::MainWindow(QWidget* parent)
     // --- Physics properties dock: right column, below GridProperties ---
     {
         m_physicsPanel = new PhysicsPropertiesWidget(m_scene.get(), this);
+        // Hot-apply edits to the live physics world while playing/paused.
+        connect(m_physicsPanel, &PhysicsPropertiesWidget::entityComponentsChanged,
+                this, [this](entt::entity e) {
+                    if (m_simulation) m_simulation->notifyEntityChanged(e);
+                });
         auto* physDock = new ads::CDockWidget(QStringLiteral("Physics"), this);
         physDock->setWidget(m_physicsPanel);
         physDock->setStyleSheet(sidePanelStyle);
@@ -1652,18 +1657,20 @@ void MainWindow::buildMenuBar()
 
     // --- Simulation ---
     QMenu* simMenu = bar->addMenu(QStringLiteral("&Simulation"));
+    // NOTE: Space is taken by the viewport's gizmo-mode cycling, so the
+    // simulation lives on P (Play), Shift+P (stoP) and Ctrl+P (steP).
     QAction* playAct = simMenu->addAction(QStringLiteral("Play / Pause"));
-    playAct->setShortcut(Qt::Key_Space);
+    playAct->setShortcut(Qt::Key_P);
     connect(playAct, &QAction::triggered, this, [this]() {
         if (!m_simulation) return;
         if (m_simulation->state() == SimulationState::Playing) m_simulation->pause();
         else m_simulation->play();
     });
     QAction* stopAct = simMenu->addAction(QStringLiteral("Stop && Reset"));
-    stopAct->setShortcut(Qt::SHIFT | Qt::Key_Space);
+    stopAct->setShortcut(Qt::SHIFT | Qt::Key_P);
     connect(stopAct, &QAction::triggered, this, [this]() { if (m_simulation) m_simulation->stop(); });
     QAction* stepAct = simMenu->addAction(QStringLiteral("Step One Frame"));
-    stepAct->setShortcut(Qt::CTRL | Qt::Key_Space);
+    stepAct->setShortcut(Qt::CTRL | Qt::Key_P);
     connect(stepAct, &QAction::triggered, this, [this]() { if (m_simulation) m_simulation->singleStep(); });
 }
 

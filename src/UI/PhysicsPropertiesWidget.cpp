@@ -128,7 +128,7 @@ QWidget* PhysicsPropertiesWidget::buildColliderSection()
 
     g->addWidget(new QLabel(QStringLiteral("Shape"), box), 0, 0);
     m_colShape = new QComboBox(box);
-    m_colShape->addItems({ QStringLiteral("None (auto box)"), QStringLiteral("Box"),
+    m_colShape->addItems({ QStringLiteral("Auto Box (fit bounds)"), QStringLiteral("Box"),
                            QStringLiteral("Sphere"), QStringLiteral("Capsule"),
                            QStringLiteral("Convex Mesh") });
     g->addWidget(m_colShape, 0, 1);
@@ -372,6 +372,7 @@ void PhysicsPropertiesWidget::applyRigidBody()
         reg.remove<RigidBodyComponent>(m_entity);
     }
     applyCollider(); // material values live on the collider
+    emit entityComponentsChanged(m_entity);
 }
 
 void PhysicsPropertiesWidget::applyCollider()
@@ -414,8 +415,17 @@ void PhysicsPropertiesWidget::applyCollider()
         c.material = mat;
         break;
     }
-    default: break; // none: simulation falls back to mesh AABB box
+    default: { // Auto Box: explicit fitted box so materials apply
+        glm::vec3 he(0.5f);
+        if (const auto* mesh = reg.try_get<RenderableMeshComponent>(m_entity))
+            he = glm::max((mesh->aabbMax - mesh->aabbMin) * 0.5f, glm::vec3(0.01f));
+        auto& c = reg.emplace<BoxCollider>(m_entity);
+        c.halfExtents = he;
+        c.material = mat;
+        break;
     }
+    }
+    emit entityComponentsChanged(m_entity);
 }
 
 void PhysicsPropertiesWidget::applyEmitter()
@@ -436,6 +446,7 @@ void PhysicsPropertiesWidget::applyEmitter()
     else {
         reg.remove<FluidEmitterComponent>(m_entity);
     }
+    emit entityComponentsChanged(m_entity);
 }
 
 void PhysicsPropertiesWidget::applyVolume()
@@ -452,4 +463,5 @@ void PhysicsPropertiesWidget::applyVolume()
     else {
         reg.remove<FluidVolumeComponent>(m_entity);
     }
+    emit entityComponentsChanged(m_entity);
 }

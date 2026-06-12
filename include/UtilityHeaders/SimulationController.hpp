@@ -48,12 +48,19 @@ public slots:
     /// Advance the accumulator / step physics. Call once per frame.
     void tick();
 
+    /// Live-edit support: rebuild a single entity's physics actor from its
+    /// current components while the world is alive. No-op when stopped
+    /// (the next play() reads the components anyway).
+    void notifyEntityChanged(entt::entity entity);
+
 signals:
     void stateChanged(SimulationState newState);
 
 private:
     void buildPhysicsWorld();
     void destroyPhysicsWorld();
+    bool createActorForEntity(entt::entity entity);
+    void removeActorForEntity(entt::entity entity);
     void stepOnce(float dt);
     void pushKinematicTargets();
     void writeBackTransforms();

@@ -473,8 +473,10 @@ void RenderingSystem::initializeSharedResources()
     m_overlayPasses.push_back(std::make_unique<SplinePass>());
     m_overlayPasses.push_back(std::make_unique<FieldVisualizerPass>());
     m_overlayPasses.push_back(std::make_unique<PointCloudPass>());
-    m_overlayPasses.push_back(std::make_unique<GizmoPass>());
+    // Fluid must depth-test against the real scene; GizmoPass clears the
+    // depth buffer to draw on top, so it must come last.
     m_overlayPasses.push_back(std::make_unique<FluidPass>());
+    m_overlayPasses.push_back(std::make_unique<GizmoPass>());
 
     // Fluid solver lives on the engine context alongside the passes.
     m_fluid = std::make_unique<FluidSystem>();

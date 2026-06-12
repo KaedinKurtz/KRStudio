@@ -223,84 +223,12 @@ void SimulationController::buildPhysicsWorld()
     int dynamicCount = 0, staticCount = 0;
 
     for (auto e : reg.view<RigidBodyComponent, TransformComponent>()) {
-        const auto& rb = reg.get<RigidBodyComponent>(e);
-        const auto& xf = reg.get<TransformComponent>(e);
-
-        const PxTransform pose(
-            PxVec3(xf.translation.x, xf.translation.y, xf.translation.z),
-            PxQuat(xf.rotation.x, xf.rotation.y, xf.rotation.z, xf.rotation.w));
-
-        // --- Build the shape from whichever collider the entity carries ---
-        PxShape* shape = nullptr;
-        PxMaterial* mat = m_px->defaultMaterial;
-
-        if (auto* box = reg.try_get<BoxCollider>(e)) {
-            mat = m_px->makeMaterial(box->material);
-            shape = m_px->physics->createShape(
-                PxBoxGeometry(box->halfExtents.x * xf.scale.x,
-                              box->halfExtents.y * xf.scale.y,
-                              box->halfExtents.z * xf.scale.z), *mat);
+        if (createActorForEntity(e)) {
+            if (reg.get<RigidBodyComponent>(e).bodyType == RigidBodyComponent::BodyType::Static)
+                ++staticCount;
+            else
+                ++dynamicCount;
         }
-        else if (auto* sph = reg.try_get<SphereCollider>(e)) {
-            mat = m_px->makeMaterial(sph->material);
-            const float maxScale = std::max({ xf.scale.x, xf.scale.y, xf.scale.z });
-            shape = m_px->physics->createShape(PxSphereGeometry(sph->radius * maxScale), *mat);
-        }
-        else if (auto* cap = reg.try_get<CapsuleCollider>(e)) {
-            mat = m_px->makeMaterial(cap->material);
-            const float s = std::max({ xf.scale.x, xf.scale.y, xf.scale.z });
-            shape = m_px->physics->createShape(
-                PxCapsuleGeometry(cap->radius * s, cap->height * 0.5f * s), *mat);
-        }
-        else if (auto* cvx = reg.try_get<ConvexMeshCollider>(e)) {
-            if (auto* mesh = reg.try_get<RenderableMeshComponent>(e)) {
-                mat = m_px->makeMaterial(cvx->material);
-                if (PxConvexMesh* hull = m_px->cookConvex(mesh->vertices, xf.scale))
-                    shape = m_px->physics->createShape(PxConvexMeshGeometry(hull), *mat);
-            }
-        }
-
-        // Fallback: AABB box from the render mesh.
-        if (!shape) {
-            if (auto* mesh = reg.try_get<RenderableMeshComponent>(e)) {
-                const glm::vec3 he = glm::max((mesh->aabbMax - mesh->aabbMin) * 0.5f, glm::vec3(0.01f));
-                const glm::vec3 center = (mesh->aabbMax + mesh->aabbMin) * 0.5f;
-                shape = m_px->physics->createShape(
-                    PxBoxGeometry(he.x * xf.scale.x, he.y * xf.scale.y, he.z * xf.scale.z),
-                    *m_px->defaultMaterial);
-                shape->setLocalPose(PxTransform(PxVec3(center.x * xf.scale.x,
-                                                       center.y * xf.scale.y,
-                                                       center.z * xf.scale.z)));
-            }
-            else {
-                shape = m_px->physics->createShape(PxBoxGeometry(0.1f, 0.1f, 0.1f), *m_px->defaultMaterial);
-            }
-        }
-
-        // --- Create the actor ---
-        PxRigidActor* actor = nullptr;
-        if (rb.bodyType == RigidBodyComponent::BodyType::Static) {
-            actor = m_px->physics->createRigidStatic(pose);
-            ++staticCount;
-        }
-        else {
-            PxRigidDynamic* dyn = m_px->physics->createRigidDynamic(pose);
-            dyn->setLinearDamping(rb.linearDamping);
-            dyn->setAngularDamping(rb.angularDamping);
-            dyn->setLinearVelocity(PxVec3(rb.linearVelocity.x, rb.linearVelocity.y, rb.linearVelocity.z));
-            if (rb.bodyType == RigidBodyComponent::BodyType::Kinematic)
-                dyn->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
-            actor = dyn;
-            ++dynamicCount;
-        }
-        actor->attachShape(*shape);
-        shape->release();
-
-        if (auto* dyn = actor->is<PxRigidDynamic>(); dyn && rb.bodyType == RigidBodyComponent::BodyType::Dynamic)
-            PxRigidBodyExt::setMassAndUpdateInertia(*dyn, std::max(0.001f, rb.mass));
-
-        m_px->scene->addActor(*actor);
-        m_px->actors[e] = actor;
     }
 
     // Static collision-only entities (no rigid body): trimesh-tagged or
@@ -325,6 +253,130 @@ void SimulationController::buildPhysicsWorld()
     }
 
     qInfo() << "[Sim] world built:" << dynamicCount << "dynamic," << staticCount << "static bodies (+ground plane)";
+#endif
+}
+
+bool SimulationController::createActorForEntity(entt::entity e)
+{
+#if defined(KR_WITH_PHYSX)
+    auto& reg = m_scene->getRegistry();
+    if (!m_px->scene || !reg.valid(e)) return false;
+    const auto* rbPtr = reg.try_get<RigidBodyComponent>(e);
+    const auto* xfPtr = reg.try_get<TransformComponent>(e);
+    if (!rbPtr || !xfPtr) return false;
+    const auto& rb = *rbPtr;
+    const auto& xf = *xfPtr;
+
+    const PxTransform pose(
+        PxVec3(xf.translation.x, xf.translation.y, xf.translation.z),
+        PxQuat(xf.rotation.x, xf.rotation.y, xf.rotation.z, xf.rotation.w));
+
+    // --- Build the shape from whichever collider the entity carries ---
+    PxShape* shape = nullptr;
+    PxMaterial* mat = m_px->defaultMaterial;
+
+    if (auto* box = reg.try_get<BoxCollider>(e)) {
+        mat = m_px->makeMaterial(box->material);
+        shape = m_px->physics->createShape(
+            PxBoxGeometry(box->halfExtents.x * xf.scale.x,
+                          box->halfExtents.y * xf.scale.y,
+                          box->halfExtents.z * xf.scale.z), *mat);
+        shape->setLocalPose(PxTransform(PxVec3(box->offset.x * xf.scale.x,
+                                               box->offset.y * xf.scale.y,
+                                               box->offset.z * xf.scale.z)));
+    }
+    else if (auto* sph = reg.try_get<SphereCollider>(e)) {
+        mat = m_px->makeMaterial(sph->material);
+        const float maxScale = std::max({ xf.scale.x, xf.scale.y, xf.scale.z });
+        shape = m_px->physics->createShape(PxSphereGeometry(sph->radius * maxScale), *mat);
+        shape->setLocalPose(PxTransform(PxVec3(sph->offset.x * xf.scale.x,
+                                               sph->offset.y * xf.scale.y,
+                                               sph->offset.z * xf.scale.z)));
+    }
+    else if (auto* cap = reg.try_get<CapsuleCollider>(e)) {
+        mat = m_px->makeMaterial(cap->material);
+        const float s = std::max({ xf.scale.x, xf.scale.y, xf.scale.z });
+        shape = m_px->physics->createShape(
+            PxCapsuleGeometry(cap->radius * s, cap->height * 0.5f * s), *mat);
+    }
+    else if (auto* cvx = reg.try_get<ConvexMeshCollider>(e)) {
+        if (auto* mesh = reg.try_get<RenderableMeshComponent>(e)) {
+            mat = m_px->makeMaterial(cvx->material);
+            if (PxConvexMesh* hull = m_px->cookConvex(mesh->vertices, xf.scale))
+                shape = m_px->physics->createShape(PxConvexMeshGeometry(hull), *mat);
+        }
+    }
+
+    // Fallback: AABB box from the render mesh.
+    if (!shape) {
+        if (auto* mesh = reg.try_get<RenderableMeshComponent>(e)) {
+            const glm::vec3 he = glm::max((mesh->aabbMax - mesh->aabbMin) * 0.5f, glm::vec3(0.01f));
+            const glm::vec3 center = (mesh->aabbMax + mesh->aabbMin) * 0.5f;
+            shape = m_px->physics->createShape(
+                PxBoxGeometry(he.x * xf.scale.x, he.y * xf.scale.y, he.z * xf.scale.z),
+                *m_px->defaultMaterial);
+            shape->setLocalPose(PxTransform(PxVec3(center.x * xf.scale.x,
+                                                   center.y * xf.scale.y,
+                                                   center.z * xf.scale.z)));
+        }
+        else {
+            shape = m_px->physics->createShape(PxBoxGeometry(0.1f, 0.1f, 0.1f), *m_px->defaultMaterial);
+        }
+    }
+
+    // --- Create the actor ---
+    PxRigidActor* actor = nullptr;
+    if (rb.bodyType == RigidBodyComponent::BodyType::Static) {
+        actor = m_px->physics->createRigidStatic(pose);
+    }
+    else {
+        PxRigidDynamic* dyn = m_px->physics->createRigidDynamic(pose);
+        dyn->setLinearDamping(rb.linearDamping);
+        dyn->setAngularDamping(rb.angularDamping);
+        dyn->setLinearVelocity(PxVec3(rb.linearVelocity.x, rb.linearVelocity.y, rb.linearVelocity.z));
+        dyn->setAngularVelocity(PxVec3(rb.angularVelocity.x, rb.angularVelocity.y, rb.angularVelocity.z));
+        if (rb.bodyType == RigidBodyComponent::BodyType::Kinematic)
+            dyn->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
+        actor = dyn;
+    }
+    actor->attachShape(*shape);
+    shape->release();
+
+    if (auto* dyn = actor->is<PxRigidDynamic>(); dyn && rb.bodyType == RigidBodyComponent::BodyType::Dynamic)
+        PxRigidBodyExt::setMassAndUpdateInertia(*dyn, std::max(0.001f, rb.mass));
+
+    m_px->scene->addActor(*actor);
+    m_px->actors[e] = actor;
+    return true;
+#else
+    Q_UNUSED(e);
+    return false;
+#endif
+}
+
+void SimulationController::removeActorForEntity(entt::entity e)
+{
+#if defined(KR_WITH_PHYSX)
+    auto it = m_px->actors.find(e);
+    if (it == m_px->actors.end()) return;
+    if (m_px->scene) m_px->scene->removeActor(*it->second);
+    it->second->release();
+    m_px->actors.erase(it);
+#else
+    Q_UNUSED(e);
+#endif
+}
+
+void SimulationController::notifyEntityChanged(entt::entity e)
+{
+#if defined(KR_WITH_PHYSX)
+    if (m_state == SimulationState::Stopped || !m_px->scene) return;
+    removeActorForEntity(e);
+    auto& reg = m_scene->getRegistry();
+    if (reg.valid(e) && reg.all_of<RigidBodyComponent, TransformComponent>(e))
+        createActorForEntity(e); // rebuilt with current pose + velocity
+#else
+    Q_UNUSED(e);
 #endif
 }
 
