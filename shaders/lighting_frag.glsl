@@ -16,6 +16,7 @@ const int MAX_LIGHTS = 4;
 uniform vec3 lightPositions[MAX_LIGHTS];
 uniform vec3 lightColors[MAX_LIGHTS];
 uniform int activeLightCount;
+uniform int u_hdrEnabled; // 1: output linear HDR (TonemapPass finishes), 0: legacy in-shader Reinhard
 
 in vec2 TexCoords;
 out vec4 fragColor;
@@ -130,9 +131,14 @@ void main()
     vec3 ambient = (diffuseIBL + specularIBL) * ao;
     vec3 color = ambient + Lo + emissive*10;
 
-    // Post-processing
-    color = color / (color + vec3(1.0)); // Tonemapping
-    color = pow(color, vec3(1.0/2.2));   // Gamma correction 
-    
+    // HDR pipeline: output linear radiance; the TonemapPass at the end of
+    // the frame applies ACES + gamma AFTER water/foam composite in linear
+    // light. u_hdrEnabled=0 is the KRS_HDR=0 bring-up fallback (legacy
+    // in-shader Reinhard).
+    if (u_hdrEnabled == 0) {
+        color = color / (color + vec3(1.0)); // Reinhard
+        color = pow(color, vec3(1.0/2.2));   // gamma
+    }
+
     fragColor = vec4(color, 1.0);
 }

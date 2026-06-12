@@ -112,6 +112,9 @@ public:
 
     // --- Public Helpers & Resource Access ---
     Shader* getShader(const std::string& name);
+    /// HDR ordering: lighting outputs linear radiance, TonemapPass applies
+    /// ACES+gamma after the fluid composite. KRS_HDR=0 = legacy fallback.
+    static bool hdrEnabled();
     const RenderResourceComponent::Buffers& getOrCreateMeshBuffers(QOpenGLFunctions_4_3_Core* gl, QOpenGLContext* ctx, entt::entity entity);
     void updatePointCloud(const rs2::points& points, const rs2::video_frame& colorFrame, const glm::mat4& pose);
     // --- Getters ---

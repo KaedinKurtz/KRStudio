@@ -26,6 +26,7 @@
 #include "FluidPass.hpp"
 #include "FluidSurfacePass.hpp"
 #include "CollisionDebugPass.hpp"
+#include "TonemapPass.hpp"
 #include "DfsphBackend.hpp"
 #include "FluidSystem.hpp"
 
@@ -358,6 +359,7 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("flow_vector_compute", std::vector<std::string>{ (shaderDir + "flow_vector_update_comp.glsl").toStdString() });
         loadAndStoreShader("blur", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "gaussian_blur_frag.glsl").toStdString());
         loadAndStoreShader("skybox", (shaderDir + "skybox_vert.glsl").toStdString(), (shaderDir + "skybox_frag.glsl").toStdString());
+        loadAndStoreShader("tonemap", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "tonemap_frag.glsl").toStdString());
         loadAndStoreShader("outline_edge", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "outline_edge_frag.glsl").toStdString());
         loadAndStoreShader("composite_simple", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "composite_simple_frag.glsl").toStdString());
     }
@@ -490,6 +492,9 @@ void RenderingSystem::initializeSharedResources()
     // Fluid must depth-test against the real scene; GizmoPass clears the
     // depth buffer to draw on top, so it must come last.
     m_overlayPasses.push_back(std::make_unique<FluidSurfacePass>());
+    // Display transform AFTER the water/foam composite (they blend in linear
+    // HDR), BEFORE the gizmo (authored in display space).
+    m_overlayPasses.push_back(std::make_unique<TonemapPass>());
     m_overlayPasses.push_back(std::make_unique<GizmoPass>());
 
     // Fluid solver lives on the engine context alongside the passes.
@@ -1311,6 +1316,13 @@ const RenderResourceComponent::Buffers& RenderingSystem::getOrCreateMeshBuffers(
     return res.perContext.at(ctx);
 }
 
+
+bool RenderingSystem::hdrEnabled()
+{
+    // KRS_HDR=0 reverts to the legacy in-lighting Reinhard (bring-up aid).
+    static const bool on = qEnvironmentVariable("KRS_HDR") != QLatin1String("0");
+    return on;
+}
 
 Shader* RenderingSystem::getShader(const std::string& name) {
     QOpenGLContext* ctx = QOpenGLContext::currentContext();

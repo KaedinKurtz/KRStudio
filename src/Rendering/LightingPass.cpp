@@ -48,6 +48,7 @@ void LightingPass::execute(const RenderFrameContext& context) {
     lightingShd->setVec3(gl, "lightPositions[0]", animatedLightPos);
     lightingShd->setVec3(gl, "lightColors[0]", glm::vec3(200.0, 150.0, 150.0)); // Increased intensity for physical correctness
     lightingShd->setInt(gl, "activeLightCount", 1);
+    lightingShd->setInt(gl, "u_hdrEnabled", RenderingSystem::hdrEnabled() ? 1 : 0);
 
     // --- Texture Binding ---
     int unit = 0;
