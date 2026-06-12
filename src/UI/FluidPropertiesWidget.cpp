@@ -226,6 +226,50 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
         layout->addWidget(box);
     }
 
+    // ---- Surface quality ----
+    layout->addWidget(header(QStringLiteral("Surface Quality"), content));
+    {
+        auto* box = new QGroupBox(content);
+        auto* g = new QGridLayout(box);
+        g->setContentsMargins(6, 6, 6, 6);
+        g->setVerticalSpacing(3);
+
+        g->addWidget(new QLabel(QStringLiteral("Quality preset"), box), 0, 0);
+        m_quality = new QComboBox(box);
+        m_quality->addItems({ QStringLiteral("Low (integrated GPU)"),
+                              QStringLiteral("High (wide filter + ellipsoid splats)") });
+        m_quality->setToolTip(QStringLiteral(
+            "High widens the depth-smoothing kernel and stretches particles into\n"
+            "flow-aligned ellipsoids — flat sheets instead of visible droplets.\n"
+            "Costs GPU time; Low keeps the iGPU-friendly path."));
+        g->addWidget(m_quality, 0, 1);
+
+        g->addWidget(new QLabel(QStringLiteral("Smoothing iterations"), box), 1, 0);
+        m_smoothIters = new QSpinBox(box);
+        m_smoothIters->setRange(1, 4);
+        m_smoothIters->setToolTip(QStringLiteral(
+            "Narrow-range depth filter passes. More = smoother surface, more GPU."));
+        g->addWidget(m_smoothIters, 1, 1);
+
+        g->addWidget(new QLabel(QStringLiteral("Foam gain ×"), box), 2, 0);
+        m_foamGain = new QDoubleSpinBox(box);
+        m_foamGain->setRange(0.1, 4.0);
+        m_foamGain->setSingleStep(0.1);
+        m_foamGain->setDecimals(2);
+        m_foamGain->setToolTip(QStringLiteral("Global multiplier on whitewater emission"));
+        g->addWidget(m_foamGain, 2, 1);
+
+        g->addWidget(new QLabel(QStringLiteral("Foam decay ×"), box), 3, 0);
+        m_foamDecaySpin = new QDoubleSpinBox(box);
+        m_foamDecaySpin->setRange(0.25, 4.0);
+        m_foamDecaySpin->setSingleStep(0.25);
+        m_foamDecaySpin->setDecimals(2);
+        m_foamDecaySpin->setToolTip(QStringLiteral(">1 = foam dies faster, <1 = lingers"));
+        g->addWidget(m_foamDecaySpin, 3, 1);
+
+        layout->addWidget(box);
+    }
+
     // ---- Sim cache (Houdini-style bake & scrub) ----
     layout->addWidget(header(QStringLiteral("Sim Cache (bake && scrub)"), content));
     {
@@ -321,11 +365,13 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
     for (auto* s : { m_density, m_viscosity, m_viscosityPaS, m_surfaceTension, m_radius, m_gravityY })
         connect(s, &QDoubleSpinBox::valueChanged, this, [this]() { applyPhysics(); });
     connect(m_iterations, &QSpinBox::valueChanged, this, [this]() { applyPhysics(); });
-    for (auto* s : { m_sizeScale, m_iorSpin, m_absorption, m_refraction })
+    for (auto* s : { m_sizeScale, m_iorSpin, m_absorption, m_refraction, m_foamGain, m_foamDecaySpin })
         connect(s, &QDoubleSpinBox::valueChanged, this, [this]() { applyAppearance(); });
     for (auto* s : { m_turbidity, m_emissivity, m_foam })
         connect(s, &QSlider::valueChanged, this, [this]() { applyAppearance(); });
     connect(m_renderMode, &QComboBox::currentIndexChanged, this, [this]() { applyAppearance(); });
+    connect(m_smoothIters, &QSpinBox::valueChanged, this, [this]() { applyAppearance(); });
+    connect(m_quality, &QComboBox::currentIndexChanged, this, [this]() { applyAppearance(); });
     connect(m_colorButton, &QPushButton::clicked, this, [this]() {
         FluidSystem* fluid = m_renderer ? m_renderer->getFluidSystem() : nullptr;
         if (!fluid) return;
@@ -372,6 +418,10 @@ void FluidPropertiesWidget::syncFromSystem()
     m_iorSpin->setValue(a.ior);
     m_absorption->setValue(a.absorptionScale);
     m_refraction->setValue(a.refractScale);
+    m_smoothIters->setValue(a.smoothIterations);
+    m_quality->setCurrentIndex(a.surfaceQuality > 0 ? 1 : 0);
+    m_foamGain->setValue(a.foamScale);
+    m_foamDecaySpin->setValue(a.foamDecay);
     m_renderMode->setCurrentIndex(a.renderMode == FluidRenderMode::WaterSurface ? 0 : 1);
     const QColor c = QColor::fromRgbF(a.color.r, a.color.g, a.color.b);
     m_colorButton->setStyleSheet(QStringLiteral("background-color: %1;").arg(c.name()));
@@ -406,6 +456,10 @@ void FluidPropertiesWidget::applyAppearance()
     a.ior = float(m_iorSpin->value());
     a.absorptionScale = float(m_absorption->value());
     a.refractScale = float(m_refraction->value());
+    a.smoothIterations = m_smoothIters->value();
+    a.surfaceQuality = m_quality->currentIndex();
+    a.foamScale = float(m_foamGain->value());
+    a.foamDecay = float(m_foamDecaySpin->value());
     a.renderMode = m_renderMode->currentIndex() == 0 ? FluidRenderMode::WaterSurface
                                                      : FluidRenderMode::Particles;
 }

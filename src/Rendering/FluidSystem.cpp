@@ -2,6 +2,7 @@
 #include "RenderingSystem.hpp"
 #include "Shader.hpp"
 #include "components.hpp"
+#include "HardwareCaps.hpp"
 
 #include "SdfBaker.hpp"
 
@@ -57,6 +58,12 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     bool foamOk = false;
     const float foamEnv = qEnvironmentVariable("KRS_FLUID_FOAM").toFloat(&foamOk);
     if (foamOk) m_appearance.foaminess = foamEnv;
+    // Surface quality: High by default on CUDA-class GPUs, Low on iGPUs.
+    // KRS_FLUID_QUALITY={0,1} forces a tier for testing.
+    m_appearance.surfaceQuality = krs::hardwareCaps().cudaPhysics ? 1 : 0;
+    bool qualityOk = false;
+    const int qualityEnv = qEnvironmentVariable("KRS_FLUID_QUALITY").toInt(&qualityOk);
+    if (qualityOk) m_appearance.surfaceQuality = qualityEnv != 0 ? 1 : 0;
 
     gl->glGenBuffers(1, &m_particleSSBO);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);

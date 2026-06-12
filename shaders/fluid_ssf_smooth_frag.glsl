@@ -10,6 +10,7 @@ uniform sampler2D u_depth;     // view-space z (0 = no fluid)
 uniform vec2 u_dir;            // (texelX, 0) or (0, texelY)
 uniform float u_particleRadius;
 uniform float u_projScaleY;    // proj[1][1] * targetHeight / 2
+uniform float u_maxSigma;      // pixel clamp on the kernel width (12 Low, 32 High)
 
 out float outDepth;
 
@@ -23,7 +24,9 @@ void main()
     float mu = 1.0 * r;     // far-side clamp offset
 
     // World-space kernel (zeta = 0.7r) projected to pixels at this depth.
-    float sigma = clamp(0.7 * r * u_projScaleY / zi, 1.0, 12.0);
+    // The clamp must exceed the projected sprite radius (~1.5r) or each
+    // sprite's dome survives filtering and refraction goes scaly.
+    float sigma = clamp(0.7 * r * u_projScaleY / zi, 1.0, u_maxSigma);
     int radius = int(ceil(2.5 * sigma));
 
     float sum = zi;

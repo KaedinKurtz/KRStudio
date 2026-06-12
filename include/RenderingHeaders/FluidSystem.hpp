@@ -45,7 +45,10 @@ struct FluidAppearance {
     float ior = 1.333f;            // index of refraction
     float absorptionScale = 1.5f;  // Beer-Lambert strength (per metre)
     float refractScale = 0.08f;    // UV offset per metre of thickness
-    int smoothIterations = 2;      // narrow-range filter iterations
+    int smoothIterations = 3;      // narrow-range filter iterations
+    int surfaceQuality = 0;        // 0 Low (iGPU-safe) / 1 High (aniso splats, wide kernel)
+    float foamScale = 1.0f;        // global whitewater emission gain
+    float foamDecay = 1.0f;        // foam lifetime divisor (>1 = dies faster)
     FluidRenderMode renderMode = FluidRenderMode::WaterSurface;
 };
 

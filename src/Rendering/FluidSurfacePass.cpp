@@ -182,6 +182,9 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
     smoothShader->use(gl);
     smoothShader->setFloat(gl, "u_particleRadius", radius * look.sizeScale);
     smoothShader->setFloat(gl, "u_projScaleY", context.projection[1][1] * h * 0.5f);
+    // Kernel clamp must exceed the projected sprite radius or per-sprite
+    // domes survive filtering (the "dragon scales" refraction artifact).
+    smoothShader->setFloat(gl, "u_maxSigma", look.surfaceQuality > 0 ? 32.0f : 12.0f);
     smoothShader->setInt(gl, "u_depth", 0);
     gl->glActiveTexture(GL_TEXTURE0);
     GLuint src = b.depthTex;

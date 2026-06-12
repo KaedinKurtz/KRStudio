@@ -55,6 +55,12 @@ private:
     QDoubleSpinBox* m_absorption = nullptr;
     QDoubleSpinBox* m_refraction = nullptr;
 
+    // surface quality
+    QSpinBox* m_smoothIters = nullptr;
+    QComboBox* m_quality = nullptr;
+    QDoubleSpinBox* m_foamGain = nullptr;
+    QDoubleSpinBox* m_foamDecaySpin = nullptr;
+
     // sim cache
     QCheckBox* m_recordCheck = nullptr;
     QSlider* m_scrubSlider = nullptr;

@@ -46,18 +46,21 @@ void main()
     vec3 P = viewPosAt(TexCoords, zc);
 
     // One-sided central differences: pick the neighbour closer in depth so
-    // normals stay sane at silhouettes.
-    float zxp = texture(u_fluidDepth, TexCoords + vec2(u_texel.x, 0)).r;
-    float zxm = texture(u_fluidDepth, TexCoords - vec2(u_texel.x, 0)).r;
-    float zyp = texture(u_fluidDepth, TexCoords + vec2(0, u_texel.y)).r;
-    float zym = texture(u_fluidDepth, TexCoords - vec2(0, u_texel.y)).r;
+    // normals stay sane at silhouettes. Sampled 2 texels out — halves the
+    // sprite-frequency noise that survives the depth filter.
+    vec2 dx = vec2(u_texel.x * 2.0, 0.0);
+    vec2 dy = vec2(0.0, u_texel.y * 2.0);
+    float zxp = texture(u_fluidDepth, TexCoords + dx).r;
+    float zxm = texture(u_fluidDepth, TexCoords - dx).r;
+    float zyp = texture(u_fluidDepth, TexCoords + dy).r;
+    float zym = texture(u_fluidDepth, TexCoords - dy).r;
 
     vec3 ddx = (zxp > 0.0 && (zxm <= 0.0 || abs(zxp - zc) <= abs(zxm - zc)))
-        ? viewPosAt(TexCoords + vec2(u_texel.x, 0), zxp) - P
-        : P - viewPosAt(TexCoords - vec2(u_texel.x, 0), max(zxm, 0.001));
+        ? viewPosAt(TexCoords + dx, zxp) - P
+        : P - viewPosAt(TexCoords - dx, max(zxm, 0.001));
     vec3 ddy = (zyp > 0.0 && (zym <= 0.0 || abs(zyp - zc) <= abs(zym - zc)))
-        ? viewPosAt(TexCoords + vec2(0, u_texel.y), zyp) - P
-        : P - viewPosAt(TexCoords - vec2(0, u_texel.y), max(zym, 0.001));
+        ? viewPosAt(TexCoords + dy, zyp) - P
+        : P - viewPosAt(TexCoords - dy, max(zym, 0.001));
 
     vec3 N = normalize(cross(ddx, ddy));
     if (N.z < 0.0) N = -N; // face the camera
@@ -69,7 +72,10 @@ void main()
     if (u_debugMode == 3) { FragColor = vec4(N * 0.5 + 0.5, 1.0); gl_FragDepth = 0.0; return; }
 
     // ---- Refraction: offset shrinks to zero at silhouettes (thin water) ----
-    vec2 refrUV = TexCoords + N.xy * thick * u_refractScale;
+    // Cap the offset so residual normal noise can't drag in far-away texels.
+    vec2 refrOff = N.xy * thick * u_refractScale;
+    refrOff = clamp(refrOff, vec2(-0.04), vec2(0.04));
+    vec2 refrUV = TexCoords + refrOff;
     // Reject refracted samples that would pull FOREGROUND objects into the
     // water (their depth is closer than the fluid surface).
     float refrSceneZ = texture(u_sceneDepth, refrUV).r;
