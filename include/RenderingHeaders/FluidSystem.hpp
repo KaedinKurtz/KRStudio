@@ -210,6 +210,9 @@ private:
     GLuint m_impulseSSBO = 0;   // ivec4 per collider slot (fixed-point 1e7)
     GLuint m_anisoSSBO = 0;     // {vec4 quat; vec4 radiiN; vec4 center;} * kMaxParticles
     bool m_anisoValid = false;
+    GLuint m_normalsSSBO = 0;   // vec4 per particle: surface normal + neighbour count
+    GLuint m_foamNormSSBO = 0;  // int[3]: per-frame raw potential maxima (x1000)
+    glm::vec3 m_foamPotentialEma{ 0.0f }; // smoothed maxima -> auto-normalised taus
     std::vector<entt::entity> m_boxEntities;    // collider slot -> entity
     std::vector<entt::entity> m_sphereEntities;
     ImpulseSink m_impulseSink;

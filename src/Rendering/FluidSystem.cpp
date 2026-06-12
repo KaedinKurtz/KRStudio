@@ -102,6 +102,18 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
                      GLsizeiptr(sizeof(glm::vec4)) * 3 * kMaxParticles, nullptr, GL_DYNAMIC_DRAW);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
+    // Surface normals (finalize writes, foam emission reads) and the
+    // whitewater auto-normalisation maxima (3 fixed-point ints).
+    gl->glGenBuffers(1, &m_normalsSSBO);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_normalsSSBO);
+    gl->glBufferData(GL_SHADER_STORAGE_BUFFER,
+                     GLsizeiptr(sizeof(glm::vec4)) * kMaxParticles, nullptr, GL_DYNAMIC_DRAW);
+    gl->glGenBuffers(1, &m_foamNormSSBO);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_foamNormSSBO);
+    const int normZeros[4] = { 0, 0, 0, 0 };
+    gl->glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(normZeros), normZeros, GL_DYNAMIC_DRAW);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
     // Whitewater diffuse particles (zeroed: life 0 = dead slot).
     {
         std::vector<float> zeros(size_t(kMaxDiffuse) * 8, 0.0f);
@@ -135,6 +147,8 @@ void FluidSystem::shutdown(QOpenGLFunctions_4_3_Core* gl)
     gl->glDeleteBuffers(1, &m_diffuseCounterSSBO);
     gl->glDeleteBuffers(1, &m_impulseSSBO);
     gl->glDeleteBuffers(1, &m_anisoSSBO);
+    gl->glDeleteBuffers(1, &m_normalsSSBO);
+    gl->glDeleteBuffers(1, &m_foamNormSSBO);
     m_initialized = false;
 }
 
@@ -558,7 +572,9 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     }
 
     // 4) finalize: velocity from positions, XSPH viscosity + Akinci
-    //    cohesion (surface tension), lifetime.
+    //    cohesion (surface tension), lifetime. Also writes per-particle
+    //    surface normals (binding 7) for the whitewater crest potential.
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, m_normalsSSBO);
     bindCommon(finalize);
     finalize->setFloat(gl, "u_dt", stepDt);
     // XSPH c from real kinematic viscosity: c ≈ 7.3·ν·dt/h² (research
@@ -587,19 +603,48 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         ++m_foamFrame;
         gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, m_diffuseSSBO);
         gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_diffuseCounterSSBO);
+        gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, m_normalsSSBO);
+
+        // Auto-normalised taus (Bender 2019): tau_max rides a fast-rise /
+        // slow-decay envelope of the raw per-frame potential maxima, so the
+        // foam slider behaves identically across scenes and scales.
+        {
+            const GLint izero = 0;
+            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_foamNormSSBO);
+            gl->glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT,
+                                  &izero);
+            gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, m_foamNormSSBO);
+        }
+        const glm::vec3 floors(1.0f, 0.3f, 0.002f); // ta [m/s], wc, ke [J]
+        const glm::vec3 tauMax = glm::max(m_foamPotentialEma, floors);
 
         bindCommon(foamEmit);
         foamEmit->setInt(gl, "u_maxDiffuse", kMaxDiffuse);
         foamEmit->setFloat(gl, "u_dt", stepDt);
         foamEmit->setFloat(gl, "u_foaminess", m_appearance.foaminess);
+        foamEmit->setFloat(gl, "u_foamScale", m_appearance.foamScale);
+        foamEmit->setVec2(gl, "u_tauTa", glm::vec2(0.1f * tauMax.x, tauMax.x));
+        foamEmit->setVec2(gl, "u_tauWc", glm::vec2(0.1f * tauMax.y, tauMax.y));
+        foamEmit->setVec2(gl, "u_tauKe", glm::vec2(0.1f * tauMax.z, tauMax.z));
         gl->glUniform1ui(gl->glGetUniformLocation(foamEmit->ID, "u_frame"), m_foamFrame);
         gl->glDispatchCompute(groups, 1, 1);
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        // Fold this frame's raw maxima into the envelope for next frame.
+        {
+            int raw[3] = { 0, 0, 0 };
+            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_foamNormSSBO);
+            gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(raw), raw);
+            gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            const glm::vec3 rawMax(raw[0] / 1000.0f, raw[1] / 1000.0f, raw[2] / 1000.0f);
+            m_foamPotentialEma = glm::max(rawMax, glm::mix(m_foamPotentialEma, rawMax, 0.02f));
+        }
 
         bindCommon(foamUpdate);
         foamUpdate->setInt(gl, "u_maxDiffuse", kMaxDiffuse);
         foamUpdate->setFloat(gl, "u_dt", stepDt);
         foamUpdate->setVec3(gl, "u_gravity", m_params.gravity);
+        foamUpdate->setFloat(gl, "u_foamDecay", m_appearance.foamDecay);
         gl->glDispatchCompute((kMaxDiffuse + 255) / 256, 1, 1);
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
     }

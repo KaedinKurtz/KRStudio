@@ -10,6 +10,10 @@ struct Particle {
 layout(std430, binding = 0) buffer Particles { Particle p[]; };
 layout(std430, binding = 1) buffer GridHead { int head[]; };
 layout(std430, binding = 2) buffer GridNext { int nxt[]; };
+// Color-field surface normals for the whitewater crest potential
+// (Ihmsen 2012): xyz = outward normal (zero for interior particles),
+// w = fluid neighbour count.
+layout(std430, binding = 7) buffer NormalsBuf { vec4 normals[]; };
 
 uniform int u_particleCount;
 uniform float u_dt;
@@ -55,6 +59,8 @@ void main()
     ivec3 cc = cellOf(pi);
     vec3 xsph = vec3(0.0);
     vec3 cohesion = vec3(0.0);
+    vec3 gradC = vec3(0.0); // color-field gradient: outward at the surface
+    int neighbors = 0;
     float kCoh = 32.0 / (PI * pow(u_h, 9.0));
     float h6_64 = pow(u_h, 6.0) / 64.0;
     for (int dz = -1; dz <= 1; ++dz)
@@ -75,11 +81,18 @@ void main()
                     float t = (u_h - r) * (u_h - r) * (u_h - r) * r * r * r;
                     float spline = (2.0 * r > u_h) ? t : (2.0 * t - h6_64);
                     cohesion += -u_cohesion * u_particleMass * kCoh * spline * (rij / r);
+                    gradC += (rij / r) * (1.0 - r / u_h);
+                    ++neighbors;
                 }
             }
             j = nxt[j];
         }
     }
+    // Surface normal only where the neighbourhood is deficient (Ihmsen:
+    // interior particles keep a zero normal so they never read as crests).
+    vec3 nSurf = vec3(0.0);
+    if (neighbors <= 20 && dot(gradC, gradC) > 1e-8) nSurf = normalize(gradC);
+    normals[i] = vec4(nSurf, float(neighbors));
     newVel += u_viscosity * xsph + cohesion * u_dt;
     // Surface tension limits the stable step: clamp runaway accelerations.
     float speed = length(newVel);
