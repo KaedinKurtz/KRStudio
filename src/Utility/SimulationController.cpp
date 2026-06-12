@@ -633,6 +633,29 @@ bool SimulationController::createActorForEntity(entt::entity e)
 #endif
 }
 
+void SimulationController::applyFluidImpulse(entt::entity e, const glm::vec3& impulse)
+{
+#if defined(KR_WITH_PHYSX)
+    if (m_state != SimulationState::Playing || !m_px->scene) return;
+    auto it = m_px->actors.find(e);
+    if (it == m_px->actors.end()) return;
+    auto* dyn = it->second->is<PxRigidDynamic>();
+    if (!dyn || (dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)) return;
+
+    // Stability clamp (research brief): limit per-frame Δv to 2 m/s so a
+    // light body can't be slingshot by an impulse spike.
+    const float mass = std::max(0.001f, dyn->getMass());
+    glm::vec3 J = impulse;
+    const float maxJ = mass * 2.0f;
+    const float len = glm::length(J);
+    if (len > maxJ) J *= maxJ / len;
+
+    dyn->addForce(PxVec3(J.x, J.y, J.z), PxForceMode::eIMPULSE, true);
+#else
+    Q_UNUSED(e); Q_UNUSED(impulse);
+#endif
+}
+
 void SimulationController::removeActorForEntity(entt::entity e)
 {
 #if defined(KR_WITH_PHYSX)

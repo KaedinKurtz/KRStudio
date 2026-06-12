@@ -19,6 +19,12 @@ layout(std140, binding = 3) uniform Colliders {
     ivec4 counts; // x boxes, y spheres
 };
 
+// Fluid -> rigid reaction impulses, fixed point (1e7), 4 ints per slot:
+// 32 box slots then 32 sphere slots. J = -m * dx_boundary / dt per pushout.
+// (Flat int array: GLSL atomics don't work on vector components.)
+layout(std430, binding = 5) buffer ImpulseBuf { int impulseRaw[]; };
+uniform float u_dt;
+
 uniform int u_particleCount;
 uniform float u_h;
 uniform float u_restDensity;
@@ -35,6 +41,15 @@ uniform int u_sdfCount;
 uniform sampler3D u_sdf[4];
 uniform vec3 u_sdfMin[4];
 uniform vec3 u_sdfMax[4];
+
+const float IMP_SCALE = 1.0e7;
+void accumulateImpulse(int slot, vec3 push)
+{
+    vec3 J = -u_particleMass * push / max(u_dt, 1e-5);
+    atomicAdd(impulseRaw[slot * 4 + 0], int(J.x * IMP_SCALE));
+    atomicAdd(impulseRaw[slot * 4 + 1], int(J.y * IMP_SCALE));
+    atomicAdd(impulseRaw[slot * 4 + 2], int(J.z * IMP_SCALE));
+}
 
 const float PI = 3.14159265358979;
 
@@ -96,7 +111,9 @@ vec3 collide(vec3 pos, vec3 prevPos)
             if (d.x < d.y && d.x < d.z)      local.x = side.x * he.x;
             else if (d.y < d.z)              local.y = side.y * he.y;
             else                             local.z = side.z * he.z;
-            pos = boxes[b].center.xyz + rotateByQuat(local, boxes[b].rotation);
+            vec3 newPos = boxes[b].center.xyz + rotateByQuat(local, boxes[b].rotation);
+            accumulateImpulse(b, newPos - pos);
+            pos = newPos;
         }
     }
 
@@ -105,8 +122,11 @@ vec3 collide(vec3 pos, vec3 prevPos)
         vec3 d = pos - spheres[s].centerRadius.xyz;
         float minDist = spheres[s].centerRadius.w + r;
         float len = length(d);
-        if (len < minDist && len > 1e-6)
-            pos = spheres[s].centerRadius.xyz + d * (minDist / len);
+        if (len < minDist && len > 1e-6) {
+            vec3 newPos = spheres[s].centerRadius.xyz + d * (minDist / len);
+            accumulateImpulse(32 + s, newPos - pos);
+            pos = newPos;
+        }
     }
 
     // SDF colliders: exact mesh shapes. Distance sampled in world units;

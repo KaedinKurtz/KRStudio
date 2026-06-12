@@ -15,6 +15,7 @@
 #include "Mesh.hpp" // Required for the test cube's mesh data.
 #include "IntersectionSystem.hpp" 
 #include "RenderingSystem.hpp"
+#include "FluidSystem.hpp"
 #include "FlowVisualizerMenu.hpp"
 #include "Helpers.hpp"   
 #include "entt/entt.hpp"
@@ -436,6 +437,20 @@ MainWindow::MainWindow(QWidget* parent)
         auto& vol = registry.emplace<FluidVolumeComponent>(water);
         vol.halfExtents = { 0.9f, 0.22f, 0.9f }; // fill top 0.52 — under the 0.7 rim
         registry.emplace<TagComponent>(water, std::string("TestWater"));
+
+        // Level 2: drop a light cube in — it must SPLASH and FLOAT
+        // (box 0.3 m³ displaces ~27 kg of water; 8 kg ⇒ ~30 % submerged).
+        if (qEnvironmentVariable("KRS_FLUID_DEMO") == QLatin1String("2")) {
+            entt::entity floater = SceneBuilder::spawnPrimitive(
+                *m_scene, int(Primitive::Cube), { 0.0f, 1.3f, 0.0f }, glm::vec3(0.3f), "Floater");
+            auto& rb = registry.emplace<RigidBodyComponent>(floater);
+            rb.bodyType = RigidBodyComponent::BodyType::Dynamic;
+            rb.mass = 8.0f;
+            auto& col = registry.emplace<BoxCollider>(floater);
+            col.halfExtents = glm::vec3(0.5f);
+            auto& mat = registry.emplace_or_replace<MaterialComponent>(floater);
+            mat.albedoColor = glm::vec3(0.85f, 0.65f, 0.2f);
+        }
     }
 
     // --- Physics demo: a small stack of primitives that falls on Play ---
@@ -545,6 +560,23 @@ MainWindow::MainWindow(QWidget* parent)
 
     // --- 2. Create the SINGLE Shared Rendering System ---
     m_renderingSystem = std::make_unique<RenderingSystem>(nullptr);
+
+    // Two-way fluid coupling: the FluidSystem is created lazily on the
+    // engine GL context, so retry the wiring until it exists.
+    {
+        auto* couplingTimer = new QTimer(this);
+        connect(couplingTimer, &QTimer::timeout, this, [this, couplingTimer]() {
+            FluidSystem* fluid =
+                m_renderingSystem ? m_renderingSystem->getFluidSystem() : nullptr;
+            if (!fluid) return;
+            fluid->setImpulseSink([this](entt::entity e, const glm::vec3& impulse) {
+                if (m_simulation) m_simulation->applyFluidImpulse(e, impulse);
+            });
+            couplingTimer->stop();
+            couplingTimer->deleteLater();
+        });
+        couplingTimer->start(500);
+    }
 
     // ---------------------------------------------------------------------------
     // 3.  Core UI layout & dock setup

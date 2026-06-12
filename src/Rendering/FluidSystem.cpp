@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <QDir>
 #include <glm/gtc/quaternion.hpp>
+#include <array>
 #include <random>
 
 namespace {
@@ -75,6 +76,17 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     gl->glBufferData(GL_UNIFORM_BUFFER, sizeof(ColliderBlock), nullptr, GL_DYNAMIC_DRAW);
     gl->glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
+    // Two-way coupling impulse accumulator: one fixed-point ivec4 per
+    // collider slot (32 boxes then 32 spheres).
+    {
+        std::vector<int> zeros(size_t(kMaxBoxes + kMaxSpheres) * 4, 0);
+        gl->glGenBuffers(1, &m_impulseSSBO);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_impulseSSBO);
+        gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(zeros.size() * sizeof(int)),
+                         zeros.data(), GL_DYNAMIC_DRAW);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+
     // Whitewater diffuse particles (zeroed: life 0 = dead slot).
     {
         std::vector<float> zeros(size_t(kMaxDiffuse) * 8, 0.0f);
@@ -106,6 +118,7 @@ void FluidSystem::shutdown(QOpenGLFunctions_4_3_Core* gl)
     gl->glDeleteBuffers(1, &m_colliderUBO);
     gl->glDeleteBuffers(1, &m_diffuseSSBO);
     gl->glDeleteBuffers(1, &m_diffuseCounterSSBO);
+    gl->glDeleteBuffers(1, &m_impulseSSBO);
     m_initialized = false;
 }
 
@@ -245,6 +258,8 @@ void FluidSystem::uploadColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry&
 {
     static ColliderBlock block; // large; avoid stack churn
     int nb = 0, ns = 0;
+    m_boxEntities.clear();
+    m_sphereEntities.clear();
 
     for (auto e : registry.view<BoxCollider, TransformComponent>()) {
         if (nb >= kMaxBoxes) break;
@@ -253,6 +268,7 @@ void FluidSystem::uploadColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry&
         block.boxes[nb].center = glm::vec4(xf.translation + glm::vec3(xf.rotation * c.offset), 0.0f);
         block.boxes[nb].halfExtents = glm::vec4(c.halfExtents * xf.scale, 0.0f);
         block.boxes[nb].rotation = glm::vec4(xf.rotation.x, xf.rotation.y, xf.rotation.z, xf.rotation.w);
+        m_boxEntities.push_back(e);
         ++nb;
     }
     for (auto e : registry.view<SphereCollider, TransformComponent>()) {
@@ -262,6 +278,7 @@ void FluidSystem::uploadColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry&
         const float maxScale = std::max({ xf.scale.x, xf.scale.y, xf.scale.z });
         block.spheres[ns].centerRadius =
             glm::vec4(xf.translation + glm::vec3(xf.rotation * c.offset), c.radius * maxScale);
+        m_sphereEntities.push_back(e);
         ++ns;
     }
     block.counts = glm::ivec4(nb, ns, 0, 0);
@@ -454,6 +471,14 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         gl->glActiveTexture(GL_TEXTURE0);
     };
 
+    // Zero + bind the fluid->rigid impulse accumulator for this frame.
+    {
+        const GLint izero = 0;
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_impulseSSBO);
+        gl->glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, &izero);
+        gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, m_impulseSSBO);
+    }
+
     for (int it = 0; it < m_params.solverIterations; ++it) {
         bindCommon(lambda);
         gl->glDispatchCompute(groups, 1, 1);
@@ -461,6 +486,7 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
 
         bindCommon(deltap);
         bindSdfUniforms(deltap);
+        deltap->setFloat(gl, "u_dt", stepDt);
         gl->glDispatchCompute(groups, 1, 1);
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
@@ -506,6 +532,25 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         foamUpdate->setVec3(gl, "u_gravity", m_params.gravity);
         gl->glDispatchCompute((kMaxDiffuse + 255) / 256, 1, 1);
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+    }
+
+    // 6) Fluid -> rigid coupling: read the per-collider impulse accumulator
+    //    and hand net impulses to the rigid solver (same thread).
+    if (m_impulseSink) {
+        std::array<glm::ivec4, kMaxBoxes + kMaxSpheres> raw{};
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_impulseSSBO);
+        gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(raw), raw.data());
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        constexpr float kInvScale = 1.0f / 1.0e7f; // fixed-point decode
+        // ("emit" is a Qt macro — don't name the lambda that.)
+        auto sendImpulse = [&](int slot, entt::entity e) {
+            const glm::ivec4& v = raw[size_t(slot)];
+            if ((v.x | v.y | v.z) == 0) return;
+            m_impulseSink(e, glm::vec3(v) * kInvScale);
+        };
+        for (size_t i = 0; i < m_boxEntities.size(); ++i) sendImpulse(int(i), m_boxEntities[i]);
+        for (size_t i = 0; i < m_sphereEntities.size(); ++i)
+            sendImpulse(kMaxBoxes + int(i), m_sphereEntities[i]);
     }
 
     // Bake recording: one cache frame per rendered frame while playing.

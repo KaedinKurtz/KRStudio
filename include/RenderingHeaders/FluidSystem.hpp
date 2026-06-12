@@ -6,6 +6,7 @@
 #include <QtGui/qopengl.h>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -120,6 +121,13 @@ public:
     void setExternalSolver(FluidBackend tier, std::unique_ptr<IFluidSolver> solver);
     IFluidSolver* externalSolver() const { return m_externalSolver.get(); }
 
+    // --- Two-way coupling: fluid -> rigid impulses ---
+    /// Called once per frame per collider entity the fluid pushed against,
+    /// with the net impulse [N·s] the fluid exerted (reaction to the
+    /// boundary displacement). Wired to SimulationController by the UI.
+    using ImpulseSink = std::function<void(entt::entity, const glm::vec3&)>;
+    void setImpulseSink(ImpulseSink sink) { m_impulseSink = std::move(sink); }
+
     // --- Houdini-style bake & scrub ---
     /// While recording, every rendered frame of the playing sim is written
     /// to the cache directory; scrubbing replays frames through the same
@@ -187,6 +195,12 @@ private:
     GLuint m_diffuseSSBO = 0;   // {vec4 posLife; vec4 velType;} * kMaxDiffuse
     GLuint m_diffuseCounterSSBO = 0; // monotonic ring cursor
     uint32_t m_foamFrame = 0;
+
+    // --- Two-way coupling ---
+    GLuint m_impulseSSBO = 0;   // ivec4 per collider slot (fixed-point 1e7)
+    std::vector<entt::entity> m_boxEntities;    // collider slot -> entity
+    std::vector<entt::entity> m_sphereEntities;
+    ImpulseSink m_impulseSink;
 
     // --- Bake & scrub ---
     FluidCache m_cache;

@@ -53,6 +53,11 @@ public slots:
     /// (the next play() reads the components anyway).
     void notifyEntityChanged(entt::entity entity);
 
+    /// Two-way fluid coupling: apply the fluid's net reaction impulse [N·s]
+    /// to the entity's dynamic actor (buoyancy, splashes pushing objects).
+    /// Per-frame Δv is clamped for stability.
+    void applyFluidImpulse(entt::entity entity, const glm::vec3& impulse);
+
 signals:
     void stateChanged(SimulationState newState);
 
