@@ -498,7 +498,10 @@ void SimulationController::buildPhysicsWorld()
         sceneDesc.simulationEventCallback = &g_benchContactLogger;
     }
     m_px->scene = m_px->physics->createScene(sceneDesc);
-    m_px->defaultMaterial = m_px->physics->createMaterial(0.6f, 0.6f, 0.1f);
+    // Dead ground by default: with MAX restitution combine, bounce should
+    // come from the OBJECT's material, not an arbitrary floor default.
+    m_px->defaultMaterial = m_px->physics->createMaterial(0.6f, 0.6f, 0.0f);
+    m_px->defaultMaterial->setRestitutionCombineMode(PxCombineMode::eMAX);
 
     // Static ground plane at y=0 (matches the grid).
     m_px->groundPlane = PxCreatePlane(*m_px->physics, PxPlane(0, 1, 0, 0), *m_px->defaultMaterial);

@@ -19,7 +19,7 @@ struct FluidParams {
     float dynamicViscosityPaS = 1.002e-3f; // Pa·s (DFSPH backend; water 20 °C)
     float surfaceTensionNpm = 0.0728f;     // N/m  (DFSPH backend; water-air)
     int solverIterations = 3;      // incompressibility enforcement (higher = stiffer water)
-    float particleRadius = 0.035f; // m (render + collision radius)
+    float particleRadius = 0.025f; // m = REST SPACING d_rest (render radius too); h = 2x
     glm::vec3 gravity = { 0.0f, -9.81f, 0.0f }; // m/s^2
 };
 
@@ -64,7 +64,7 @@ struct FluidAppearance {
 class FluidSystem
 {
 public:
-    static constexpr int kMaxParticles = 100000;
+    static constexpr int kMaxParticles = 200000;
     static constexpr int kMaxBoxes = 32;
     static constexpr int kMaxSpheres = 32;
 
@@ -155,18 +155,22 @@ private:
     float m_emitAccumulator = 0.0f;
 
     // --- Tunables (PBF) ---
-    float m_h = 0.10f;              // smoothing radius (m); fixed (grid-coupled)
+    float m_h = 0.05f;              // smoothing radius = 2 * particleRadius (grid-coupled)
+    float m_builtRadius = 0.0f;     // radius the grid was built for (rebuild on change)
     FluidParams m_params;
     FluidAppearance m_appearance;
+
+    void rebuildGrid(QOpenGLFunctions_4_3_Core* gl);
 
     // --- Backend selection ---
     FluidBackend m_requestedBackend = FluidBackend::Auto;
     FluidBackend m_externalTier = FluidBackend::Auto; // tier m_externalSolver implements
     std::unique_ptr<IFluidSolver> m_externalSolver;
 
-    // Simulation domain (uniform grid bounds)
-    glm::vec3 m_domainMin = { -8.0f, 0.0f, -8.0f };
-    glm::vec3 m_domainMax = { 8.0f, 10.0f, 8.0f };
+    // Simulation domain (uniform grid bounds). Smaller than the old ±8x10:
+    // cell count scales with 1/h³ and h halved for real-fluid resolution.
+    glm::vec3 m_domainMin = { -5.0f, 0.0f, -5.0f };
+    glm::vec3 m_domainMax = { 5.0f, 8.0f, 5.0f };
     glm::ivec3 m_gridDim = { 0, 0, 0 };
 
     std::vector<glm::vec4> m_positionMirror;

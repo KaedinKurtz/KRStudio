@@ -24,6 +24,7 @@ uniform int u_gridNz;
 
 const float PI = 3.14159265358979;
 uniform float u_viscosity; // XSPH blend coefficient
+uniform float u_cohesion;  // Akinci 2013 gamma (mapped from sigma N/m)
 
 float wPoly6(float r2, float h)
 {
@@ -47,10 +48,15 @@ void main()
 
     vec3 newVel = (p[i].pred.xyz - p[i].posLife.xyz) / u_dt;
 
-    // XSPH viscosity: blend toward neighborhood velocity for coherent motion
+    // XSPH viscosity + Akinci 2013 cohesion (surface tension) in one
+    // neighbor walk. The cohesion spline is negative at close range, which
+    // doubles as anti-clustering — droplets bead, surfaces pull flat.
     vec3 pi = p[i].pred.xyz;
     ivec3 cc = cellOf(pi);
     vec3 xsph = vec3(0.0);
+    vec3 cohesion = vec3(0.0);
+    float kCoh = 32.0 / (PI * pow(u_h, 9.0));
+    float h6_64 = pow(u_h, 6.0) / 64.0;
     for (int dz = -1; dz <= 1; ++dz)
     for (int dy = -1; dy <= 1; ++dy)
     for (int dx = -1; dx <= 1; ++dx) {
@@ -61,13 +67,24 @@ void main()
         while (j >= 0) {
             if (j != int(i)) {
                 vec3 rij = pi - p[j].pred.xyz;
-                xsph += (p[j].vel.xyz - newVel) * wPoly6(dot(rij, rij), u_h)
+                float r2 = dot(rij, rij);
+                xsph += (p[j].vel.xyz - newVel) * wPoly6(r2, u_h)
                         * (u_particleMass / u_restDensity);
+                float r = sqrt(r2);
+                if (r > 1e-6 && r < u_h) {
+                    float t = (u_h - r) * (u_h - r) * (u_h - r) * r * r * r;
+                    float spline = (2.0 * r > u_h) ? t : (2.0 * t - h6_64);
+                    cohesion += -u_cohesion * u_particleMass * kCoh * spline * (rij / r);
+                }
             }
             j = nxt[j];
         }
     }
-    newVel += u_viscosity * xsph;
+    newVel += u_viscosity * xsph + cohesion * u_dt;
+    // Surface tension limits the stable step: clamp runaway accelerations.
+    float speed = length(newVel);
+    float maxSpeed = 0.5 * u_h / u_dt;
+    if (speed > maxSpeed) newVel *= maxSpeed / speed;
 
     float life = p[i].posLife.w - u_dt;
     if (life <= 0.0) {

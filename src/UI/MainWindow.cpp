@@ -431,10 +431,10 @@ MainWindow::MainWindow(QWidget* parent)
         wall("Basin.Wall-Z", { 0, H * 0.5f, -W - T }, { W, H * 0.5f, T });
 
         entt::entity water = registry.create();
-        registry.emplace<TransformComponent>(water, glm::vec3(0.0f, 0.45f, 0.0f),
+        registry.emplace<TransformComponent>(water, glm::vec3(0.0f, 0.3f, 0.0f),
                                              glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
         auto& vol = registry.emplace<FluidVolumeComponent>(water);
-        vol.halfExtents = { 0.9f, 0.3f, 0.9f };
+        vol.halfExtents = { 0.9f, 0.22f, 0.9f }; // fill top 0.52 — under the 0.7 rim
         registry.emplace<TagComponent>(water, std::string("TestWater"));
     }
 

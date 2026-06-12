@@ -54,17 +54,13 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     if (turbidityOk) m_appearance.turbidity = turbidityEnv;
     if (qEnvironmentVariableIsSet("KRS_FLUID_RECORD")) setRecording(true);
 
-    const glm::vec3 extent = m_domainMax - m_domainMin;
-    m_gridDim = glm::ivec3(glm::ceil(extent / m_h));
-    const int cellCount = m_gridDim.x * m_gridDim.y * m_gridDim.z;
-
     gl->glGenBuffers(1, &m_particleSSBO);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
     gl->glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GpuParticle) * kMaxParticles, nullptr, GL_DYNAMIC_DRAW);
 
-    gl->glGenBuffers(1, &m_gridHeadSSBO);
-    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridHeadSSBO);
-    gl->glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLint) * cellCount, nullptr, GL_DYNAMIC_DRAW);
+    m_h = 2.0f * m_params.particleRadius;
+    m_builtRadius = m_params.particleRadius;
+    rebuildGrid(gl);
 
     gl->glGenBuffers(1, &m_gridNextSSBO);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridNextSSBO);
@@ -179,7 +175,12 @@ void FluidSystem::seedVolumes(QOpenGLFunctions_4_3_Core* gl, entt::registry& reg
     for (auto e : registry.view<FluidVolumeComponent, TransformComponent>()) {
         const auto& vol = registry.get<FluidVolumeComponent>(e);
         const auto& xf = registry.get<TransformComponent>(e);
-        const float s = std::max(0.01f, vol.particleSpacing);
+        // Single resolution source of truth: the particle mass is computed
+        // from the global rest spacing, so volumes MUST seed at it too —
+        // mixed spacings give particles the wrong density and the column
+        // compresses (caught by the fluid-column benchmark).
+        const float s = m_params.particleRadius;
+        Q_UNUSED(vol.particleSpacing);
         const glm::vec3 he = vol.halfExtents;
         for (float x = -he.x; x <= he.x; x += s)
             for (float y = -he.y; y <= he.y; y += s)
@@ -300,6 +301,20 @@ void FluidSystem::setExternalSolver(FluidBackend tier, std::unique_ptr<IFluidSol
     m_externalSolver = std::move(solver);
 }
 
+void FluidSystem::rebuildGrid(QOpenGLFunctions_4_3_Core* gl)
+{
+    if (m_gridHeadSSBO) gl->glDeleteBuffers(1, &m_gridHeadSSBO);
+    const glm::vec3 extent = m_domainMax - m_domainMin;
+    m_gridDim = glm::ivec3(glm::ceil(extent / m_h));
+    const int cellCount = m_gridDim.x * m_gridDim.y * m_gridDim.z;
+    gl->glGenBuffers(1, &m_gridHeadSSBO);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridHeadSSBO);
+    gl->glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLint) * cellCount, nullptr, GL_DYNAMIC_DRAW);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    qInfo() << "[Fluid] grid rebuilt: h =" << m_h << "->" << m_gridDim.x << "x" << m_gridDim.y
+            << "x" << m_gridDim.z << "cells";
+}
+
 void FluidSystem::setRecording(bool on)
 {
     if (on) {
@@ -344,6 +359,13 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
 
     if (!m_initialized || !m_playing) return;
 
+    // Live resolution change: h and the grid follow the particle radius.
+    if (m_builtRadius != m_params.particleRadius) {
+        m_h = 2.0f * m_params.particleRadius;
+        m_builtRadius = m_params.particleRadius;
+        rebuildGrid(gl);
+    }
+
     if (activeBackend() == m_externalTier && m_externalSolver) {
         m_particleCount = m_externalSolver->update(renderer, gl, registry, dt);
         static int telemetryFrame = 0;
@@ -372,7 +394,7 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     const int cellCount = m_gridDim.x * m_gridDim.y * m_gridDim.z;
 
     // Particle mass chosen so a lattice at seeding spacing reaches rest density.
-    const float spacing = 0.05f;
+    const float spacing = m_params.particleRadius; // rest spacing d_rest
     const float particleMass = m_params.restDensity * spacing * spacing * spacing;
 
     auto bindCommon = [&](Shader* s) {
@@ -440,10 +462,21 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
 
-    // 4) finalize: velocity from positions, XSPH viscosity, lifetime
+    // 4) finalize: velocity from positions, XSPH viscosity + Akinci
+    //    cohesion (surface tension), lifetime.
     bindCommon(finalize);
     finalize->setFloat(gl, "u_dt", stepDt);
-    finalize->setFloat(gl, "u_viscosity", m_params.viscosity);
+    // XSPH c from real kinematic viscosity: c ≈ 7.3·ν·dt/h² (research
+    // brief), floored at 0.01 as the solver-noise filter; the legacy XSPH
+    // slider adds on top for artistic damping.
+    const float nu = m_params.dynamicViscosityPaS / m_params.restDensity;
+    const float cMapped = 7.3f * nu * stepDt / (m_h * m_h);
+    finalize->setFloat(gl, "u_viscosity",
+                       glm::clamp(m_params.viscosity + std::max(0.01f, cMapped), 0.0f, 0.6f));
+    // Akinci-style cohesion from sigma [N/m]. The published gamma=1 "water"
+    // assumes unit-ish masses; with our SI particle masses the stable range
+    // sits ~20x lower (gas explosion above it — found empirically).
+    finalize->setFloat(gl, "u_cohesion", m_params.surfaceTensionNpm * 0.7f);
     gl->glDispatchCompute(groups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
@@ -506,6 +539,22 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
         m_positionMirror.resize(n);
         for (int i = 0; i < n; ++i) m_positionMirror[i] = sample[i].posLife;
+        // Dispersal telemetry: p95 height + horizontal extent — separates
+        // "dense pool" from "exploded into gas" without screenshots.
+        std::vector<float> ys;
+        float maxR = 0.0f;
+        ys.reserve(size_t(n));
+        for (int i = 0; i < n; ++i) {
+            if (sample[size_t(i)].posLife.w <= 0.0f) continue;
+            ys.push_back(sample[size_t(i)].posLife.y);
+            maxR = std::max(maxR, std::max(std::abs(sample[size_t(i)].posLife.x),
+                                           std::abs(sample[size_t(i)].posLife.z)));
+        }
+        if (!ys.empty()) {
+            std::sort(ys.begin(), ys.end());
+            qInfo() << "[Fluid][autoplay] p95Y" << ys[size_t(ys.size() * 0.95)]
+                    << "maxXZ" << maxR << "live" << ys.size();
+        }
 
         if (qEnvironmentVariableIsSet("KRS_AUTOPLAY") && (s_frames % 120) == 0) {
             int inside = 0, outside = 0, sdfPenetrating = 0;
