@@ -1160,9 +1160,15 @@ entt::entity SceneBuilder::createCamera(Scene& scene,
 {
     auto& registry = scene.getRegistry();
 
-    // 1 � Create the main camera entity (which is invisible).
+    // 1 — Create the main camera entity (which is invisible).
     entt::entity camE = registry.create();
-    registry.emplace<CameraComponent>(camE, colour);
+    // NOTE: emplace<CameraComponent>(camE, colour) forwarded the COLOUR to
+    // the first member — the Camera, whose ctor takes a POSITION. Every
+    // camera spawned at the tint color as coordinates (0.29, 0.10, 0.90),
+    // ten centimetres off the ground. Construct the fields explicitly.
+    auto& camComp = registry.emplace<CameraComponent>(camE);
+    camComp.camera = Camera(position);
+    camComp.tint = colour;
     registry.emplace<TransformComponent>(camE, position);
     registry.emplace<TagComponent>(camE, "Camera");
 

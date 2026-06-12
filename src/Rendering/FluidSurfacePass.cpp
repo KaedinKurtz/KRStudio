@@ -169,9 +169,11 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
                 mn = std::min(mn, v);
                 mx = std::max(mx, v);
             }
+            const glm::vec3 camPos = glm::vec3(glm::inverse(context.view)[3]);
             qInfo() << "[SSF] depthTex" << w << "x" << h << "nonZero" << nonZero
                     << "min" << (nonZero ? mn : 0.0f) << "max" << (nonZero ? mx : 0.0f)
-                    << "particles" << count << "radius" << radius;
+                    << "particles" << count << "radius" << radius << "cam" << camPos.x
+                    << camPos.y << camPos.z << "vp" << (const void*)context.viewport;
         }
     }
 

@@ -855,23 +855,29 @@ void RenderingSystem::lightingPass(ViewportWidget* viewport)
     static float elapsed = 0.0f;
     elapsed += m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime;
     
-        RenderFrameContext ctx{
+    // RenderFrameContext.view/projection are REFERENCES: binding them to
+    // the temporaries returned by the camera getters dangles the moment
+    // this statement ends (UB — later passes read whatever reuses the
+    // stack slot; the fluid pass once read a tint color as a view matrix).
+    const glm::mat4 viewMat = camComp.camera.getViewMatrix();
+    const glm::mat4 projMat = camComp.camera.getProjectionMatrix(aspect);
+    RenderFrameContext ctx{
         m_gl,
         m_scene->getRegistry(),
         *this,
         camComp.camera,
-        camComp.camera.getViewMatrix(),
-        camComp.camera.getProjectionMatrix(aspect),
+        viewMat,
+        projMat,
         target,
         target.w,
         target.h,
         m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime,
         elapsed,
         viewport
-         };
-    
-        // Let the LightingPass do *its* binding of gPosition,gNormal,gAlbedoSpec
-        m_lightingPass->execute(ctx);
+    };
+
+    // Let the LightingPass do *its* binding of gPosition,gNormal,gAlbedoSpec
+    m_lightingPass->execute(ctx);
 }
 
 void RenderingSystem::postProcessingPass(ViewportWidget* viewport)
@@ -981,13 +987,19 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
     static float elapsed = 0.0f;
     elapsed += m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime;
 
+    // view/projection must be locals: the context stores REFERENCES, and
+    // binding them to getter temporaries is a dangling reference for every
+    // pass below (this painted the whole screen as 25cm-deep water — the
+    // fluid pass was reading the camera's tint color as its view matrix).
+    const glm::mat4 viewMat = camComp.camera.getViewMatrix();
+    const glm::mat4 projMat = camComp.camera.getProjectionMatrix(aspect);
     RenderFrameContext ctx{
         m_gl,
         m_scene->getRegistry(),
         *this,
         camComp.camera,
-        camComp.camera.getViewMatrix(),
-        camComp.camera.getProjectionMatrix(aspect),
+        viewMat,
+        projMat,
         target,
         target.w,
         target.h,
