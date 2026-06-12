@@ -60,3 +60,9 @@ assets/**/*.fbx
 !assets/samples/**
 # Keep dir structure if assets/ is otherwise empty
 assets/.gitkeep
+
+# Qt Designer autosave files
+*.autosave
+
+# Local build convenience script (machine-specific paths)
+run_configure.bat

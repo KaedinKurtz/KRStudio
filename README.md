@@ -115,9 +115,13 @@ git clone https://github.com/KaedinKurtz/KRStudio.git
 
 cd KRStudio
 
-cmake --preset windows-msvc-debug
+# Release build (use this for normal development — Debug builds render at a fraction of the framerate)
+cmake --preset windows-ninja-release
+cmake --build --preset release
 
-cmake --build build
+# Debug build (only when you need a debugger; expect low FPS)
+cmake --preset windows-ninja-debug
+cmake --build --preset debug
 
 
 

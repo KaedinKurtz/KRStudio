@@ -83,6 +83,13 @@ endif()
 # -----------------------------
 #  Global Configuration
 # -----------------------------
+# Default to an optimized build — an unoptimized Debug build of this engine
+# runs at a fraction of the framerate. Use the *-debug presets to debug.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -192,7 +199,6 @@ file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
 
 # FIX: Use specific, non-overlapping GLOB calls to prevent searching the build directory.
 # This is the definitive fix for the "multiple rules" error.
-file(GLOB ROOT_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/*.cpp")
 file(GLOB_RECURSE NODE_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/Nodes/*.cpp")
 file(GLOB_RECURSE OBJECT_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/Object/*.cpp")
 file(GLOB_RECURSE RENDERING_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/Rendering/*.cpp")
@@ -203,7 +209,6 @@ file(GLOB_RECURSE RESOURCES_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/R
 file(GLOB_RECURSE PUGIXML_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/external/pugixml/*.cpp")
 
 set(SOURCE_FILES
-    ${ROOT_SOURCES}
     ${NODE_SOURCES}
     ${OBJECT_SOURCES}
     ${RENDERING_SOURCES}
@@ -440,6 +445,16 @@ if(WIN32)
           "${CMAKE_SOURCE_DIR}/assets"
           "$<TARGET_FILE_DIR:RoboticsSoftware>/assets"
 )
+
+  # windeployqt copies the qsqlite plugin but not its vcpkg dependency:
+  # without sqlite3.dll next to the exe the QSQLITE driver fails to load
+  # and the app exits at database init.
+  if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+    add_custom_command(TARGET RoboticsSoftware POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin/sqlite3.dll"
+              "$<TARGET_FILE_DIR:RoboticsSoftware>")
+  endif()
 endif()
 
 # Define installation rules for creating a distributable package.
