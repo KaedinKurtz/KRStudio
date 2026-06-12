@@ -291,6 +291,11 @@ MainWindow::MainWindow(QWidget* parent)
     m_scene = std::make_unique<Scene>();
     auto& registry = m_scene->getRegistry();
 
+    // Simulation exists BEFORE any entity spawns: spawn paths request
+    // speculative collision cooks, which need the PhysX core (created
+    // eagerly in the SimulationController constructor).
+    m_simulation = std::make_unique<SimulationController>(m_scene.get(), this);
+
     m_gizmoSystem = std::make_unique<GizmoSystem>(*m_scene);
 
     ads::CDockManager::setConfigFlag(ads::CDockManager::ActiveTabHasCloseButton, true);
@@ -384,8 +389,9 @@ MainWindow::MainWindow(QWidget* parent)
             auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
             mat.heightScale = 0.1f;
             registry.emplace_or_replace<TagComponent>(e, std::string("Dragon"));
-            // Static convex hull: rigid bodies collide with the dragon.
-            registry.emplace_or_replace<ConvexMeshCollider>(e);
+            // Rigid collision comes from AutoCollisionComponent (attached at
+            // spawn): static scenery resolves to the EXACT cooked triangle
+            // mesh — balls rest in the dragon's actual concavities now.
             // Exact-shape fluid collision: SDF baked from the mesh at Play.
             registry.emplace_or_replace<SDFColliderComponent>(e);
 
@@ -415,7 +421,9 @@ MainWindow::MainWindow(QWidget* parent)
             rb.mass = 1.0f;
             if (sphere) {
                 auto& col = registry.emplace<SphereCollider>(e);
-                col.radius = 0.5f * scale.x; // unit primitives are ~1m across
+                // Local-space radius: unit icosphere is 1 m across; the
+                // backend multiplies by the entity scale (was double-scaled).
+                col.radius = 0.5f;
                 col.material.restitution = 0.45f;
             }
             else {
@@ -508,7 +516,6 @@ MainWindow::MainWindow(QWidget* parent)
 
     // --- 2. Create the SINGLE Shared Rendering System ---
     m_renderingSystem = std::make_unique<RenderingSystem>(nullptr);
-    m_simulation = std::make_unique<SimulationController>(m_scene.get(), this);
 
     // ---------------------------------------------------------------------------
     // 3.  Core UI layout & dock setup

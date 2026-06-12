@@ -6,6 +6,7 @@
 #include "PrimitiveBuilders.hpp"
 #include "ResourceManager.hpp" // For loading meshes
 #include "SceneQuery.hpp"      // For SpawnCommand, SurfaceQueryFunction, etc.
+#include "CollisionCookingService.hpp" // Speculative collision cooking at spawn
 
 #include <limits>
 #include <glm/gtc/matrix_transform.hpp>
@@ -133,6 +134,13 @@ entt::entity SceneBuilder::spawnPrimitive(Scene& scene, int primitive,
     registry.emplace<TransformComponent>(e, position, glm::quat(1, 0, 0, 0), scale);
     registry.emplace<TriPlanarMaterialTag>(e); // primitives have no UVs
     registry.emplace<TagComponent>(e, name.empty() ? std::string("Primitive") : name);
+
+    // Every mesh entering the scene collides with its real shape by default.
+    // Cook both variants speculatively in the background so the data is warm
+    // before the user presses Play (cache-deduplicated across instances).
+    registry.emplace<AutoCollisionComponent>(e);
+    CollisionCookingService::instance().requestTriangleMesh(mesh.vertices, mesh.indices, name);
+    CollisionCookingService::instance().requestConvexHull(mesh.vertices, name);
     return e;
 }
 
@@ -183,6 +191,14 @@ entt::entity SceneBuilder::spawnMeshInstance(Scene& scene, MeshID meshId,
     else {
         registry.emplace_or_replace<TriPlanarMaterialTag>(newEntity);
     }
+
+    // 5. Real-shape collision by default; warm both cooked variants now so
+    //    Play never blocks on a cold cook (deduplicated by geometry hash).
+    registry.emplace_or_replace<AutoCollisionComponent>(newEntity);
+    CollisionCookingService::instance().requestTriangleMesh(
+        newMeshComp.vertices, newMeshComp.indices, newMeshComp.sourcePath);
+    CollisionCookingService::instance().requestConvexHull(
+        newMeshComp.vertices, newMeshComp.sourcePath);
 
     return newEntity;
 }

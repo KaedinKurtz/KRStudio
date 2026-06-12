@@ -128,9 +128,14 @@ QWidget* PhysicsPropertiesWidget::buildColliderSection()
 
     g->addWidget(new QLabel(QStringLiteral("Shape"), box), 0, 0);
     m_colShape = new QComboBox(box);
-    m_colShape->addItems({ QStringLiteral("Auto Box (fit bounds)"), QStringLiteral("Box"),
+    m_colShape->addItems({ QStringLiteral("Auto (Exact Mesh)"), QStringLiteral("Convex Hull"),
+                           QStringLiteral("Convex Decomposition"), QStringLiteral("Box"),
                            QStringLiteral("Sphere"), QStringLiteral("Capsule"),
-                           QStringLiteral("Convex Mesh") });
+                           QStringLiteral("Auto Box (fit bounds)"), QStringLiteral("None") });
+    m_colShape->setToolTip(QStringLiteral(
+        "Auto (Exact Mesh): statics/kinematics collide with the exact triangle mesh,\n"
+        "dynamics with a convex hull (CPU solver limit).\n"
+        "Convex Decomposition: V-HACD multi-hull — concave dynamics keep their cavities."));
     g->addWidget(m_colShape, 0, 1);
 
     m_colStack = new QStackedWidget(box);
@@ -182,11 +187,16 @@ QWidget* PhysicsPropertiesWidget::buildColliderSection()
     m_colAutoFit = new QPushButton(QStringLiteral("Fit to mesh bounds"), box);
     g->addWidget(m_colAutoFit, 2, 0, 1, 2);
 
+    m_colStatus = new QLabel(box);
+    m_colStatus->setStyleSheet("color: palette(mid); font-size: 8pt;");
+    m_colStatus->setWordWrap(true);
+    g->addWidget(m_colStatus, 3, 0, 1, 2);
+
     m_sdfFluidCollider = new QCheckBox(QStringLiteral("Exact fluid collision (SDF bake)"), box);
     m_sdfFluidCollider->setToolTip(QStringLiteral(
         "Bakes this mesh into a signed distance field at Play so the fluid\n"
         "collides with the exact shape (OpenVDB). Static geometry only."));
-    g->addWidget(m_sdfFluidCollider, 3, 0, 1, 2);
+    g->addWidget(m_sdfFluidCollider, 4, 0, 1, 2);
     connect(m_sdfFluidCollider, &QCheckBox::toggled, this, [this](bool on) {
         if (m_updating || m_entity == entt::null) return;
         auto& reg = m_scene->getRegistry();
@@ -197,8 +207,9 @@ QWidget* PhysicsPropertiesWidget::buildColliderSection()
     });
 
     connect(m_colShape, &QComboBox::currentIndexChanged, this, [this](int idx) {
-        // shape combo: 0 none, 1 box, 2 sphere, 3 capsule, 4 convex
-        const int page = (idx == 1) ? 1 : (idx == 2) ? 2 : (idx == 3) ? 3 : 0;
+        // combo: 0 auto-exact, 1 hull, 2 decomposition, 3 box, 4 sphere,
+        //        5 capsule, 6 auto-box, 7 none
+        const int page = (idx == 3) ? 1 : (idx == 4) ? 2 : (idx == 5) ? 3 : 0;
         m_colStack->setCurrentIndex(page);
         applyCollider();
     });
@@ -313,7 +324,7 @@ void PhysicsPropertiesWidget::rebuildFromEntity()
 
     // collider (priority order matches the simulation backend)
     if (const auto* box = reg.try_get<BoxCollider>(m_entity)) {
-        m_colShape->setCurrentIndex(1);
+        m_colShape->setCurrentIndex(3);
         m_colStack->setCurrentIndex(1);
         m_colBoxX->setValue(box->halfExtents.x);
         m_colBoxY->setValue(box->halfExtents.y);
@@ -322,26 +333,38 @@ void PhysicsPropertiesWidget::rebuildFromEntity()
         m_rbRestitution->setValue(box->material.restitution);
     }
     else if (const auto* sph = reg.try_get<SphereCollider>(m_entity)) {
-        m_colShape->setCurrentIndex(2);
+        m_colShape->setCurrentIndex(4);
         m_colStack->setCurrentIndex(2);
         m_colSphereRadius->setValue(sph->radius);
         m_rbFriction->setValue(sph->material.dynamicFriction);
         m_rbRestitution->setValue(sph->material.restitution);
     }
     else if (const auto* cap = reg.try_get<CapsuleCollider>(m_entity)) {
-        m_colShape->setCurrentIndex(3);
+        m_colShape->setCurrentIndex(5);
         m_colStack->setCurrentIndex(3);
         m_colCapRadius->setValue(cap->radius);
         m_colCapHeight->setValue(cap->height);
     }
     else if (reg.any_of<ConvexMeshCollider>(m_entity)) {
-        m_colShape->setCurrentIndex(4);
+        m_colShape->setCurrentIndex(1); // legacy component == Convex Hull
         m_colStack->setCurrentIndex(0);
+    }
+    else if (const auto* ac = reg.try_get<AutoCollisionComponent>(m_entity)) {
+        switch (ac->mode) {
+        case AutoCollisionComponent::Mode::AutoExact:           m_colShape->setCurrentIndex(0); break;
+        case AutoCollisionComponent::Mode::ConvexHull:          m_colShape->setCurrentIndex(1); break;
+        case AutoCollisionComponent::Mode::ConvexDecomposition: m_colShape->setCurrentIndex(2); break;
+        case AutoCollisionComponent::Mode::None:                m_colShape->setCurrentIndex(7); break;
+        }
+        m_colStack->setCurrentIndex(0);
+        m_rbFriction->setValue(ac->material.dynamicFriction);
+        m_rbRestitution->setValue(ac->material.restitution);
     }
     else {
-        m_colShape->setCurrentIndex(0);
+        m_colShape->setCurrentIndex(6); // backend AABB fallback == Auto Box
         m_colStack->setCurrentIndex(0);
     }
+    updateCollisionStatusLabel();
 
     m_sdfFluidCollider->setChecked(reg.any_of<SDFColliderComponent>(m_entity));
 
@@ -405,33 +428,38 @@ void PhysicsPropertiesWidget::applyCollider()
     reg.remove<SphereCollider>(m_entity);
     reg.remove<CapsuleCollider>(m_entity);
     reg.remove<ConvexMeshCollider>(m_entity);
+    reg.remove<AutoCollisionComponent>(m_entity);
+
+    auto emplaceAuto = [&](AutoCollisionComponent::Mode mode) {
+        auto& c = reg.emplace<AutoCollisionComponent>(m_entity);
+        c.mode = mode;
+        c.material = mat;
+    };
 
     switch (m_colShape->currentIndex()) {
-    case 1: { // box
+    case 0: emplaceAuto(AutoCollisionComponent::Mode::AutoExact); break;
+    case 1: emplaceAuto(AutoCollisionComponent::Mode::ConvexHull); break;
+    case 2: emplaceAuto(AutoCollisionComponent::Mode::ConvexDecomposition); break;
+    case 3: { // box
         auto& c = reg.emplace<BoxCollider>(m_entity);
         c.halfExtents = { float(m_colBoxX->value()), float(m_colBoxY->value()), float(m_colBoxZ->value()) };
         c.material = mat;
         break;
     }
-    case 2: { // sphere
+    case 4: { // sphere
         auto& c = reg.emplace<SphereCollider>(m_entity);
         c.radius = float(m_colSphereRadius->value());
         c.material = mat;
         break;
     }
-    case 3: { // capsule
+    case 5: { // capsule
         auto& c = reg.emplace<CapsuleCollider>(m_entity);
         c.radius = float(m_colCapRadius->value());
         c.height = float(m_colCapHeight->value());
         c.material = mat;
         break;
     }
-    case 4: { // convex mesh
-        auto& c = reg.emplace<ConvexMeshCollider>(m_entity);
-        c.material = mat;
-        break;
-    }
-    default: { // Auto Box: explicit fitted box so materials apply
+    case 6: { // Auto Box: explicit fitted box so materials apply
         glm::vec3 he(0.5f);
         if (const auto* mesh = reg.try_get<RenderableMeshComponent>(m_entity))
             he = glm::max((mesh->aabbMax - mesh->aabbMin) * 0.5f, glm::vec3(0.01f));
@@ -440,8 +468,53 @@ void PhysicsPropertiesWidget::applyCollider()
         c.material = mat;
         break;
     }
+    default: emplaceAuto(AutoCollisionComponent::Mode::None); break;
     }
+    updateCollisionStatusLabel();
     emit entityComponentsChanged(m_entity);
+}
+
+void PhysicsPropertiesWidget::updateCollisionStatusLabel()
+{
+    if (!m_colStatus) return;
+    auto& reg = m_scene->getRegistry();
+    if (m_entity == entt::null || !reg.valid(m_entity)) {
+        m_colStatus->clear();
+        return;
+    }
+
+    const auto* mesh = reg.try_get<RenderableMeshComponent>(m_entity);
+    const size_t tris = mesh ? mesh->indices.size() / 3 : 0;
+    const auto* rb = reg.try_get<RigidBodyComponent>(m_entity);
+    const bool dynamic = rb && rb->bodyType == RigidBodyComponent::BodyType::Dynamic;
+
+    QString text;
+    if (reg.any_of<BoxCollider>(m_entity))            text = QStringLiteral("Resolves to: box primitive");
+    else if (reg.any_of<SphereCollider>(m_entity))    text = QStringLiteral("Resolves to: sphere primitive");
+    else if (reg.any_of<CapsuleCollider>(m_entity))   text = QStringLiteral("Resolves to: capsule primitive");
+    else if (reg.any_of<ConvexMeshCollider>(m_entity))
+        text = QStringLiteral("Resolves to: convex hull (≤64 verts)");
+    else if (const auto* ac = reg.try_get<AutoCollisionComponent>(m_entity)) {
+        switch (ac->mode) {
+        case AutoCollisionComponent::Mode::AutoExact:
+            text = dynamic
+                ? QStringLiteral("Resolves to: convex hull (dynamic body — exact trimesh needs the GPU solver)")
+                : QStringLiteral("Resolves to: exact triangle mesh (%1 tris)").arg(tris);
+            break;
+        case AutoCollisionComponent::Mode::ConvexHull:
+            text = QStringLiteral("Resolves to: convex hull (≤64 verts)");
+            break;
+        case AutoCollisionComponent::Mode::ConvexDecomposition:
+            text = QStringLiteral("Resolves to: V-HACD multi-hull decomposition");
+            break;
+        case AutoCollisionComponent::Mode::None:
+            text = QStringLiteral("No collision — body moves but touches nothing");
+            break;
+        }
+    }
+    else
+        text = QStringLiteral("Resolves to: fitted bounding box (legacy fallback)");
+    m_colStatus->setText(text);
 }
 
 void PhysicsPropertiesWidget::applyEmitter()

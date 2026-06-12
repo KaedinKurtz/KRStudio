@@ -745,6 +745,28 @@ struct ConvexMeshCollider {
 };
 
 /**
+ * @brief Spawn-time default collision intent, attached automatically to every
+ * mesh/primitive that enters the scene. Resolved at physics-actor creation
+ * time (the body type isn't known until then):
+ *   static / kinematic -> exact cooked triangle mesh (true to the render mesh)
+ *   dynamic            -> convex hull (CPU PhysX can't simulate dynamic
+ *                         trimeshes; V-HACD decomposition upgrades concave
+ *                         dynamics, PhysX GPU SDF collision once CUDA exists)
+ * Explicit legacy colliders (Box/Sphere/Capsule/ConvexMesh) take priority.
+ */
+struct AutoCollisionComponent {
+    enum class Mode {
+        AutoExact,           // resolve by body type (default)
+        ConvexHull,          // force single hull
+        ConvexDecomposition, // force V-HACD multi-hull (dynamic concave)
+        None                 // opt out of automatic collision
+    };
+    Mode mode = Mode::AutoExact;
+    PhysicsMaterial material;
+    bool isTrigger = false;
+};
+
+/**
  * @brief Bakes the entity's render mesh into a signed distance field
  * (OpenVDB meshToLevelSet) that the fluid collides against — exact-shape
  * fluid interaction for arbitrary geometry (e.g. water poured on a statue,

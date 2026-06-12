@@ -40,6 +40,7 @@ private slots:
 
 private:
     void rebuildFromEntity();
+    void updateCollisionStatusLabel();
     QWidget* buildRigidBodySection();
     QWidget* buildColliderSection();
     QWidget* buildFluidSection();
@@ -71,6 +72,7 @@ private:
     QDoubleSpinBox* m_colCapHeight = nullptr;
     QPushButton* m_colAutoFit = nullptr;
     QCheckBox* m_sdfFluidCollider = nullptr;
+    QLabel* m_colStatus = nullptr; // what the backend will actually build
 
     // fluid
     QCheckBox* m_emEnabled = nullptr;
