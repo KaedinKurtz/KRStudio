@@ -33,6 +33,7 @@
 #include "SimulationController.hpp"
 #include "PrimitiveBuilders.hpp"
 #include "PhysicsPropertiesWidget.hpp"
+#include "OutlinerWidget.hpp"
 
 #include <QDir>
 #include <QDirIterator>
@@ -376,6 +377,9 @@ MainWindow::MainWindow(QWidget* parent)
 
             auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
             mat.heightScale = 0.1f;
+            registry.emplace_or_replace<TagComponent>(e, std::string("Dragon"));
+            // Static convex hull: rigid bodies collide with the dragon.
+            registry.emplace_or_replace<ConvexMeshCollider>(e);
         }
     }
 
@@ -403,11 +407,12 @@ MainWindow::MainWindow(QWidget* parent)
             return e;
         };
 
-        addRigidPrimitive(Primitive::Cube, "Cube.001", { 2.0f, 0.5f, 0.0f }, glm::vec3(1.0f), false);
-        addRigidPrimitive(Primitive::Cube, "Cube.002", { 2.05f, 1.6f, 0.05f }, glm::vec3(1.0f), false);
-        addRigidPrimitive(Primitive::Cube, "Cube.003", { 1.95f, 2.7f, -0.05f }, glm::vec3(1.0f), false);
-        addRigidPrimitive(Primitive::IcoSphere, "Sphere.001", { 2.3f, 4.2f, 0.1f }, glm::vec3(0.5f), true);
-        addRigidPrimitive(Primitive::IcoSphere, "Sphere.002", { 1.7f, 5.2f, -0.1f }, glm::vec3(0.5f), true);
+        // Keep clear of the dragon's convex hull at the origin.
+        addRigidPrimitive(Primitive::Cube, "Cube.001", { 5.0f, 0.5f, 0.0f }, glm::vec3(1.0f), false);
+        addRigidPrimitive(Primitive::Cube, "Cube.002", { 5.05f, 1.6f, 0.05f }, glm::vec3(1.0f), false);
+        addRigidPrimitive(Primitive::Cube, "Cube.003", { 4.95f, 2.7f, -0.05f }, glm::vec3(1.0f), false);
+        addRigidPrimitive(Primitive::IcoSphere, "Sphere.001", { 5.3f, 4.2f, 0.1f }, glm::vec3(0.5f), true);
+        addRigidPrimitive(Primitive::IcoSphere, "Sphere.002", { 4.7f, 5.2f, -0.1f }, glm::vec3(0.5f), true);
 
         // --- Fluid demo: an open-top "glass" with water seeded inside and a
         // tap pouring more in from above. Walls are static rigid boxes so the
@@ -807,6 +812,24 @@ MainWindow::MainWindow(QWidget* parent)
             m_dockManager->addDockWidget(ads::BottomDockWidgetArea, physDock, rightArea);
         else
             m_dockManager->addDockWidget(ads::RightDockWidgetArea, physDock);
+    }
+
+    // --- Outliner: tabbed with GridProperties in the right column ---
+    {
+        auto* outliner = new OutlinerWidget(m_scene.get(), this);
+        connect(outliner, &OutlinerWidget::selectionEdited, this,
+                [this]() { refreshGizmoAndProperties(); });
+        auto* outDock = new ads::CDockWidget(QStringLiteral("Outliner"), this);
+        outDock->setWidget(outliner);
+        outDock->setStyleSheet(sidePanelStyle);
+        ads::CDockAreaWidget* rightArea = nullptr;
+        auto gridIt2 = m_menus.find(MenuType::GridProperties);
+        if (gridIt2 != m_menus.end() && gridIt2->dock)
+            rightArea = gridIt2->dock->dockAreaWidget();
+        if (rightArea)
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, outDock, rightArea);
+        else
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, outDock);
     }
 
     // --- Application menu bar (File / Add / Simulation) ---
@@ -1544,9 +1567,49 @@ void MainWindow::buildMenuBar()
 
     // --- File ---
     QMenu* fileMenu = bar->addMenu(QStringLiteral("&File"));
+    QAction* importAct = fileMenu->addAction(QStringLiteral("Import Mesh..."));
+    importAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_I));
+    connect(importAct, &QAction::triggered, this, [this]() {
+        const QString path = QFileDialog::getOpenFileName(
+            this, QStringLiteral("Import Mesh"), QString(),
+            QStringLiteral("Meshes (*.stl *.obj *.fbx *.dae *.ply *.gltf *.glb *.3ds);;All files (*)"));
+        if (path.isEmpty()) return;
+        MeshID id = ResourceManager::instance().loadMesh(path);
+        if (id == MeshID::None) {
+            statusBar()->showMessage(QStringLiteral("Import failed: %1").arg(path), 5000);
+            return;
+        }
+        entt::entity e = SceneBuilder::spawnMeshInstance(*m_scene, id,
+            glm::vec3(0.0f, 0.5f, 0.0f));
+        auto& reg = m_scene->getRegistry();
+        reg.emplace_or_replace<TagComponent>(e, QFileInfo(path).baseName().toStdString());
+        for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+        reg.emplace<SelectedComponent>(e);
+        refreshGizmoAndProperties();
+        statusBar()->showMessage(QStringLiteral("Imported %1").arg(QFileInfo(path).fileName()), 4000);
+    });
+    fileMenu->addSeparator();
     QAction* quitAct = fileMenu->addAction(QStringLiteral("Quit"));
     quitAct->setShortcut(QKeySequence::Quit);
     connect(quitAct, &QAction::triggered, this, &QWidget::close);
+
+    // --- Edit ---
+    QMenu* editMenu = bar->addMenu(QStringLiteral("&Edit"));
+    QAction* deleteAct = editMenu->addAction(QStringLiteral("Delete Selected"));
+    deleteAct->setShortcut(QKeySequence::Delete);
+    connect(deleteAct, &QAction::triggered, this, [this]() {
+        auto& reg = m_scene->getRegistry();
+        std::vector<entt::entity> doomed;
+        for (auto e : reg.view<SelectedComponent>()) {
+            // Never delete cameras or grids through this path.
+            if (reg.any_of<CameraComponent, GridComponent>(e)) continue;
+            doomed.push_back(e);
+        }
+        if (doomed.empty()) return;
+        reg.destroy(doomed.begin(), doomed.end());
+        refreshGizmoAndProperties();
+        statusBar()->showMessage(QStringLiteral("Deleted %1 object(s)").arg(doomed.size()), 3000);
+    });
 
     // --- Add (Blender's Shift+A spirit) ---
     QMenu* addMenu = bar->addMenu(QStringLiteral("&Add"));
