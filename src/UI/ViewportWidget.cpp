@@ -5,6 +5,10 @@
 #include <QSurfaceFormat>
 #include <QTimer>
 #include <QMouseEvent>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QWheelEvent>
 #include <QKeyEvent>
 #include <QCloseEvent>
@@ -211,6 +215,7 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
     m_instanceId = s_instanceCounter++;
     qDebug() << "[LIFECYCLE] Constructing ViewportWidget instance:" << m_instanceId;
     setFocusPolicy(Qt::StrongFocus);
+    setAcceptDrops(true); // asset-browser drag-and-drop spawning
 
     m_statsOverlay = new QLabel(this);
     m_statsOverlay->setStyleSheet("background-color: rgba(44, 49, 58, 0.7);"
@@ -559,6 +564,45 @@ void ViewportWidget::keyPressEvent(QKeyEvent* ev)
         }
     }
     update();
+}
+
+void ViewportWidget::dragEnterEvent(QDragEnterEvent* ev)
+{
+    if (ev->mimeData()->hasFormat(QStringLiteral("application/x-krstudio-asset")))
+        ev->acceptProposedAction();
+}
+
+void ViewportWidget::dragMoveEvent(QDragMoveEvent* ev)
+{
+    if (ev->mimeData()->hasFormat(QStringLiteral("application/x-krstudio-asset")))
+        ev->acceptProposedAction();
+}
+
+void ViewportWidget::dropEvent(QDropEvent* ev)
+{
+    const QMimeData* mime = ev->mimeData();
+    if (!mime->hasFormat(QStringLiteral("application/x-krstudio-asset")) || !m_scene) return;
+    const QString path = QString::fromUtf8(
+        mime->data(QStringLiteral("application/x-krstudio-asset")));
+    if (path.isEmpty()) return;
+
+    const QPoint pos = ev->position().toPoint();
+    Camera& cam = getCamera();
+
+    // Land on whatever the cursor points at; ground plane as the fallback.
+    glm::vec3 worldPos(0.0f, 0.5f, 0.0f);
+    if (auto hit = cpuPickAABB(*m_scene, cam, pos.x(), pos.y(), width(), height())) {
+        worldPos = hit->worldPos;
+    } else {
+        CpuRay ray = makeCpuRay(cam, pos.x(), pos.y(), width(), height());
+        float t;
+        glm::vec3 H;
+        if (rayPlane(ray.origin, ray.dir, glm::vec3(0), glm::vec3(0, 1, 0), t, H))
+            worldPos = H;
+    }
+
+    emit assetDropped(path, worldPos);
+    ev->acceptProposedAction();
 }
 
 void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* ev)

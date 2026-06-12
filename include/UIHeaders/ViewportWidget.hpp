@@ -55,6 +55,9 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* ev) override;
     void mouseDoubleClickEvent(QMouseEvent* ev) override;
+    void dragEnterEvent(QDragEnterEvent* ev) override;
+    void dragMoveEvent(QDragMoveEvent* ev) override;
+    void dropEvent(QDropEvent* ev) override;
 
     const float frameDt = 1.0f / 60.0f; // Fixed frame rate for simplicity
 
@@ -109,4 +112,7 @@ signals: // <<< ADD THIS SECTION
     void selectionChanged(const QVector<entt::entity>& selectedEntities, const Camera& camera);
     void gizmoModeRequested(int mode);
     void gizmoHandleDoubleClicked(int mode, int axis);
+    /// An asset (mesh path) was dropped at a world position (ray-cast hit
+    /// against scene AABBs, else the ground plane).
+    void assetDropped(const QString& path, const glm::vec3& worldPos);
 };

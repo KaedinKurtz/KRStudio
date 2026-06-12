@@ -58,6 +58,12 @@ public:
 
     ViewportWidget* primaryViewport() const;
     void refreshGizmoAndProperties(ViewportWidget* vp = nullptr);
+
+public slots:
+    /// Load a mesh asset and spawn it at a world position (asset-browser
+    /// button and viewport drag-and-drop both land here).
+    void spawnMeshAssetAt(const QString& path, const glm::vec3& worldPos);
+
 protected:
     // No changes needed here
     void setDockManagerBaseStyle();

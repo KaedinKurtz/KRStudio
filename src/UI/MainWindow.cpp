@@ -37,6 +37,7 @@
 #include "OutlinerWidget.hpp"
 #include "FluidPropertiesWidget.hpp"
 #include "TextureBrowserWidget.hpp"
+#include "AssetBrowserWidget.hpp"
 #include "BenchmarkRunner.hpp"
 
 #include <QDir>
@@ -654,6 +655,7 @@ MainWindow::MainWindow(QWidget* parent)
         this,
         &MainWindow::onSelectionChanged
     );
+    connect(viewport1, &ViewportWidget::assetDropped, this, &MainWindow::spawnMeshAssetAt);
 
     connect(viewport1, &ViewportWidget::gizmoModeRequested, this, [this](int m) {
         if (!m_gizmoSystem) return;
@@ -915,6 +917,23 @@ MainWindow::MainWindow(QWidget* parent)
         diagDock->setWidget(diagPanel);
         diagDock->setStyleSheet(sidePanelStyle);
         m_dockManager->addDockWidget(ads::BottomDockWidgetArea, diagDock);
+
+        // Asset browser: mesh imports + drag-and-drop spawning, tabbed with
+        // Diagnostics (the wide bottom area suits an icon grid).
+        auto* assetBrowser = new AssetBrowserWidget(
+            QCoreApplication::applicationDirPath() + QLatin1String("/assets"), this);
+        connect(assetBrowser, &AssetBrowserWidget::spawnRequested, this,
+                [this](const QString& path) {
+                    spawnMeshAssetAt(path, glm::vec3(0.0f, 0.5f, 0.0f));
+                });
+        auto* assetDock = new ads::CDockWidget(QStringLiteral("Assets"), this);
+        assetDock->setWidget(assetBrowser);
+        assetDock->setStyleSheet(sidePanelStyle);
+        if (auto* diagArea = diagDock->dockAreaWidget())
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, assetDock, diagArea);
+        else
+            m_dockManager->addDockWidget(ads::BottomDockWidgetArea, assetDock);
+        diagDock->setAsCurrentTab();
     }
 
     // --- Physics properties dock: right column, below GridProperties ---
@@ -1325,6 +1344,7 @@ void MainWindow::addViewport() {
 
     vp->setGizmoSystem(m_gizmoSystem.get());
     connect(vp, &ViewportWidget::selectionChanged, this, &MainWindow::onSelectionChanged);
+    connect(vp, &ViewportWidget::assetDropped, this, &MainWindow::spawnMeshAssetAt);
 
     ads::CDockAreaWidget* anchor = nullptr;
     if (m_dockContainers.size() > 1)
@@ -1702,6 +1722,23 @@ entt::entity MainWindow::addObjectFromMenu(int primitive, const QString& baseNam
     return e;
 }
 
+void MainWindow::spawnMeshAssetAt(const QString& path, const glm::vec3& worldPos)
+{
+    if (!m_scene) return;
+    MeshID id = ResourceManager::instance().loadMesh(path);
+    if (id == MeshID::None) {
+        statusBar()->showMessage(QStringLiteral("Mesh load failed: %1").arg(path), 5000);
+        return;
+    }
+    entt::entity e = SceneBuilder::spawnMeshInstance(*m_scene, id, worldPos);
+    auto& reg = m_scene->getRegistry();
+    reg.emplace_or_replace<TagComponent>(e, QFileInfo(path).baseName().toStdString());
+    for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+    reg.emplace<SelectedComponent>(e);
+    refreshGizmoAndProperties();
+    statusBar()->showMessage(QStringLiteral("Spawned %1").arg(QFileInfo(path).fileName()), 4000);
+}
+
 void MainWindow::buildMenuBar()
 {
     auto* bar = menuBar();
@@ -1721,19 +1758,7 @@ void MainWindow::buildMenuBar()
             this, QStringLiteral("Import Mesh"), QString(),
             QStringLiteral("Meshes (*.stl *.obj *.fbx *.dae *.ply *.gltf *.glb *.3ds);;All files (*)"));
         if (path.isEmpty()) return;
-        MeshID id = ResourceManager::instance().loadMesh(path);
-        if (id == MeshID::None) {
-            statusBar()->showMessage(QStringLiteral("Import failed: %1").arg(path), 5000);
-            return;
-        }
-        entt::entity e = SceneBuilder::spawnMeshInstance(*m_scene, id,
-            glm::vec3(0.0f, 0.5f, 0.0f));
-        auto& reg = m_scene->getRegistry();
-        reg.emplace_or_replace<TagComponent>(e, QFileInfo(path).baseName().toStdString());
-        for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
-        reg.emplace<SelectedComponent>(e);
-        refreshGizmoAndProperties();
-        statusBar()->showMessage(QStringLiteral("Imported %1").arg(QFileInfo(path).fileName()), 4000);
+        spawnMeshAssetAt(path, glm::vec3(0.0f, 0.5f, 0.0f));
     });
     fileMenu->addSeparator();
     QAction* quitAct = fileMenu->addAction(QStringLiteral("Quit"));
