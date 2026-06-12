@@ -74,6 +74,20 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     gl->glBufferData(GL_UNIFORM_BUFFER, sizeof(ColliderBlock), nullptr, GL_DYNAMIC_DRAW);
     gl->glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
+    // Whitewater diffuse particles (zeroed: life 0 = dead slot).
+    {
+        std::vector<float> zeros(size_t(kMaxDiffuse) * 8, 0.0f);
+        gl->glGenBuffers(1, &m_diffuseSSBO);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_diffuseSSBO);
+        gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(zeros.size() * sizeof(float)),
+                         zeros.data(), GL_DYNAMIC_DRAW);
+        const GLuint zero = 0;
+        gl->glGenBuffers(1, &m_diffuseCounterSSBO);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_diffuseCounterSSBO);
+        gl->glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), &zero, GL_DYNAMIC_DRAW);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+
     m_initialized = true;
     qInfo() << "[Fluid] initialized: grid" << m_gridDim.x << "x" << m_gridDim.y << "x" << m_gridDim.z
             << "cells, capacity" << kMaxParticles << "particles";
@@ -89,6 +103,8 @@ void FluidSystem::shutdown(QOpenGLFunctions_4_3_Core* gl)
     gl->glDeleteBuffers(1, &m_gridHeadSSBO);
     gl->glDeleteBuffers(1, &m_gridNextSSBO);
     gl->glDeleteBuffers(1, &m_colliderUBO);
+    gl->glDeleteBuffers(1, &m_diffuseSSBO);
+    gl->glDeleteBuffers(1, &m_diffuseCounterSSBO);
     m_initialized = false;
 }
 
@@ -389,6 +405,31 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     finalize->setFloat(gl, "u_viscosity", m_params.viscosity);
     gl->glDispatchCompute(groups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+    // 5) whitewater: emit diffuse particles where air gets trapped / crests
+    //    break, then advect them by local-fluid classification.
+    Shader* foamEmit = renderer.getShader("fluid_foam_emit");
+    Shader* foamUpdate = renderer.getShader("fluid_foam_update");
+    if (foamEmit && foamUpdate && m_appearance.foaminess > 0.001f) {
+        ++m_foamFrame;
+        gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, m_diffuseSSBO);
+        gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_diffuseCounterSSBO);
+
+        bindCommon(foamEmit);
+        foamEmit->setInt(gl, "u_maxDiffuse", kMaxDiffuse);
+        foamEmit->setFloat(gl, "u_dt", stepDt);
+        foamEmit->setFloat(gl, "u_foaminess", m_appearance.foaminess);
+        gl->glUniform1ui(gl->glGetUniformLocation(foamEmit->ID, "u_frame"), m_foamFrame);
+        gl->glDispatchCompute(groups, 1, 1);
+        gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        bindCommon(foamUpdate);
+        foamUpdate->setInt(gl, "u_maxDiffuse", kMaxDiffuse);
+        foamUpdate->setFloat(gl, "u_dt", stepDt);
+        foamUpdate->setVec3(gl, "u_gravity", m_params.gravity);
+        gl->glDispatchCompute((kMaxDiffuse + 255) / 256, 1, 1);
+        gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+    }
 
     // Telemetry mirror: refresh a CPU copy of particle positions for the
     // benchmark suite / autoplay diagnostics.

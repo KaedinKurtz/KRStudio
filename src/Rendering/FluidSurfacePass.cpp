@@ -254,6 +254,23 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
     compositeShader->setInt(gl, "u_debugMode", dbgMode == 4 ? 1 : dbgMode);
     gl->glDrawArrays(GL_TRIANGLES, 0, 3);
 
+    // ---- 5) Whitewater sprites over the surface -----------------------
+    if (Shader* foam = context.renderer.getShader("fluid_foam_render");
+        foam && look.foaminess > 0.001f) {
+        gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, fluid->diffuseBuffer());
+        gl->glEnable(GL_BLEND);
+        gl->glBlendFunc(GL_ONE, GL_ONE); // additive: whitewater glows over water
+        gl->glDepthMask(GL_FALSE);       // test against fluid/scene, don't write
+        foam->use(gl);
+        foam->setMat4(gl, "u_view", context.view);
+        foam->setMat4(gl, "u_projection", context.projection);
+        foam->setFloat(gl, "u_particleRadius", radius);
+        foam->setFloat(gl, "u_viewportHeight", float(h));
+        gl->glDrawArrays(GL_POINTS, 0, FluidSystem::kMaxDiffuse);
+        gl->glDepthMask(GL_TRUE);
+        gl->glDisable(GL_BLEND);
+    }
+
     // ---- restore expected overlay-stage state -------------------------
     gl->glBindVertexArray(0);
     gl->glDisable(GL_PROGRAM_POINT_SIZE);

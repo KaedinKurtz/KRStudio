@@ -94,6 +94,11 @@ public:
     GLuint particleBuffer() const { return m_particleSSBO; }
     float particleRadius() const { return m_params.particleRadius; }
 
+    // Whitewater (Ihmsen-style diffuse particles), maintained by compute
+    // passes while the PBF backend plays; rendered by FluidSurfacePass.
+    static constexpr int kMaxDiffuse = 100000;
+    GLuint diffuseBuffer() const { return m_diffuseSSBO; }
+
     /// CPU mirror of particle positions (xyz, w=life), refreshed periodically
     /// when KRS_BENCH or KRS_AUTOPLAY is set. Used by telemetry/benchmarks.
     const std::vector<glm::vec4>& sampledPositions() const { return m_positionMirror; }
@@ -163,4 +168,7 @@ private:
     GLuint m_gridHeadSSBO = 0;  // int per cell
     GLuint m_gridNextSSBO = 0;  // int per particle
     GLuint m_colliderUBO = 0;   // boxes + spheres, std140
+    GLuint m_diffuseSSBO = 0;   // {vec4 posLife; vec4 velType;} * kMaxDiffuse
+    GLuint m_diffuseCounterSSBO = 0; // monotonic ring cursor
+    uint32_t m_foamFrame = 0;
 };

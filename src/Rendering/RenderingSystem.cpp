@@ -350,6 +350,9 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("fluid_ssf_smooth", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_smooth_frag.glsl").toStdString());
         loadAndStoreShader("fluid_ssf_thickness", (shaderDir + "fluid_ssf_depth_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_thickness_frag.glsl").toStdString());
         loadAndStoreShader("fluid_ssf_composite", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_composite_frag.glsl").toStdString());
+        loadAndStoreShader("fluid_foam_emit", std::vector<std::string>{ (shaderDir + "fluid_foam_emit_comp.glsl").toStdString() });
+        loadAndStoreShader("fluid_foam_update", std::vector<std::string>{ (shaderDir + "fluid_foam_update_comp.glsl").toStdString() });
+        loadAndStoreShader("fluid_foam_render", (shaderDir + "fluid_foam_vert.glsl").toStdString(), (shaderDir + "fluid_foam_frag.glsl").toStdString());
         loadAndStoreShader("particle_render", (shaderDir + "particle_render_vert.glsl").toStdString(), (shaderDir + "particle_render_frag.glsl").toStdString());
         loadAndStoreShader("flow_vector_compute", std::vector<std::string>{ (shaderDir + "flow_vector_update_comp.glsl").toStdString() });
         loadAndStoreShader("blur", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "gaussian_blur_frag.glsl").toStdString());
