@@ -244,7 +244,9 @@ void OpaquePass::execute(const RenderFrameContext& context)
                 activeShader->setFloat(gl, "maxTess", 32.0f);
                 activeShader->setFloat(gl, "maxDist", 25.0f);
                 activeShader->setFloat(gl, "displacementScale", 0.1f);
-				activeShader->setFloat(gl, "heightScale", 0.20f);
+                // Authored value wins; 0.20 is only the legacy default.
+                activeShader->setFloat(gl, "heightScale",
+                    (mat && mat->heightScale > 0.0f) ? mat->heightScale : 0.20f);
                 if (mat && mat->heightMap) {
                     mat->heightMap->bind(unit);
                     activeShader->setInt(gl, "heightMap", unit);
@@ -256,7 +258,17 @@ void OpaquePass::execute(const RenderFrameContext& context)
             }
             if (activeShader == pomShader) {
                 activeShader->setFloat(gl, "u_texture_scale", 1.0f);
-                activeShader->setFloat(gl, "u_height_scale", 0.05f);
+                // Two long-standing bugs: the authored heightScale was
+                // ignored (hardcoded 0.05) and material.heightMap was never
+                // bound — the sampler defaulted to unit 0, so the parallax
+                // marched the ALBEDO as if it were a height field.
+                activeShader->setFloat(gl, "u_height_scale",
+                    (mat && mat->heightScale > 0.0f) ? mat->heightScale : 0.05f);
+                if (mat && mat->heightMap) {
+                    mat->heightMap->bind(unit);
+                    activeShader->setInt(gl, "material.heightMap", int(unit));
+                    unit++;
+                }
             }
         }
 
