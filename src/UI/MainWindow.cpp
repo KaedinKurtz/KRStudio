@@ -405,6 +405,51 @@ MainWindow::MainWindow(QWidget* parent)
         addRigidPrimitive(Primitive::Cube, "Cube.003", { 1.95f, 2.7f, -0.05f }, glm::vec3(1.0f), false);
         addRigidPrimitive(Primitive::IcoSphere, "Sphere.001", { 2.3f, 4.2f, 0.1f }, glm::vec3(0.5f), true);
         addRigidPrimitive(Primitive::IcoSphere, "Sphere.002", { 1.7f, 5.2f, -0.1f }, glm::vec3(0.5f), true);
+
+        // --- Fluid demo: an open-top "glass" with water seeded inside and a
+        // tap pouring more in from above. Walls are static rigid boxes so the
+        // PhysX bodies AND the fluid both collide with them.
+        auto addWall = [&](const char* name, glm::vec3 pos, glm::vec3 halfExt) {
+            entt::entity e = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::Cube), pos,
+                                                          halfExt * 2.0f, name);
+            auto& rb = registry.emplace<RigidBodyComponent>(e);
+            rb.bodyType = RigidBodyComponent::BodyType::Static;
+            auto& col = registry.emplace<BoxCollider>(e);
+            col.halfExtents = glm::vec3(0.5f); // unit cube scaled by transform
+            auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
+            mat.albedoColor = glm::vec3(0.65f, 0.65f, 0.7f);
+            return e;
+        };
+        const glm::vec3 g(-2.0f, 0.0f, 0.0f);  // glass center on the ground
+        const float W = 0.45f, H = 0.6f, T = 0.05f; // inner half-width, height, wall thickness
+        addWall("Glass.Floor", g + glm::vec3(0, T, 0), { W + 2 * T, T, W + 2 * T });
+        addWall("Glass.Wall+X", g + glm::vec3(W + T, H * 0.5f, 0), { T, H * 0.5f, W + 2 * T });
+        addWall("Glass.Wall-X", g + glm::vec3(-W - T, H * 0.5f, 0), { T, H * 0.5f, W + 2 * T });
+        addWall("Glass.Wall+Z", g + glm::vec3(0, H * 0.5f, W + T), { W, H * 0.5f, T });
+        addWall("Glass.Wall-Z", g + glm::vec3(0, H * 0.5f, -W - T), { W, H * 0.5f, T });
+
+        // Water sitting in the glass at t=0
+        {
+            entt::entity water = registry.create();
+            registry.emplace<TransformComponent>(water, g + glm::vec3(0.0f, 0.32f, 0.0f),
+                                                 glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+            auto& vol = registry.emplace<FluidVolumeComponent>(water);
+            vol.halfExtents = { 0.38f, 0.22f, 0.38f };
+            registry.emplace<TagComponent>(water, std::string("Water.Volume"));
+        }
+        // Tap above, pouring in
+        {
+            entt::entity tap = registry.create();
+            registry.emplace<TransformComponent>(tap, g + glm::vec3(0.15f, 2.0f, 0.0f),
+                                                 glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+            auto& em = registry.emplace<FluidEmitterComponent>(tap);
+            em.ratePerSecond = 250.0f;
+            em.initialSpeed = 0.8f;
+            em.spreadDegrees = 3.0f;
+            em.emitterRadius = 0.025f;
+            em.particleLifetime = 0.0f; // immortal — fills the glass
+            registry.emplace<TagComponent>(tap, std::string("Water.Tap"));
+        }
     }
 
     // --- Create Splines ---
@@ -550,7 +595,8 @@ MainWindow::MainWindow(QWidget* parent)
     ads::CDockSplitter* mainSplitter = viewportArea1->parentSplitter();
     if (mainSplitter)
     {
-        mainSplitter->setSizes({ 1, 2, 1 });
+        // Blender-style layout: the 3D viewport dominates, side panels flank it.
+        mainSplitter->setSizes({ 5, 2, 2 });
     }
 
     // ===================================================================
@@ -629,6 +675,11 @@ MainWindow::MainWindow(QWidget* parent)
     });
     connect(m_simulation.get(), &SimulationController::stateChanged, this, [this](SimulationState s) {
         m_fixedTopToolbar->setSimulationPlaying(s == SimulationState::Playing);
+        if (m_renderingSystem) {
+            m_renderingSystem->setSimulationPlaying(s == SimulationState::Playing);
+            if (s == SimulationState::Stopped)
+                m_renderingSystem->resetFluidSimulation();
+        }
     });
 
     //========================= Start the SLAM Manager =========================

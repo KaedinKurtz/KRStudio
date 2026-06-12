@@ -756,6 +756,7 @@ struct FluidEmitterComponent {
     float spreadDegrees = 10.0f;     // cone half-angle
     float emitterRadius = 0.05f;     // disc radius particles spawn across
     float particleLifetime = 20.0f;  // seconds (0 = immortal)
+    float emitAccumulator = 0.0f;    // internal: fractional particles owed
 };
 
 /**
@@ -764,7 +765,7 @@ struct FluidEmitterComponent {
  */
 struct FluidVolumeComponent {
     glm::vec3 halfExtents = { 0.25f, 0.25f, 0.25f };
-    float particleSpacing = 0.035f;  // metres between seeded particles
+    float particleSpacing = 0.05f;   // metres between seeded particles
 };
 
 struct Pose6D                // or using Pose6D = glm::mat4;

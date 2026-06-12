@@ -24,6 +24,7 @@ class QOpenGLContext;
 class QOffscreenSurface;
 class QSurface;
 class ViewportWidget;
+class FluidSystem;
 class Shader;
 class Scene;
 class OpaquePass;
@@ -122,6 +123,11 @@ public:
 
     const TargetFBOs* getTargetFBO(ViewportWidget* vp) const;
 
+    // --- Fluid simulation (GPU PBF, stepped on the engine context) ---
+    FluidSystem* getFluidSystem() const { return m_fluid.get(); }
+    void setSimulationPlaying(bool playing);
+    void resetFluidSimulation();
+
     // IBL getters
     std::shared_ptr<Cubemap>   getIrradianceMap()    const;
     std::shared_ptr<Cubemap>   getPrefilteredEnvMap() const;
@@ -196,6 +202,9 @@ private:
     std::unique_ptr<IRenderPass> m_lightingPass;
     std::vector<std::unique_ptr<IRenderPass>> m_postProcessingPasses;
     std::vector<std::unique_ptr<IRenderPass>> m_overlayPasses;
+
+    // --- Fluid sim (lives on the engine context) ---
+    std::unique_ptr<FluidSystem> m_fluid;
 
     // --- Framebuffers ---
     GBufferFBO m_gBuffer;

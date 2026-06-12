@@ -23,6 +23,8 @@
 #include "FieldVisualizerPass.hpp"
 #include "PointCloudPass.hpp"
 #include "GizmoPass.hpp"
+#include "FluidPass.hpp"
+#include "FluidSystem.hpp"
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -331,6 +333,14 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("instanced_arrow", (shaderDir + "instanced_arrow_vert.glsl").toStdString(), (shaderDir + "instanced_arrow_frag.glsl").toStdString());
         loadAndStoreShader("arrow_field_compute", std::vector<std::string>{ (shaderDir + "field_visualizer_comp.glsl").toStdString() });
         loadAndStoreShader("particle_update_compute", std::vector<std::string>{ (shaderDir + "particle_update_comp.glsl").toStdString() });
+
+        // Fluid (PBF) pipeline
+        loadAndStoreShader("fluid_integrate", std::vector<std::string>{ (shaderDir + "fluid_integrate_comp.glsl").toStdString() });
+        loadAndStoreShader("fluid_grid", std::vector<std::string>{ (shaderDir + "fluid_grid_comp.glsl").toStdString() });
+        loadAndStoreShader("fluid_lambda", std::vector<std::string>{ (shaderDir + "fluid_lambda_comp.glsl").toStdString() });
+        loadAndStoreShader("fluid_deltap", std::vector<std::string>{ (shaderDir + "fluid_deltap_comp.glsl").toStdString() });
+        loadAndStoreShader("fluid_finalize", std::vector<std::string>{ (shaderDir + "fluid_finalize_comp.glsl").toStdString() });
+        loadAndStoreShader("fluid_render", (shaderDir + "fluid_particle_vert.glsl").toStdString(), (shaderDir + "fluid_particle_frag.glsl").toStdString());
         loadAndStoreShader("particle_render", (shaderDir + "particle_render_vert.glsl").toStdString(), (shaderDir + "particle_render_frag.glsl").toStdString());
         loadAndStoreShader("flow_vector_compute", std::vector<std::string>{ (shaderDir + "flow_vector_update_comp.glsl").toStdString() });
         loadAndStoreShader("blur", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "gaussian_blur_frag.glsl").toStdString());
@@ -464,6 +474,11 @@ void RenderingSystem::initializeSharedResources()
     m_overlayPasses.push_back(std::make_unique<FieldVisualizerPass>());
     m_overlayPasses.push_back(std::make_unique<PointCloudPass>());
     m_overlayPasses.push_back(std::make_unique<GizmoPass>());
+    m_overlayPasses.push_back(std::make_unique<FluidPass>());
+
+    // Fluid solver lives on the engine context alongside the passes.
+    m_fluid = std::make_unique<FluidSystem>();
+    m_fluid->initialize(*this, m_gl);
 
     // 4) Initialize all passes
     qDebug() << "[RenderingSystem] Initializing passes for context" << ctx;
@@ -496,6 +511,16 @@ void RenderingSystem::resizeGLResources()
             initOrResizeFinalFBO(m_gl, target, targetW, targetH);
         }
     }
+}
+
+void RenderingSystem::setSimulationPlaying(bool playing)
+{
+    if (m_fluid) m_fluid->setPlaying(playing);
+}
+
+void RenderingSystem::resetFluidSimulation()
+{
+    if (m_fluid) m_fluid->reset();
 }
 
 void RenderingSystem::requestViewportUpdates()
@@ -534,6 +559,10 @@ void RenderingSystem::renderAllViewports()
     m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime = dt;
 
     resizeGLResources();
+
+    // --- Fluid step (engine context; no-op unless simulation is playing) ---
+    if (m_fluid)
+        m_fluid->update(*this, m_gl, m_scene->getRegistry(), dt);
 
     // --- GPU stage timing: ring of GL_TIME_ELAPSED queries (engine ctx). ---
     // Write index this frame, read the slot written kGpuQueryRing-1 frames
@@ -1018,6 +1047,7 @@ void RenderingSystem::shutdown()
         res.perContext.clear();
     }
 
+    if (m_fluid) m_fluid->shutdown(gl);
     if (m_frameFence) { gl->glDeleteSync(m_frameFence); m_frameFence = nullptr; }
     if (m_gpuQueriesInitialized) {
         gl->glDeleteQueries(kGpuStages * kGpuQueryRing, &m_gpuQueries[0][0]);
