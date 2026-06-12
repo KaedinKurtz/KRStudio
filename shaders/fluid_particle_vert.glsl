@@ -12,6 +12,7 @@ uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform float u_particleRadius;
 uniform float u_viewportHeight;
+uniform float u_sizeScale;
 
 out float vSpeed;
 out float vLife;
@@ -27,6 +28,6 @@ void main()
 
     // Perspective-correct point size (pixels)
     float dist = max(0.1, -viewPos.z);
-    gl_PointSize = clamp(u_particleRadius * 2.2 * u_viewportHeight *
+    gl_PointSize = clamp(u_sizeScale * u_particleRadius * 2.2 * u_viewportHeight *
                          u_projection[1][1] / dist, 1.0, 64.0);
 }

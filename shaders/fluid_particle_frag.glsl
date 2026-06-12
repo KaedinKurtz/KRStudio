@@ -5,6 +5,11 @@ in float vSpeed;
 in float vLife;
 out vec4 fragColor;
 
+uniform vec3 u_waterColor;
+uniform float u_turbidity;   // 0 clear/glossy .. 1 murky/flat
+uniform float u_emissivity;  // additive glow
+uniform float u_foaminess;   // speed-driven white water
+
 void main()
 {
     if (vLife <= 0.0) discard;
@@ -19,13 +24,16 @@ void main()
     float ndl = max(dot(n, lightDir), 0.0);
     float fresnel = pow(1.0 - n.z, 2.0);
 
-    vec3 deepWater = vec3(0.02, 0.12, 0.30);
-    vec3 shallowWater = vec3(0.10, 0.40, 0.75);
+    vec3 deepWater = u_waterColor * 0.22;
     vec3 foam = vec3(0.85, 0.92, 0.98);
 
-    float foamAmt = clamp(vSpeed * 0.12, 0.0, 0.65);
-    vec3 base = mix(deepWater, shallowWater, 0.35 + 0.65 * ndl);
-    vec3 color = mix(base, foam, foamAmt) + fresnel * 0.15;
+    float foamAmt = clamp(vSpeed * 0.25 * u_foaminess, 0.0, 0.7);
+    vec3 base = mix(deepWater, u_waterColor, 0.35 + 0.65 * ndl);
+    // turbidity: scatter-dominated look — flatter shading, weaker fresnel
+    base = mix(base, u_waterColor, u_turbidity * 0.6);
+    float gloss = (1.0 - u_turbidity);
+    vec3 color = mix(base, foam, foamAmt) + fresnel * 0.2 * gloss
+               + u_waterColor * u_emissivity;
 
     fragColor = vec4(color, 1.0);
 }

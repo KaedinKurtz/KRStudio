@@ -12,6 +12,7 @@ layout(std430, binding = 0) buffer Particles { Particle p[]; };
 uniform int u_particleCount;
 uniform float u_dt;
 uniform float u_h;
+uniform vec3 u_gravity;
 
 void main()
 {
@@ -19,7 +20,7 @@ void main()
     if (i >= uint(u_particleCount)) return;
     if (p[i].posLife.w <= 0.0) return; // inert
 
-    vec3 v = p[i].vel.xyz + vec3(0.0, -9.81, 0.0) * u_dt;
+    vec3 v = p[i].vel.xyz + u_gravity * u_dt;
 
     // CFL clamp: never travel more than ~0.5 kernel radii per step, which
     // also prevents tunneling through thin collider walls.

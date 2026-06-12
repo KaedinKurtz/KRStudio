@@ -34,6 +34,7 @@
 #include "PrimitiveBuilders.hpp"
 #include "PhysicsPropertiesWidget.hpp"
 #include "OutlinerWidget.hpp"
+#include "FluidPropertiesWidget.hpp"
 #include "BenchmarkRunner.hpp"
 
 #include <QDir>
@@ -845,6 +846,17 @@ MainWindow::MainWindow(QWidget* parent)
             m_dockManager->addDockWidget(ads::BottomDockWidgetArea, physDock, rightArea);
         else
             m_dockManager->addDockWidget(ads::RightDockWidgetArea, physDock);
+
+        // Fluid global controls: tabbed with the Physics panel.
+        auto* fluidPanel = new FluidPropertiesWidget(m_renderingSystem.get(), this);
+        auto* fluidDock = new ads::CDockWidget(QStringLiteral("Fluid"), this);
+        fluidDock->setWidget(fluidPanel);
+        fluidDock->setStyleSheet(sidePanelStyle);
+        if (auto* physArea = physDock->dockAreaWidget())
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, fluidDock, physArea);
+        else
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, fluidDock);
+        physDock->setAsCurrentTab();
     }
 
     // --- Outliner: tabbed with GridProperties in the right column ---

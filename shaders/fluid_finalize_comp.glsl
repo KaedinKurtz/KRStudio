@@ -23,7 +23,7 @@ uniform int u_gridNy;
 uniform int u_gridNz;
 
 const float PI = 3.14159265358979;
-const float XSPH_C = 0.05;
+uniform float u_viscosity; // XSPH blend coefficient
 
 float wPoly6(float r2, float h)
 {
@@ -67,7 +67,7 @@ void main()
             j = nxt[j];
         }
     }
-    newVel += XSPH_C * xsph;
+    newVel += u_viscosity * xsph;
 
     float life = p[i].posLife.w - u_dt;
     if (life <= 0.0) {

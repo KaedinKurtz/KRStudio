@@ -260,15 +260,15 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
 
     // Particle mass chosen so a lattice at seeding spacing reaches rest density.
     const float spacing = 0.05f;
-    const float particleMass = m_restDensity * spacing * spacing * spacing;
+    const float particleMass = m_params.restDensity * spacing * spacing * spacing;
 
     auto bindCommon = [&](Shader* s) {
         s->use(gl);
         s->setInt(gl, "u_particleCount", m_particleCount);
         s->setFloat(gl, "u_h", m_h);
-        s->setFloat(gl, "u_restDensity", m_restDensity);
+        s->setFloat(gl, "u_restDensity", m_params.restDensity);
         s->setFloat(gl, "u_particleMass", particleMass);
-        s->setFloat(gl, "u_particleRadius", m_particleRadius);
+        s->setFloat(gl, "u_particleRadius", m_params.particleRadius);
         s->setVec3(gl, "u_domainMin", m_domainMin);
         s->setVec3(gl, "u_domainMax", m_domainMax);
         // grid dims as ivec3 (Shader helper lacks ivec3 — use 3 ints)
@@ -285,6 +285,7 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     // 1) integrate: gravity + predict
     bindCommon(integrate);
     integrate->setFloat(gl, "u_dt", stepDt);
+    integrate->setVec3(gl, "u_gravity", m_params.gravity);
     gl->glDispatchCompute(groups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -315,7 +316,7 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         gl->glActiveTexture(GL_TEXTURE0);
     };
 
-    for (int it = 0; it < m_solverIterations; ++it) {
+    for (int it = 0; it < m_params.solverIterations; ++it) {
         bindCommon(lambda);
         gl->glDispatchCompute(groups, 1, 1);
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -329,6 +330,7 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     // 4) finalize: velocity from positions, XSPH viscosity, lifetime
     bindCommon(finalize);
     finalize->setFloat(gl, "u_dt", stepDt);
+    finalize->setFloat(gl, "u_viscosity", m_params.viscosity);
     gl->glDispatchCompute(groups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
@@ -370,7 +372,7 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
                 const bool inGlass = std::abs(pp.x + 2.0f) < 0.62f && std::abs(pp.z) < 0.62f;
                 if (inGlass) { ++inside; maxYIn = std::max(maxYIn, pp.y); }
                 else ++outside;
-                if (!m_sdfColliders.empty() && sdfDistance(pp) < -2.0f * m_particleRadius)
+                if (!m_sdfColliders.empty() && sdfDistance(pp) < -2.0f * m_params.particleRadius)
                     ++sdfPenetrating;
             }
             qInfo() << "[Fluid][autoplay] t=" << s_frames << "inGlass" << inside

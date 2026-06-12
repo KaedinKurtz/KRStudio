@@ -8,6 +8,24 @@
 class QOpenGLFunctions_4_3_Core;
 class RenderingSystem;
 
+/// Physical fluid parameters, SI units where applicable.
+struct FluidParams {
+    float restDensity = 1000.0f;   // kg/m^3 (water)
+    float viscosity = 0.05f;       // XSPH blend coefficient (0 = inviscid, ~0.5 = honey-like)
+    int solverIterations = 3;      // incompressibility enforcement (higher = stiffer water)
+    float particleRadius = 0.035f; // m (render + collision radius)
+    glm::vec3 gravity = { 0.0f, -9.81f, 0.0f }; // m/s^2
+};
+
+/// Artistic appearance of the rendered fluid ("user" mode).
+struct FluidAppearance {
+    glm::vec3 color = { 0.10f, 0.40f, 0.75f }; // base water colour
+    float turbidity = 0.4f;   // 0 = clear/glossy .. 1 = murky/flat
+    float emissivity = 0.0f;  // additive glow
+    float foaminess = 0.5f;   // speed-driven white-water amount
+    float sizeScale = 1.0f;   // particle sprite size multiplier
+};
+
 /**
  * @brief GPU Position-Based Fluids (Macklin & Müller 2013) on compute shaders.
  *
@@ -46,11 +64,17 @@ public:
 
     int particleCount() const { return m_particleCount; }
     GLuint particleBuffer() const { return m_particleSSBO; }
-    float particleRadius() const { return m_particleRadius; }
+    float particleRadius() const { return m_params.particleRadius; }
 
     /// CPU mirror of particle positions (xyz, w=life), refreshed periodically
     /// when KRS_BENCH or KRS_AUTOPLAY is set. Used by telemetry/benchmarks.
     const std::vector<glm::vec4>& sampledPositions() const { return m_positionMirror; }
+
+    // --- Live-tunable parameters (panels write these) ---
+    FluidParams& params() { return m_params; }
+    const FluidParams& params() const { return m_params; }
+    FluidAppearance& appearance() { return m_appearance; }
+    const FluidAppearance& appearance() const { return m_appearance; }
 
 private:
     struct SdfCollider {
@@ -76,10 +100,9 @@ private:
     float m_emitAccumulator = 0.0f;
 
     // --- Tunables (PBF) ---
-    float m_h = 0.10f;              // smoothing radius (m)
-    float m_restDensity = 1000.0f;  // kg/m^3
-    float m_particleRadius = 0.035f;
-    int m_solverIterations = 3;
+    float m_h = 0.10f;              // smoothing radius (m); fixed (grid-coupled)
+    FluidParams m_params;
+    FluidAppearance m_appearance;
 
     // Simulation domain (uniform grid bounds)
     glm::vec3 m_domainMin = { -8.0f, 0.0f, -8.0f };

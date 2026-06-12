@@ -19,6 +19,12 @@ void FluidPass::execute(const RenderFrameContext& context)
     shader->setMat4(gl, "u_projection", context.projection);
     shader->setFloat(gl, "u_particleRadius", fluid->particleRadius());
     shader->setFloat(gl, "u_viewportHeight", float(context.viewportHeight));
+    const FluidAppearance& look = fluid->appearance();
+    shader->setFloat(gl, "u_sizeScale", look.sizeScale);
+    shader->setVec3(gl, "u_waterColor", look.color);
+    shader->setFloat(gl, "u_turbidity", look.turbidity);
+    shader->setFloat(gl, "u_emissivity", look.emissivity);
+    shader->setFloat(gl, "u_foaminess", look.foaminess);
 
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, fluid->particleBuffer());
 
