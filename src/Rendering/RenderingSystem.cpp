@@ -578,10 +578,6 @@ void RenderingSystem::renderAllViewports()
 
     resizeGLResources();
 
-    // --- Fluid step (engine context; no-op unless simulation is playing) ---
-    if (m_fluid)
-        m_fluid->update(*this, m_gl, m_scene->getRegistry(), dt);
-
     // --- GPU stage timing: ring of GL_TIME_ELAPSED queries (engine ctx). ---
     // Write index this frame, read the slot written kGpuQueryRing-1 frames
     // ago — old enough that the result is available without stalling.
@@ -591,9 +587,17 @@ void RenderingSystem::renderAllViewports()
     }
     const int qWrite = int(m_gpuQueryFrame % kGpuQueryRing);
     const int qRead = int((m_gpuQueryFrame + 1) % kGpuQueryRing); // oldest slot
+
+    // --- Fluid step (engine context; no-op unless simulation is playing) ---
+    m_gl->glBeginQuery(GL_TIME_ELAPSED, m_gpuQueries[4][qWrite]);
+    if (m_fluid)
+        m_fluid->update(*this, m_gl, m_scene->getRegistry(), dt);
+    m_gl->glEndQuery(GL_TIME_ELAPSED);
+
     if (m_gpuQueryFrame >= kGpuQueryRing - 1) {
         float* dst[kGpuStages] = { &m_gpuTimings.geometryMs, &m_gpuTimings.lightingMs,
-                                   &m_gpuTimings.postMs, &m_gpuTimings.overlayMs };
+                                   &m_gpuTimings.postMs, &m_gpuTimings.overlayMs,
+                                   &m_gpuTimings.fluidSimMs };
         for (int s = 0; s < kGpuStages; ++s) {
             GLuint available = 0;
             m_gl->glGetQueryObjectuiv(m_gpuQueries[s][qRead], GL_QUERY_RESULT_AVAILABLE, &available);

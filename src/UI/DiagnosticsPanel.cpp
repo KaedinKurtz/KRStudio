@@ -46,12 +46,14 @@ DiagnosticsPanel::DiagnosticsPanel(QWidget* parent)
     m_lightingLabel = new QLabel("Lighting: --", this);
     m_postLabel = new QLabel("Post-processing: --", this);
     m_overlayLabel = new QLabel("Overlay: --", this);
+    m_fluidSimLabel = new QLabel("Fluid sim: --", this);
     m_gpuTotalLabel = new QLabel("GPU total: --", this);
     m_gpuTotalLabel->setStyleSheet("font-weight: bold;");
     m_layout->addWidget(m_geometryLabel);
     m_layout->addWidget(m_lightingLabel);
     m_layout->addWidget(m_postLabel);
     m_layout->addWidget(m_overlayLabel);
+    m_layout->addWidget(m_fluidSimLabel);
     m_layout->addWidget(m_gpuTotalLabel);
 
     // --- Robot joints (populated when a robot is loaded) ---
@@ -90,6 +92,7 @@ void DiagnosticsPanel::refreshTimings()
     m_lightingLabel->setText(QString("Lighting: %1").arg(t.lightingMs, 0, 'f', 2));
     m_postLabel->setText(QString("Post-processing: %1").arg(t.postMs, 0, 'f', 2));
     m_overlayLabel->setText(QString("Overlay: %1").arg(t.overlayMs, 0, 'f', 2));
+    m_fluidSimLabel->setText(QString("Fluid sim: %1").arg(t.fluidSimMs, 0, 'f', 2));
     m_gpuTotalLabel->setText(QString("GPU total: %1").arg(t.totalMs(), 0, 'f', 2));
 }
 

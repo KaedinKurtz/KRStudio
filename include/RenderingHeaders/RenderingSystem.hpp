@@ -75,8 +75,9 @@ struct GpuTimings {
     float geometryMs = 0.0f;
     float lightingMs = 0.0f;
     float postMs = 0.0f;
-    float overlayMs = 0.0f;
-    float totalMs() const { return geometryMs + lightingMs + postMs + overlayMs; }
+    float overlayMs = 0.0f;  // grid, splines, fluid surface, gizmos
+    float fluidSimMs = 0.0f; // PBF compute + whitewater (solver only)
+    float totalMs() const { return geometryMs + lightingMs + postMs + overlayMs + fluidSimMs; }
 };
 
 namespace rs2 {
@@ -184,7 +185,7 @@ private:
     float m_renderScale = 1.0f;
 
     // --- GPU stage timing (engine-context GL_TIME_ELAPSED query rings) ---
-    static constexpr int kGpuStages = 4;     // geometry, lighting, post, overlay
+    static constexpr int kGpuStages = 5;     // geometry, lighting, post, overlay, fluid sim
     static constexpr int kGpuQueryRing = 3;  // written frame N, read frame N+2
     GLuint m_gpuQueries[kGpuStages][kGpuQueryRing] = {};
     bool m_gpuQueriesInitialized = false;

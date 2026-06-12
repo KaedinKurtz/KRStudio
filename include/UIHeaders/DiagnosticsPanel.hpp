@@ -45,6 +45,7 @@ private:
     QLabel* m_lightingLabel = nullptr;
     QLabel* m_postLabel = nullptr;
     QLabel* m_overlayLabel = nullptr;
+    QLabel* m_fluidSimLabel = nullptr;
     QLabel* m_gpuTotalLabel = nullptr;
 
     // Robot joint readout
