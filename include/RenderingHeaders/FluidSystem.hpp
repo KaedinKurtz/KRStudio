@@ -13,8 +13,10 @@ class RenderingSystem;
 
 /// Physical fluid parameters, SI units where applicable.
 struct FluidParams {
-    float restDensity = 1000.0f;   // kg/m^3 (water)
-    float viscosity = 0.05f;       // XSPH blend coefficient (0 = inviscid, ~0.5 = honey-like)
+    float restDensity = 998.2f;    // kg/m^3 (water, 20 °C)
+    float viscosity = 0.05f;       // XSPH blend coefficient (PBF backend; not a real unit)
+    float dynamicViscosityPaS = 1.002e-3f; // Pa·s (DFSPH backend; water 20 °C)
+    float surfaceTensionNpm = 0.0728f;     // N/m  (DFSPH backend; water-air)
     int solverIterations = 3;      // incompressibility enforcement (higher = stiffer water)
     float particleRadius = 0.035f; // m (render + collision radius)
     glm::vec3 gravity = { 0.0f, -9.81f, 0.0f }; // m/s^2

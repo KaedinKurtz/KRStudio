@@ -182,11 +182,41 @@ target_include_directories(sqlite3 PUBLIC "${sqlite_official_src_SOURCE_DIR}")
 # -----------------------------
 #  Add Submodules (Optional)
 # -----------------------------
+# SPlisHSPlasH is built as an isolated ExternalProject superbuild: its CMake
+# overwrites global flags and the runtime output dir (CACHE INTERNAL), and
+# clones its own deps (CompactNSearch/Discregrid/GenericParameters/PBD) at
+# build time — add_subdirectory would hijack this project's build graph.
+set(KR_HAS_SPLISH 0)
 if(ENABLE_SPLISH_SPLASH AND EXISTS "${CMAKE_SOURCE_DIR}/external/SPlisHSPlasH/CMakeLists.txt")
-  set(SPLISHSPLASH_BUILD_GUI      OFF CACHE BOOL "" FORCE)
-  set(SPLISHSPLASH_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-  set(SPLISHSPLASH_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
-  add_subdirectory(external/SPlisHSPlasH)
+  include(ExternalProject)
+  set(SPLISH_SRC   "${CMAKE_SOURCE_DIR}/external/SPlisHSPlasH")
+  set(SPLISH_BUILD "${CMAKE_BINARY_DIR}/splishsplash-build")
+  set(SPLISH_EIGEN "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include/eigen3")
+  ExternalProject_Add(splishsplash_ext
+    SOURCE_DIR "${SPLISH_SRC}"
+    BINARY_DIR "${SPLISH_BUILD}"
+    PREFIX "${CMAKE_BINARY_DIR}/splishsplash-prefix"
+    CMAKE_ARGS
+      -DSPH_LIBS_ONLY=On
+      -DUSE_PYTHON_BINDINGS=Off
+      -DUSE_DOUBLE_PRECISION=Off
+      -DUSE_AVX=On
+      -DUSE_OpenMP=On
+      -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.10
+      -DEIGEN3_INCLUDE_DIR:PATH=${SPLISH_EIGEN}
+    INSTALL_COMMAND ""
+    BUILD_BYPRODUCTS
+      "${SPLISH_BUILD}/lib/SPlisHSPlasH.lib"
+      "${SPLISH_BUILD}/lib/Utilities.lib"
+      "${SPLISH_BUILD}/lib/partio.lib"
+      "${SPLISH_BUILD}/lib/zlib.lib"
+      "${SPLISH_BUILD}/lib/tinyexpr.lib"
+      "${SPLISH_BUILD}/lib/MD5.lib"
+      "${SPLISH_BUILD}/extern/install/NeighborhoodSearch/lib/CompactNSearch.lib"
+      "${SPLISH_BUILD}/extern/install/Discregrid/lib/Discregrid.lib"
+  )
+  set(KR_HAS_SPLISH 1)
 endif()
 
 if(ENABLE_COACD AND EXISTS "${CMAKE_SOURCE_DIR}/external/CoACD/CMakeLists.txt")
@@ -382,8 +412,33 @@ if(ENABLE_CHRONO)
 endif()
 
 # --- Submodules ---
-if(ENABLE_SPLISH_SPLASH AND TARGET SPlisHSPlasH)
-  target_link_libraries(RoboticsSoftware PRIVATE SPlisHSPlasH)
+if(KR_HAS_SPLISH)
+  add_dependencies(RoboticsSoftware splishsplash_ext)
+  target_include_directories(RoboticsSoftware PRIVATE
+    "${SPLISH_SRC}"
+    "${SPLISH_BUILD}/extern/install/NeighborhoodSearch/include"
+    "${SPLISH_BUILD}/extern/install/Discregrid/include"
+    "${SPLISH_BUILD}/extern/install/GenericParameters/include"
+    "${SPLISH_EIGEN}"
+  )
+  target_link_libraries(RoboticsSoftware PRIVATE
+    "${SPLISH_BUILD}/lib/SPlisHSPlasH.lib"
+    "${SPLISH_BUILD}/lib/Utilities.lib"
+    "${SPLISH_BUILD}/extern/install/NeighborhoodSearch/lib/CompactNSearch.lib"
+    "${SPLISH_BUILD}/extern/install/Discregrid/lib/Discregrid.lib"
+    "${SPLISH_BUILD}/lib/partio.lib"
+    "${SPLISH_BUILD}/lib/zlib.lib"
+    "${SPLISH_BUILD}/lib/tinyexpr.lib"
+    "${SPLISH_BUILD}/lib/MD5.lib"
+  )
+  find_package(OpenMP REQUIRED)
+  target_link_libraries(RoboticsSoftware PRIVATE OpenMP::OpenMP_CXX)
+  # The adapter TU must compile with the SAME defines/arch as the library —
+  # SPlisHSPlasH headers change type layouts with these.
+  set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Rendering/DfsphBackend.cpp"
+    PROPERTIES
+      COMPILE_OPTIONS "/arch:AVX2"
+      COMPILE_DEFINITIONS "USE_AVX;USE_PERFORMANCE_OPTIMIZATION;USE_THIRD_PARTY_METHODS;EIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT;_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING")
 endif()
 if(ENABLE_COACD AND TARGET CoACD) # Assuming the target is named 'CoACD'
   target_link_libraries(RoboticsSoftware PRIVATE CoACD)
@@ -400,7 +455,7 @@ target_compile_definitions(RoboticsSoftware PRIVATE
   $<$<BOOL:${KR_HAS_IGL}>:KR_WITH_IGL=1>
   $<$<BOOL:${KR_HAS_FCL}>:KR_WITH_FCL=1>
   $<$<BOOL:${KR_HAS_CHRONO}>:KR_WITH_CHRONO=1>
-  $<$<BOOL:${ENABLE_SPLISH_SPLASH}>:KR_WITH_SPLISHSPLASH=1>
+  $<$<BOOL:${KR_HAS_SPLISH}>:KR_WITH_SPLISHSPLASH=1>
   $<$<BOOL:${ENABLE_COACD}>:KR_WITH_COACD=1>
 )
 

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
+#include <vector>
 
 class QOpenGLFunctions_4_3_Core;
 class RenderingSystem;
@@ -42,4 +44,8 @@ public:
 
     virtual void setPlaying(bool playing) = 0;
     virtual void reset() = 0;
+
+    /// Optional: copy current particle positions (xyz, w = life) for
+    /// telemetry/benchmarks. CPU backends have these for free.
+    virtual void samplePositions(std::vector<glm::vec4>& out) const { out.clear(); }
 };

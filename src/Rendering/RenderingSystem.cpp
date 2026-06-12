@@ -25,6 +25,7 @@
 #include "GizmoPass.hpp"
 #include "FluidPass.hpp"
 #include "CollisionDebugPass.hpp"
+#include "DfsphBackend.hpp"
 #include "FluidSystem.hpp"
 
 #include <QOpenGLContext>
@@ -484,6 +485,9 @@ void RenderingSystem::initializeSharedResources()
     // Fluid solver lives on the engine context alongside the passes.
     m_fluid = std::make_unique<FluidSystem>();
     m_fluid->initialize(*this, m_gl);
+    // Reference-fidelity CPU tier (real SI units); no-op stub when the
+    // SPlisHSPlasH superbuild is disabled.
+    m_fluid->setExternalSolver(FluidBackend::DfsphCpu, std::make_unique<DfsphBackend>());
 
     // 4) Initialize all passes
     qDebug() << "[RenderingSystem] Initializing passes for context" << ctx;

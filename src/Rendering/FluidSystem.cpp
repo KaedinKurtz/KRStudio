@@ -38,6 +38,11 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     Q_UNUSED(renderer);
     if (m_initialized) return;
 
+    // Test hook: select the solver tier from the environment.
+    const QString backendEnv = qEnvironmentVariable("KRS_FLUID_BACKEND").toLower();
+    if (backendEnv == QLatin1String("dfsph")) m_requestedBackend = FluidBackend::DfsphCpu;
+    else if (backendEnv == QLatin1String("pbf")) m_requestedBackend = FluidBackend::PbfGpu;
+
     const glm::vec3 extent = m_domainMax - m_domainMin;
     m_gridDim = glm::ivec3(glm::ceil(extent / m_h));
     const int cellCount = m_gridDim.x * m_gridDim.y * m_gridDim.z;
@@ -275,6 +280,10 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
 
     if (activeBackend() == m_externalTier && m_externalSolver) {
         m_particleCount = m_externalSolver->update(renderer, gl, registry, dt);
+        static int telemetryFrame = 0;
+        if ((qEnvironmentVariableIsSet("KRS_AUTOPLAY") || qEnvironmentVariableIsSet("KRS_BENCH"))
+            && (++telemetryFrame % 30) == 0)
+            m_externalSolver->samplePositions(m_positionMirror);
         return;
     }
 

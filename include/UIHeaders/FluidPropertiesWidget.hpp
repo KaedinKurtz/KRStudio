@@ -3,6 +3,7 @@
 #include <QWidget>
 
 class RenderingSystem;
+class QComboBox;
 class QDoubleSpinBox;
 class QSpinBox;
 class QPushButton;
@@ -28,9 +29,15 @@ private:
     RenderingSystem* m_renderer = nullptr;
     bool m_updating = false;
 
+    // solver
+    QComboBox* m_backend = nullptr;
+    QComboBox* m_materialPreset = nullptr;
+
     // physics
     QDoubleSpinBox* m_density = nullptr;
     QDoubleSpinBox* m_viscosity = nullptr;
+    QDoubleSpinBox* m_viscosityPaS = nullptr;
+    QDoubleSpinBox* m_surfaceTension = nullptr;
     QSpinBox* m_iterations = nullptr;
     QDoubleSpinBox* m_radius = nullptr;
     QDoubleSpinBox* m_gravityY = nullptr;
