@@ -73,6 +73,14 @@ struct MaterialDirectoryTag {
     std::string dirPath;
 };
 
+// Asks the renderer to (re)load this entity's MaterialComponent from its
+// MaterialDirectoryTag on the next engine frame (texture upload + old
+// texture destruction must happen on the engine GL context). Consumed by
+// RenderingSystem::processMaterialReloads().
+struct MaterialReloadRequest {
+    float heightScaleOverride = -1.0f; // <0: keep existing / pack default
+};
+
 struct TessellatedMaterialTag{};
 struct ParallaxMaterialTag {};
 

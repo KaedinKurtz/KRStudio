@@ -36,6 +36,7 @@
 #include "PhysicsPropertiesWidget.hpp"
 #include "OutlinerWidget.hpp"
 #include "FluidPropertiesWidget.hpp"
+#include "TextureBrowserWidget.hpp"
 #include "BenchmarkRunner.hpp"
 
 #include <QDir>
@@ -945,6 +946,18 @@ MainWindow::MainWindow(QWidget* parent)
             m_dockManager->addDockWidget(ads::CenterDockWidgetArea, fluidDock, physArea);
         else
             m_dockManager->addDockWidget(ads::RightDockWidgetArea, fluidDock);
+
+        // Texture browser: hot-swaps material packs onto the selection.
+        const QString materialsRoot =
+            QCoreApplication::applicationDirPath() + QLatin1String("/assets/materials");
+        m_textureBrowser = new TextureBrowserWidget(m_scene.get(), materialsRoot, this);
+        auto* texDock = new ads::CDockWidget(QStringLiteral("Textures"), this);
+        texDock->setWidget(m_textureBrowser);
+        texDock->setStyleSheet(sidePanelStyle);
+        if (auto* physArea = physDock->dockAreaWidget())
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, texDock, physArea);
+        else
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, texDock);
         physDock->setAsCurrentTab();
     }
 

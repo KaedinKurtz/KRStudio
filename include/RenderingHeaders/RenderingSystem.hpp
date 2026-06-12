@@ -109,6 +109,9 @@ public:
     // --- Viewport Management ---
     void onViewportAdded(ViewportWidget* viewport);
     void onViewportWillBeDestroyed(ViewportWidget* viewport);
+    /// Loads MaterialComponents for entities tagged MaterialReloadRequest
+    /// (engine GL context required — called from renderAllViewports).
+    void processMaterialReloads();
 
     // --- Public Helpers & Resource Access ---
     Shader* getShader(const std::string& name);

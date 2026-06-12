@@ -585,6 +585,7 @@ void RenderingSystem::renderAllViewports()
     }
     m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime = dt;
 
+    processMaterialReloads();
     resizeGLResources();
 
     // --- GPU stage timing: ring of GL_TIME_ELAPSED queries (engine ctx). ---
@@ -738,13 +739,33 @@ void RenderingSystem::onViewportAdded(ViewportWidget* viewport)
     initializeViewportResources(viewport);
 
     for (auto ent : m_scene->getRegistry().view<MaterialDirectoryTag>())
-    {
-        auto& tag = m_scene->getRegistry().get<MaterialDirectoryTag>(ent);
-        MaterialComponent mat = loadMaterialFromDirectory(tag.dirPath);
-        m_scene->getRegistry().emplace_or_replace<MaterialComponent>(ent, std::move(mat));
-    }
+        m_scene->getRegistry().emplace_or_replace<MaterialReloadRequest>(ent);
+    processMaterialReloads();
 
     doneEngineCurrent(prevCtx, prevSurf);
+}
+
+// Engine-context material (re)loads: the texture browser (or anything else)
+// tags an entity with MaterialReloadRequest and the next engine frame loads
+// the pack here — uploading new Texture2Ds and destroying the old ones on
+// the context that owns them.
+void RenderingSystem::processMaterialReloads()
+{
+    if (!m_scene) return;
+    auto& reg = m_scene->getRegistry();
+    std::vector<std::pair<entt::entity, float>> pending;
+    for (auto ent : reg.view<MaterialDirectoryTag, MaterialReloadRequest>())
+        pending.emplace_back(ent, reg.get<MaterialReloadRequest>(ent).heightScaleOverride);
+    for (auto [ent, hsOverride] : pending) {
+        const auto& tag = reg.get<MaterialDirectoryTag>(ent);
+        MaterialComponent mat = loadMaterialFromDirectory(tag.dirPath);
+        const MaterialComponent* old = reg.try_get<MaterialComponent>(ent);
+        if (hsOverride >= 0.0f) mat.heightScale = hsOverride;
+        else if (old && old->heightScale > 0.0f) mat.heightScale = old->heightScale;
+        else if (mat.heightMap) mat.heightScale = 0.1f;
+        reg.emplace_or_replace<MaterialComponent>(ent, std::move(mat));
+        reg.remove<MaterialReloadRequest>(ent);
+    }
 }
 
 void RenderingSystem::onViewportWillBeDestroyed(ViewportWidget* viewport)
