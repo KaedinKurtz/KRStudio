@@ -34,13 +34,14 @@ void FluidSurfacePass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_
 
 void FluidSurfacePass::releaseBuffers(QOpenGLFunctions_4_3_Core* gl, SsfBuffers& b)
 {
-    GLuint fbos[5] = { b.depthFBO, b.smoothFBO[0], b.smoothFBO[1], b.thickFBO,
-                       b.sceneDepthCopyFBO };
-    gl->glDeleteFramebuffers(5, fbos);
-    GLuint texs[6] = { b.depthTex, b.smoothTex[0], b.smoothTex[1], b.thickTex, b.sceneCopyTex,
-                       b.sceneDepthCopyTex };
-    gl->glDeleteTextures(6, texs);
+    GLuint fbos[6] = { b.depthFBO, b.smoothFBO[0], b.smoothFBO[1], b.thickFBO,
+                       b.sceneDepthCopyFBO, b.backFBO };
+    gl->glDeleteFramebuffers(6, fbos);
+    GLuint texs[7] = { b.depthTex, b.smoothTex[0], b.smoothTex[1], b.thickTex, b.sceneCopyTex,
+                       b.sceneDepthCopyTex, b.backTex };
+    gl->glDeleteTextures(7, texs);
     if (b.depthRB) gl->glDeleteRenderbuffers(1, &b.depthRB);
+    if (b.backRB) gl->glDeleteRenderbuffers(1, &b.backRB);
     b = SsfBuffers{};
 }
 
@@ -80,6 +81,16 @@ FluidSurfacePass::SsfBuffers& FluidSurfacePass::buffersFor(const RenderFrameCont
     gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, b.thickTex, 0);
 
     b.sceneCopyTex = makeColorTexture(gl, w, h, GL_RGBA16F);
+
+    // Back-face target (Wyman two-interface refraction): exit normal + z.
+    b.backTex = makeColorTexture(gl, w, h, GL_RGBA16F);
+    gl->glGenRenderbuffers(1, &b.backRB);
+    gl->glBindRenderbuffer(GL_RENDERBUFFER, b.backRB);
+    gl->glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32F, w, h);
+    gl->glGenFramebuffers(1, &b.backFBO);
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, b.backFBO);
+    gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, b.backTex, 0);
+    gl->glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, b.backRB);
 
     // Scene-depth copy: the composite renders INTO finalFBO whose depth
     // attachment is finalDepthTexture — sampling it there would be a
@@ -220,6 +231,29 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
     gl->glDrawArrays(GL_POINTS, 0, count);
     gl->glDisable(GL_BLEND);
 
+    // ---- 3b) Back faces for two-interface refraction (High only) ------
+    Shader* backShader = context.renderer.getShader("fluid_ssf_backdepth");
+    const bool wantBack = look.surfaceQuality > 0 && backShader != nullptr;
+    if (wantBack) {
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, b.backFBO);
+        gl->glViewport(0, 0, w, h);
+        gl->glClearBufferfv(GL_COLOR, 0, zero);
+        gl->glClearDepthf(0.0f); // GREATER test keeps the FARTHEST surface
+        gl->glClear(GL_DEPTH_BUFFER_BIT);
+        gl->glEnable(GL_DEPTH_TEST);
+        gl->glDepthFunc(GL_GREATER);
+        gl->glDepthMask(GL_TRUE);
+        bindSprites(backShader);
+        backShader->setVec2(gl, "u_invTargetSize", glm::vec2(1.0f / w, 1.0f / h));
+        gl->glDrawArrays(GL_POINTS, 0, count);
+        gl->glDepthFunc(GL_LEQUAL);
+        gl->glClearDepthf(1.0f);
+        gl->glDisable(GL_DEPTH_TEST);
+    }
+
+    // ---- 3c) Lingering-foam accumulation (world-anchored, High only) --
+    if (look.surfaceQuality > 0) updateFoamAccum(context);
+
     // ---- 4) Composite over the scene ----------------------------------
     // Copy what the world looks like BEFORE the water so refraction can
     // sample it (can't read a texture bound to the active framebuffer).
@@ -248,6 +282,8 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
     bindTex(3, GL_TEXTURE_2D, b.sceneDepthCopyTex, "u_sceneDepth");
     const auto env = context.renderer.getPrefilteredEnvMap();
     bindTex(4, GL_TEXTURE_CUBE_MAP, env ? env->getID() : 0, "u_prefilteredEnv");
+    bindTex(5, GL_TEXTURE_2D, b.backTex, "u_backData");
+    bindTex(6, GL_TEXTURE_2D, m_foamTex[m_foamIndex], "u_foamMask");
 
     compositeShader->setMat4(gl, "u_projection", context.projection);
     compositeShader->setMat4(gl, "u_invView", glm::inverse(context.view));
@@ -260,6 +296,14 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
     compositeShader->setFloat(gl, "u_ior", look.ior);
     compositeShader->setFloat(gl, "u_absorptionScale", look.absorptionScale);
     compositeShader->setFloat(gl, "u_refractScale", look.refractScale);
+    compositeShader->setFloat(gl, "u_foamDistance", 0.08f);
+    compositeShader->setFloat(gl, "u_time", context.elapsedTime);
+    compositeShader->setInt(gl, "u_quality", wantBack ? 1 : 0);
+    const glm::vec3 dMin = fluid->domainMin();
+    const glm::vec3 dMax = fluid->domainMax();
+    compositeShader->setVec2(gl, "u_worldMin", glm::vec2(dMin.x, dMin.z));
+    compositeShader->setVec2(gl, "u_worldSize",
+                             glm::vec2(dMax.x - dMin.x, dMax.z - dMin.z));
     // Debug views: 1 = filtered depth, 2 = thickness, 3 = normals, 4 = raw depth.
     compositeShader->setInt(gl, "u_debugMode", dbgMode == 4 ? 1 : dbgMode);
     gl->glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -286,4 +330,61 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
     gl->glDisable(GL_PROGRAM_POINT_SIZE);
     gl->glDepthFunc(GL_LESS);
     gl->glActiveTexture(GL_TEXTURE0);
+}
+
+void FluidSurfacePass::updateFoamAccum(const RenderFrameContext& context)
+{
+    auto* gl = context.gl;
+    FluidSystem* fluid = context.renderer.getFluidSystem();
+    Shader* decay = context.renderer.getShader("fluid_foam_accum_decay");
+    Shader* inject = context.renderer.getShader("fluid_foam_accum_inject");
+    if (!gl || !fluid || !decay || !inject) return;
+
+    // Step once per engine frame even with several viewports.
+    if (context.elapsedTime == m_lastFoamTime) return;
+    m_lastFoamTime = context.elapsedTime;
+
+    if (m_foamTex[0] == 0) {
+        for (int i = 0; i < 2; ++i) {
+            m_foamTex[i] = makeColorTexture(gl, kFoamRes, kFoamRes, GL_R16F);
+            gl->glGenFramebuffers(1, &m_foamFBO[i]);
+            gl->glBindFramebuffer(GL_FRAMEBUFFER, m_foamFBO[i]);
+            gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                                       m_foamTex[i], 0);
+            const float zero[4] = { 0, 0, 0, 0 };
+            gl->glClearBufferfv(GL_COLOR, 0, zero);
+        }
+    }
+
+    const int src = m_foamIndex;
+    const int dst = 1 - m_foamIndex;
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, m_foamFBO[dst]);
+    gl->glViewport(0, 0, kFoamRes, kFoamRes);
+    gl->glDisable(GL_DEPTH_TEST);
+    gl->glDisable(GL_BLEND);
+
+    // 1) diffuse + fade the previous frame
+    decay->use(gl);
+    gl->glActiveTexture(GL_TEXTURE0);
+    gl->glBindTexture(GL_TEXTURE_2D, m_foamTex[src]);
+    decay->setInt(gl, "u_prev", 0);
+    decay->setVec2(gl, "u_texel", glm::vec2(1.0f / kFoamRes));
+    decay->setFloat(gl, "u_decay", 0.965f);
+    gl->glBindVertexArray(m_emptyVao);
+    gl->glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    // 2) splat this frame's surface foam on top (additive)
+    gl->glEnable(GL_BLEND);
+    gl->glBlendFunc(GL_ONE, GL_ONE);
+    gl->glEnable(GL_PROGRAM_POINT_SIZE);
+    inject->use(gl);
+    const glm::vec3 dMin = fluid->domainMin();
+    const glm::vec3 dMax = fluid->domainMax();
+    inject->setVec2(gl, "u_worldMin", glm::vec2(dMin.x, dMin.z));
+    inject->setVec2(gl, "u_worldSize", glm::vec2(dMax.x - dMin.x, dMax.z - dMin.z));
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, fluid->diffuseBuffer());
+    gl->glDrawArrays(GL_POINTS, 0, FluidSystem::kMaxDiffuse);
+    gl->glDisable(GL_BLEND);
+
+    m_foamIndex = dst;
 }

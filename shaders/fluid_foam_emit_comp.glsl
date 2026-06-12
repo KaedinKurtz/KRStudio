@@ -51,9 +51,9 @@ uniform vec2 u_tauWc;      // wave crest
 uniform vec2 u_tauKe;      // kinetic energy
 uniform uint u_frame;
 
-const float K_TA = 10.0;  // trapped-air emission rate (1/s at full potential)
-const float K_WC = 25.0;  // wave-crest emission rate
-const int   MAX_EMIT = 8; // per particle per step
+const float K_TA = 8.0;   // trapped-air emission rate (1/s at full potential)
+const float K_WC = 15.0;  // wave-crest emission rate
+const int   MAX_EMIT = 6; // per particle per step
 
 ivec3 cellOf(vec3 pos)
 {

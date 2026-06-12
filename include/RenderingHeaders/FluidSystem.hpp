@@ -106,6 +106,8 @@ public:
     GLuint anisoBuffer() const { return m_anisoSSBO; }
     /// True once the anisotropy pass has run for the current particle set.
     bool anisoValid() const { return m_anisoValid; }
+    glm::vec3 domainMin() const { return m_domainMin; }
+    glm::vec3 domainMax() const { return m_domainMax; }
 
     /// CPU mirror of particle positions (xyz, w=life), refreshed periodically
     /// when KRS_BENCH or KRS_AUTOPLAY is set. Used by telemetry/benchmarks.

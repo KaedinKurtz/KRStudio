@@ -351,6 +351,9 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("fluid_ssf_smooth", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_smooth_frag.glsl").toStdString());
         loadAndStoreShader("fluid_ssf_thickness", (shaderDir + "fluid_ssf_depth_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_thickness_frag.glsl").toStdString());
         loadAndStoreShader("fluid_ssf_composite", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_composite_frag.glsl").toStdString());
+        loadAndStoreShader("fluid_ssf_backdepth", (shaderDir + "fluid_ssf_depth_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_backdepth_frag.glsl").toStdString());
+        loadAndStoreShader("fluid_foam_accum_decay", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_foam_accum_decay_frag.glsl").toStdString());
+        loadAndStoreShader("fluid_foam_accum_inject", (shaderDir + "fluid_foam_accum_inject_vert.glsl").toStdString(), (shaderDir + "fluid_foam_accum_inject_frag.glsl").toStdString());
         loadAndStoreShader("fluid_aniso", std::vector<std::string>{ (shaderDir + "fluid_aniso_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_emit", std::vector<std::string>{ (shaderDir + "fluid_foam_emit_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_update", std::vector<std::string>{ (shaderDir + "fluid_foam_update_comp.glsl").toStdString() });

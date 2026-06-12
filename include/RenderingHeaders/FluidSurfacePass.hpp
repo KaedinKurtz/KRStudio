@@ -36,12 +36,23 @@ private:
         GLuint thickFBO = 0, thickTex = 0;              // R16F, half res
         GLuint sceneCopyTex = 0;                        // RGBA16F, full res
         GLuint sceneDepthCopyFBO = 0, sceneDepthCopyTex = 0; // D32F copy (no feedback loop)
+        GLuint backFBO = 0, backTex = 0, backRB = 0;    // RGBA16F exit normal+z (High)
     };
 
     SsfBuffers& buffersFor(const RenderFrameContext& context);
     void releaseBuffers(QOpenGLFunctions_4_3_Core* gl, SsfBuffers& b);
+    void updateFoamAccum(const RenderFrameContext& context);
 
     std::unordered_map<ViewportWidget*, SsfBuffers> m_buffers;
     FluidPass m_particleFallback; // legacy dots (debug view)
     GLuint m_emptyVao = 0;
+
+    // World-anchored (top-down XZ over the fluid domain) lingering-foam
+    // accumulation: max-style additive inject + blur*decay ping-pong.
+    // Shared across viewports; stepped once per engine frame.
+    static constexpr int kFoamRes = 512;
+    GLuint m_foamTex[2] = { 0, 0 };
+    GLuint m_foamFBO[2] = { 0, 0 };
+    int m_foamIndex = 0;
+    float m_lastFoamTime = -1.0f;
 };

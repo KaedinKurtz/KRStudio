@@ -615,8 +615,16 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
                                   &izero);
             gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, m_foamNormSSBO);
         }
-        const glm::vec3 floors(1.0f, 0.3f, 0.002f); // ta [m/s], wc, ke [J]
+        // ta/wc are resolution-dependent -> auto-normalise, but with floors
+        // so near-calm water can't be normalised into "full agitation".
+        const glm::vec3 floors(3.0f, 1.0f, 0.0f);
         const glm::vec3 tauMax = glm::max(m_foamPotentialEma, floors);
+        // Kinetic energy has a PHYSICAL scale: gate emissions to particle
+        // speeds between ~1 and 4 m/s regardless of what the scene does.
+        // (Auto-normalising this one made residual slosh foam forever, and
+        // a submerged bobbing body churns gently at ~0.7 m/s — real
+        // whitewater needs genuinely fast water.)
+        const glm::vec2 tauKe(0.5f * particleMass * 1.0f, 0.5f * particleMass * 16.0f);
 
         bindCommon(foamEmit);
         foamEmit->setInt(gl, "u_maxDiffuse", kMaxDiffuse);
@@ -625,7 +633,7 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         foamEmit->setFloat(gl, "u_foamScale", m_appearance.foamScale);
         foamEmit->setVec2(gl, "u_tauTa", glm::vec2(0.1f * tauMax.x, tauMax.x));
         foamEmit->setVec2(gl, "u_tauWc", glm::vec2(0.1f * tauMax.y, tauMax.y));
-        foamEmit->setVec2(gl, "u_tauKe", glm::vec2(0.1f * tauMax.z, tauMax.z));
+        foamEmit->setVec2(gl, "u_tauKe", tauKe);
         gl->glUniform1ui(gl->glGetUniformLocation(foamEmit->ID, "u_frame"), m_foamFrame);
         gl->glDispatchCompute(groups, 1, 1);
         gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);

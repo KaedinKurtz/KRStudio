@@ -837,12 +837,16 @@ MainWindow::MainWindow(QWidget* parent)
                 vp->getCamera().forceRecalculateView(pos, tgt, glm::length(pos - tgt));
             }
         };
+        // KRS_GRAB_DELAY=<ms> moves the grab (default 8s) — e.g. 30000 to
+        // capture the SETTLED state of a fluid scene instead of the splash.
+        int grabDelay = qEnvironmentVariable("KRS_GRAB_DELAY").toInt();
+        if (grabDelay <= 0) grabDelay = 8000;
         QTimer::singleShot(1000, this, applyCamEnv);
         // Re-pin half a second before the grab: the engine needs a frame or
         // two to render with the new camera before the widget tree is read.
-        QTimer::singleShot(7500, this, applyCamEnv);
+        QTimer::singleShot(grabDelay - 500, this, applyCamEnv);
         if (qEnvironmentVariableIsSet("KRS_GRAB")) {
-            QTimer::singleShot(8000, this, [this]() {
+            QTimer::singleShot(grabDelay, this, [this]() {
                 const QString path = qEnvironmentVariable("KRS_GRAB");
                 this->grab().save(path);
                 qInfo() << "[UI] window grabbed to" << path;
