@@ -364,14 +364,13 @@ MainWindow::MainWindow(QWidget* parent)
 
         // Demo mesh: the dragon, centered in front of the default camera.
         // (Skipped under KRS_BENCH: its convex hull at the origin would
-        // intercept benchmark projectiles — found the hard way.)
+        // intercept benchmark projectiles — found the hard way.
+        //  Skipped under KRS_FLUID_DEMO: minimal fluid-rendering test scene.)
         QString dragonPath = assetDir + "Dragon.stl";
-        MeshID dragonId = qEnvironmentVariableIsSet("KRS_BENCH")
+        MeshID dragonId =
+            (qEnvironmentVariableIsSet("KRS_BENCH") || qEnvironmentVariableIsSet("KRS_FLUID_DEMO"))
             ? MeshID::None
             : ResourceManager::instance().loadMesh(dragonPath);
-        if (dragonId == MeshID::None && !qEnvironmentVariableIsSet("KRS_BENCH")) {
-            qWarning() << "[Spawner] Failed to load mesh:" << dragonPath;
-        }
 
         auto& registry = m_scene->getRegistry();
 
@@ -411,9 +410,37 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
+    // --- Minimal fluid-render test scene (KRS_FLUID_DEMO): a walled basin
+    // with water, dead-centre in front of the default camera.
+    if (qEnvironmentVariableIsSet("KRS_FLUID_DEMO")) {
+        auto& registry = m_scene->getRegistry();
+        auto wall = [&](const char* name, glm::vec3 pos, glm::vec3 halfExt) {
+            entt::entity e = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::Cube), pos,
+                                                          halfExt * 2.0f, name);
+            auto& rb = registry.emplace<RigidBodyComponent>(e);
+            rb.bodyType = RigidBodyComponent::BodyType::Static;
+            auto& col = registry.emplace<BoxCollider>(e);
+            col.halfExtents = glm::vec3(0.5f);
+            auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
+            mat.albedoColor = glm::vec3(0.55f, 0.52f, 0.48f);
+        };
+        const float W = 1.0f, H = 0.7f, T = 0.06f;
+        wall("Basin.Wall+X", { W + T, H * 0.5f, 0 }, { T, H * 0.5f, W + 2 * T });
+        wall("Basin.Wall-X", { -W - T, H * 0.5f, 0 }, { T, H * 0.5f, W + 2 * T });
+        wall("Basin.Wall+Z", { 0, H * 0.5f, W + T }, { W, H * 0.5f, T });
+        wall("Basin.Wall-Z", { 0, H * 0.5f, -W - T }, { W, H * 0.5f, T });
+
+        entt::entity water = registry.create();
+        registry.emplace<TransformComponent>(water, glm::vec3(0.0f, 0.45f, 0.0f),
+                                             glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+        auto& vol = registry.emplace<FluidVolumeComponent>(water);
+        vol.halfExtents = { 0.9f, 0.3f, 0.9f };
+        registry.emplace<TagComponent>(water, std::string("TestWater"));
+    }
+
     // --- Physics demo: a small stack of primitives that falls on Play ---
     // (Skipped under KRS_BENCH: benchmarks need a clean world.)
-    if (!qEnvironmentVariableIsSet("KRS_BENCH")) {
+    if (!qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")) {
         auto& registry = m_scene->getRegistry();
         auto addRigidPrimitive = [&](Primitive prim, const char* name, glm::vec3 pos,
                                      glm::vec3 scale, bool sphere) {

@@ -43,9 +43,13 @@ private:
     QDoubleSpinBox* m_gravityY = nullptr;
 
     // appearance
+    QComboBox* m_renderMode = nullptr;
     QPushButton* m_colorButton = nullptr;
     QSlider* m_turbidity = nullptr;
     QSlider* m_emissivity = nullptr;
     QSlider* m_foam = nullptr;
     QDoubleSpinBox* m_sizeScale = nullptr;
+    QDoubleSpinBox* m_iorSpin = nullptr;
+    QDoubleSpinBox* m_absorption = nullptr;
+    QDoubleSpinBox* m_refraction = nullptr;
 };

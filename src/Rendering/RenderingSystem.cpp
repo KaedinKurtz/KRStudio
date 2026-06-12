@@ -24,6 +24,7 @@
 #include "PointCloudPass.hpp"
 #include "GizmoPass.hpp"
 #include "FluidPass.hpp"
+#include "FluidSurfacePass.hpp"
 #include "CollisionDebugPass.hpp"
 #include "DfsphBackend.hpp"
 #include "FluidSystem.hpp"
@@ -344,6 +345,11 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("fluid_finalize", std::vector<std::string>{ (shaderDir + "fluid_finalize_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_render", (shaderDir + "fluid_particle_vert.glsl").toStdString(), (shaderDir + "fluid_particle_frag.glsl").toStdString());
         loadAndStoreShader("collision_debug", (shaderDir + "collision_debug_vert.glsl").toStdString(), (shaderDir + "collision_debug_frag.glsl").toStdString());
+        // Screen-space fluid surface pipeline
+        loadAndStoreShader("fluid_ssf_depth", (shaderDir + "fluid_ssf_depth_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_depth_frag.glsl").toStdString());
+        loadAndStoreShader("fluid_ssf_smooth", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_smooth_frag.glsl").toStdString());
+        loadAndStoreShader("fluid_ssf_thickness", (shaderDir + "fluid_ssf_depth_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_thickness_frag.glsl").toStdString());
+        loadAndStoreShader("fluid_ssf_composite", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_composite_frag.glsl").toStdString());
         loadAndStoreShader("particle_render", (shaderDir + "particle_render_vert.glsl").toStdString(), (shaderDir + "particle_render_frag.glsl").toStdString());
         loadAndStoreShader("flow_vector_compute", std::vector<std::string>{ (shaderDir + "flow_vector_update_comp.glsl").toStdString() });
         loadAndStoreShader("blur", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "gaussian_blur_frag.glsl").toStdString());
@@ -479,7 +485,7 @@ void RenderingSystem::initializeSharedResources()
     m_overlayPasses.push_back(std::make_unique<CollisionDebugPass>());
     // Fluid must depth-test against the real scene; GizmoPass clears the
     // depth buffer to draw on top, so it must come last.
-    m_overlayPasses.push_back(std::make_unique<FluidPass>());
+    m_overlayPasses.push_back(std::make_unique<FluidSurfacePass>());
     m_overlayPasses.push_back(std::make_unique<GizmoPass>());
 
     // Fluid solver lives on the engine context alongside the passes.

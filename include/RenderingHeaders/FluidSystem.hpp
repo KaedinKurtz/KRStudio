@@ -22,13 +22,29 @@ struct FluidParams {
     glm::vec3 gravity = { 0.0f, -9.81f, 0.0f }; // m/s^2
 };
 
-/// Artistic appearance of the rendered fluid ("user" mode).
+enum class FluidRenderMode {
+    Particles,    // raw solver particles (debug view)
+    WaterSurface, // screen-space fluid: filtered depth + refraction + IBL
+};
+
+/// Appearance of the rendered fluid. In WaterSurface mode every control maps
+/// to a physical quantity in the screen-space composite:
+///   color      -> per-channel Beer-Lambert absorption spectrum
+///   turbidity  -> scattering (refraction fades to body color) + rough IBL
+///   emissivity -> additive emission
+///   foaminess  -> whitewater amount (diffuse particles)
+///   ior        -> Fresnel F0 + refraction strength (water 1.333)
 struct FluidAppearance {
-    glm::vec3 color = { 0.10f, 0.40f, 0.75f }; // base water colour
-    float turbidity = 0.4f;   // 0 = clear/glossy .. 1 = murky/flat
-    float emissivity = 0.0f;  // additive glow
-    float foaminess = 0.5f;   // speed-driven white-water amount
-    float sizeScale = 1.0f;   // particle sprite size multiplier
+    glm::vec3 color = { 0.10f, 0.40f, 0.75f }; // transmission colour
+    float turbidity = 0.25f;       // 0 = clear .. 1 = murky
+    float emissivity = 0.0f;       // additive glow
+    float foaminess = 0.5f;        // speed-driven white-water amount
+    float sizeScale = 1.0f;        // particle sprite size multiplier
+    float ior = 1.333f;            // index of refraction
+    float absorptionScale = 1.5f;  // Beer-Lambert strength (per metre)
+    float refractScale = 0.08f;    // UV offset per metre of thickness
+    int smoothIterations = 2;      // narrow-range filter iterations
+    FluidRenderMode renderMode = FluidRenderMode::WaterSurface;
 };
 
 /**

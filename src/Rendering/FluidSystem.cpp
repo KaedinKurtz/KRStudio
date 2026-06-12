@@ -38,10 +38,19 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     Q_UNUSED(renderer);
     if (m_initialized) return;
 
-    // Test hook: select the solver tier from the environment.
+    // Test hooks: select solver tier / render mode from the environment.
     const QString backendEnv = qEnvironmentVariable("KRS_FLUID_BACKEND").toLower();
     if (backendEnv == QLatin1String("dfsph")) m_requestedBackend = FluidBackend::DfsphCpu;
     else if (backendEnv == QLatin1String("pbf")) m_requestedBackend = FluidBackend::PbfGpu;
+    const QString renderEnv = qEnvironmentVariable("KRS_FLUID_RENDER").toLower();
+    if (renderEnv == QLatin1String("particles")) m_appearance.renderMode = FluidRenderMode::Particles;
+    else if (renderEnv == QLatin1String("surface")) m_appearance.renderMode = FluidRenderMode::WaterSurface;
+    const QStringList colorEnv = qEnvironmentVariable("KRS_FLUID_COLOR").split(',');
+    if (colorEnv.size() == 3)
+        m_appearance.color = { colorEnv[0].toFloat(), colorEnv[1].toFloat(), colorEnv[2].toFloat() };
+    bool turbidityOk = false;
+    const float turbidityEnv = qEnvironmentVariable("KRS_FLUID_TURBIDITY").toFloat(&turbidityOk);
+    if (turbidityOk) m_appearance.turbidity = turbidityEnv;
 
     const glm::vec3 extent = m_domainMax - m_domainMin;
     m_gridDim = glm::ivec3(glm::ceil(extent / m_h));

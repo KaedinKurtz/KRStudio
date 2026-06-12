@@ -159,29 +159,67 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
         g->setContentsMargins(6, 6, 6, 6);
         g->setVerticalSpacing(3);
 
-        g->addWidget(new QLabel(QStringLiteral("Colour"), box), 0, 0);
+        g->addWidget(new QLabel(QStringLiteral("Render mode"), box), 0, 0);
+        m_renderMode = new QComboBox(box);
+        m_renderMode->addItems({ QStringLiteral("Water surface (screen-space)"),
+                                 QStringLiteral("Particles (debug)") });
+        m_renderMode->setToolTip(QStringLiteral(
+            "Water surface: filtered depth + refraction + absorption + IBL.\n"
+            "Particles: the raw solver particles."));
+        g->addWidget(m_renderMode, 0, 1);
+
+        g->addWidget(new QLabel(QStringLiteral("Colour (transmission)"), box), 1, 0);
         m_colorButton = new QPushButton(box);
         m_colorButton->setFixedHeight(22);
-        g->addWidget(m_colorButton, 0, 1);
+        m_colorButton->setToolTip(QStringLiteral(
+            "Drives per-channel Beer-Lambert absorption: light passing through\n"
+            "the water decays toward this colour with depth."));
+        g->addWidget(m_colorButton, 1, 1);
 
-        g->addWidget(new QLabel(QStringLiteral("Turbidity"), box), 1, 0);
+        g->addWidget(new QLabel(QStringLiteral("Turbidity"), box), 2, 0);
         m_turbidity = percentSlider(box);
-        g->addWidget(m_turbidity, 1, 1);
+        m_turbidity->setToolTip(QStringLiteral(
+            "Scattering: murky water hides what's behind it and blurs reflections"));
+        g->addWidget(m_turbidity, 2, 1);
 
-        g->addWidget(new QLabel(QStringLiteral("Emissivity"), box), 2, 0);
+        g->addWidget(new QLabel(QStringLiteral("Emissivity"), box), 3, 0);
         m_emissivity = percentSlider(box);
-        g->addWidget(m_emissivity, 2, 1);
+        g->addWidget(m_emissivity, 3, 1);
 
-        g->addWidget(new QLabel(QStringLiteral("Foam"), box), 3, 0);
+        g->addWidget(new QLabel(QStringLiteral("Foam"), box), 4, 0);
         m_foam = percentSlider(box);
-        g->addWidget(m_foam, 3, 1);
+        g->addWidget(m_foam, 4, 1);
 
-        g->addWidget(new QLabel(QStringLiteral("Sprite size ×"), box), 4, 0);
+        g->addWidget(new QLabel(QStringLiteral("Index of refraction"), box), 5, 0);
+        m_iorSpin = new QDoubleSpinBox(box);
+        m_iorSpin->setRange(1.0, 2.5);
+        m_iorSpin->setSingleStep(0.01);
+        m_iorSpin->setDecimals(3);
+        m_iorSpin->setToolTip(QStringLiteral("Water 1.333, oil ~1.47, glass ~1.5"));
+        g->addWidget(m_iorSpin, 5, 1);
+
+        g->addWidget(new QLabel(QStringLiteral("Absorption × (1/m)"), box), 6, 0);
+        m_absorption = new QDoubleSpinBox(box);
+        m_absorption->setRange(0.0, 20.0);
+        m_absorption->setSingleStep(0.25);
+        m_absorption->setDecimals(2);
+        m_absorption->setToolTip(QStringLiteral(
+            "Beer-Lambert strength: how quickly light dies per metre of water"));
+        g->addWidget(m_absorption, 6, 1);
+
+        g->addWidget(new QLabel(QStringLiteral("Refraction strength"), box), 7, 0);
+        m_refraction = new QDoubleSpinBox(box);
+        m_refraction->setRange(0.0, 0.5);
+        m_refraction->setSingleStep(0.01);
+        m_refraction->setDecimals(3);
+        g->addWidget(m_refraction, 7, 1);
+
+        g->addWidget(new QLabel(QStringLiteral("Sprite size ×"), box), 8, 0);
         m_sizeScale = new QDoubleSpinBox(box);
         m_sizeScale->setRange(0.2, 4.0);
         m_sizeScale->setSingleStep(0.1);
         m_sizeScale->setDecimals(2);
-        g->addWidget(m_sizeScale, 4, 1);
+        g->addWidget(m_sizeScale, 8, 1);
 
         layout->addWidget(box);
     }
@@ -220,9 +258,11 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
     for (auto* s : { m_density, m_viscosity, m_viscosityPaS, m_surfaceTension, m_radius, m_gravityY })
         connect(s, &QDoubleSpinBox::valueChanged, this, [this]() { applyPhysics(); });
     connect(m_iterations, &QSpinBox::valueChanged, this, [this]() { applyPhysics(); });
-    connect(m_sizeScale, &QDoubleSpinBox::valueChanged, this, [this]() { applyAppearance(); });
+    for (auto* s : { m_sizeScale, m_iorSpin, m_absorption, m_refraction })
+        connect(s, &QDoubleSpinBox::valueChanged, this, [this]() { applyAppearance(); });
     for (auto* s : { m_turbidity, m_emissivity, m_foam })
         connect(s, &QSlider::valueChanged, this, [this]() { applyAppearance(); });
+    connect(m_renderMode, &QComboBox::currentIndexChanged, this, [this]() { applyAppearance(); });
     connect(m_colorButton, &QPushButton::clicked, this, [this]() {
         FluidSystem* fluid = m_renderer ? m_renderer->getFluidSystem() : nullptr;
         if (!fluid) return;
@@ -258,6 +298,10 @@ void FluidPropertiesWidget::syncFromSystem()
     m_emissivity->setValue(int(a.emissivity * 100));
     m_foam->setValue(int(a.foaminess * 100));
     m_sizeScale->setValue(a.sizeScale);
+    m_iorSpin->setValue(a.ior);
+    m_absorption->setValue(a.absorptionScale);
+    m_refraction->setValue(a.refractScale);
+    m_renderMode->setCurrentIndex(a.renderMode == FluidRenderMode::WaterSurface ? 0 : 1);
     const QColor c = QColor::fromRgbF(a.color.r, a.color.g, a.color.b);
     m_colorButton->setStyleSheet(QStringLiteral("background-color: %1;").arg(c.name()));
     m_updating = false;
@@ -288,4 +332,9 @@ void FluidPropertiesWidget::applyAppearance()
     a.emissivity = m_emissivity->value() / 100.0f;
     a.foaminess = m_foam->value() / 100.0f;
     a.sizeScale = float(m_sizeScale->value());
+    a.ior = float(m_iorSpin->value());
+    a.absorptionScale = float(m_absorption->value());
+    a.refractScale = float(m_refraction->value());
+    a.renderMode = m_renderMode->currentIndex() == 0 ? FluidRenderMode::WaterSurface
+                                                     : FluidRenderMode::Particles;
 }
