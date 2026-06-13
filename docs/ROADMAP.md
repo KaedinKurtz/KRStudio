@@ -29,6 +29,14 @@ a uniform grid; CFL-adaptive substeps; lit point-sprite rendering (`MpmPass`); d
 rest, sand column collapse, heat diffusion 55→0.6 °C with mean conserved to 0.06 °C,
 729/729 particles melting on phase change. This closes section A below.
 
+**Realized 2026-06-13 (Sim-to-Real HIL, Phase 1):** a reverse-mode **adjoint
+MLS-MPM** differentiable physics core, an **async 1 kHz clock coordinator** with a
+lock-free ring buffer, and **virtual camera / CAN bridges** behind OS-abstracted
+interfaces. Verified headlessly (`KRS_MPM_SELFTEST`): ADJOINT_GRADIENT_CHECK to
+~1e-9 (target 1e-5), HIL_JITTER max 0.05–0.07 ms (gate 1.5 ms), and
+LOOPBACK_FRAME_INTEGRITY 1080p zero-drop bit-exact. Full design + trade-offs in
+§H below.
+
 The remaining tracks are the SOTA upgrades the user called out (the heavier
 incompressible-projection + sparse-grid layer in §A1, two-phase flow,
 participating-media rendering) and the robotics stack.
@@ -266,3 +274,93 @@ it's trivial once reset is solid.
    TGS restitution phase loss (#38); Weiler2018 viscosity AVX crash (#39); V-HACD
    multi-hull dynamics (#40); near-black POM material on the demo dragon (#63);
    MaterialDirectoryTag not yet DB-persisted.
+
+---
+
+## H) Sim-to-Real HIL infrastructure (Phase 1 — SHIPPED 2026-06-13)
+
+Three subsystems toward hardware-in-the-loop training and deployment. All are
+verified headlessly by the extended `KRS_MPM_SELFTEST` suite.
+
+### H.1 Differentiable physics — reverse-mode adjoint MLS-MPM (`MpmAdjoint`)
+A CPU double-precision differentiable twin of the realtime GPU `MpmSystem`. Exact
+forward math (quadratic B-spline weights, `D⁻¹=4/dx²` APIC, fixed-corotated
+Neo-Hookean, Drucker-Prager) + a tape-based reverse pass: adjoint P2G/G2P through
+the APIC `C` matrix (incl. position gradients through interpolation weights and
+node offsets), an analytic 3×3 SVD adjoint, and analytic constitutive adjoints
+(Neo-Hookean stress; DP return-map gradients flowing through the log-singular-value
+cone projection). `ADJOINT_GRADIENT_CHECK` (central FD vs analytic, control =
+initial velocity of a deforming elastic block) matches to **~1e-9** (target 1e-5).
+
+**Trade-offs (documented):**
+- **CPU double precision, not GPU**, and a *separate* core from the realtime GPU
+  solver. This mirrors the engine's existing GPU-PBF (realtime) / CPU-DFSPH
+  (reference) split. Rationale: the 1e-5 gradient-check bar is unreachable through
+  the GPU forward path because its **fixed-point int32 atomics are order-
+  nondeterministic** (the same reason that scatter is deterministic bit-to-bit is
+  exactly what makes its rounding path-dependent across runs), and reverse-mode
+  needs an exact transpose of the forward linearization. Double-precision CPU also
+  sidesteps the `SCALE=1e7` fixed-point quantization the forward GPU pass uses —
+  the adjoint carries **no fixed-point scaling**, so there is no adjoint-side
+  scaling bound to tune.
+- **SVD-adjoint degeneracy clamp:** the per-pair coupling `1/(σ_j²−σ_i²)` is set to
+  zero when `|σ_j²−σ_i²| < 1e-9` (repeated singular values). This is the standard
+  differentiable-SVD guard; gradients at exactly-repeated singular values are
+  subgradients.
+- **Plasticity at the yield boundary:** the DP return map is piecewise (tip /
+  inside-cone / projecting); its adjoint is exact within each branch and a
+  subgradient on the cone surface. The gradient check runs in smooth regimes.
+
+### H.2 Async clock coordinator + lock-free ring (`HilClock`)
+Physics runs on a dedicated thread at a rigid rate (default 1000 Hz); the sensor/
+render pipeline runs on another thread at a lower rate (default 30 Hz), handed off
+through a lock-free SPSC `StateRing` (sequence-stamped latest-value, power-of-two
+slots, acquire/release). No locks on the physics hot path. Cadence held by a
+sleep-then-spin wait on a steady high-res clock + a 1 ms Windows timer period.
+
+**Trade-off (documented): the 0.15 ms max-jitter target needs a real-time kernel.**
+Stock Windows 11 / non-PREEMPT_RT Linux cannot *guarantee* a worst-case scheduling
+bound — the scheduler can preempt any user thread. The local `HIL_JITTER` gate is
+therefore **1.5 ms** (measured mean ~0.1 µs, p99 ~0.3 µs, max ~0.05–0.07 ms over
+10,000 ticks — already inside 0.15 ms in practice, but not *guaranteed*). The hard
+0.15 ms determinism guarantee requires a **PREEMPT_RT host** (or an RTOS / isolated
+CPU + `SCHED_FIFO`), which is the deployment target.
+
+### H.3 OS bridges — virtual camera + CAN (`HilBridges`)
+`IVirtualCamera` / `IVirtualCAN` abstractions so the engine dispatches identically
+regardless of backend.
+
+- **Linux (deployment):** `v4l2loopback` (`/dev/videoX`, `V4L2_PIX_FMT_RGBA32`) and
+  SocketCAN RAW on `vcan0`, compiled under `#ifdef __linux__`. An external
+  perception/SLAM stack opens `/dev/videoX` as a standard capture device.
+- **Windows (this dev box):** a named cross-process **shared-memory frame ring**
+  (header + 8 slots, sequence-stamped, zero-copy) an external reader maps by name;
+  and a **UDP-localhost** transport carrying the exact 16-byte SocketCAN `can_frame`
+  byte layout (`static_assert(sizeof(CanFrame)==16)`), bidirectional.
+
+**Trade-off (documented):** V4L2/SocketCAN are Linux-kernel facilities with no
+Windows equivalent, so the dev-box backends are functional stand-ins, not the
+literal devices. `LOOPBACK_FRAME_INTEGRITY`'s zero-drop/bit-exact guarantee at
+1080p is a property of the **reliable** transport (shared memory; or the kernel on
+the v4l2 target) — a lossy datagram path could not meet it, which is why the camera
+loopback is shared-memory rather than UDP. The CAN transport uses UDP because CAN
+frames are tiny (16 B, no fragmentation) and the rates are low.
+
+### Verification (extended `KRS_MPM_SELFTEST`)
+| Module | Result on this box | Target / note |
+|---|---|---|
+| `ADJOINT_GRADIENT_CHECK` | max rel err ~1e-9 | < 1e-5 |
+| `HIL_JITTER` (10k @ 1 kHz) | mean ~0.1 µs, p99 ~0.3 µs, **max ~0.05–0.07 ms** | local gate 1.5 ms; 0.15 ms needs PREEMPT_RT |
+| `LOOPBACK_FRAME_INTEGRITY` | 1080p, **0 drops, bit-exact** (5 s default; `KRS_HIL_LOOPBACK_SECS=60` for the full window) | 60 s continuous |
+| `CAN_LOOPBACK` | 64/64 frames, 0 corrupt, bidirectional | — |
+
+**Env hooks:** `KRS_MPM_SELFTEST=1` runs all modules; `KRS_HIL_LOOPBACK_SECS=<n>`
+sets the camera loopback window.
+
+### Phase 2 (next)
+Drive the live engine `SimulationController` from `AsyncCoordinator` (physics on the
+1 kHz thread, CAN command frames applied as joint forces on the next tick, encoder/
+torque frames published out); pipe the offscreen sensor render into the camera
+bridge each sensor tick; use `MpmAdjoint` as the gradient backend for a
+trajectory-optimization / system-ID loop and graft the verified adjoint kernels onto
+the GPU forward solver for batched differentiable rollouts.
