@@ -24,11 +24,13 @@
 #include "PointCloudPass.hpp"
 #include "GizmoPass.hpp"
 #include "FluidPass.hpp"
+#include "MpmPass.hpp"
 #include "FluidSurfacePass.hpp"
 #include "CollisionDebugPass.hpp"
 #include "TonemapPass.hpp"
 #include "GlassPass.hpp"
 #include "SmokeSystem.hpp"
+#include "MpmSystem.hpp"
 #include "SmokePass.hpp"
 #include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
@@ -372,6 +374,13 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("smoke_jacobi", std::vector<std::string>{ (shaderDir + "smoke_jacobi_comp.glsl").toStdString() });
         loadAndStoreShader("smoke_project", std::vector<std::string>{ (shaderDir + "smoke_project_comp.glsl").toStdString() });
         loadAndStoreShader("smoke_raymarch", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "smoke_raymarch_frag.glsl").toStdString());
+        // MLS-MPM continuum solver: P2G -> grid update -> G2P. The grid int
+        // buffer is cleared each substep with glClearBufferData (4.3 core),
+        // so no clear shader is needed. mpm_render is registered in M5.
+        loadAndStoreShader("mpm_p2g", std::vector<std::string>{ (shaderDir + "mpm_p2g_comp.glsl").toStdString() });
+        loadAndStoreShader("mpm_grid", std::vector<std::string>{ (shaderDir + "mpm_grid_comp.glsl").toStdString() });
+        loadAndStoreShader("mpm_g2p", std::vector<std::string>{ (shaderDir + "mpm_g2p_comp.glsl").toStdString() });
+        loadAndStoreShader("mpm_render", (shaderDir + "mpm_render_vert.glsl").toStdString(), (shaderDir + "mpm_render_frag.glsl").toStdString());
         loadAndStoreShader("fluid_foam_emit", std::vector<std::string>{ (shaderDir + "fluid_foam_emit_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_update", std::vector<std::string>{ (shaderDir + "fluid_foam_update_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_render", (shaderDir + "fluid_foam_vert.glsl").toStdString(), (shaderDir + "fluid_foam_frag.glsl").toStdString());
@@ -510,6 +519,9 @@ void RenderingSystem::initializeSharedResources()
     m_overlayPasses.push_back(std::make_unique<FieldVisualizerPass>());
     m_overlayPasses.push_back(std::make_unique<PointCloudPass>());
     m_overlayPasses.push_back(std::make_unique<CollisionDebugPass>());
+    // MLS-MPM particles: opaque, depth-tested against the scene so water and
+    // glass composite over them correctly.
+    m_overlayPasses.push_back(std::make_unique<MpmPass>());
     // Fluid must depth-test against the real scene; GizmoPass clears the
     // depth buffer to draw on top, so it must come last.
     m_overlayPasses.push_back(std::make_unique<FluidSurfacePass>());
@@ -535,12 +547,20 @@ void RenderingSystem::initializeSharedResources()
     m_smoke = std::make_unique<SmokeSystem>();
     m_smoke->initialize(*this, m_gl);
 
+    // Unified MLS-MPM continuum solver (fluid/elastic/sand/snow), engine context.
+    m_mpm = std::make_unique<MpmSystem>();
+    m_mpm->initialize(*this, m_gl);
+
     // 4) Initialize all passes
     qDebug() << "[RenderingSystem] Initializing passes for context" << ctx;
     m_geometryPass->initialize(*this, m_gl);
     m_lightingPass->initialize(*this, m_gl);
     for (auto& p : m_postProcessingPasses) p->initialize(*this, m_gl);
     for (auto& p : m_overlayPasses)       p->initialize(*this, m_gl);
+
+    // Headless MLS-MPM fidelity suite (analytic ground-truth checks).
+    if (m_mpm && qEnvironmentVariableIntValue("KRS_MPM_SELFTEST") != 0)
+        m_mpm->runSelfTests(*this, m_gl);
 }
 
 void RenderingSystem::resizeGLResources()
@@ -572,12 +592,14 @@ void RenderingSystem::setSimulationPlaying(bool playing)
 {
     if (m_fluid) m_fluid->setPlaying(playing);
     if (m_smoke) m_smoke->setPlaying(playing);
+    if (m_mpm) m_mpm->setPlaying(playing);
 }
 
 void RenderingSystem::resetFluidSimulation()
 {
     if (m_fluid) m_fluid->reset();
     if (m_smoke) m_smoke->reset();
+    if (m_mpm) m_mpm->reset();
 }
 
 void RenderingSystem::requestViewportUpdates()
@@ -639,6 +661,8 @@ void RenderingSystem::renderAllViewports()
         m_fluid->update(*this, m_gl, m_scene->getRegistry(), dt);
     if (m_smoke)
         m_smoke->update(*this, m_gl, m_scene->getRegistry(), dt);
+    if (m_mpm)
+        m_mpm->update(*this, m_gl, m_scene->getRegistry(), dt);
     m_gl->glEndQuery(GL_TIME_ELAPSED);
 
     if (m_gpuQueryFrame >= kGpuQueryRing - 1) {
@@ -1180,6 +1204,7 @@ void RenderingSystem::shutdown()
 
     if (m_fluid) m_fluid->shutdown(gl);
     if (m_smoke) m_smoke->shutdown(gl);
+    if (m_mpm) m_mpm->shutdown(gl);
     if (m_frameFence) { gl->glDeleteSync(m_frameFence); m_frameFence = nullptr; }
     if (m_gpuQueriesInitialized) {
         gl->glDeleteQueries(kGpuStages * kGpuQueryRing, &m_gpuQueries[0][0]);

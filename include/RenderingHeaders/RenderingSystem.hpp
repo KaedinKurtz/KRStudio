@@ -26,6 +26,7 @@ class QSurface;
 class ViewportWidget;
 class FluidSystem;
 class SmokeSystem;
+class MpmSystem;
 class Shader;
 class Scene;
 class OpaquePass;
@@ -134,6 +135,7 @@ public:
     // --- Fluid simulation (GPU PBF, stepped on the engine context) ---
     FluidSystem* getFluidSystem() const { return m_fluid.get(); }
     SmokeSystem* getSmokeSystem() const { return m_smoke.get(); }
+    MpmSystem* getMpmSystem() const { return m_mpm.get(); }
     void setSimulationPlaying(bool playing);
     void resetFluidSimulation();
 
@@ -215,6 +217,7 @@ private:
     // --- Fluid sim (lives on the engine context) ---
     std::unique_ptr<FluidSystem> m_fluid;
     std::unique_ptr<SmokeSystem> m_smoke;
+    std::unique_ptr<MpmSystem> m_mpm;     // unified MLS-MPM continuum solver
 
     // --- Framebuffers ---
     GBufferFBO m_gBuffer;

@@ -852,6 +852,31 @@ struct SmokeEmitterComponent {
 /// centred on the first active emitter.
 struct SmokeDomainTag {};
 
+/// Material model for an MLS-MPM body. Maps to a branch in the GPU
+/// constitutive kernel; parameters are pre-converted to Lame coefficients.
+enum class MpmMaterial : int {
+    Fluid = 0,        // weakly-compressible (J-based pressure EOS)
+    Elastic = 1,      // fixed corotated Neo-Hookean (rubber, tissue)
+    Sand = 2,         // Drucker-Prager granular plasticity
+    Snow = 3,         // Stomakhin 2013 (clamp + hardening)
+};
+
+/// A block of MLS-MPM material seeded when the simulation starts (like
+/// FluidVolumeComponent, but for the unified continuum solver). The entity
+/// transform's translation is the box centre; halfExtents (× scale) the box.
+struct MpmBodyComponent {
+    MpmMaterial material = MpmMaterial::Elastic;
+    glm::vec3 halfExtents = { 0.25f, 0.25f, 0.25f };
+    float particleSpacing = 0.04f;   // metres between seeded particles
+    float density = 1000.0f;         // kg/m^3
+    float youngsModulus = 1.0e5f;    // Pa (elastic/sand/snow stiffness)
+    float poissonRatio = 0.3f;       // -
+    float frictionDegrees = 35.0f;   // sand internal friction angle
+    float temperature = 20.0f;       // initial temperature (°C)
+    glm::vec3 color = { 0.8f, 0.7f, 0.5f };
+    glm::vec3 initialVelocity = { 0.0f, 0.0f, 0.0f };
+};
+
 struct Pose6D                // or using Pose6D = glm::mat4;
 {
     glm::vec3 position{ 0.0f };

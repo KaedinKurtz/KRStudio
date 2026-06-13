@@ -405,7 +405,7 @@ MainWindow::MainWindow(QWidget* parent)
         QString dragonPath = assetDir + "Dragon.stl";
         MeshID dragonId =
             (qEnvironmentVariableIsSet("KRS_BENCH") || qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
-             || qEnvironmentVariableIsSet("KRS_SMOKE_DEMO"))
+             || qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") || qEnvironmentVariableIsSet("KRS_MPM_DEMO"))
             ? MeshID::None
             : ResourceManager::instance().loadMesh(dragonPath);
 
@@ -510,10 +510,45 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
+    // --- MLS-MPM continuum demo (KRS_MPM_DEMO): material blocks that drop and
+    //     deform on Play. 1=water, 2=elastic jello, 3=sand column, 4=all three.
+    if (qEnvironmentVariableIsSet("KRS_MPM_DEMO")) {
+        auto& reg = m_scene->getRegistry();
+        const QString mode = qEnvironmentVariable("KRS_MPM_DEMO");
+        auto addBody = [&](MpmMaterial m, glm::vec3 pos, glm::vec3 half, glm::vec3 col,
+                           float E, float dens, float sp, glm::vec3 v0) {
+            entt::entity e = reg.create();
+            auto& xf = reg.emplace<TransformComponent>(e);
+            xf.translation = pos;
+            auto& b = reg.emplace<MpmBodyComponent>(e);
+            b.material = m; b.halfExtents = half; b.color = col;
+            b.youngsModulus = E; b.density = dens; b.particleSpacing = sp;
+            b.initialVelocity = v0;
+            if (m == MpmMaterial::Sand) b.frictionDegrees = 35.0f;
+        };
+        if (mode == QLatin1String("2")) {
+            addBody(MpmMaterial::Elastic, { 0, 1.0f, 0 }, glm::vec3(0.30f), { 0.90f, 0.30f, 0.38f },
+                    8.0e4f, 1000.0f, 0.045f, { 0, 0, 0 });
+        } else if (mode == QLatin1String("3")) {
+            addBody(MpmMaterial::Sand, { 0, 1.1f, 0 }, glm::vec3(0.25f, 0.45f, 0.25f),
+                    { 0.86f, 0.72f, 0.45f }, 6.0e5f, 1600.0f, 0.04f, { 0, 0, 0 });
+        } else if (mode == QLatin1String("4")) {
+            addBody(MpmMaterial::Fluid, { -0.65f, 1.0f, 0 }, glm::vec3(0.24f), { 0.20f, 0.45f, 0.85f },
+                    5.0e4f, 1000.0f, 0.045f, { 0, 0, 0 });
+            addBody(MpmMaterial::Elastic, { 0.0f, 1.0f, 0 }, glm::vec3(0.22f), { 0.90f, 0.30f, 0.38f },
+                    8.0e4f, 1000.0f, 0.045f, { 0, 0, 0 });
+            addBody(MpmMaterial::Sand, { 0.65f, 1.0f, 0 }, glm::vec3(0.20f), { 0.86f, 0.72f, 0.45f },
+                    6.0e5f, 1600.0f, 0.04f, { 0, 0, 0 });
+        } else {
+            addBody(MpmMaterial::Fluid, { 0, 1.0f, 0 }, glm::vec3(0.30f), { 0.20f, 0.45f, 0.85f },
+                    5.0e4f, 1000.0f, 0.045f, { 0, 0, 0 });
+        }
+    }
+
     // --- Physics demo: a small stack of primitives that falls on Play ---
     // (Skipped under KRS_BENCH: benchmarks need a clean world.)
     if (!qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
-        && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO")) {
+        && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") && !qEnvironmentVariableIsSet("KRS_MPM_DEMO")) {
         auto& registry = m_scene->getRegistry();
         auto addRigidPrimitive = [&](Primitive prim, const char* name, glm::vec3 pos,
                                      glm::vec3 scale, bool sphere) {
