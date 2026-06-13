@@ -724,6 +724,11 @@ void RenderingSystem::renderAllViewports()
         if (validTarget(viewport)) overlayPass(viewport);
     m_gl->glEndQuery(GL_TIME_ELAPSED);
 
+    // HIL: hand the finished frame to the virtual-camera ring (engine context
+    // is current here — GL readback must happen on this thread, not the async
+    // sensor consumer). Throttled to 30 Hz internally.
+    publishHilCameraFrame();
+
     // Publish this frame to the widgets: fence guarantees the engine's writes
     // are visible to the RHI contexts before they blit (sync objects are
     // shared across the share group).
@@ -735,6 +740,51 @@ void RenderingSystem::renderAllViewports()
 
     // Ask Qt to repaint the viewports; each paintGL calls presentViewport().
     requestViewportUpdates();
+}
+
+void RenderingSystem::publishHilCameraFrame()
+{
+    if (qEnvironmentVariableIntValue("KRS_HIL_CAMERA") == 0) return;
+    // Throttle to the sensor frame rate (30 Hz) — far below the render rate.
+    if (m_hilCamLastPublish >= 0.0 && (m_elapsedSeconds - m_hilCamLastPublish) < (1.0 / 30.0)) return;
+
+    ViewportWidget* vp = nullptr;                          // first viewport with a finished target
+    for (auto* v : m_targets.keys()) {
+        const auto& t = m_targets[v];
+        if (t.w > 0 && t.h > 0 && t.finalFBO) { vp = v; break; }
+    }
+    if (!vp) return;
+    const auto& t = m_targets[vp];
+
+    if (!m_hilCam || m_hilCamW != t.w || m_hilCamH != t.h) { // (re)open at the current resolution
+        if (m_hilCam) m_hilCam->close();
+        m_hilCam = krs::hil::makeVirtualCamera("krs_hil_cam");
+        if (!m_hilCam->open(t.w, t.h)) { m_hilCam.reset(); return; }
+        m_hilCamW = t.w; m_hilCamH = t.h;
+        qInfo() << "[HIL] camera bridge open" << t.w << "x" << t.h << "via" << m_hilCam->backendName();
+    }
+
+    const size_t px = size_t(t.w) * size_t(t.h);
+    m_hilReadF.resize(px * 4); m_hilReadU.resize(px * 4);
+    m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, t.finalFBO);
+    m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
+    m_gl->glReadPixels(0, 0, t.w, t.h, GL_RGBA, GL_FLOAT, m_hilReadF.data()); // VRAM RGBA16F -> sysmem
+    m_gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+    // The final texture is the tonemapped display image (~[0,1]); clamp+encode
+    // to RGBA8 and flip Y so row 0 is the top scanline (V4L2 / webcam convention).
+    for (int y = 0; y < t.h; ++y) {
+        const float* src = &m_hilReadF[size_t(t.h - 1 - y) * size_t(t.w) * 4];
+        unsigned char* dst = &m_hilReadU[size_t(y) * size_t(t.w) * 4];
+        for (int c = 0; c < t.w * 4; ++c) {
+            float v = src[c]; v = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+            dst[c] = (unsigned char)(v * 255.0f + 0.5f);
+        }
+    }
+    m_hilCam->writeFrame(m_hilReadU.data(), m_hilReadU.size(), m_hilFrameId++);
+    m_hilCamLastPublish = m_elapsedSeconds;
+    if (m_hilFrameId % 30 == 0)
+        qInfo() << "[HIL] camera published" << m_hilFrameId << "frames" << t.w << "x" << t.h;
 }
 
 void RenderingSystem::presentViewport(ViewportWidget* viewport)

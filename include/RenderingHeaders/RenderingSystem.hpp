@@ -18,6 +18,7 @@
 #include <librealsense2/rs.hpp>
 #include "Texture2D.hpp"
 #include "Cubemap.hpp"   // your cubemap wrapper
+#include "HilBridges.hpp" // HIL virtual camera (Phase 2)
 
 // Forward declarations
 class QOpenGLContext;
@@ -102,6 +103,10 @@ public:
     // All engine GL stays off Qt's RHI context so the compositor state cache
     // and context currency are never disturbed.
     void renderAllViewports();
+    // HIL camera (Phase 2): on the engine GL thread, throttled to 30 Hz, reads
+    // the finished finalColorTexture into sysmem and publishes it to the
+    // shared-memory frame ring an external perception stack can open.
+    void publishHilCameraFrame();
     // Blits a viewport's finished frame (shared texture) into the widget's
     // backbuffer. MUST be called from ViewportWidget::paintGL.
     void presentViewport(ViewportWidget* viewport);
@@ -218,6 +223,14 @@ private:
     std::unique_ptr<FluidSystem> m_fluid;
     std::unique_ptr<SmokeSystem> m_smoke;
     std::unique_ptr<MpmSystem> m_mpm;     // unified MLS-MPM continuum solver
+
+    // HIL virtual camera (Phase 2): shared-memory frame ring, fed at 30 Hz.
+    std::unique_ptr<krs::hil::IVirtualCamera> m_hilCam;
+    int m_hilCamW = 0, m_hilCamH = 0;
+    double m_hilCamLastPublish = -1.0;     // s; throttles the readback to 30 Hz
+    unsigned long long m_hilFrameId = 0;
+    std::vector<float> m_hilReadF;         // RGBA16F staging
+    std::vector<unsigned char> m_hilReadU; // RGBA8 published frame
 
     // --- Framebuffers ---
     GBufferFBO m_gBuffer;
