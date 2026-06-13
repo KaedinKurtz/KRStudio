@@ -58,6 +58,9 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     bool foamOk = false;
     const float foamEnv = qEnvironmentVariable("KRS_FLUID_FOAM").toFloat(&foamOk);
     if (foamOk) m_appearance.foaminess = foamEnv;
+    bool turbOk = false;
+    const float turbEnv = qEnvironmentVariable("KRS_FLUID_TURB").toFloat(&turbOk);
+    if (turbOk) m_params.turbulence = turbEnv;
     // Surface quality: High by default on CUDA-class GPUs, Low on iGPUs.
     // KRS_FLUID_QUALITY={0,1} forces a tier for testing.
     m_appearance.surfaceQuality = krs::hardwareCaps().cudaPhysics ? 1 : 0;
@@ -657,6 +660,9 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     // assumes unit-ish masses; with our SI particle masses the stable range
     // sits ~20x lower (gas explosion above it — found empirically).
     finalize->setFloat(gl, "u_cohesion", m_params.surfaceTensionNpm * 0.7f);
+    m_simTime += stepDt;
+    finalize->setFloat(gl, "u_turbulence", m_params.turbulence);
+    finalize->setFloat(gl, "u_time", m_simTime);
     // Drain regions (FluidSinkComponent), world-axis-aligned boxes.
     {
         constexpr int kMaxSinks = 8;

@@ -153,6 +153,15 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
         m_gravityY->setDecimals(2);
         g->addWidget(m_gravityY, 7, 1);
 
+        g->addWidget(new QLabel(QStringLiteral("Turbulence"), box), 8, 0);
+        m_turbulence = new QDoubleSpinBox(box);
+        m_turbulence->setRange(0.0, 3.0);
+        m_turbulence->setSingleStep(0.05);
+        m_turbulence->setDecimals(3);
+        m_turbulence->setToolTip(QStringLiteral(
+            "Curl-noise eddies: water swirls and churns instead of settling flat"));
+        g->addWidget(m_turbulence, 8, 1);
+
         layout->addWidget(box);
     }
 
@@ -411,7 +420,7 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
         m_surfaceTension->setValue(m.sigma);
         applyPhysics();
     });
-    for (auto* s : { m_density, m_viscosity, m_viscosityPaS, m_surfaceTension, m_radius, m_gravityY })
+    for (auto* s : { m_density, m_viscosity, m_viscosityPaS, m_surfaceTension, m_radius, m_gravityY, m_turbulence })
         connect(s, &QDoubleSpinBox::valueChanged, this, [this]() { applyPhysics(); });
     connect(m_iterations, &QSpinBox::valueChanged, this, [this]() { applyPhysics(); });
     for (auto* s : { m_sizeScale, m_iorSpin, m_absorption, m_refraction, m_foamGain, m_foamDecaySpin })
@@ -454,6 +463,7 @@ void FluidPropertiesWidget::syncFromSystem()
     m_iterations->setValue(p.solverIterations);
     m_radius->setValue(p.particleRadius);
     m_gravityY->setValue(p.gravity.y);
+    m_turbulence->setValue(p.turbulence);
     switch (fluid->requestedBackend()) {
     case FluidBackend::PbfGpu:   m_backend->setCurrentIndex(1); break;
     case FluidBackend::DfsphCpu: m_backend->setCurrentIndex(2); break;
@@ -490,6 +500,7 @@ void FluidPropertiesWidget::applyPhysics()
     p.solverIterations = m_iterations->value();
     p.particleRadius = float(m_radius->value());
     p.gravity.y = float(m_gravityY->value());
+    p.turbulence = float(m_turbulence->value());
 }
 
 void FluidPropertiesWidget::applyAppearance()

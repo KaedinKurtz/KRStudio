@@ -38,6 +38,43 @@ uniform int u_sinkCount;
 uniform vec3 u_sinkMin[MAX_SINKS];
 uniform vec3 u_sinkMax[MAX_SINKS];
 
+// Curl-noise turbulence: a divergence-free eddy field added to velocity so
+// water swirls instead of damping flat. Cheap procedural alternative to a
+// full SPH vorticity-confinement pass.
+uniform float u_turbulence; // m/s of swirl (0 = off)
+uniform float u_time;
+
+float hash31(vec3 p)
+{
+    p = fract(p * 0.3183099 + 0.1);
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float vnoise3(vec3 x)
+{
+    vec3 i = floor(x), f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    float n000 = hash31(i + vec3(0, 0, 0)), n100 = hash31(i + vec3(1, 0, 0));
+    float n010 = hash31(i + vec3(0, 1, 0)), n110 = hash31(i + vec3(1, 1, 0));
+    float n001 = hash31(i + vec3(0, 0, 1)), n101 = hash31(i + vec3(1, 0, 1));
+    float n011 = hash31(i + vec3(0, 1, 1)), n111 = hash31(i + vec3(1, 1, 1));
+    return mix(mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+               mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);
+}
+// Scalar noise potential -> divergence-free field via curl of (psi advanced
+// along three offset axes).
+vec3 curlNoise(vec3 p)
+{
+    const float e = 0.35;
+    vec3 dx = vec3(e, 0, 0), dy = vec3(0, e, 0), dz = vec3(0, 0, e);
+    vec3 px = vec3(vnoise3(p + vec3(31.4)), vnoise3(p + vec3(57.7)), vnoise3(p));
+    vec3 p_x1 = vec3(vnoise3(p + dx + vec3(31.4)), vnoise3(p + dx + vec3(57.7)), vnoise3(p + dx));
+    vec3 p_y1 = vec3(vnoise3(p + dy + vec3(31.4)), vnoise3(p + dy + vec3(57.7)), vnoise3(p + dy));
+    vec3 p_z1 = vec3(vnoise3(p + dz + vec3(31.4)), vnoise3(p + dz + vec3(57.7)), vnoise3(p + dz));
+    vec3 dpdx = (p_x1 - px) / e, dpdy = (p_y1 - px) / e, dpdz = (p_z1 - px) / e;
+    return vec3(dpdy.z - dpdz.y, dpdz.x - dpdx.z, dpdx.y - dpdy.x);
+}
+
 float wPoly6(float r2, float h)
 {
     float h2 = h * h;
@@ -102,6 +139,13 @@ void main()
     if (neighbors <= 20 && dot(gradC, gradC) > 1e-8) nSurf = normalize(gradC);
     normals[i] = vec4(nSurf, float(neighbors));
     newVel += u_viscosity * xsph + cohesion * u_dt;
+    // Curl-noise eddies (animated, divergence-free) for turbulent swirl.
+    // Low spatial frequency = large rolling eddies; dt-scaled as an
+    // acceleration so it stays contained (and framerate-independent).
+    if (u_turbulence > 0.0001) {
+        vec3 turb = curlNoise(pi * 0.55 + vec3(0.0, u_time * 0.2, 0.0));
+        newVel += turb * u_turbulence * u_dt * 6.0;
+    }
     // Surface tension limits the stable step: clamp runaway accelerations.
     float speed = length(newVel);
     float maxSpeed = 0.5 * u_h / u_dt;

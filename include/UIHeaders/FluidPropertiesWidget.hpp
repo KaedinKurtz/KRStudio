@@ -43,6 +43,7 @@ private:
     QSpinBox* m_iterations = nullptr;
     QDoubleSpinBox* m_radius = nullptr;
     QDoubleSpinBox* m_gravityY = nullptr;
+    QDoubleSpinBox* m_turbulence = nullptr;
 
     // appearance
     QComboBox* m_renderMode = nullptr;

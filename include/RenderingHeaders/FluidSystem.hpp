@@ -21,6 +21,7 @@ struct FluidParams {
     float surfaceTensionNpm = 0.0728f;     // N/m  (DFSPH backend; water-air)
     int solverIterations = 3;      // incompressibility enforcement (higher = stiffer water)
     float particleRadius = 0.025f; // m = REST SPACING d_rest (render radius too); h = 2x
+    float turbulence = 0.0f;       // curl-noise eddy strength (m/s of swirl); 0 = off
     glm::vec3 gravity = { 0.0f, -9.81f, 0.0f }; // m/s^2
 };
 
@@ -213,6 +214,7 @@ private:
     GLuint m_diffuseSSBO = 0;   // {vec4 posLife; vec4 velType;} * kMaxDiffuse
     GLuint m_diffuseCounterSSBO = 0; // monotonic ring cursor
     uint32_t m_foamFrame = 0;
+    float m_simTime = 0.0f; // animation clock for curl-noise turbulence
 
     // --- Two-way coupling ---
     GLuint m_impulseSSBO = 0;   // ivec4 per collider slot (fixed-point 1e7)
