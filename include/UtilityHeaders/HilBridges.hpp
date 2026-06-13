@@ -50,6 +50,24 @@ struct CanFrame {
 #pragma pack(pop)
 static_assert(sizeof(CanFrame) == 16, "CanFrame must match SocketCAN can_frame layout");
 
+// --- CANopen-style telemetry codec ----------------------------------------
+// Maps actuator efforts/state onto can_frame payloads (int16, fixed scale).
+// Command IDs are 0x200+axis (host->sim); state IDs are 0x180/0x1C0/0x140+axis
+// (sim->host) for position / velocity / applied-effort. Mirrors a PDO mapping.
+namespace cancodec {
+constexpr uint32_t kCmdBase = 0x200; // effort command  (N, scale 100)
+constexpr uint32_t kPosBase = 0x180; // encoder position (m, scale 1000 -> mm)
+constexpr uint32_t kVelBase = 0x1C0; // velocity         (m/s, scale 1000)
+constexpr uint32_t kTrqBase = 0x140; // applied effort   (N, scale 100)
+
+CanFrame encodeEffort(int axis, const float f[3]);   // host -> sim
+bool     decodeEffort(const CanFrame& fr, int& axis, float f[3]);
+CanFrame encodePose(int axis, const float p[3]);     // sim -> host
+bool     decodePose(const CanFrame& fr, int& axis, float p[3]);
+CanFrame encodeVel(int axis, const float v[3]);
+CanFrame encodeTorque(int axis, const float t[3]);
+} // namespace cancodec
+
 class IVirtualCAN {
 public:
     virtual ~IVirtualCAN() = default;
@@ -71,5 +89,10 @@ std::unique_ptr<IVirtualCAN> makeVirtualCAN();
 // KRS_HIL_LOOPBACK_SECS, e.g. 60, for the full spec window). Also runs a
 // bidirectional CAN round-trip check. Logs and returns pass/fail.
 bool runBridgeSelfTest();
+
+// CAN_PLANT module: command -> effort -> integrate a mock 1-DOF plant ->
+// encoder -> command round-trip through the bridge, verifying the codec and the
+// "apply as force / read back state" data path the SimulationController uses.
+bool runCanPlantSelfTest();
 
 } // namespace krs::hil

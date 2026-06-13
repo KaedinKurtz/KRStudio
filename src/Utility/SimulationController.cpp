@@ -360,6 +360,7 @@ void SimulationController::play()
         m_accumulator = 0.0;
     }
     m_clock.restart();
+    openHilCan();   // HIL CAN telemetry, if KRS_HIL_CAN is set (no-op otherwise)
     setState(SimulationState::Playing);
     qInfo() << "[Sim] Play";
 }
@@ -374,6 +375,7 @@ void SimulationController::pause()
 void SimulationController::stop()
 {
     if (m_state == SimulationState::Stopped) return;
+    closeHilCan();
     destroyPhysicsWorld();
     restoreSnapshot();
     m_accumulator = 0.0;
@@ -411,7 +413,9 @@ void SimulationController::tick()
     constexpr int kMaxStepsPerTick = 32;
     while (m_accumulator >= kFixedDt && steps < kMaxStepsPerTick) {
         pushKinematicTargets();
+        if (m_can) applyCanCommands();   // CAN effort commands -> body forces (this step)
         stepOnce(kFixedDt);
+        if (m_can) publishCanState();    // body pose/velocity/effort -> CAN state frames
         m_accumulator -= kFixedDt;
         ++steps;
     }
@@ -785,6 +789,79 @@ void SimulationController::writeBackTransforms()
             rb->linearVelocity = { lv.x, lv.y, lv.z };
             rb->angularVelocity = { av.x, av.y, av.z };
         }
+    }
+#endif
+}
+
+// ===========================================================================
+// HIL CAN telemetry (Phase 2): bidirectional plant <-> bus coupling.
+// ===========================================================================
+void SimulationController::openHilCan()
+{
+    if (m_can) return;                                    // already open (e.g. resume from pause)
+    if (!qEnvironmentVariableIsSet("KRS_HIL_CAN")) return;
+    m_can = krs::hil::makeVirtualCAN();
+    QString iface = qEnvironmentVariable("KRS_HIL_CAN_IFACE");
+    if (iface.isEmpty())
+#ifdef __linux__
+        iface = "vcan0";
+#else
+        iface = "57001:57000";                            // tx:rx; the host mirrors as 57000:57001
+#endif
+    if (!m_can->open(iface.toStdString())) { qWarning() << "[Sim] HIL CAN open failed"; m_can.reset(); return; }
+    qInfo() << "[Sim] HIL CAN telemetry on" << iface << "via" << m_can->backendName();
+}
+
+void SimulationController::closeHilCan()
+{
+    if (m_can) { m_can->close(); m_can.reset(); }
+}
+
+void SimulationController::applyCanCommands()
+{
+#if defined(KR_WITH_PHYSX)
+    if (!m_can || !m_px->scene) return;
+    auto& reg = m_scene->getRegistry();
+    krs::hil::CanFrame fr;
+    while (m_can->recv(fr)) {                              // drain all pending command frames
+        int axis; float f[3];
+        if (!krs::hil::cancodec::decodeEffort(fr, axis, f)) continue; // ignore non-effort frames
+        for (auto e : reg.view<HilActuatorComponent>()) {
+            auto& act = reg.get<HilActuatorComponent>(e);
+            if (act.axisId != axis) continue;
+            auto it = m_px->actors.find(e);
+            if (it != m_px->actors.end()) {
+                auto* dyn = it->second->is<PxRigidDynamic>();
+                if (dyn && !(dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)) {
+                    dyn->addForce(PxVec3(f[0], f[1], f[2]), PxForceMode::eFORCE, true); // continuous force this step
+                    act.lastEffort = { f[0], f[1], f[2] };
+                }
+            }
+            break;
+        }
+    }
+#endif
+}
+
+void SimulationController::publishCanState()
+{
+#if defined(KR_WITH_PHYSX)
+    if (!m_can || !m_px->scene) return;
+    auto& reg = m_scene->getRegistry();
+    for (auto e : reg.view<HilActuatorComponent>()) {
+        auto& act = reg.get<HilActuatorComponent>(e);
+        auto it = m_px->actors.find(e);
+        if (it == m_px->actors.end()) continue;
+        auto* dyn = it->second->is<PxRigidDynamic>();
+        if (!dyn) continue;
+        const PxTransform pose = dyn->getGlobalPose();    // encoder position
+        const PxVec3 lv = dyn->getLinearVelocity();        // encoder velocity
+        float p[3] = { pose.p.x, pose.p.y, pose.p.z };
+        float v[3] = { lv.x, lv.y, lv.z };
+        float t[3] = { act.lastEffort.x, act.lastEffort.y, act.lastEffort.z }; // applied effort metric
+        m_can->send(krs::hil::cancodec::encodePose(act.axisId, p));
+        m_can->send(krs::hil::cancodec::encodeVel(act.axisId, v));
+        m_can->send(krs::hil::cancodec::encodeTorque(act.axisId, t));
     }
 #endif
 }

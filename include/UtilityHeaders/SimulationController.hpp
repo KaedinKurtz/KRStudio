@@ -8,6 +8,8 @@
 #include <memory>
 #include <vector>
 
+#include "HilBridges.hpp"
+
 class Scene;
 
 /// Lifecycle state of the scene simulation (physics + fluids).
@@ -74,6 +76,12 @@ private:
     void restoreSnapshot();
     void setState(SimulationState s);
 
+    // HIL CAN telemetry (Phase 2): opened on play() when KRS_HIL_CAN is set.
+    void openHilCan();
+    void closeHilCan();
+    void applyCanCommands();   // drain effort command frames -> body forces (pre-step)
+    void publishCanState();    // body pose/velocity/effort -> state frames (post-step)
+
     struct TransformSnapshot {
         entt::entity entity;
         glm::vec3 translation;
@@ -91,4 +99,6 @@ private:
     // include graph (and the class still compiles when KR_WITH_PHYSX is off).
     struct PxImpl;
     std::unique_ptr<PxImpl> m_px;
+
+    std::unique_ptr<krs::hil::IVirtualCAN> m_can; // HIL telemetry bus (null = off)
 };

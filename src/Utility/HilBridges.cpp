@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -268,6 +269,42 @@ std::unique_ptr<IVirtualCAN> makeVirtualCAN() {
 }
 
 // ===========================================================================
+// CANopen-style telemetry codec — pack/unpack int16 channels into can_frame.
+// ===========================================================================
+namespace cancodec {
+static inline void put16(uint8_t* d, int i, float v, float scale) {
+    int32_t q = (int32_t)std::lround(v * scale);
+    q = q < -32768 ? -32768 : (q > 32767 ? 32767 : q);  // saturate to int16
+    d[i] = uint8_t(q & 0xff); d[i + 1] = uint8_t((q >> 8) & 0xff);
+}
+static inline float get16(const uint8_t* d, int i, float scale) {
+    int16_t q = int16_t(uint16_t(d[i]) | (uint16_t(d[i + 1]) << 8));
+    return float(q) / scale;
+}
+static CanFrame pack3(uint32_t id, const float v[3], float scale) {
+    CanFrame f; f.can_id = id; f.len = 6;
+    put16(f.data, 0, v[0], scale); put16(f.data, 2, v[1], scale); put16(f.data, 4, v[2], scale);
+    return f;
+}
+CanFrame encodeEffort(int axis, const float f[3]) { return pack3(kCmdBase + axis, f, 100.0f); }
+CanFrame encodePose(int axis, const float p[3])   { return pack3(kPosBase + axis, p, 1000.0f); }
+CanFrame encodeVel(int axis, const float v[3])    { return pack3(kVelBase + axis, v, 1000.0f); }
+CanFrame encodeTorque(int axis, const float t[3]) { return pack3(kTrqBase + axis, t, 100.0f); }
+bool decodeEffort(const CanFrame& fr, int& axis, float f[3]) {
+    if (fr.can_id < kCmdBase || fr.can_id >= kCmdBase + 0x40) return false;
+    axis = int(fr.can_id - kCmdBase);
+    f[0] = get16(fr.data, 0, 100.0f); f[1] = get16(fr.data, 2, 100.0f); f[2] = get16(fr.data, 4, 100.0f);
+    return true;
+}
+bool decodePose(const CanFrame& fr, int& axis, float p[3]) {
+    if (fr.can_id < kPosBase || fr.can_id >= kPosBase + 0x40) return false;
+    axis = int(fr.can_id - kPosBase);
+    p[0] = get16(fr.data, 0, 1000.0f); p[1] = get16(fr.data, 2, 1000.0f); p[2] = get16(fr.data, 4, 1000.0f);
+    return true;
+}
+} // namespace cancodec
+
+// ===========================================================================
 // LOOPBACK_FRAME_INTEGRITY + bidirectional CAN round-trip (Task 3 module).
 // ===========================================================================
 // Deterministic 1080p calibration pattern -> exercises every byte lane.
@@ -366,11 +403,50 @@ static bool canBidirectional() {
     return pass;
 }
 
+// Command -> effort -> integrate a mock 1-DOF plant -> encoder -> command,
+// proving the codec + "apply as force / read back state" path the
+// SimulationController uses, with no PhysX dependency.
+bool runCanPlantSelfTest() {
+    std::fprintf(stderr, "[HIL] === CAN_PLANT (command -> force -> encoder round-trip) ===\n");
+    auto host = makeVirtualCAN(), plant = makeVirtualCAN();
+#ifdef __linux__
+    bool ok = host->open("vcan0") && plant->open("vcan0");
+#else
+    bool ok = host->open("57111:57110") && plant->open("57110:57111");
+#endif
+    if (!ok) { std::fprintf(stderr, "[HIL] CAN_PLANT open FAILED\n"); return false; }
+
+    const int axis = 0; const float m = 1.0f, dt = 0.001f; const float fx = 8.0f;
+    float cmd[3] = { fx, 0, 0 };
+    host->send(cancodec::encodeEffort(axis, cmd));                 // host commands effort
+    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+
+    float force[3] = { 0, 0, 0 }; int rxAxis = -1; bool got = false; CanFrame rx{};
+    while (plant->recv(rx)) { int a; if (cancodec::decodeEffort(rx, a, force)) { rxAxis = a; got = true; } }
+    float v[3] = { 0, 0, 0 }, x[3] = { 0, 0, 0 };                   // mock free-mass plant
+    if (got) for (int s = 0; s < 100; ++s) for (int k = 0; k < 3; ++k) { v[k] += force[k] / m * dt; x[k] += v[k] * dt; }
+    plant->send(cancodec::encodePose(axis, x));                    // plant reports encoder
+    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+
+    float pose[3] = { 0, 0, 0 }; int pAxis = -1; bool gotPose = false; CanFrame pr{};
+    while (host->recv(pr)) { int a; if (cancodec::decodePose(pr, a, pose)) { pAxis = a; gotPose = true; } }
+    host->close(); plant->close();
+
+    float vv = 0, expected = 0;                                    // analytic discrete integral
+    for (int s = 0; s < 100; ++s) { vv += fx / m * dt; expected += vv * dt; }
+    bool pass = got && gotPose && rxAxis == axis && pAxis == axis
+              && force[0] == fx && pose[0] > 0.0f && std::fabs(pose[0] - expected) < 0.002f; // 1mm quantization
+    std::fprintf(stderr, "[HIL] CAN_PLANT %s  cmdF=%.2fN decodedF=%.2fN encoderX=%.4fm expected=%.4fm\n",
+                 pass ? "PASS" : "FAIL", fx, force[0], pose[0], expected);
+    return pass;
+}
+
 bool runBridgeSelfTest() {
     std::fprintf(stderr, "[HIL] === LOOPBACK_FRAME_INTEGRITY + CAN ===\n");
     bool ok = true;
     ok &= loopbackFrameIntegrity();
     ok &= canBidirectional();
+    ok &= runCanPlantSelfTest();
     std::fprintf(stderr, "[HIL] bridges overall: %s\n", ok ? "ALL PASS" : "FAILURES PRESENT");
     return ok;
 }

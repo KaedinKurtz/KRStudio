@@ -879,6 +879,16 @@ struct MpmBodyComponent {
     glm::vec3 initialVelocity = { 0.0f, 0.0f, 0.0f };
 };
 
+/// Exposes a dynamic rigid body on the HIL CAN bus (Phase 2). Incoming effort
+/// command frames (can_id 0x200+axisId) are applied as a body force each
+/// physics step; the body's pose / velocity / applied effort are published back
+/// as state frames. No PhysX articulations exist yet, so an "axis" is a whole
+/// rigid-body DOF set rather than a single hinge.
+struct HilActuatorComponent {
+    int axisId = 0;
+    glm::vec3 lastEffort{ 0.0f }; // last commanded force [N] (the torque metric reported back)
+};
+
 struct Pose6D                // or using Pose6D = glm::mat4;
 {
     glm::vec3 position{ 0.0f };
