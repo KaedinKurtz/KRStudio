@@ -550,6 +550,17 @@ MainWindow::MainWindow(QWidget* parent)
             b.color = { 0.78f, 0.86f, 0.95f };  // icy white-blue
             b.youngsModulus = 1.2e5f; b.density = 900.0f; b.particleSpacing = 0.045f;
             b.temperature = -12.0f; b.meltTemperature = 0.0f;
+        } else if (mode == QLatin1String("6")) {
+            // Viscous fluid (honey): high dynamic viscosity, soft EOS so it
+            // oozes into a slow dome instead of splashing like water.
+            entt::entity e = reg.create();
+            reg.emplace<TransformComponent>(e).translation = glm::vec3(0, 0.9f, 0);
+            auto& b = reg.emplace<MpmBodyComponent>(e);
+            b.material = MpmMaterial::Fluid;
+            b.halfExtents = glm::vec3(0.24f);
+            b.color = { 0.85f, 0.6f, 0.12f };  // amber
+            b.youngsModulus = 3.0e4f; b.density = 1400.0f; b.particleSpacing = 0.04f;
+            b.viscosity = 6.0f;
         } else {
             addBody(MpmMaterial::Fluid, { 0, 1.0f, 0 }, glm::vec3(0.30f), { 0.20f, 0.45f, 0.85f },
                     5.0e4f, 1000.0f, 0.045f, { 0, 0, 0 });

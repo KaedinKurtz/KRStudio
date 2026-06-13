@@ -871,6 +871,7 @@ struct MpmBodyComponent {
     float density = 1000.0f;         // kg/m^3
     float youngsModulus = 1.0e5f;    // Pa (elastic/sand/snow stiffness)
     float poissonRatio = 0.3f;       // -
+    float viscosity = 0.0f;          // Pa·s dynamic viscosity (fluid; 0 = inviscid)
     float frictionDegrees = 35.0f;   // sand internal friction angle
     float temperature = 20.0f;       // initial temperature (°C)
     float meltTemperature = 1.0e9f;  // °C; crossing it converts a solid to fluid

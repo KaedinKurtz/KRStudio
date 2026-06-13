@@ -108,12 +108,22 @@ mat3 computeTau(in Particle pp)
     mat3 F = mat3(pp.f0.xyz, pp.f1.xyz, pp.f2.xyz);
 
     if (matType < 0.5) {
-        // FLUID — weakly compressible Tait EOS on tracked J.
+        // FLUID — weakly-compressible Navier-Stokes: Tait EOS pressure plus an
+        // explicit Newtonian viscous stress from the velocity gradient C.
         float J = max(pp.plastic.x, 1e-4);
         float K = pp.matl.x;
         float gamma = pp.matl.y;
+        float visc = pp.matl.z;            // dynamic viscosity (Pa.s)
         float pres = K * (pow(1.0 / J, gamma) - 1.0);
-        return mat3(-J * pres); // Kirchhoff = J * (-p I)
+        mat3 tau = mat3(-J * pres);        // Kirchhoff = J * (-p I)
+        if (visc > 0.0) {
+            mat3 C = mat3(pp.c0.xyz, pp.c1.xyz, pp.c2.xyz);
+            mat3 D = 0.5 * (C + transpose(C));            // strain-rate tensor
+            float trD = (D[0][0] + D[1][1] + D[2][2]) / 3.0;
+            mat3 dev = D - mat3(trD);                     // deviatoric
+            tau += (2.0 * visc * J) * dev;                // Kirchhoff = J * Cauchy
+        }
+        return tau;
     }
 
     float mu = pp.matl.x;

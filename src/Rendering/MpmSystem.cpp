@@ -142,7 +142,7 @@ void MpmSystem::seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& regist
         if (b.material == MpmMaterial::Fluid) {
             v[36] = b.youngsModulus; // bulk modulus K (set softly for explicit stability)
             v[37] = 7.0f;            // Tait gamma
-            v[38] = 0.0f;
+            v[38] = b.viscosity;     // dynamic viscosity (Pa·s)
         } else {
             v[36] = mu; v[37] = lambda; v[38] = alpha;
         }
