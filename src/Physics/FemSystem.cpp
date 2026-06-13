@@ -2,8 +2,10 @@
 // + GPU upload for the unified visualization. Engine GL thread.
 #include "FemSystem.hpp"
 #include "FemComponents.hpp"
+#include "SurrogateField.hpp"
 #include "components.hpp"
 #include "MpmSystem.hpp"
+#include <cstdlib>
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <glm/gtc/matrix_transform.hpp>
@@ -97,6 +99,17 @@ void FemSystem::update(entt::registry& reg, QOpenGLFunctions_4_3_Core* gl, MpmSy
             if (fb.useGravity) ebc.gravity = glm::dvec3(0.0, -9.81, 0.0);
             if (fb.appliedForceN != 0.0f && !topNodes.empty())
                 for (int n : topNodes) ebc.nodalForces.push_back({ n, glm::dvec3(0.0, -double(fb.appliedForceN) / topNodes.size(), 0.0) });
+            // Retain material + BCs + heat-source cells for the training-data export.
+            s.material = mat; s.ebc = ebc; s.sourceCells.clear();
+            for (auto he : reg.view<HeatSourceComponent, TransformComponent>()) {
+                const auto& hs2 = reg.get<HeatSourceComponent>(he);
+                if (!hs2.active || hs2.power <= 0.0f) continue;
+                const glm::dvec3 hp2(reg.get<TransformComponent>(he).translation);
+                for (int kk = 0; kk < s.model.nz; ++kk) for (int jj = 0; jj < s.model.ny; ++jj) for (int ii = 0; ii < s.model.nx; ++ii) {
+                    const glm::dvec3 c = s.model.origin + (glm::dvec3(ii, jj, kk) + 0.5) * s.model.h;
+                    if (glm::length(c - hp2) <= hs2.radius) s.sourceCells.push_back((kk * s.model.ny + jj) * s.model.nx + ii);
+                }
+            }
             s.elastic = FemSolver::solveElasticAsync(s.model, mat, ebc);
 
             // Thermal BCs: heat sources (W) lumped to nodes in radius + surface
@@ -153,7 +166,10 @@ void FemSystem::update(entt::registry& reg, QOpenGLFunctions_4_3_Core* gl, MpmSy
                 for (int i = 1; i <= 3; ++i) { if (rng[i].y <= rng[i].x) rng[i].y = rng[i].x + 1e-4f; res.range[i] = rng[i]; }
                 res.indexCount = int(s.indices.size());
                 res.ready = true; res.buffersBuilt = false; res.uploadedMode = -1;
-                // cache geometry on the component-side solve for buffer build
+                // FEM is the data ORACLE: export (geometry+material+BC -> field) pairs
+                // for surrogate training when KRS_FEM_EXPORT names an output directory.
+                if (const char* dir = std::getenv("KRS_FEM_EXPORT"))
+                    exportTrainingSample(dir, m_exportIndex++, s.model, s.material, s.ebc, s.sourceCells, er, tr);
                 s.running = false;
             }
         }

@@ -32,8 +32,12 @@ private:
         std::vector<glm::vec3> localVerts;         // render-mesh local positions
         std::vector<glm::dvec3> worldVerts;        // for nodal->vertex sampling
         std::vector<unsigned int> indices;
+        FemMaterial material;                      // for the training-data export
+        ElasticBC ebc;                             // retained for export (fixed/load masks)
+        std::vector<int> sourceCells;              // cells overlapping a heat source
     };
     std::unordered_map<entt::entity, Solve> m_solves;
+    int m_exportIndex = 0;                         // KRS_FEM_EXPORT running sample index
 };
 
 } // namespace krs::fem

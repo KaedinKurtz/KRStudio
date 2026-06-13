@@ -426,6 +426,19 @@ else()
   message(STATUS "OpenCASCADE not found; STEP import compiled out (CadImporter stub).")
 endif()
 
+# --- ONNX Runtime (Phase 5: learned-surrogate inference; build-OPTIONAL) ---
+# Not in vcpkg.json by default (heavy). When a surrogate trained on the FEM oracle
+# exists, add `onnxruntime` to vcpkg.json; this enables the OnnxSurrogate path.
+# Until then the NullSurrogate is active and the FEM oracle is the source of truth.
+find_package(onnxruntime CONFIG QUIET)
+if(onnxruntime_FOUND)
+  target_link_libraries(RoboticsSoftware PRIVATE onnxruntime::onnxruntime)
+  target_compile_definitions(RoboticsSoftware PRIVATE KR_WITH_ONNX)
+  message(STATUS "ONNX Runtime found; learned-surrogate inference enabled (KR_WITH_ONNX).")
+else()
+  message(STATUS "ONNX Runtime not found; surrogate inference compiled out (NullSurrogate; FEM is truth).")
+endif()
+
 # --- Chrono ---
 set(KR_HAS_CHRONO 0)
 if(ENABLE_CHRONO)

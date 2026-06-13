@@ -721,3 +721,27 @@ INTERFACE + a stub + the FEM data-export; the FEM oracle stays the source of tru
   base under self-weight) in Stress mode and a heater-driven gradient in Thermal
   mode, rendered as a SOLID surface (not particles). MPM particle bodies keep the
   splat recolour. One dropdown drives both representations.
+
+### L.6 Learned-surrogate scaffold (Task 5) — oracle-first, NO faked model
+Honest reality (web-confirmed, §L.3): there is **no drop-in pretrained FEA
+foundation model**; a surrogate must be TRAINED on data from our own FEM oracle.
+This phase ships ONLY the scaffold — the FEM solver remains the source of truth.
+- **`ISurrogateField` interface** (`SurrogateField.hpp`): `available()` + `predictVonMises(...)`.
+  `NullSurrogate` (active) always returns unavailable → callers use the FEM solve.
+  `OnnxSurrogate` (behind `KR_WITH_ONNX`, compiled out by default) wires the
+  `Ort::Env`/`Ort::Session` lifecycle for a future trained model; `makeSurrogate()`
+  returns it only when ONNX + a model path are present, else `NullSurrogate`.
+- **Build-optional ONNX**: CMake `find_package(onnxruntime CONFIG QUIET)` → defines
+  `KR_WITH_ONNX` + links `onnxruntime::onnxruntime` if present (mirrors `KR_WITH_OCCT`).
+  onnxruntime is a mature vcpkg port (1.23.x, CPU); it is NOT added to vcpkg.json yet
+  (heavy; add when a trained model exists).
+- **FEM as the data oracle**: with `KRS_FEM_EXPORT=<dir>` set, every async FEM solve
+  writes a training pair `fem_sample_<n>.bin` (self-describing header + `FORMAT.txt`):
+  input = per-cell float32 grid [occupancy, E/200e9, nu, k/400, cp/1000, fixed-mask,
+  load-mask, heat-source-mask]; output = per-cell [von Mises (Pa), temperature (°C),
+  strain-norm]. Channel-major, structured grid — directly consumable by the
+  recommended **3D CNN / U-Net per-voxel regressor** (cleanest ONNX export, fixed
+  shapes, matches our voxel grid; MeshGraphNets GNN is the alternative if true
+  topology generality is needed, with ONNX scatter/dynamic-shape caveats — §L.3).
+- The trained model would predict the field from the input grid in one forward pass,
+  with the FEM oracle kept as ground truth / fallback (the `available()`-false path).
