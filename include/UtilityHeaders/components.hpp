@@ -902,6 +902,21 @@ struct MpmBodyComponent {
     glm::vec3 initialVelocity = { 0.0f, 0.0f, 0.0f };
 };
 
+/// Phase 5 — marks a RIGID solid body for the FEM oracle: the async voxel-hex
+/// solver computes a true linear-elastic stress field and (optionally) a steady
+/// heat field on the body's geometry, using the entity's MaterialComponent
+/// (E, nu, rho, k, c_p). The result recolours the render mesh through the unified
+/// viz (Thermal/Stress/Strain). This is the DEFAULT for solid bodies; MPM is
+/// reserved for soft / large-deformation bodies (representation policy: ROADMAP §L).
+struct FemBodyComponent {
+    int   resolution = 16;        // target voxel cells along the longest axis
+    bool  useGravity = true;      // include the gravity body force (rho*g)
+    bool  fixBottom = true;       // clamp the lowest face (Dirichlet u=0)
+    float appliedForceN = 0.0f;   // uniform load on the TOP face, -y (N); 0 = none
+    bool  solveThermal = true;    // also run the steady heat solve
+    bool  dirty = true;           // (re)solve requested (geometry/BC/material change)
+};
+
 /// Exposes a dynamic rigid body on the HIL CAN bus (Phase 2). Incoming effort
 /// command frames (can_id 0x200+axisId) are applied as a body force each
 /// physics step; the body's pose / velocity / applied effort are published back

@@ -37,6 +37,8 @@
 #include "TrajectoryVerifier.hpp"
 #include "CadImporter.hpp"
 #include "FemSolver.hpp"
+#include "FemSystem.hpp"
+#include "FemVizPass.hpp"
 #include "SmokePass.hpp"
 #include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
@@ -387,6 +389,8 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("mpm_grid", std::vector<std::string>{ (shaderDir + "mpm_grid_comp.glsl").toStdString() });
         loadAndStoreShader("mpm_g2p", std::vector<std::string>{ (shaderDir + "mpm_g2p_comp.glsl").toStdString() });
         loadAndStoreShader("mpm_render", (shaderDir + "mpm_render_vert.glsl").toStdString(), (shaderDir + "mpm_render_frag.glsl").toStdString());
+        // Phase 5: FEM body surface recolour (shares the MPM viz ramp + range).
+        loadAndStoreShader("fem_viz", (shaderDir + "fem_viz_vert.glsl").toStdString(), (shaderDir + "fem_viz_frag.glsl").toStdString());
         // MLS-MPM thermodynamics: heat scatter -> normalize -> diffuse -> gather.
         loadAndStoreShader("mpm_heat_scatter", std::vector<std::string>{ (shaderDir + "mpm_heat_scatter_comp.glsl").toStdString() });
         loadAndStoreShader("mpm_heat_normalize", std::vector<std::string>{ (shaderDir + "mpm_heat_normalize_comp.glsl").toStdString() });
@@ -533,6 +537,7 @@ void RenderingSystem::initializeSharedResources()
     // MLS-MPM particles: opaque, depth-tested against the scene so water and
     // glass composite over them correctly.
     m_overlayPasses.push_back(std::make_unique<MpmPass>());
+    m_overlayPasses.push_back(std::make_unique<FemVizPass>()); // Phase 5: recolour FEM solid meshes
     // Fluid must depth-test against the real scene; GizmoPass clears the
     // depth buffer to draw on top, so it must come last.
     m_overlayPasses.push_back(std::make_unique<FluidSurfacePass>());
@@ -561,6 +566,9 @@ void RenderingSystem::initializeSharedResources()
     // Unified MLS-MPM continuum solver (fluid/elastic/sand/snow), engine context.
     m_mpm = std::make_unique<MpmSystem>();
     m_mpm->initialize(*this, m_gl);
+
+    // Phase 5: async FEM oracle driver for rigid solid bodies.
+    m_fem = std::make_unique<krs::fem::FemSystem>();
 
     // 4) Initialize all passes
     qDebug() << "[RenderingSystem] Initializing passes for context" << ctx;
@@ -691,6 +699,10 @@ void RenderingSystem::renderAllViewports()
         m_smoke->update(*this, m_gl, m_scene->getRegistry(), dt);
     if (m_mpm)
         m_mpm->update(*this, m_gl, m_scene->getRegistry(), dt);
+    // Phase 5: drive the FEM oracle AFTER MPM calibration so its scalar range
+    // unions into the shared viz range; publishes nodal fields to FEM bodies.
+    if (m_fem && m_mpm)
+        m_fem->update(m_scene->getRegistry(), m_gl, m_mpm.get(), int(m_mpm->appearance().mode));
     m_gl->glEndQuery(GL_TIME_ELAPSED);
 
     if (m_gpuQueryFrame >= kGpuQueryRing - 1) {
@@ -1283,6 +1295,7 @@ void RenderingSystem::shutdown()
     if (m_fluid) m_fluid->shutdown(gl);
     if (m_smoke) m_smoke->shutdown(gl);
     if (m_mpm) m_mpm->shutdown(gl);
+    if (m_fem) m_fem->shutdown(gl);
     if (m_frameFence) { gl->glDeleteSync(m_frameFence); m_frameFence = nullptr; }
     if (m_gpuQueriesInitialized) {
         gl->glDeleteQueries(kGpuStages * kGpuQueryRing, &m_gpuQueries[0][0]);

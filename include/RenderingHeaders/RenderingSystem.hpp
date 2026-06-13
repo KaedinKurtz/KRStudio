@@ -28,6 +28,7 @@ class ViewportWidget;
 class FluidSystem;
 class SmokeSystem;
 class MpmSystem;
+namespace krs::fem { class FemSystem; }
 class Shader;
 class Scene;
 class OpaquePass;
@@ -223,6 +224,7 @@ private:
     std::unique_ptr<FluidSystem> m_fluid;
     std::unique_ptr<SmokeSystem> m_smoke;
     std::unique_ptr<MpmSystem> m_mpm;     // unified MLS-MPM continuum solver
+    std::unique_ptr<krs::fem::FemSystem> m_fem; // Phase 5: async FEM oracle driver
 
     // HIL virtual camera (Phase 2): shared-memory frame ring, fed at 30 Hz.
     std::unique_ptr<krs::hil::IVirtualCamera> m_hilCam;

@@ -3,6 +3,7 @@
 #include <QtGui/qopengl.h>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <algorithm>
 #include <vector>
 
 class QOpenGLFunctions_4_3_Core;
@@ -62,6 +63,13 @@ public:
     Appearance& appearance() { return m_appearance; }
     void setVizMode(VizMode m) { m_appearance.mode = m; m_calibratePending = m_appearance.autoRange; }
     glm::vec2 vizRange() const;                // active mode's [min, max]
+    // Expand a mode's range to include r, so MPM particles and FEM bodies share one
+    // dynamic range (FemSystem unions its field range here after MPM calibration).
+    void unionVizRange(VizMode m, glm::vec2 r) {
+        glm::vec2& d = (m == VizMode::Thermal) ? m_appearance.thermal
+                     : (m == VizMode::Strain)  ? m_appearance.strain : m_appearance.vonMises;
+        d.x = std::min(d.x, r.x); d.y = std::max(d.y, r.y);
+    }
 
     // Live diagnostics (filled under KRS_MPM_SELFTEST / autoplay).
     struct Diag {

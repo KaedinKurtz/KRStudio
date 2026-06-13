@@ -694,3 +694,30 @@ INTERFACE + a stub + the FEM data-export; the FEM oracle stays the source of tru
 - **Geometry source**: the FEM uses the body's RENDER mesh (RenderableMeshComponent), not
   the cooked physics collision shape (which is a convex hull for dynamics).
 - **MPM stays for soft/large-deformation**; rigid solids get rigid + FEM (policy §L / Task 4).
+
+### L.5 Representation policy (Task 4) + unified viz (Task 3) — REALIZED
+- **Rigid + FEM is the DEFAULT for solid bodies.** A solid (metal especially) is
+  EITHER rigid + FEM (cheap; true stress/heat fields via the async oracle, no
+  explicit-stiffness ceiling) OR deformable-MPM — never a coarse MPM proxy for a
+  rigid solid. `FemBodyComponent` marks the rigid-FEM path; `MpmBodyComponent`
+  marks the soft path.
+- **MPM is reserved for soft / large-deformation bodies.** When MPM is used it
+  should be resolved finely (small Δx) so it reads as a solid, with the render
+  splat = Δx (Task 1), not a sparse spring-net.
+- **Tie to interaction intent** (consistent with the engine's tiering): an
+  un-interacted solid stays rigid + FEM; a body under active large-deformation
+  manipulation may be promoted to MPM. The promotion *machinery* (swap component
+  on grab) is a documented follow-up; this phase ships the rigid+FEM DEFAULT and
+  the boot scene demonstrates it.
+- **Boot scene**: the default block is now a rigid + FEM 6061 cube (a real solid
+  triangle mesh) on the floor with a heater — replacing the MPM proxy.
+- **Unified visualization (Task 3)**: FEM bodies recolour their SOLID render mesh
+  per-vertex (nodal field interpolated to vertices, dedicated pos+scalar VBO) via
+  a forward `FemVizPass` that reuses the EXACT cold→hot `ramp()` and shares the
+  dynamic range with the MPM splats (`FemSystem` unions its scalar range into
+  `MpmSystem` after MPM calibration, so gradients are comparable across the whole
+  scene). Default mode → normal PBR; Stress/Thermal/Strain → recoloured surface.
+  Verified by grabs: the 6061 block shows a von-Mises gradient (hot at the clamped
+  base under self-weight) in Stress mode and a heater-driven gradient in Thermal
+  mode, rendered as a SOLID surface (not particles). MPM particle bodies keep the
+  splat recolour. One dropdown drives both representations.

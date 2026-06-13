@@ -408,31 +408,36 @@ MainWindow::MainWindow(QWidget* parent)
             }
         }
 
-        // Default boot content: a 6061-aluminium MLS-MPM block on the floor with a
-        // heater at one face. This is the VISUALIZATION TARGET -- the toolbar's
-        // Visualize dropdown (PBR/Thermal/Stress/Strain) recolours its particles
-        // immediately (MPM bodies seed at boot, not just on Play), and on Play the
-        // heater drives Fourier conduction through it. (Replaces the old decorative
-        // dragon mesh.) Skipped under the demo/bench scenes, which spawn their own.
+        // Default boot content (Phase 5): a RIGID + FEM 6061-aluminium block on the
+        // floor with a heater at one face. This is the VISUALIZATION TARGET rendered
+        // as a SOLID surface (not particles) -- the async FEM oracle computes the true
+        // linear-elastic stress (under gravity + its own weight, clamped base) and the
+        // steady heat field, and the Visualize dropdown (Stress/Thermal/Strain)
+        // recolours the surface through the unified ramp. Rigid + FEM is the DEFAULT
+        // representation for solids; MPM is reserved for soft / large-deformation
+        // bodies (representation policy, ROADMAP §L). Skipped under demo/bench scenes.
         if (!qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
             && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") && !qEnvironmentVariableIsSet("KRS_MPM_DEMO")
             && !qEnvironmentVariableIsSet("KRS_HEAT_DEMO")) {
             auto& registry = m_scene->getRegistry();
-            entt::entity block = registry.create();
-            registry.emplace<TransformComponent>(block, glm::vec3(0.0f, 0.4f, 0.0f),
-                                                 glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
-            auto& b = registry.emplace<MpmBodyComponent>(block);   // defaults = 6061 aluminium
-            b.material = MpmMaterial::Elastic;
-            b.halfExtents = glm::vec3(0.32f);
-            b.particleSpacing = 0.05f;
-            b.youngsModulus = 2.0e6f;          // firm but explicit-stable (real 6061 ~68.9 GPa)
-            registry.emplace<TagComponent>(block, std::string("Aluminium Block"));
+            // Solid 0.64 m cube resting on the floor (a real triangle mesh surface).
+            entt::entity block = SceneBuilder::spawnPrimitive(
+                *m_scene, int(Primitive::Cube), glm::vec3(0.0f, 0.32f, 0.0f),
+                glm::vec3(0.64f, 0.64f, 0.64f), "Aluminium Block (FEM)");
+            auto& rb = registry.emplace<RigidBodyComponent>(block);
+            rb.bodyType = RigidBodyComponent::BodyType::Static;   // fixed solid (not soft MPM)
+            auto& col = registry.emplace<BoxCollider>(block);
+            col.halfExtents = glm::vec3(0.5f);
+            auto& mat = registry.emplace_or_replace<MaterialComponent>(block); // defaults = 6061-T6
+            mat.albedoColor = glm::vec3(0.82f, 0.83f, 0.85f);
+            auto& fem = registry.emplace<FemBodyComponent>(block);
+            fem.resolution = 14; fem.useGravity = true; fem.fixBottom = true; fem.solveThermal = true;
 
             entt::entity heater = registry.create();
-            registry.emplace<TransformComponent>(heater, glm::vec3(-0.4f, 0.4f, 0.0f),
+            registry.emplace<TransformComponent>(heater, glm::vec3(-0.4f, 0.32f, 0.0f),
                                                  glm::quat(1, 0, 0, 0), glm::vec3(0.15f));
             auto& hs = registry.emplace<HeatSourceComponent>(heater);
-            hs.power = 3.0e6f;                 // W into the block's near face (Neumann)
+            hs.power = 5.0e3f;                 // W into the block's near face (Neumann)
             hs.radius = 0.3f;
             hs.temperature = 320.0f;           // nominal glow colour
             registry.emplace<TagComponent>(heater, std::string("Heater"));
