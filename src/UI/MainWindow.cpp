@@ -36,6 +36,7 @@
 #include "PhysicsPropertiesWidget.hpp"
 #include "OutlinerWidget.hpp"
 #include "FluidPropertiesWidget.hpp"
+#include "SmokePropertiesWidget.hpp"
 #include "TextureBrowserWidget.hpp"
 #include "AssetBrowserWidget.hpp"
 #include "FluidMesher.hpp"
@@ -1071,6 +1072,16 @@ MainWindow::MainWindow(QWidget* parent)
         else
             m_dockManager->addDockWidget(ads::RightDockWidgetArea, fluidDock);
 
+        // Smoke/fire global controls: tabbed with the Fluid panel.
+        auto* smokePanel = new SmokePropertiesWidget(m_renderingSystem.get(), this);
+        auto* smokeDock = new ads::CDockWidget(QStringLiteral("Gas"), this);
+        smokeDock->setWidget(smokePanel);
+        smokeDock->setStyleSheet(sidePanelStyle);
+        if (auto* physArea = physDock->dockAreaWidget())
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, smokeDock, physArea);
+        else
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, smokeDock);
+
         // Texture browser: hot-swaps material packs onto the selection.
         const QString materialsRoot =
             QCoreApplication::applicationDirPath() + QLatin1String("/assets/materials");
@@ -2080,6 +2091,18 @@ void MainWindow::buildMenuBar()
         auto& mat = reg.get<MaterialComponent>(e);
         mat.albedoColor = glm::vec3(0.2f, 0.8f, 0.9f);
         if (m_physicsPanel) m_physicsPanel->setEntity(e);
+    });
+    // Simulation sources (emitters/sinks/gas) — same spawn path as the
+    // viewport right-click menu, placed at the origin to be dragged.
+    addMenu->addSeparator();
+    addMenu->addAction(QStringLiteral("Water Drain (sink)"), this, [this]() {
+        spawnSimSourceAt(SimSource::WaterSink, glm::vec3(0.0f, 0.3f, 0.0f));
+    });
+    addMenu->addAction(QStringLiteral("Smoke Emitter"), this, [this]() {
+        spawnSimSourceAt(SimSource::SmokeEmitter, glm::vec3(0.0f, 0.2f, 0.0f));
+    });
+    addMenu->addAction(QStringLiteral("Fire Emitter"), this, [this]() {
+        spawnSimSourceAt(SimSource::FireEmitter, glm::vec3(0.0f, 0.2f, 0.0f));
     });
 
     // --- View ---
