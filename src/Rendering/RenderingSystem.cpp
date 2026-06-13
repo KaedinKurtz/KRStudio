@@ -31,6 +31,7 @@
 #include "GlassPass.hpp"
 #include "SmokeSystem.hpp"
 #include "MpmSystem.hpp"
+#include "MpmAdjoint.hpp"
 #include "SmokePass.hpp"
 #include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
@@ -564,8 +565,10 @@ void RenderingSystem::initializeSharedResources()
     for (auto& p : m_overlayPasses)       p->initialize(*this, m_gl);
 
     // Headless MLS-MPM fidelity suite (analytic ground-truth checks).
-    if (m_mpm && qEnvironmentVariableIntValue("KRS_MPM_SELFTEST") != 0)
+    if (m_mpm && qEnvironmentVariableIntValue("KRS_MPM_SELFTEST") != 0) {
         m_mpm->runSelfTests(*this, m_gl);
+        krs::mpmad::runSelfTests();   // CPU adjoint gradient checks (ADJOINT_GRADIENT_CHECK)
+    }
 }
 
 void RenderingSystem::resizeGLResources()
