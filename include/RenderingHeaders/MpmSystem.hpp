@@ -55,6 +55,10 @@ public:
         glm::dvec3 comPosition{ 0.0 };
         float maxSpeed = 0.0f;
         int live = 0;
+        double tempMean = 0.0;   // mass-weighted mean temperature
+        float tempMin = 0.0f;
+        float tempMax = 0.0f;
+        int fluidCount = 0;      // particles currently of Fluid type (post-melt)
     };
     Diag sample(QOpenGLFunctions_4_3_Core* gl);
 
@@ -73,6 +77,9 @@ private:
     void runSubstep(QOpenGLFunctions_4_3_Core* gl, class Shader* p2g, class Shader* grid,
                     class Shader* g2p, float sdt, const glm::vec3& gravity,
                     float dx, float invDx);
+    // One thermal step (heat scatter -> normalize -> diffuse -> gather + phase
+    // change), run once per frame. No-op if thermal shaders are missing.
+    void runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl, float dtFrame);
 
     int m_N = 64;                       // grid cells per axis
     glm::vec3 m_origin{ -1.5f, 0.0f, -1.5f };
@@ -81,7 +88,16 @@ private:
     GLuint m_particleSSBO = 0;          // kFloatsPerParticle * kMaxParticles
     GLuint m_gridIntSSBO = 0;           // int[cellCount*4] fixed-point momentum+mass
     GLuint m_gridVelSSBO = 0;           // vec4[cellCount] velocity + mass (float)
+    GLuint m_gridThermSSBO = 0;         // int[cellCount*2] fixed-point (m*T, m)
+    GLuint m_gridTempA = 0;             // float[cellCount] normalized temperature
+    GLuint m_gridTempB = 0;             // float[cellCount] diffused temperature
     int m_particleCount = 0;
+
+    // Thermodynamics (M4): ambient field + conductivity + Newton exchange.
+    float m_ambientT = 20.0f;           // °C ambient reservoir
+    float m_conductivity = 0.5f;        // thermal diffusivity proxy (m^2/s)
+    float m_heatExchange = 0.0f;        // 1/s exchange with ambient (0 = off)
+    float m_fluidMeltK = 5.0e4f;        // bulk modulus assigned to melted fluid
 
     bool m_initialized = false;
     bool m_playing = false;

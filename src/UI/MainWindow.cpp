@@ -539,6 +539,17 @@ MainWindow::MainWindow(QWidget* parent)
                     8.0e4f, 1000.0f, 0.045f, { 0, 0, 0 });
             addBody(MpmMaterial::Sand, { 0.65f, 1.0f, 0 }, glm::vec3(0.20f), { 0.86f, 0.72f, 0.45f },
                     6.0e5f, 1600.0f, 0.04f, { 0, 0, 0 });
+        } else if (mode == QLatin1String("5")) {
+            // Thermodynamics: an ice block (melt point 0C, starts cold) in a
+            // warm ambient melts into water as it heats past its threshold.
+            entt::entity e = reg.create();
+            reg.emplace<TransformComponent>(e).translation = glm::vec3(0, 0.9f, 0);
+            auto& b = reg.emplace<MpmBodyComponent>(e);
+            b.material = MpmMaterial::Elastic;
+            b.halfExtents = glm::vec3(0.28f);
+            b.color = { 0.78f, 0.86f, 0.95f };  // icy white-blue
+            b.youngsModulus = 1.2e5f; b.density = 900.0f; b.particleSpacing = 0.045f;
+            b.temperature = -12.0f; b.meltTemperature = 0.0f;
         } else {
             addBody(MpmMaterial::Fluid, { 0, 1.0f, 0 }, glm::vec3(0.30f), { 0.20f, 0.45f, 0.85f },
                     5.0e4f, 1000.0f, 0.045f, { 0, 0, 0 });

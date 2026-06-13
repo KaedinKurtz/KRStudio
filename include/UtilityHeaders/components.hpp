@@ -873,6 +873,7 @@ struct MpmBodyComponent {
     float poissonRatio = 0.3f;       // -
     float frictionDegrees = 35.0f;   // sand internal friction angle
     float temperature = 20.0f;       // initial temperature (°C)
+    float meltTemperature = 1.0e9f;  // °C; crossing it converts a solid to fluid
     glm::vec3 color = { 0.8f, 0.7f, 0.5f };
     glm::vec3 initialVelocity = { 0.0f, 0.0f, 0.0f };
 };

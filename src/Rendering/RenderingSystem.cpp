@@ -381,6 +381,11 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("mpm_grid", std::vector<std::string>{ (shaderDir + "mpm_grid_comp.glsl").toStdString() });
         loadAndStoreShader("mpm_g2p", std::vector<std::string>{ (shaderDir + "mpm_g2p_comp.glsl").toStdString() });
         loadAndStoreShader("mpm_render", (shaderDir + "mpm_render_vert.glsl").toStdString(), (shaderDir + "mpm_render_frag.glsl").toStdString());
+        // MLS-MPM thermodynamics: heat scatter -> normalize -> diffuse -> gather.
+        loadAndStoreShader("mpm_heat_scatter", std::vector<std::string>{ (shaderDir + "mpm_heat_scatter_comp.glsl").toStdString() });
+        loadAndStoreShader("mpm_heat_normalize", std::vector<std::string>{ (shaderDir + "mpm_heat_normalize_comp.glsl").toStdString() });
+        loadAndStoreShader("mpm_heat_diffuse", std::vector<std::string>{ (shaderDir + "mpm_heat_diffuse_comp.glsl").toStdString() });
+        loadAndStoreShader("mpm_heat_gather", std::vector<std::string>{ (shaderDir + "mpm_heat_gather_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_emit", std::vector<std::string>{ (shaderDir + "fluid_foam_emit_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_update", std::vector<std::string>{ (shaderDir + "fluid_foam_update_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_render", (shaderDir + "fluid_foam_vert.glsl").toStdString(), (shaderDir + "fluid_foam_frag.glsl").toStdString());
