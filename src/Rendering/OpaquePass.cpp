@@ -166,6 +166,9 @@ void OpaquePass::execute(const RenderFrameContext& context)
     {
         if (context.registry.any_of<CameraGizmoTag>(ent))
             continue;
+        // Transparent: rendered by the GlassPass after the water composite.
+        if (context.registry.any_of<GlassComponent>(ent))
+            continue;
 
         const auto& meshComp = context.registry.get<RenderableMeshComponent>(ent);
         if (meshComp.indices.empty()) {

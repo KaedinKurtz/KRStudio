@@ -55,4 +55,11 @@ private:
     GLuint m_foamFBO[2] = { 0, 0 };
     int m_foamIndex = 0;
     float m_lastFoamTime = -1.0f;
+
+    // Per-frame caustic splat map (r32ui, top-down over the fluid domain).
+    void updateCaustics(const RenderFrameContext& context);
+    static constexpr int kCausticRes = 512;
+    GLuint m_causticTex = 0;
+    GLuint m_causticFBO = 0; // clear-target only (glClearTexImage is GL 4.4)
+    float m_lastCausticTime = -1.0f;
 };

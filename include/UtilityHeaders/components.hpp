@@ -85,6 +85,16 @@ struct MaterialReloadRequest {
 struct TessellatedMaterialTag{};
 struct ParallaxMaterialTag {};
 
+// Transparent refractive material: the entity leaves the opaque G-buffer
+// and renders in the GlassPass (screen-space refraction + Fresnel env
+// reflection + Beer-Lambert tint), after the water composite, in linear HDR.
+struct GlassComponent {
+    float ior = 1.5f;                          // crown glass
+    glm::vec3 tint{ 0.94f, 0.98f, 0.96f };     // transmission colour
+    float thickness = 0.08f;                   // virtual path length (m)
+    float dispersion = 0.012f;                 // per-channel IOR spread (0 = off)
+};
+
 struct MaterialComponent
 {
     // � Base Layer �

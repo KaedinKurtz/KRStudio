@@ -535,6 +535,10 @@ MainWindow::MainWindow(QWidget* parent)
             col.halfExtents = glm::vec3(0.5f); // unit cube scaled by transform
             auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
             mat.albedoColor = glm::vec3(0.65f, 0.65f, 0.7f);
+            // It's called a glass — render it as one (GlassPass: screen-space
+            // refraction + Fresnel). The floor stays opaque.
+            if (std::string(name).find("Wall") != std::string::npos)
+                registry.emplace<GlassComponent>(e);
             return e;
         };
         const glm::vec3 g(-2.0f, 0.0f, 0.0f);  // glass center on the ground
@@ -1872,6 +1876,14 @@ void MainWindow::onViewportContextMenu(const QPoint& globalPos, const glm::vec3&
                 cam.focusOn(worldPos, glm::length(cam.getPosition() - worldPos));
             }
         });
+        const bool isGlass = reg.all_of<GlassComponent>(hit);
+        menu.addAction(isGlass ? QStringLiteral("Make Solid") : QStringLiteral("Make Glass"),
+                       [this, hit, isGlass]() {
+                           auto& r = m_scene->getRegistry();
+                           if (!r.valid(hit)) return;
+                           if (isGlass) r.remove<GlassComponent>(hit);
+                           else r.emplace<GlassComponent>(hit);
+                       });
         menu.addAction(QStringLiteral("Delete"), [this, hit]() {
             auto& r = m_scene->getRegistry();
             if (r.valid(hit)) r.destroy(hit);

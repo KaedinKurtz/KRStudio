@@ -27,6 +27,7 @@
 #include "FluidSurfacePass.hpp"
 #include "CollisionDebugPass.hpp"
 #include "TonemapPass.hpp"
+#include "GlassPass.hpp"
 #include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
 #include "FluidSystem.hpp"
@@ -355,6 +356,8 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("fluid_ssf_backdepth", (shaderDir + "fluid_ssf_depth_vert.glsl").toStdString(), (shaderDir + "fluid_ssf_backdepth_frag.glsl").toStdString());
         loadAndStoreShader("fluid_foam_accum_decay", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_foam_accum_decay_frag.glsl").toStdString());
         loadAndStoreShader("fluid_foam_accum_inject", (shaderDir + "fluid_foam_accum_inject_vert.glsl").toStdString(), (shaderDir + "fluid_foam_accum_inject_frag.glsl").toStdString());
+        loadAndStoreShader("fluid_caustics", std::vector<std::string>{ (shaderDir + "fluid_caustics_comp.glsl").toStdString() });
+        loadAndStoreShader("fluid_caustics_apply", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_caustics_apply_frag.glsl").toStdString());
         loadAndStoreShader("fluid_aniso", std::vector<std::string>{ (shaderDir + "fluid_aniso_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_emit", std::vector<std::string>{ (shaderDir + "fluid_foam_emit_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_update", std::vector<std::string>{ (shaderDir + "fluid_foam_update_comp.glsl").toStdString() });
@@ -364,6 +367,7 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("blur", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "gaussian_blur_frag.glsl").toStdString());
         loadAndStoreShader("skybox", (shaderDir + "skybox_vert.glsl").toStdString(), (shaderDir + "skybox_frag.glsl").toStdString());
         loadAndStoreShader("tonemap", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "tonemap_frag.glsl").toStdString());
+        loadAndStoreShader("glass", (shaderDir + "glass_vert.glsl").toStdString(), (shaderDir + "glass_frag.glsl").toStdString());
         loadAndStoreShader("outline_edge", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "outline_edge_frag.glsl").toStdString());
         loadAndStoreShader("composite_simple", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "composite_simple_frag.glsl").toStdString());
     }
@@ -496,6 +500,9 @@ void RenderingSystem::initializeSharedResources()
     // Fluid must depth-test against the real scene; GizmoPass clears the
     // depth buffer to draw on top, so it must come last.
     m_overlayPasses.push_back(std::make_unique<FluidSurfacePass>());
+    // Glass refracts the lit HDR frame INCLUDING the water, so it runs
+    // between the fluid composite and the display transform.
+    m_overlayPasses.push_back(std::make_unique<GlassPass>());
     // Display transform AFTER the water/foam composite (they blend in linear
     // HDR), BEFORE the gizmo (authored in display space).
     m_overlayPasses.push_back(std::make_unique<TonemapPass>());

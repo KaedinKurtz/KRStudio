@@ -254,6 +254,38 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
     // ---- 3c) Lingering-foam accumulation (world-anchored, High only) --
     if (look.surfaceQuality > 0) updateFoamAccum(context);
 
+    // ---- 3d) Caustics: splat refracted key light onto the floor, then
+    //          light the scene with it BEFORE the water composites over it.
+    if (look.surfaceQuality > 0) {
+        updateCaustics(context);
+        if (Shader* apply = context.renderer.getShader("fluid_caustics_apply");
+            apply && m_causticTex) {
+            gl->glBindFramebuffer(GL_FRAMEBUFFER, context.targetFBOs.finalFBO);
+            gl->glViewport(0, 0, w, h);
+            gl->glDisable(GL_DEPTH_TEST);
+            gl->glDepthMask(GL_FALSE);
+            gl->glEnable(GL_BLEND);
+            gl->glBlendFunc(GL_ONE, GL_ONE);
+            apply->use(gl);
+            gl->glActiveTexture(GL_TEXTURE0);
+            gl->glBindTexture(GL_TEXTURE_2D, context.renderer.getGBuffer().positionTexture);
+            apply->setInt(gl, "u_gPosition", 0);
+            gl->glActiveTexture(GL_TEXTURE1);
+            gl->glBindTexture(GL_TEXTURE_2D, m_causticTex);
+            apply->setInt(gl, "u_caustics", 1);
+            const glm::vec3 cMin = fluid->domainMin();
+            const glm::vec3 cMax = fluid->domainMax();
+            apply->setVec2(gl, "u_worldMin", glm::vec2(cMin.x, cMin.z));
+            apply->setVec2(gl, "u_worldSize", glm::vec2(cMax.x - cMin.x, cMax.z - cMin.z));
+            apply->setFloat(gl, "u_floorY", 0.0f);
+            apply->setVec3(gl, "u_lightColor", glm::vec3(0.55f, 0.52f, 0.42f));
+            gl->glBindVertexArray(m_emptyVao);
+            gl->glDrawArrays(GL_TRIANGLES, 0, 3);
+            gl->glDisable(GL_BLEND);
+            gl->glDepthMask(GL_TRUE);
+        }
+    }
+
     // ---- 4) Composite over the scene ----------------------------------
     // Copy what the world looks like BEFORE the water so refraction can
     // sample it (can't read a texture bound to the active framebuffer).
@@ -330,6 +362,51 @@ void FluidSurfacePass::execute(const RenderFrameContext& context)
     gl->glDisable(GL_PROGRAM_POINT_SIZE);
     gl->glDepthFunc(GL_LESS);
     gl->glActiveTexture(GL_TEXTURE0);
+}
+
+void FluidSurfacePass::updateCaustics(const RenderFrameContext& context)
+{
+    auto* gl = context.gl;
+    FluidSystem* fluid = context.renderer.getFluidSystem();
+    Shader* splat = context.renderer.getShader("fluid_caustics");
+    if (!gl || !fluid || !splat || fluid->particleCount() == 0) return;
+
+    // Rebuild once per engine frame even with several viewports.
+    if (context.elapsedTime == m_lastCausticTime) return;
+    m_lastCausticTime = context.elapsedTime;
+
+    if (m_causticTex == 0) {
+        gl->glGenTextures(1, &m_causticTex);
+        gl->glBindTexture(GL_TEXTURE_2D, m_causticTex);
+        gl->glTexStorage2D(GL_TEXTURE_2D, 1, GL_R32UI, kCausticRes, kCausticRes);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        gl->glGenFramebuffers(1, &m_causticFBO);
+        gl->glBindFramebuffer(GL_FRAMEBUFFER, m_causticFBO);
+        gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                                   m_causticTex, 0);
+    }
+    // glClearTexImage is GL 4.4; clear through the FBO instead.
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, m_causticFBO);
+    const GLuint zeros[4] = { 0, 0, 0, 0 };
+    gl->glClearBufferuiv(GL_COLOR, 0, zeros);
+    gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    gl->glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    splat->use(gl);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, fluid->particleBuffer());
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, fluid->normalsBuffer());
+    gl->glBindImageTexture(0, m_causticTex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
+    splat->setInt(gl, "u_particleCount", fluid->particleCount());
+    const glm::vec3 dMin = fluid->domainMin();
+    const glm::vec3 dMax = fluid->domainMax();
+    splat->setVec2(gl, "u_worldMin", glm::vec2(dMin.x, dMin.z));
+    splat->setVec2(gl, "u_worldSize", glm::vec2(dMax.x - dMin.x, dMax.z - dMin.z));
+    // Matches the composite's key light direction (light -> scene).
+    splat->setVec3(gl, "u_lightDir", glm::normalize(glm::vec3(-0.35f, -0.65f, -0.45f)));
+    splat->setFloat(gl, "u_floorY", 0.0f);
+    gl->glDispatchCompute((fluid->particleCount() + 255) / 256, 1, 1);
+    gl->glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 }
 
 void FluidSurfacePass::updateFoamAccum(const RenderFrameContext& context)

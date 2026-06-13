@@ -104,6 +104,7 @@ public:
     static constexpr int kMaxDiffuse = 100000;
     GLuint diffuseBuffer() const { return m_diffuseSSBO; }
     GLuint anisoBuffer() const { return m_anisoSSBO; }
+    GLuint normalsBuffer() const { return m_normalsSSBO; }
     /// True once the anisotropy pass has run for the current particle set.
     bool anisoValid() const { return m_anisoValid; }
     glm::vec3 domainMin() const { return m_domainMin; }
