@@ -98,6 +98,7 @@ private:
     // in ViewportWidget.hpp (private:)
     QPoint m_clickStartPos;
     bool   m_suppressClickThisRelease = false;
+    QPoint m_rightPressPos;
 
     GizmoSystem* m_gizmo = nullptr;
 
@@ -115,4 +116,8 @@ signals: // <<< ADD THIS SECTION
     /// An asset (mesh path) was dropped at a world position (ray-cast hit
     /// against scene AABBs, else the ground plane).
     void assetDropped(const QString& path, const glm::vec3& worldPos);
+    /// Right-CLICK (no drag — dragging is the fly camera): the cursor's
+    /// world position and the entity under it (entt::null when none).
+    void contextMenuRequested(const QPoint& globalPos, const glm::vec3& worldPos,
+                              entt::entity hit);
 };

@@ -335,6 +335,7 @@ void ViewportWidget::mousePressEvent(QMouseEvent* ev)
     m_lastMousePos = ev->pos();
 
     if (ev->button() == Qt::RightButton) {
+        m_rightPressPos = ev->pos();
         setFocus(Qt::OtherFocusReason);
         getCamera().setNavMode(Camera::NavMode::FLY);
         setCursor(Qt::BlankCursor);
@@ -411,6 +412,25 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
     if (ev->button() == Qt::RightButton) {
         getCamera().setNavMode(Camera::NavMode::ORBIT);
         unsetCursor();
+
+        // Right-CLICK (no fly-drag): scene context menu at the cursor.
+        if ((ev->pos() - m_rightPressPos).manhattanLength() < m_ClickSlop && m_scene) {
+            glm::vec3 worldPos(0.0f);
+            entt::entity hitEntity = entt::null;
+            if (auto hit = cpuPickAABB(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(),
+                                       width(), height())) {
+                worldPos = hit->worldPos;
+                hitEntity = hit->entity;
+            } else {
+                CpuRay ray = makeCpuRay(getCamera(), ev->pos().x(), ev->pos().y(),
+                                        width(), height());
+                float t;
+                glm::vec3 H;
+                if (rayPlane(ray.origin, ray.dir, glm::vec3(0), glm::vec3(0, 1, 0), t, H))
+                    worldPos = H;
+            }
+            emit contextMenuRequested(ev->globalPosition().toPoint(), worldPos, hitEntity);
+        }
     }
 
     if (ev->button() == Qt::LeftButton) {

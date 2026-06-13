@@ -64,6 +64,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFileDialog>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QWidget>
 #include <QMenuBar>
@@ -656,6 +657,8 @@ MainWindow::MainWindow(QWidget* parent)
         &MainWindow::onSelectionChanged
     );
     connect(viewport1, &ViewportWidget::assetDropped, this, &MainWindow::spawnMeshAssetAt);
+    connect(viewport1, &ViewportWidget::contextMenuRequested, this,
+            &MainWindow::onViewportContextMenu);
 
     connect(viewport1, &ViewportWidget::gizmoModeRequested, this, [this](int m) {
         if (!m_gizmoSystem) return;
@@ -1354,6 +1357,8 @@ void MainWindow::addViewport() {
     vp->setGizmoSystem(m_gizmoSystem.get());
     connect(vp, &ViewportWidget::selectionChanged, this, &MainWindow::onSelectionChanged);
     connect(vp, &ViewportWidget::assetDropped, this, &MainWindow::spawnMeshAssetAt);
+    connect(vp, &ViewportWidget::contextMenuRequested, this,
+            &MainWindow::onViewportContextMenu);
 
     ads::CDockAreaWidget* anchor = nullptr;
     if (m_dockContainers.size() > 1)
@@ -1729,6 +1734,95 @@ entt::entity MainWindow::addObjectFromMenu(int primitive, const QString& baseNam
     reg.emplace<SelectedComponent>(e);
     refreshGizmoAndProperties();
     return e;
+}
+
+entt::entity MainWindow::duplicateEntity(entt::entity src)
+{
+    auto& reg = m_scene->getRegistry();
+    if (!reg.valid(src)) return entt::null;
+    entt::entity dst = reg.create();
+
+    // Copy renderable + transform (offset so the copy is visible) + the
+    // material/physics description — never live PhysX handles; the physics
+    // world rebuilds actors from components on Play.
+    if (auto* mesh = reg.try_get<RenderableMeshComponent>(src))
+        reg.emplace<RenderableMeshComponent>(dst, *mesh);
+    if (auto* xf = reg.try_get<TransformComponent>(src)) {
+        TransformComponent copy = *xf;
+        copy.translation += glm::vec3(0.5f, 0.0f, 0.5f);
+        reg.emplace<TransformComponent>(dst, copy);
+    }
+    if (auto* mat = reg.try_get<MaterialComponent>(src)) reg.emplace<MaterialComponent>(dst, *mat);
+    if (auto* dir = reg.try_get<MaterialDirectoryTag>(src)) reg.emplace<MaterialDirectoryTag>(dst, *dir);
+    if (reg.all_of<UVTexturedMaterialTag>(src)) reg.emplace<UVTexturedMaterialTag>(dst);
+    if (reg.all_of<TriPlanarMaterialTag>(src)) reg.emplace<TriPlanarMaterialTag>(dst);
+    if (reg.all_of<ParallaxMaterialTag>(src)) reg.emplace<ParallaxMaterialTag>(dst);
+    if (auto* rb = reg.try_get<RigidBodyComponent>(src)) reg.emplace<RigidBodyComponent>(dst, *rb);
+    if (auto* bc = reg.try_get<BoxCollider>(src)) reg.emplace<BoxCollider>(dst, *bc);
+    if (auto* sc = reg.try_get<SphereCollider>(src)) reg.emplace<SphereCollider>(dst, *sc);
+    if (auto* ac = reg.try_get<AutoCollisionComponent>(src)) reg.emplace<AutoCollisionComponent>(dst, *ac);
+
+    QString base = QStringLiteral("Object");
+    if (auto* tag = reg.try_get<TagComponent>(src))
+        base = QString::fromStdString(tag->tag).section(QLatin1Char('.'), 0, 0);
+    int count = 1;
+    for (auto e : reg.view<TagComponent>())
+        if (QString::fromStdString(reg.get<TagComponent>(e).tag).startsWith(base)) ++count;
+    reg.emplace<TagComponent>(
+        dst, QStringLiteral("%1.%2").arg(base).arg(count, 3, 10, QLatin1Char('0')).toStdString());
+
+    for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+    reg.emplace<SelectedComponent>(dst);
+    refreshGizmoAndProperties();
+    return dst;
+}
+
+void MainWindow::onViewportContextMenu(const QPoint& globalPos, const glm::vec3& worldPos,
+                                       entt::entity hit)
+{
+    auto& reg = m_scene->getRegistry();
+    const bool hitIsObject = reg.valid(hit)
+        && !reg.any_of<CameraComponent, GridComponent, GizmoHandleComponent>(hit);
+
+    QMenu menu(this);
+    if (hitIsObject) {
+        const QString name = reg.all_of<TagComponent>(hit)
+            ? QString::fromStdString(reg.get<TagComponent>(hit).tag)
+            : QStringLiteral("Object");
+        menu.addSection(name);
+        menu.addAction(QStringLiteral("Duplicate"), [this, hit]() { duplicateEntity(hit); });
+        menu.addAction(QStringLiteral("Rename…"), [this, hit, name]() {
+            bool ok = false;
+            const QString text = QInputDialog::getText(
+                this, QStringLiteral("Rename"), QStringLiteral("Name:"),
+                QLineEdit::Normal, name, &ok);
+            if (ok && !text.isEmpty())
+                m_scene->getRegistry().emplace_or_replace<TagComponent>(hit, text.toStdString());
+        });
+        menu.addAction(QStringLiteral("Focus camera"), [this, worldPos]() {
+            if (ViewportWidget* vp = primaryViewport()) {
+                Camera& cam = vp->getCamera();
+                cam.focusOn(worldPos, glm::length(cam.getPosition() - worldPos));
+            }
+        });
+        menu.addAction(QStringLiteral("Delete"), [this, hit]() {
+            auto& r = m_scene->getRegistry();
+            if (r.valid(hit)) r.destroy(hit);
+            refreshGizmoAndProperties();
+        });
+        menu.addSeparator();
+    }
+    QMenu* addMenu = menu.addMenu(QStringLiteral("Add here"));
+    auto addPrim = [this, addMenu, worldPos](const QString& label, Primitive prim, glm::vec3 scale) {
+        addMenu->addAction(label, [this, label, prim, worldPos, scale]() {
+            addObjectFromMenu(int(prim), label, worldPos + glm::vec3(0, 0.5f, 0), scale);
+        });
+    };
+    addPrim(QStringLiteral("Cube"), Primitive::Cube, glm::vec3(1.0f));
+    addPrim(QStringLiteral("Sphere"), Primitive::IcoSphere, glm::vec3(0.5f));
+    addPrim(QStringLiteral("Cylinder"), Primitive::Cylinder, glm::vec3(0.5f, 1.0f, 0.5f));
+
+    menu.exec(globalPos);
 }
 
 void MainWindow::spawnMeshAssetAt(const QString& path, const glm::vec3& worldPos)

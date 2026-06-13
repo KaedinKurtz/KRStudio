@@ -63,6 +63,9 @@ public slots:
     /// Load a mesh asset and spawn it at a world position (asset-browser
     /// button and viewport drag-and-drop both land here).
     void spawnMeshAssetAt(const QString& path, const glm::vec3& worldPos);
+    /// Right-click scene menu (delete/duplicate/focus/add-at-point).
+    void onViewportContextMenu(const QPoint& globalPos, const glm::vec3& worldPos,
+                               entt::entity hit);
 
 protected:
     // No changes needed here
@@ -113,6 +116,7 @@ private:
     void buildMenuBar();
     entt::entity addObjectFromMenu(int primitive, const QString& baseName,
                                    const glm::vec3& pos, const glm::vec3& scale);
+    entt::entity duplicateEntity(entt::entity src);
 
     entt::entity m_cameraEntity;
 

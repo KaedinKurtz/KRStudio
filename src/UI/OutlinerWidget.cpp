@@ -6,6 +6,8 @@
 #include <QVBoxLayout>
 #include <QListWidget>
 #include <QTimer>
+#include <QMenu>
+#include <QInputDialog>
 
 OutlinerWidget::OutlinerWidget(Scene* scene, QWidget* parent)
     : QWidget(parent), m_scene(scene)
@@ -25,6 +27,37 @@ OutlinerWidget::OutlinerWidget(Scene* scene, QWidget* parent)
             if (reg.valid(e)) reg.emplace_or_replace<SelectedComponent>(e);
         }
         emit selectionEdited();
+    });
+
+    // Right-click: rename / delete straight from the list.
+    m_list->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_list, &QListWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        QListWidgetItem* item = m_list->itemAt(pos);
+        if (!item) return;
+        const auto e = entt::entity(item->data(Qt::UserRole).toUInt());
+        auto& reg = m_scene->getRegistry();
+        if (!reg.valid(e)) return;
+
+        QMenu menu(this);
+        menu.addAction(QStringLiteral("Rename…"), [this, e, item]() {
+            bool ok = false;
+            const QString text = QInputDialog::getText(
+                this, QStringLiteral("Rename"), QStringLiteral("Name:"),
+                QLineEdit::Normal, item->text(), &ok);
+            if (ok && !text.isEmpty()) {
+                m_scene->getRegistry().emplace_or_replace<TagComponent>(e, text.toStdString());
+                refresh();
+            }
+        });
+        menu.addAction(QStringLiteral("Delete"), [this, e]() {
+            auto& r = m_scene->getRegistry();
+            if (r.valid(e) && !r.any_of<CameraComponent, GridComponent>(e)) {
+                r.destroy(e);
+                refresh();
+                emit selectionEdited();
+            }
+        });
+        menu.exec(m_list->mapToGlobal(pos));
     });
 
     m_refreshTimer = new QTimer(this);

@@ -1018,11 +1018,14 @@ void GizmoSystem::updateScreenScale(const Camera& camera)
     const float dist = glm::length(camera.getPosition() - xf.translation);
     if (dist <= 0.0f) return;
 
-    constexpr float kVFovRadians = glm::radians(45.0f); // matches Camera::getProjectionMatrix
+    // Derive the vertical FOV from the camera's actual projection instead
+    // of assuming 45° (P[1][1] = cot(vfov/2) for any aspect ratio).
+    const float p11 = camera.getProjectionMatrix(1.0f)[1][1];
+    const float tanHalfVfov = p11 > 1e-4f ? 1.0f / p11 : std::tan(glm::radians(22.5f));
     constexpr float kScreenFraction = 0.16f;  // gizmo diameter as a fraction of viewport height
     constexpr float kBaseGizmoDiameter = 2.0f; // handles are built spanning ~±1.0
 
-    const float worldDiameter = 2.0f * dist * std::tan(kVFovRadians * 0.5f) * kScreenFraction;
+    const float worldDiameter = 2.0f * dist * tanHalfVfov * kScreenFraction;
     xf.scale = glm::vec3(worldDiameter / kBaseGizmoDiameter);
 }
 
