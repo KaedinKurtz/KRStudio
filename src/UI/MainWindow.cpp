@@ -407,7 +407,8 @@ MainWindow::MainWindow(QWidget* parent)
         QString dragonPath = assetDir + "Dragon.stl";
         MeshID dragonId =
             (qEnvironmentVariableIsSet("KRS_BENCH") || qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
-             || qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") || qEnvironmentVariableIsSet("KRS_MPM_DEMO"))
+             || qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") || qEnvironmentVariableIsSet("KRS_MPM_DEMO")
+             || qEnvironmentVariableIsSet("KRS_HEAT_DEMO"))
             ? MeshID::None
             : ResourceManager::instance().loadMesh(dragonPath);
 
@@ -569,10 +570,44 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
+    // --- Thermodynamics demo (KRS_HEAT_DEMO): a flame scorches a suspended MPM
+    //     block, and a HeatSourceComponent "motor" glows + heats a second block.
+    //     View > Physics Visualization > Thermal (or KRS_MPM_VIZ=1) to watch it.
+    if (qEnvironmentVariableIsSet("KRS_HEAT_DEMO")) {
+        auto& reg = m_scene->getRegistry();
+        // Fire emitter on the ground.
+        entt::entity fire = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::IcoSphere),
+                                                         glm::vec3(0, 0.12f, 0), glm::vec3(0.12f), "Flame");
+        auto& fmat = reg.emplace_or_replace<MaterialComponent>(fire);
+        fmat.emissiveColor = { 1.0f, 0.4f, 0.05f }; fmat.emissiveStrength = 2.0f;
+        auto& sm = reg.emplace<SmokeEmitterComponent>(fire);
+        sm.fuelRate = 2.5f; sm.temperature = 1.0f; sm.densityRate = 1.2f; sm.color = { 0.2f, 0.2f, 0.2f };
+        // Elastic block suspended in the plume -> scorched by the flame.
+        { entt::entity e = reg.create();
+          reg.emplace<TransformComponent>(e).translation = glm::vec3(0, 0.9f, 0);
+          auto& b = reg.emplace<MpmBodyComponent>(e);
+          b.material = MpmMaterial::Elastic; b.halfExtents = glm::vec3(0.22f);
+          b.color = { 0.75f, 0.75f, 0.78f }; b.youngsModulus = 8.0e4f;
+          b.density = 1000.0f; b.particleSpacing = 0.045f; }
+        // "Motor": a HeatSourceComponent body that glows and heats a nearby block.
+        { entt::entity m = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::Cube),
+                                                        glm::vec3(1.1f, 0.25f, 0), glm::vec3(0.12f), "Motor");
+          reg.emplace_or_replace<MaterialComponent>(m);
+          auto& hs = reg.emplace<HeatSourceComponent>(m);
+          hs.temperature = 180.0f; hs.radius = 0.45f; }
+        { entt::entity e = reg.create();
+          reg.emplace<TransformComponent>(e).translation = glm::vec3(1.1f, 0.55f, 0);
+          auto& b = reg.emplace<MpmBodyComponent>(e);
+          b.material = MpmMaterial::Elastic; b.halfExtents = glm::vec3(0.16f);
+          b.color = { 0.7f, 0.7f, 0.75f }; b.youngsModulus = 8.0e4f;
+          b.density = 1000.0f; b.particleSpacing = 0.04f; }
+    }
+
     // --- Physics demo: a small stack of primitives that falls on Play ---
     // (Skipped under KRS_BENCH: benchmarks need a clean world.)
     if (!qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
-        && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") && !qEnvironmentVariableIsSet("KRS_MPM_DEMO")) {
+        && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") && !qEnvironmentVariableIsSet("KRS_MPM_DEMO")
+        && !qEnvironmentVariableIsSet("KRS_HEAT_DEMO")) {
         auto& registry = m_scene->getRegistry();
         auto addRigidPrimitive = [&](Primitive prim, const char* name, glm::vec3 pos,
                                      glm::vec3 scale, bool sphere) {

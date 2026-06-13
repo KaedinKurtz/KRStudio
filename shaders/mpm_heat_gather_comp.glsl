@@ -21,6 +21,21 @@ uniform float u_heatExchange;   // Newton exchange rate with ambient (1/s)
 uniform float u_dtFrame;
 uniform float u_fluidK;         // bulk modulus assigned to newly-melted fluid
 
+// Heat sources (HeatSourceComponent): drive nearby particles toward a target T.
+const int MAX_HEAT = 8;
+uniform int  u_heatCount;
+uniform vec4 u_heatSrc[MAX_HEAT];    // xyz world pos, w target temperature (C)
+uniform float u_heatRadius[MAX_HEAT];
+uniform float u_heatRate;            // source coupling rate (1/s)
+
+// Smoke/flame thermal grid coupling (sampled where it overlaps the MPM domain).
+uniform int       u_smokeOn;
+uniform sampler3D u_smokeScalars;    // r=density, g=temperature(0..1), b=fuel
+uniform vec3      u_smokeOrigin;
+uniform vec3      u_smokeSize;
+uniform float     u_smokeTempC;      // °C mapped to smoke temperature g=1
+uniform float     u_smokeRate;       // flame coupling rate (1/s)
+
 void main()
 {
     uint i = gl_GlobalInvocationID.x;
@@ -51,8 +66,25 @@ void main()
         wsum += wt;
     }
     float Tnew = (wsum > 1.0e-6) ? Tsum / wsum : p[i].plastic.y;
-    // Newton exchange with the ambient field (the external heat source/sink).
-    Tnew += u_heatExchange * u_dtFrame * (u_ambientT - Tnew);
+    vec3 pos = p[i].posMass.xyz;
+
+    // Effective local reservoir: cool ambient, raised by the flame grid and by
+    // any nearby heat source. Couple toward the hottest influence at its rate.
+    float target = u_ambientT;
+    float rate = u_heatExchange;
+    if (u_smokeOn == 1) {                                // sample the flame/smoke grid
+        vec3 uvw = (pos - u_smokeOrigin) / u_smokeSize;
+        if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
+            float st = texture(u_smokeScalars, uvw).g * u_smokeTempC; // 0..1 -> °C
+            if (st > target) { target = st; rate = max(rate, u_smokeRate * texture(u_smokeScalars, uvw).g); }
+        }
+    }
+    for (int h = 0; h < u_heatCount; ++h) {              // motor coil / friction sources
+        if (distance(pos, u_heatSrc[h].xyz) <= u_heatRadius[h] && u_heatSrc[h].w > target) {
+            target = u_heatSrc[h].w; rate = max(rate, u_heatRate);
+        }
+    }
+    Tnew += rate * u_dtFrame * (target - Tnew);          // Newton exchange / conduction-dissipation
     p[i].plastic.y = Tnew;
 
     // Phase change: a solid (matType > 0) that crosses its melt threshold

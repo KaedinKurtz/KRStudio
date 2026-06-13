@@ -889,6 +889,16 @@ struct HilActuatorComponent {
     glm::vec3 lastEffort{ 0.0f }; // last commanded force [N] (the torque metric reported back)
 };
 
+/// Internal heat generation (Phase 3): a motor coil / friction source or an
+/// external hot object. Each thermal step it drives MPM particles within
+/// `radius` toward `temperature`; if the entity has a MaterialComponent its
+/// emissive is tinted by the temperature so a hot rigid body glows.
+struct HeatSourceComponent {
+    float temperature = 150.0f;  // °C the source drives nearby material toward
+    float radius = 0.4f;         // m influence sphere
+    bool  active = true;
+};
+
 struct Pose6D                // or using Pose6D = glm::mat4;
 {
     glm::vec3 position{ 0.0f };

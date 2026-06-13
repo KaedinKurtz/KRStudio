@@ -88,6 +88,7 @@ private:
     void seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
     void computeDomain(entt::registry& registry);
     void autoCalibrate(QOpenGLFunctions_4_3_Core* gl); // one-shot CPU min/max for the active viz mode
+    void collectHeatSources(entt::registry& registry);  // HeatSourceComponent -> uniforms + emissive tint
     // One MLS-MPM substep (clear grid -> P2G -> grid -> G2P) on the bound
     // particle/grid buffers. Shared by update() and the self-test.
     void runSubstep(QOpenGLFunctions_4_3_Core* gl, class Shader* p2g, class Shader* grid,
@@ -114,6 +115,13 @@ private:
     float m_conductivity = 0.5f;        // thermal diffusivity proxy (m^2/s)
     float m_heatExchange = 0.0f;        // 1/s exchange with ambient (0 = off)
     float m_fluidMeltK = 5.0e4f;        // bulk modulus assigned to melted fluid
+
+    // Heat sources (Phase 3): HeatSourceComponent entities drive nearby
+    // particles toward their temperature; the smoke/flame grid is sampled too.
+    static constexpr int kMaxHeatSources = 8;
+    glm::vec4 m_heatSrc[kMaxHeatSources]{}; // xyz world pos, w target temperature (C)
+    float m_heatRadius[kMaxHeatSources]{};  // m influence radius
+    int m_heatCount = 0;
 
     bool m_initialized = false;
     bool m_playing = false;

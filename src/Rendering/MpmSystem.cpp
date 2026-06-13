@@ -1,5 +1,6 @@
 #include "MpmSystem.hpp"
 #include "RenderingSystem.hpp"
+#include "SmokeSystem.hpp"
 #include "Shader.hpp"
 #include "components.hpp"
 #include "HardwareCaps.hpp"
@@ -260,7 +261,30 @@ void MpmSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
 
     // Heat diffusion + phase change, once per rendered frame (heat evolves far
     // slower than momentum, so a single thermal step per frame is plenty).
+    collectHeatSources(registry);
     runThermalStep(renderer, gl, frameDt);
+}
+
+void MpmSystem::collectHeatSources(entt::registry& registry)
+{
+    m_heatCount = 0;
+    for (auto e : registry.view<HeatSourceComponent, TransformComponent>()) {
+        const auto& hs = registry.get<HeatSourceComponent>(e);
+        if (!hs.active) continue;
+        const auto& xf = registry.get<TransformComponent>(e);
+        if (m_heatCount < kMaxHeatSources) {
+            m_heatSrc[m_heatCount] = glm::vec4(xf.translation, hs.temperature); // pos + target T
+            m_heatRadius[m_heatCount] = hs.radius;
+            ++m_heatCount;
+        }
+        // A hot rigid body glows: drive its emissive from the source temperature
+        // (reuses the existing emissive G-buffer path — no shader-variant churn).
+        if (auto* mat = registry.try_get<MaterialComponent>(e)) {
+            const float t = glm::clamp((hs.temperature - 20.0f) / 200.0f, 0.0f, 1.0f);
+            mat->emissiveColor = glm::mix(glm::vec3(0.02f), glm::vec3(1.0f, 0.35f, 0.08f), t);
+            mat->emissiveStrength = t * 3.0f;
+        }
+    }
 }
 
 void MpmSystem::runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
@@ -319,6 +343,28 @@ void MpmSystem::runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_C
     gath->setFloat(gl, "u_heatExchange", m_heatExchange);
     gath->setFloat(gl, "u_dtFrame", dtFrame);
     gath->setFloat(gl, "u_fluidK", m_fluidMeltK);
+    // Heat sources (HeatSourceComponent), collected in update().
+    gath->setInt(gl, "u_heatCount", m_heatCount);
+    gath->setFloat(gl, "u_heatRate", 6.0f);
+    for (int h = 0; h < m_heatCount; ++h) {
+        gath->setVec4(gl, ("u_heatSrc[" + std::to_string(h) + "]").c_str(), m_heatSrc[h]);
+        gath->setFloat(gl, ("u_heatRadius[" + std::to_string(h) + "]").c_str(), m_heatRadius[h]);
+    }
+    // Flame/smoke grid coupling: sample the smoke temperature field where it
+    // overlaps the MPM domain so a flame scorches the material.
+    SmokeSystem* smoke = renderer.getSmokeSystem();
+    int smokeOn = (smoke && smoke->scalarsTexture()) ? 1 : 0;
+    if (smokeOn) {
+        gl->glActiveTexture(GL_TEXTURE0 + 8);
+        gl->glBindTexture(GL_TEXTURE_3D, smoke->scalarsTexture());
+        gath->setInt(gl, "u_smokeScalars", 8);
+        gath->setVec3(gl, "u_smokeOrigin", smoke->origin());
+        gath->setVec3(gl, "u_smokeSize", smoke->extent());
+        gath->setFloat(gl, "u_smokeTempC", 600.0f);   // flame (g=1) ~ 600 C
+        gath->setFloat(gl, "u_smokeRate", 5.0f);
+        gl->glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT); // smoke wrote it earlier this frame
+    }
+    gath->setInt(gl, "u_smokeOn", smokeOn);
     gl->glDispatchCompute(pGroups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -545,6 +591,26 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
         check("phase change: heated solid melts to fluid", d1.fluidCount > d1.live / 2,
               fmt("melted", d1.fluidCount) + " / " + fmt("live", d1.live));
         m_ambientT = savedAmb; m_heatExchange = savedHx;
+    }
+    // Test 7 — HeatSourceComponent injection + dissipation (Phase 3). A hot
+    // source warms a solid body; removing it lets the heat dissipate to ambient.
+    {
+        const float savedAmb = m_ambientT, savedHx = m_heatExchange;
+        m_ambientT = 20.0f; m_heatExchange = 0.5f;
+        seedBlock(1, glm::vec3(0, -0.4f, 0), 0.22f, 0.05f, 1000.0f, 8.0e4f, 0.3f,
+                  glm::vec3(0), 20.0f, 1.0e9f, 0.0f);
+        m_heatCount = 1; m_heatSrc[0] = glm::vec4(0, -0.4f, 0, 250.0f); m_heatRadius[0] = 0.6f;
+        Diag d0 = sample(gl);
+        for (int f = 0; f < 90; ++f) runThermalStep(renderer, gl, 1.0f / 60.0f);
+        Diag dHot = sample(gl);
+        m_heatCount = 0; m_heatExchange = 3.0f;                 // source off -> dissipate to cool ambient
+        for (int f = 0; f < 180; ++f) runThermalStep(renderer, gl, 1.0f / 60.0f);
+        Diag dCool = sample(gl);
+        check("heat source warms body", dHot.tempMean > d0.tempMean + 30.0,
+              fmt("T0", d0.tempMean) + " -> " + fmt("Thot", dHot.tempMean));
+        check("heat dissipates to ambient", dCool.tempMean < dHot.tempMean - 10.0,
+              fmt("Thot", dHot.tempMean) + " -> " + fmt("Tcool", dCool.tempMean));
+        m_heatCount = 0; m_ambientT = savedAmb; m_heatExchange = savedHx;
     }
 
     qInfo() << "[MPM selftest] overall:" << (allPass ? "ALL PASS" : "FAILURES PRESENT");
