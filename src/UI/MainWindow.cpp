@@ -340,9 +340,12 @@ MainWindow::MainWindow(QWidget* parent)
         // relative to assets/materials, e.g. "metals/brushed-steel").
         QString demoTexDir;
         QDir materialsRoot(assetDir + QLatin1String("materials"));
+        // rocky-shoreline1 looked broken-dark for months: its albedo's MEAN
+        // brightness is 0.15 — the texture itself is near-black. blocky-cliff
+        // (0.37) reads as rock under our lighting.
         const QString requestedPack = qEnvironmentVariableIsSet("KRS_DEMO_MATERIAL")
             ? qEnvironmentVariable("KRS_DEMO_MATERIAL")
-            : QStringLiteral("ground/rocky-shoreline1");
+            : QStringLiteral("rocks/blocky-cliff");
         if (materialsRoot.exists(requestedPack)) {
             demoTexDir = materialsRoot.absoluteFilePath(requestedPack);
         }
@@ -366,6 +369,33 @@ MainWindow::MainWindow(QWidget* parent)
         else
             qWarning() << "[Spawner] No material packs in" << materialsRoot.absolutePath()
                        << "— using untextured material.";
+
+        // A real floor: a large concrete slab under the whole working area
+        // (the photo "ground" below the grid was just the HDR skybox).
+        // Skipped for benchmarks and the minimal fluid test scenes.
+        if (!qEnvironmentVariableIsSet("KRS_BENCH")
+            && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")) {
+            auto& reg = m_scene->getRegistry();
+            entt::entity slab = SceneBuilder::spawnPrimitive(
+                *m_scene, int(Primitive::Cube), glm::vec3(0.0f, -0.1f, 0.0f),
+                glm::vec3(24.0f, 0.2f, 24.0f), "Ground.Slab");
+            auto& rb = reg.emplace<RigidBodyComponent>(slab);
+            rb.bodyType = RigidBodyComponent::BodyType::Static;
+            auto& col = reg.emplace<BoxCollider>(slab);
+            col.halfExtents = glm::vec3(0.5f); // unit cube scaled by transform
+            const QString concrete = materialsRoot.exists(QStringLiteral("concrete/clean-concrete"))
+                ? materialsRoot.absoluteFilePath(QStringLiteral("concrete/clean-concrete"))
+                : demoTexDir;
+            if (!concrete.isEmpty()) {
+                reg.emplace_or_replace<TriPlanarMaterialTag>(slab);
+                reg.emplace_or_replace<MaterialDirectoryTag>(slab, concrete.toStdString());
+                auto& req = reg.emplace_or_replace<MaterialReloadRequest>(slab);
+                req.tilingOverride = 0.5f; // 2 m per tile: reads as poured slabs
+            } else {
+                auto& mat = reg.emplace_or_replace<MaterialComponent>(slab);
+                mat.albedoColor = glm::vec3(0.55f);
+            }
+        }
 
         // Demo mesh: the dragon, centered in front of the default camera.
         // (Skipped under KRS_BENCH: its convex hull at the origin would
@@ -394,6 +424,7 @@ MainWindow::MainWindow(QWidget* parent)
 
             auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
             mat.heightScale = 0.1f;
+            mat.albedoTiling = glm::vec2(0.5f); // chunkier rock: 2 m per tile
             registry.emplace_or_replace<TagComponent>(e, std::string("Dragon"));
             // Rigid collision comes from AutoCollisionComponent (attached at
             // spawn): static scenery resolves to the EXACT cooked triangle
@@ -484,12 +515,13 @@ MainWindow::MainWindow(QWidget* parent)
             return e;
         };
 
-        // Keep clear of the dragon's convex hull at the origin.
-        addRigidPrimitive(Primitive::Cube, "Cube.001", { 5.0f, 0.5f, 0.0f }, glm::vec3(1.0f), false);
-        addRigidPrimitive(Primitive::Cube, "Cube.002", { 5.05f, 1.6f, 0.05f }, glm::vec3(1.0f), false);
-        addRigidPrimitive(Primitive::Cube, "Cube.003", { 4.95f, 2.7f, -0.05f }, glm::vec3(1.0f), false);
-        addRigidPrimitive(Primitive::IcoSphere, "Sphere.001", { 5.3f, 4.2f, 0.1f }, glm::vec3(0.5f), true);
-        addRigidPrimitive(Primitive::IcoSphere, "Sphere.002", { 4.7f, 5.2f, -0.1f }, glm::vec3(0.5f), true);
+        // Keep clear of the dragon's collision mesh at the origin, but close
+        // enough that the default camera frames floor + dragon + stack + glass.
+        addRigidPrimitive(Primitive::Cube, "Cube.001", { 3.0f, 0.5f, -0.5f }, glm::vec3(1.0f), false);
+        addRigidPrimitive(Primitive::Cube, "Cube.002", { 3.05f, 1.6f, -0.45f }, glm::vec3(1.0f), false);
+        addRigidPrimitive(Primitive::Cube, "Cube.003", { 2.95f, 2.7f, -0.55f }, glm::vec3(1.0f), false);
+        addRigidPrimitive(Primitive::IcoSphere, "Sphere.001", { 3.3f, 4.2f, -0.4f }, glm::vec3(0.5f), true);
+        addRigidPrimitive(Primitive::IcoSphere, "Sphere.002", { 2.7f, 5.2f, -0.6f }, glm::vec3(0.5f), true);
 
         // --- Fluid demo: an open-top "glass" with water seeded inside and a
         // tap pouring more in from above. Walls are static rigid boxes so the
@@ -811,8 +843,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_slamManager->start();
 
     // --- 5. FINAL, ROBUST INITIALIZATION AND RENDER LOOP START ---
-    m_masterRenderTimer = new QTimer(this);
-    connect(m_masterRenderTimer, &QTimer::timeout, this, [this]() {
+    auto engineFrame = [this]() {
         // Step the simulation (fixed-timestep physics), then render all
         // viewports on the engine's own GL context and schedule repaints.
         if (m_simulation) {
@@ -821,13 +852,20 @@ MainWindow::MainWindow(QWidget* parent)
         if (m_renderingSystem) {
             m_renderingSystem->renderAllViewports();
         }
-        });
+    };
+    m_masterRenderTimer = new QTimer(this);
+    connect(m_masterRenderTimer, &QTimer::timeout, this, engineFrame);
 
     m_renderingSystem->initialize(m_scene.get());
-    // Pace the render loop instead of spinning the event loop at 100% CPU.
-    // ~8 ms ≈ 120 FPS target; actual presentation is gated by vsync.
+    // Drive engine frames from the primary viewport's vsync (frameSwapped):
+    // a free-running 8 ms timer beat against the 60 Hz display, so animated
+    // motion (the orbiting key light) alternated 1-and-2 engine steps per
+    // presented frame — visible judder. The timer stays as a low-rate
+    // fallback so the engine keeps ticking when no viewport presents
+    // (hidden/minimised window, headless test runs).
+    connect(viewport1, &QOpenGLWidget::frameSwapped, this, engineFrame);
     m_masterRenderTimer->setTimerType(Qt::PreciseTimer);
-    m_masterRenderTimer->start(8);
+    m_masterRenderTimer->start(33);
 
     // Dev aid: KRS_GRAB=<path.png> software-renders the whole widget tree to
     // a file 8s after boot — screen captures lie under DPI virtualization,

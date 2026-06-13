@@ -91,6 +91,17 @@ TextureBrowserWidget::TextureBrowserWidget(Scene* scene, const QString& material
         "Parallax height scale for packs with a height map (the \"fake depth\")"));
     m_heightScale->setKeyboardTracking(false);
     row->addWidget(m_heightScale);
+    row->addWidget(new QLabel(QStringLiteral("Tiling"), this));
+    m_tiling = new QDoubleSpinBox(this);
+    m_tiling->setRange(0.05, 32.0);
+    m_tiling->setSingleStep(0.25);
+    m_tiling->setDecimals(2);
+    m_tiling->setValue(1.0);
+    m_tiling->setToolTip(QStringLiteral(
+        "Texture repeats: tiles per metre for triplanar materials,\n"
+        "UV multiplier for UV-mapped meshes. Smaller = bigger texture."));
+    m_tiling->setKeyboardTracking(false);
+    row->addWidget(m_tiling);
     layout->addLayout(row);
 
     connect(m_tree, &QTreeView::clicked, this, [this]() {
@@ -205,6 +216,7 @@ void TextureBrowserWidget::applyToSelection()
         reg.emplace_or_replace<MaterialDirectoryTag>(e, dir.toStdString());
         auto& req = reg.emplace_or_replace<MaterialReloadRequest>(e);
         req.heightScaleOverride = parallax ? float(m_heightScale->value()) : -1.0f;
+        req.tilingOverride = float(m_tiling->value());
         if (parallax) {
             reg.emplace_or_replace<ParallaxMaterialTag>(e);
             // Parallax path needs triplanar projection (it has no UVs).

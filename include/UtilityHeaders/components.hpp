@@ -79,6 +79,7 @@ struct MaterialDirectoryTag {
 // RenderingSystem::processMaterialReloads().
 struct MaterialReloadRequest {
     float heightScaleOverride = -1.0f; // <0: keep existing / pack default
+    float tilingOverride = -1.0f;      // <0: keep existing (tiles/metre)
 };
 
 struct TessellatedMaterialTag{};

@@ -270,12 +270,18 @@ void FluidSystem::emitFromEmitters(QOpenGLFunctions_4_3_Core* gl, entt::registry
         for (int i = 0; i < n; ++i) {
             const float ang = uni(rng) * 6.2831853f;
             const float rad = std::sqrt(uni(rng)) * em.emitterRadius;
-            const glm::vec3 p = xf.translation + (u * std::cos(ang) + v * std::sin(ang)) * rad;
+            glm::vec3 p = xf.translation + (u * std::cos(ang) + v * std::sin(ang)) * rad;
 
             const float ca = uni(rng) * 6.2831853f;
             const float cr = uni(rng) * spreadRad;
             const glm::vec3 d = glm::normalize(
                 dir * std::cos(cr) + (u * std::cos(ca) + v * std::sin(ca)) * std::sin(cr));
+
+            // Sub-frame emission time: spread this frame's batch ALONG the
+            // stream instead of stamping a pancake at the disc each frame —
+            // a tap reads as a continuous column, not beads.
+            const float subT = dt * (float(i) + uni(rng)) / float(n);
+            p += d * em.initialSpeed * subT;
 
             pos.emplace_back(p, em.particleLifetime > 0.0f ? em.particleLifetime : 1e9f);
             vel.emplace_back(d * em.initialSpeed, 0.0f);

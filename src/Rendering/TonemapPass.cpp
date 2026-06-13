@@ -48,7 +48,9 @@ void TonemapPass::execute(const RenderFrameContext& context)
     gl->glActiveTexture(GL_TEXTURE0);
     gl->glBindTexture(GL_TEXTURE_2D, s.tex);
     shader->setInt(gl, "u_hdr", 0);
-    shader->setFloat(gl, "u_exposure", 1.0f);
+    // Slight push: the env HDR grades dim and most PBR pack albedos sit in
+    // the 0.3-0.4 midtone range; ACES rolls the sky off gracefully.
+    shader->setFloat(gl, "u_exposure", 1.35f);
 
     gl->glBindVertexArray(m_emptyVao);
     gl->glDrawArrays(GL_TRIANGLES, 0, 3);

@@ -575,7 +575,12 @@ void RenderingSystem::renderAllViewports()
     if (!m_gl) { doneEngineCurrent(prevCtx, prevSurf); return; }
 
     // --- Frame stats ---
-    const float dt = m_clock.restart() * 0.001f;
+    // Nanosecond clock: restart() returns integer MILLISECONDS, which
+    // quantised dt to 8-vs-9 ms at 120 Hz — animated motion (the orbiting
+    // key light) visibly jittered from the rounding alone.
+    const float dt = float(double(m_clock.nsecsElapsed()) * 1e-9);
+    m_clock.restart();
+    m_elapsedSeconds += double(dt);
     m_frameTimeHistory.push_back(dt);
     if (m_frameTimeHistory.size() > m_historySize) m_frameTimeHistory.pop_front();
     if (!m_frameTimeHistory.empty()) {
@@ -754,16 +759,18 @@ void RenderingSystem::processMaterialReloads()
 {
     if (!m_scene) return;
     auto& reg = m_scene->getRegistry();
-    std::vector<std::pair<entt::entity, float>> pending;
+    std::vector<std::pair<entt::entity, MaterialReloadRequest>> pending;
     for (auto ent : reg.view<MaterialDirectoryTag, MaterialReloadRequest>())
-        pending.emplace_back(ent, reg.get<MaterialReloadRequest>(ent).heightScaleOverride);
-    for (auto [ent, hsOverride] : pending) {
+        pending.emplace_back(ent, reg.get<MaterialReloadRequest>(ent));
+    for (auto [ent, req] : pending) {
         const auto& tag = reg.get<MaterialDirectoryTag>(ent);
         MaterialComponent mat = loadMaterialFromDirectory(tag.dirPath);
         const MaterialComponent* old = reg.try_get<MaterialComponent>(ent);
-        if (hsOverride >= 0.0f) mat.heightScale = hsOverride;
+        if (req.heightScaleOverride >= 0.0f) mat.heightScale = req.heightScaleOverride;
         else if (old && old->heightScale > 0.0f) mat.heightScale = old->heightScale;
         else if (mat.heightMap) mat.heightScale = 0.1f;
+        if (req.tilingOverride > 0.0f) mat.albedoTiling = glm::vec2(req.tilingOverride);
+        else if (old) mat.albedoTiling = old->albedoTiling;
         reg.emplace_or_replace<MaterialComponent>(ent, std::move(mat));
         reg.remove<MaterialReloadRequest>(ent);
     }
@@ -864,22 +871,24 @@ void RenderingSystem::geometryPass()
     auto& camComp = m_scene->getRegistry().get<CameraComponent>(camE);
     float aspect = float(m_gBuffer.w) / float(m_gBuffer.h);
 
-    static float accumTime = 0.f;
-    accumTime += m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime;
-
     auto& target = m_targets[vp];
+    // view/projection are REFERENCES in the context: hoist the getter
+    // temporaries or they dangle before the pass runs (same UB class as the
+    // Round 3 camera bug).
+    const glm::mat4 viewMat = camComp.camera.getViewMatrix();
+    const glm::mat4 projMat = camComp.camera.getProjectionMatrix(aspect);
     RenderFrameContext context{
         m_gl,
         m_scene->getRegistry(),
         *this,
         camComp.camera,
-        camComp.camera.getViewMatrix(),
-        camComp.camera.getProjectionMatrix(aspect),
+        viewMat,
+        projMat,
         target,
         m_gBuffer.w,
         m_gBuffer.h,
         m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime,
-        accumTime,
+        float(m_elapsedSeconds),
         nullptr
     };
     m_geometryPass->execute(context);
@@ -911,9 +920,7 @@ void RenderingSystem::lightingPass(ViewportWidget* viewport)
         auto& camComp = m_scene->getRegistry().get<CameraComponent>(
             viewport->getCameraEntity());
     float aspect = float(target.w) / float(target.h);
-    static float elapsed = 0.0f;
-    elapsed += m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime;
-    
+
     // RenderFrameContext.view/projection are REFERENCES: binding them to
     // the temporaries returned by the camera getters dangles the moment
     // this statement ends (UB — later passes read whatever reuses the
@@ -931,7 +938,7 @@ void RenderingSystem::lightingPass(ViewportWidget* viewport)
         target.w,
         target.h,
         m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime,
-        elapsed,
+        float(m_elapsedSeconds),
         viewport
     };
 
@@ -981,7 +988,7 @@ void RenderingSystem::postProcessingPass(ViewportWidget* viewport)
         vpW,
         vpH,
         0.0f,              // deltaTime (if you want)
-        0.0f,              // elapsedTime
+        float(m_elapsedSeconds),
         viewport
     };
 

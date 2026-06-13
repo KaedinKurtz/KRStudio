@@ -6,6 +6,9 @@
 #include <entt/entity/registry.hpp>
 #include <QLabel> // Include QLabel for stats overlay
 #include <QVector>
+#include <QSet>
+#include <QTimer>
+#include <QElapsedTimer>
 #include "components.hpp"
 #include "GizmoSystem.hpp" // Include GizmoSystem header for gizmo functionality
 
@@ -53,6 +56,7 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* ev) override;
     void mouseDoubleClickEvent(QMouseEvent* ev) override;
     void dragEnterEvent(QDragEnterEvent* ev) override;
@@ -99,6 +103,15 @@ private:
     QPoint m_clickStartPos;
     bool   m_suppressClickThisRelease = false;
     QPoint m_rightPressPos;
+
+    // Smooth fly camera: keys feed a target velocity, a 60 Hz tick eases the
+    // actual velocity toward it (keypress autorepeat felt like teleporting).
+    void tickFlyCamera();
+    QSet<int> m_keysDown;
+    glm::vec3 m_flyVel{ 0.0f };
+    float m_flySpeed = 4.0f; // m/s; mouse wheel adjusts while flying
+    QTimer* m_flyTimer = nullptr;
+    QElapsedTimer m_flyClock;
 
     GizmoSystem* m_gizmo = nullptr;
 

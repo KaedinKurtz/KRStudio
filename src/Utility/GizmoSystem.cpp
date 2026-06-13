@@ -805,35 +805,30 @@ void GizmoSystem::updateDrag(const CpuRay& ray, const Camera& camera)
     if (m_dragMode == GizmoMode::Scale) {
         if (m_dragAxisOrPlane == GizmoAxis::X || m_dragAxisOrPlane == GizmoAxis::Y || m_dragAxisOrPlane == GizmoAxis::Z) {
             float tRay = 0, tAxis = 0; closestRayLine(ray.origin, ray.dir, P, m_dragAxisWorld, tRay, tAxis);
-            float delta = (tAxis - m_t0);
-            float s = 1.0f + delta;
+            // RATIO of the grab point's distance along the axis: the handle
+            // tracks the cursor exactly (grab at the tip, drag to twice the
+            // distance => scale x2). The old 1+delta-in-metres made the
+            // response depend on camera distance, and the world-frame branch
+            // never resized anything — with one object selected the gizmo
+            // appeared completely dead.
+            float s = std::abs(m_t0) > 1e-4f ? (tAxis / m_t0) : 1.0f + (tAxis - m_t0);
+            if (s < 0.01f) s = 0.01f; // no mirror flips when overshooting the origin
             if (m_snap.scaleStep > 0.0f) { s = m_snap.scaleStep * std::round(s / m_snap.scaleStep); if (s <= 0.0f) s = m_snap.scaleStep; }
 
-            if (!useLocal) {
-                // WORLD frame: move objects farther/closer along that world axis (don�t resize objects)
-                glm::vec3 A = glm::normalize(m_dragAxisWorld);
-                for (auto& di : m_group) {
-                    auto& t = R.get<TransformComponent>(di.e);
-                    glm::vec3 off = di.pivotOffsetW;
-                    glm::vec3 offPar = glm::dot(off, A) * A;
-                    glm::vec3 offPer = off - offPar;
-                    glm::vec3 newOff = offPer + s * offPar;
-                    t.translation = P + newOff;
-                    t.scale = di.t0.scale; // keep size unchanged in world-frame scale
-                    emitEdited(di.e);
-                }
-            }
-            else {
-                // LOCAL frame: change each object's local scale on that component
-                for (auto& di : m_group) {
-                    auto& t = R.get<TransformComponent>(di.e);
-                    glm::vec3 sc = di.t0.scale;
-                    if (m_dragAxisOrPlane == GizmoAxis::X) sc.x = di.t0.scale.x * s;
-                    if (m_dragAxisOrPlane == GizmoAxis::Y) sc.y = di.t0.scale.y * s;
-                    if (m_dragAxisOrPlane == GizmoAxis::Z) sc.z = di.t0.scale.z * s;
-                    t.scale = sc;
-                    emitEdited(di.e);
-                }
+            glm::vec3 A = glm::normalize(m_dragAxisWorld);
+            for (auto& di : m_group) {
+                auto& t = R.get<TransformComponent>(di.e);
+                // Spread group members along the axis...
+                glm::vec3 off = di.pivotOffsetW;
+                glm::vec3 offPar = glm::dot(off, A) * A;
+                t.translation = P + (off - offPar) + s * offPar;
+                // ...and resize every object on the dragged component.
+                glm::vec3 sc = di.t0.scale;
+                if (m_dragAxisOrPlane == GizmoAxis::X) sc.x = di.t0.scale.x * s;
+                if (m_dragAxisOrPlane == GizmoAxis::Y) sc.y = di.t0.scale.y * s;
+                if (m_dragAxisOrPlane == GizmoAxis::Z) sc.z = di.t0.scale.z * s;
+                t.scale = sc;
+                emitEdited(di.e);
             }
             return;
         }

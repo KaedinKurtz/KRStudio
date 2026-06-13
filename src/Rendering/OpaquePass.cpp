@@ -253,11 +253,18 @@ void OpaquePass::execute(const RenderFrameContext& context)
                     unit++;
                 }
             }
+            // Artist tiling control (albedoTiling.x): world tiles/metre for
+            // the triplanar paths, UV multiplier for the textured path.
+            const float texScale =
+                (mat && mat->albedoTiling.x > 0.0f) ? mat->albedoTiling.x : 1.0f;
+            if (activeShader == uvShader) {
+                activeShader->setFloat(gl, "u_texture_scale", texScale);
+            }
             if (activeShader == triplanarShader || activeShader == tessTriplanarShader) {
-                activeShader->setFloat(gl, "u_texture_scale", 1.0f);
+                activeShader->setFloat(gl, "u_texture_scale", texScale);
             }
             if (activeShader == pomShader) {
-                activeShader->setFloat(gl, "u_texture_scale", 1.0f);
+                activeShader->setFloat(gl, "u_texture_scale", texScale);
                 // Two long-standing bugs: the authored heightScale was
                 // ignored (hardcoded 0.05) and material.heightMap was never
                 // bound — the sampler defaulted to unit 0, so the parallax

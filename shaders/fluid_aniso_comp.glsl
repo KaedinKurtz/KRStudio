@@ -127,8 +127,31 @@ void main()
     }
 
     if (neighbors < N_ISO || wsum < 1e-6) {
-        // Sparse neighbourhood (droplet/spray): isotropic sphere, raw centre.
-        aniso[i] = Aniso(vec4(0, 0, 0, 1), vec4(vec3(1.0), 1.0), vec4(pi, 0.0));
+        // Sparse neighbourhood: emitter streams and spray. A plain sphere
+        // here is exactly the "glass orb" look — stretch the splat along the
+        // velocity by roughly the distance travelled per frame so a tap
+        // stream fuses into a rod (volume preserved, droplets stay round
+        // when slow).
+        vec3 vi = p[i].vel.xyz;
+        float speed = length(vi);
+        float stretch = clamp(speed * 0.009 / max(u_h * 0.25, 1e-5), 0.0, 2.5);
+        if (stretch > 0.15) {
+            vec3 a = vi / speed;
+            // Quaternion rotating local +X onto the velocity direction.
+            vec4 q;
+            float d = a.x; // dot(+X, a)
+            if (d < -0.9999) {
+                q = vec4(0.0, 0.0, 1.0, 0.0); // 180° about Z
+            } else {
+                vec3 c = vec3(0.0, a.z, -a.y) * -1.0; // cross(+X, a)
+                q = normalize(vec4(c, 1.0 + d));
+            }
+            float along = 1.0 + stretch;
+            float across = inversesqrt(along); // volume-preserving
+            aniso[i] = Aniso(q, vec4(along, across, across, 1.0), vec4(pi, 0.0));
+        } else {
+            aniso[i] = Aniso(vec4(0, 0, 0, 1), vec4(vec3(1.0), 1.0), vec4(pi, 0.0));
+        }
         return;
     }
 

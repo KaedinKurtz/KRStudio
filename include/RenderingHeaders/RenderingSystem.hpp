@@ -228,6 +228,7 @@ private:
     // --- Timing & Stats ---
     QTimer m_frameTimer;
     QElapsedTimer m_clock;
+    double m_elapsedSeconds = 0.0; // single animation clock for every pass
     float m_fps = 0.0f;
     float m_frameTime = 0.0f;
     std::deque<float> m_frameTimeHistory;

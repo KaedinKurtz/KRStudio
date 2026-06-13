@@ -9,6 +9,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QGuiApplication>
 #include <QWheelEvent>
 #include <QKeyEvent>
 #include <QCloseEvent>
@@ -217,6 +218,13 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
     setFocusPolicy(Qt::StrongFocus);
     setAcceptDrops(true); // asset-browser drag-and-drop spawning
 
+    // Smooth fly-camera integration (60 Hz, eased velocity).
+    m_flyTimer = new QTimer(this);
+    m_flyTimer->setTimerType(Qt::PreciseTimer);
+    connect(m_flyTimer, &QTimer::timeout, this, [this]() { tickFlyCamera(); });
+    m_flyTimer->start(16);
+    m_flyClock.start();
+
     m_statsOverlay = new QLabel(this);
     m_statsOverlay->setStyleSheet("background-color: rgba(44, 49, 58, 0.7);"
         "color: white;"
@@ -339,6 +347,17 @@ void ViewportWidget::mousePressEvent(QMouseEvent* ev)
         setFocus(Qt::OtherFocusReason);
         getCamera().setNavMode(Camera::NavMode::FLY);
         setCursor(Qt::BlankCursor);
+    }
+
+    // Middle-click: re-centre the orbit around whatever is under the cursor
+    // (keeps the current viewing distance).
+    if (ev->button() == Qt::MiddleButton && m_scene) {
+        Camera& cam = getCamera();
+        if (auto hit = cpuPickAABB(*m_scene, cam, ev->pos().x(), ev->pos().y(),
+                                   width(), height())) {
+            cam.focusOn(hit->worldPos, glm::length(cam.getPosition() - hit->worldPos));
+            update();
+        }
     }
 
     if (ev->button() == Qt::LeftButton) {
@@ -542,24 +561,25 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* ev)
 
 
 void ViewportWidget::wheelEvent(QWheelEvent* event) {
-    getCamera().dolly(event->angleDelta().y());
+    Camera& cam = getCamera();
+    if (cam.navMode() == Camera::NavMode::FLY) {
+        // While flying the wheel tunes the fly speed instead of dollying.
+        const float steps = float(event->angleDelta().y()) / 120.0f;
+        m_flySpeed = glm::clamp(m_flySpeed * std::pow(1.2f, steps), 0.2f, 60.0f);
+        return;
+    }
+    cam.dolly(event->angleDelta().y());
     update();
 }
 
 void ViewportWidget::keyPressEvent(QKeyEvent* ev)
 {
-    float dt = 1.0f / 60.0f;                      // per-frame step
     Camera& cam = getCamera();
 
     if (cam.navMode() == Camera::NavMode::FLY) {
-        switch (ev->key()) {
-        case Qt::Key_W: cam.flyMove(Camera::FORWARD, dt); break;
-        case Qt::Key_S: cam.flyMove(Camera::BACKWARD, dt); break;
-        case Qt::Key_A: cam.flyMove(Camera::LEFT, dt); break;
-        case Qt::Key_D: cam.flyMove(Camera::RIGHT, dt); break;
-        case Qt::Key_E: cam.flyMove(Camera::UP, dt); break;
-        case Qt::Key_Q: cam.flyMove(Camera::DOWN, dt); break;
-        }
+        // Movement keys just record state; tickFlyCamera() integrates with
+        // eased velocity every frame (autorepeat-driven steps teleport).
+        if (!ev->isAutoRepeat()) m_keysDown.insert(ev->key());
     }
     else {                                         // orbit mode (old keys)
         float s = 0.05f;
@@ -584,6 +604,51 @@ void ViewportWidget::keyPressEvent(QKeyEvent* ev)
         }
     }
     update();
+}
+
+void ViewportWidget::keyReleaseEvent(QKeyEvent* ev)
+{
+    if (!ev->isAutoRepeat()) m_keysDown.remove(ev->key());
+    QOpenGLWidget::keyReleaseEvent(ev);
+}
+
+void ViewportWidget::tickFlyCamera()
+{
+    const float dt = glm::clamp(float(m_flyClock.restart()) * 0.001f, 0.0f, 0.05f);
+    if (!m_scene || dt <= 0.0f) return;
+    Camera& cam = getCamera();
+
+    glm::vec3 target(0.0f);
+    if (cam.navMode() == Camera::NavMode::FLY) {
+        const glm::vec3 pos = cam.getPosition();
+        const glm::vec3 fwd = glm::normalize(cam.getFocalPoint() - pos);
+        glm::vec3 right = glm::cross(fwd, glm::vec3(0, 1, 0));
+        right = glm::dot(right, right) > 1e-8f ? glm::normalize(right) : glm::vec3(1, 0, 0);
+        const glm::vec3 up = glm::cross(right, fwd);
+
+        if (m_keysDown.contains(Qt::Key_W)) target += fwd;
+        if (m_keysDown.contains(Qt::Key_S)) target -= fwd;
+        if (m_keysDown.contains(Qt::Key_D)) target += right;
+        if (m_keysDown.contains(Qt::Key_A)) target -= right;
+        if (m_keysDown.contains(Qt::Key_E)) target += up;
+        if (m_keysDown.contains(Qt::Key_Q)) target -= up;
+        if (glm::dot(target, target) > 1e-8f) {
+            float speed = m_flySpeed;
+            if (QGuiApplication::keyboardModifiers() & Qt::ShiftModifier) speed *= 3.0f;
+            target = glm::normalize(target) * speed;
+        }
+    }
+
+    // Critically-damped ease toward the target velocity: ~100 ms ramp.
+    const float blend = 1.0f - std::exp(-12.0f * dt);
+    m_flyVel = glm::mix(m_flyVel, target, blend);
+
+    if (glm::dot(m_flyVel, m_flyVel) > 1e-6f) {
+        const glm::vec3 delta = m_flyVel * dt;
+        cam.forceRecalculateView(cam.getPosition() + delta, cam.getFocalPoint() + delta,
+                                 cam.getDistance());
+        update();
+    }
 }
 
 void ViewportWidget::dragEnterEvent(QDragEnterEvent* ev)

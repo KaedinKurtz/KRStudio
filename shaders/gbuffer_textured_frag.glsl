@@ -24,8 +24,11 @@ in vec2 TexCoords;
 in vec3 Tangent;
 in vec3 Bitangent;
 
+uniform float u_texture_scale; // UV tiling multiplier (artist control)
+
 void main()
 {
+    vec2 uv = TexCoords * max(u_texture_scale, 1e-4);
     // --- Position ---
     gPosition = vec4(FragPos, 1.0);
 
@@ -50,7 +53,7 @@ void main()
     mat3 TBN = mat3(T, B, N);
 
     // 5. Sample the normal map and unpack the normal from [0,1] to [-1,1].
-    vec3 tangentSpaceNormal = texture(material.normalMap, TexCoords).rgb * 2.0 - 1.0;
+    vec3 tangentSpaceNormal = texture(material.normalMap, uv).rgb * 2.0 - 1.0;
     
     // Optional: If your normal map still looks wrong (e.g., light is inverted),
     // it might be a DirectX-style normal map. Uncomment the line below to fix it.
@@ -62,22 +65,22 @@ void main()
 
 
     // --- Albedo + AO ---
-    vec3 albedo = texture(material.albedoMap, TexCoords).rgb;
-    float ao    = texture(material.aoMap, TexCoords).r;
+    vec3 albedo = texture(material.albedoMap, uv).rgb;
+    float ao    = texture(material.aoMap, uv).r;
     gAlbedoAO   = vec4(albedo, ao);
 
     // --- DEBUG: Visualize the Normal Map ---
     // Uncomment the line below to write the raw normal map color to the albedo buffer.
     // If the normal map is being sampled correctly, the object will turn bluish/purplish.
-    //gAlbedoAO = vec4(texture(material.normalMap, TexCoords).rgb, 1.0);
+    //gAlbedoAO = vec4(texture(material.normalMap, uv).rgb, 1.0);
 
 
     // --- Metallic + Roughness ---
-    float metallic  = texture(material.metallicMap, TexCoords).r;
-    float roughness = texture(material.roughnessMap, TexCoords).r;
+    float metallic  = texture(material.metallicMap, uv).r;
+    float roughness = texture(material.roughnessMap, uv).r;
     gMetalRough = vec4(metallic, roughness, 0.0, 1.0);
 
     // --- Emissive ---
-    vec3 emissive = texture(material.emissiveMap, TexCoords).rgb;
+    vec3 emissive = texture(material.emissiveMap, uv).rgb;
     gEmissive = vec4(emissive, 1.0);
 }

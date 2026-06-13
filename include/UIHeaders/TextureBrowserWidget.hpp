@@ -54,4 +54,5 @@ private:
     QPushButton* m_applyButton = nullptr;
     QCheckBox* m_autoApply = nullptr;
     QDoubleSpinBox* m_heightScale = nullptr;
+    QDoubleSpinBox* m_tiling = nullptr;
 };
