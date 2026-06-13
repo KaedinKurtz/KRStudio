@@ -15,6 +15,8 @@
 #include "Mesh.hpp" // Required for the test cube's mesh data.
 #include "IntersectionSystem.hpp" 
 #include "RenderingSystem.hpp"
+#include "MpmSystem.hpp"
+#include <QActionGroup>
 #include "FluidSystem.hpp"
 #include "FlowVisualizerMenu.hpp"
 #include "Helpers.hpp"   
@@ -2176,6 +2178,29 @@ void MainWindow::buildMenuBar()
         if (!m_scene) return;
         m_scene->getRegistry().ctx().get<SceneProperties>().showCollisionShapes = on;
     });
+
+    // --- Physics visualization (Phase 3): recolour MPM particles by a field ---
+    QMenu* vizMenu = viewMenu->addMenu(QStringLiteral("Physics Visualization"));
+    auto* vizGroup = new QActionGroup(this);
+    vizGroup->setExclusive(true);
+    struct VizOpt { const char* name; MpmSystem::VizMode mode; };
+    const VizOpt vizOpts[] = {
+        { "Default (PBR)",          MpmSystem::VizMode::Default },
+        { "Thermal (temperature)",  MpmSystem::VizMode::Thermal },
+        { "Stress (von Mises)",     MpmSystem::VizMode::VonMises },
+        { "Strain (deformation)",   MpmSystem::VizMode::Strain },
+    };
+    for (const auto& o : vizOpts) {
+        QAction* a = vizMenu->addAction(QString::fromLatin1(o.name));
+        a->setCheckable(true);
+        vizGroup->addAction(a);
+        if (o.mode == MpmSystem::VizMode::Default) a->setChecked(true);
+        const MpmSystem::VizMode m = o.mode;
+        connect(a, &QAction::triggered, this, [this, m]() {
+            if (m_renderingSystem && m_renderingSystem->getMpmSystem())
+                m_renderingSystem->getMpmSystem()->setVizMode(m); // one-shot auto-calibrates the range
+        });
+    }
 
     // --- Simulation ---
     QMenu* simMenu = bar->addMenu(QStringLiteral("&Simulation"));

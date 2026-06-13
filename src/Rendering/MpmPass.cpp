@@ -20,6 +20,12 @@ void MpmPass::execute(const RenderFrameContext& context)
     shader->setFloat(gl, "u_viewportHeight", float(context.viewportHeight));
     shader->setFloat(gl, "u_radius", mpm->particleRadius());
 
+    // Phase 3 visualization: scalar field -> colour ramp on the splats.
+    const glm::vec2 range = mpm->vizRange();
+    shader->setInt(gl, "u_vizMode", int(mpm->appearance().mode));
+    shader->setFloat(gl, "u_rangeMin", range.x);
+    shader->setFloat(gl, "u_rangeMax", range.y);
+
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mpm->particleBuffer());
 
     gl->glEnable(GL_PROGRAM_POINT_SIZE);

@@ -38,6 +38,9 @@ void MpmSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core*
         m_ambientT = qEnvironmentVariable("KRS_MPM_AMBIENT").toFloat();
     if (qEnvironmentVariableIsSet("KRS_MPM_HEATX"))
         m_heatExchange = qEnvironmentVariable("KRS_MPM_HEATX").toFloat();
+    // Initial visualization mode (1 Thermal, 2 VonMises, 3 Strain) for headless grabs.
+    const int viz = qEnvironmentVariable("KRS_MPM_VIZ").toInt();
+    if (viz >= 1 && viz <= 3) { m_appearance.mode = VizMode(viz); m_calibratePending = true; }
     allocate(gl);
     m_initialized = true;
     qInfo() << "[MPM] initialized grid" << m_N << "^3, capacity" << kMaxParticles;
@@ -215,12 +218,22 @@ void MpmSystem::seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& regist
 void MpmSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
                        entt::registry& registry, float dt)
 {
-    if (!m_initialized || !m_playing) return;
+    if (!m_initialized) return;
+    // Paused mode-switch: recalibrate the colour range against the static state.
+    if (m_calibratePending && !m_playing && m_particleCount > 0) { autoCalibrate(gl); m_calibratePending = false; }
+    if (!m_playing) return;
     if (!m_seeded) {
         seedBodies(gl, registry);
         m_seeded = true;
     }
     if (m_particleCount <= 0) return;
+    // Dynamic normalization: recalibrate the active viz range on mode change and
+    // periodically (~0.75 s) so the gradient tracks the live, evolving field.
+    if (m_appearance.mode != VizMode::Default && m_appearance.autoRange
+        && (m_calibratePending || (m_vizFrame % 45 == 0))) {
+        autoCalibrate(gl); m_calibratePending = false;
+    }
+    ++m_vizFrame;
 
     Shader* p2g = renderer.getShader("mpm_p2g");
     Shader* grid = renderer.getShader("mpm_grid");
@@ -540,6 +553,60 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     m_particleCount = 0;
     m_seeded = false;
     return allPass;
+}
+
+glm::vec2 MpmSystem::vizRange() const
+{
+    switch (m_appearance.mode) {
+        case VizMode::Thermal:  return m_appearance.thermal;
+        case VizMode::VonMises: return m_appearance.vonMises;
+        case VizMode::Strain:   return m_appearance.strain;
+        default:                return glm::vec2(0.0f, 1.0f);
+    }
+}
+
+// One-shot CPU min/max of the active viz scalar over all live particles, so the
+// colour ramp spans the data. Same StVK strain/stress proxy the shader uses.
+void MpmSystem::autoCalibrate(QOpenGLFunctions_4_3_Core* gl)
+{
+    if (m_particleCount <= 0 || m_appearance.mode == VizMode::Default) return;
+    std::vector<float> buf(size_t(m_particleCount) * kStride);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
+    gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                           GLsizeiptr(sizeof(float)) * buf.size(), buf.data());
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    float lo = 1e30f, hi = -1e30f;
+    for (int i = 0; i < m_particleCount; ++i) {
+        const float* p = &buf[size_t(i) * kStride];
+        if (p[43] <= 0.0f) continue;
+        float s = 0.0f;
+        if (m_appearance.mode == VizMode::Thermal) {
+            s = p[33];                                       // temperature
+        } else {
+            glm::mat3 F(glm::vec3(p[20], p[21], p[22]), glm::vec3(p[24], p[25], p[26]),
+                        glm::vec3(p[28], p[29], p[30]));     // F columns
+            glm::mat3 E = 0.5f * (glm::transpose(F) * F - glm::mat3(1.0f)); // Green strain
+            if (m_appearance.mode == VizMode::Strain) {
+                s = std::sqrt(glm::dot(E[0], E[0]) + glm::dot(E[1], E[1]) + glm::dot(E[2], E[2]));
+            } else {                                         // VonMises (StVK)
+                float mu = p[36], lambda = p[37];
+                float trE = E[0][0] + E[1][1] + E[2][2];
+                glm::mat3 sg = 2.0f * mu * E + lambda * trE * glm::mat3(1.0f);
+                float a = sg[0][0], b = sg[1][1], c = sg[2][2];
+                float d = sg[1][0], e = sg[2][1], f = sg[2][0];
+                s = std::sqrt(0.5f * ((a - b) * (a - b) + (b - c) * (b - c) + (c - a) * (c - a))
+                              + 3.0f * (d * d + e * e + f * f));
+            }
+        }
+        lo = std::min(lo, s); hi = std::max(hi, s);
+    }
+    if (hi < lo) return;                                     // no live particles
+    glm::vec2 r = (m_appearance.mode == VizMode::Thermal) ? glm::vec2(lo, std::max(hi, lo + 1.0f))
+                                                          : glm::vec2(0.0f, std::max(hi, 1.0e-4f));
+    if (m_appearance.mode == VizMode::Thermal)  m_appearance.thermal = r;
+    else if (m_appearance.mode == VizMode::Strain) m_appearance.strain = r;
+    else m_appearance.vonMises = r;
+    qInfo() << "[MPM viz] calibrated mode" << int(m_appearance.mode) << "range" << r.x << r.y;
 }
 
 MpmSystem::Diag MpmSystem::sample(QOpenGLFunctions_4_3_Core* gl)

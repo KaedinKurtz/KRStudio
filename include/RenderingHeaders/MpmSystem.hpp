@@ -48,6 +48,21 @@ public:
     glm::vec3 extent() const { return m_size; }
     float particleRadius() const { return m_renderRadius; }
 
+    // --- Visualization (Phase 3): recolor particle splats by a physics scalar.
+    // The scalar is computed per-particle in the render shader (Default uses the
+    // body albedo); ranges are configurable or one-shot auto-calibrated.
+    enum class VizMode : int { Default = 0, Thermal = 1, VonMises = 2, Strain = 3 };
+    struct Appearance {
+        VizMode mode = VizMode::Default;
+        bool autoRange = true;                 // recalibrate range on mode change
+        glm::vec2 thermal{ 0.0f, 100.0f };     // °C
+        glm::vec2 vonMises{ 0.0f, 1.0e5f };    // Pa (StVK von Mises proxy)
+        glm::vec2 strain{ 0.0f, 0.25f };       // || Green-Lagrange strain ||
+    };
+    Appearance& appearance() { return m_appearance; }
+    void setVizMode(VizMode m) { m_appearance.mode = m; m_calibratePending = m_appearance.autoRange; }
+    glm::vec2 vizRange() const;                // active mode's [min, max]
+
     // Live diagnostics (filled under KRS_MPM_SELFTEST / autoplay).
     struct Diag {
         double totalMass = 0.0;
@@ -72,6 +87,7 @@ private:
     void allocate(QOpenGLFunctions_4_3_Core* gl);
     void seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
     void computeDomain(entt::registry& registry);
+    void autoCalibrate(QOpenGLFunctions_4_3_Core* gl); // one-shot CPU min/max for the active viz mode
     // One MLS-MPM substep (clear grid -> P2G -> grid -> G2P) on the bound
     // particle/grid buffers. Shared by update() and the self-test.
     void runSubstep(QOpenGLFunctions_4_3_Core* gl, class Shader* p2g, class Shader* grid,
@@ -107,4 +123,8 @@ private:
     float m_maxWaveSpeed = 10.0f;       // max sqrt(stiffness/density), for CFL
     float m_renderRadius = 0.02f;       // point-sprite radius (~half spacing)
     std::vector<float> m_seedScratch;   // CPU staging for seeding
+
+    Appearance m_appearance;            // Phase 3 visualization mode + ranges
+    bool m_calibratePending = false;    // run a range calibration next update
+    unsigned m_vizFrame = 0;            // for periodic dynamic-range recalibration
 };
