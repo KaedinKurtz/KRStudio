@@ -4,11 +4,22 @@
 USD, Isaac-class RL infrastructure); update at the end of each round.*
 
 **Where we are:** Qt6 / OpenGL 4.5 compute / EnTT / PhysX 5.5 (vcpkg, GPU DLL present).
-GPU PBF fluid (200k particles, real SI units) with screen-space surface rendering
+GPU PBF fluid (200k particles, real SI units, GPU stream-compaction so emitter+sink
+flows reach steady state, curl-noise turbulence) with screen-space surface rendering
 (anisotropic ellipsoid splats, two-interface refraction, Ihmsen whitewater, HDR/ACES),
 CPU SPlisHSPlasH DFSPH reference tier, OpenVDB SDF baking + hero-still particle
-meshing, auto exact-shape collision, analytic physics benchmark suite (KRS_BENCH),
-texture/asset browsers, mesh-native materials.
+meshing, glass (screen-space refraction + dispersion) + water caustics, and — new this
+round — a **dense Eulerian smoke + fire gas solver** with volumetric rendering. Plus
+auto exact-shape collision, analytic physics benchmark suite (KRS_BENCH), texture/asset
+browsers, mesh-native materials, emitter/sink/smoke/fire placement tooling.
+
+**Realized 2026-06-13 (gas round):** SmokeSystem (96³/128³ grid: semi-Lagrangian
+advection, vorticity confinement, Jacobi pressure projection, combustion) + SmokePass
+(HDR volumetric ray-march, blackbody fire emission, depth-occluded), FluidSinkComponent
++ GPU compaction, water turbulence, Gas properties dock, Add-menu/right-click sources.
+This closes the smoke/fire item below; the remaining tracks are the SOTA upgrades the
+user called out (FLIP/APIC, two-phase flow, participating-media rendering) and the
+robotics stack.
 
 **Where we're going:** an MQTT-connected robot-training engine that imports USD
 scenes and trains policies Isaac-Sim-style, with film-grade fluids and smoke.
@@ -31,7 +42,66 @@ nialltl/incremental_mpm + taichi_mpm's 88-line core. Tiers: 780M ~100–150k, 40
 Keep the PBF tier shipping until MPM water reaches parity; keep CPU DFSPH as offline
 ground truth (enable its Jeske-2023 implicit surface tension).
 
-## B) Smoke milestone 1 (the "next frontier")
+## A2) FLIP/APIC hybrid liquid — the next big solver after MPM groundwork
+
+The user's direction (correct): move water off pure PBF/SPH onto a **hybrid
+particle-grid** solver so it stops looking like blended spheres and gains real
+incompressibility + low numerical dissipation. Two routes share ~80% of the code, so
+build the transfer machinery once:
+
+- **MAC staggered grid** (velocity components on cell faces, pressure at centres) — the
+  one structural change from our current smoke grid (which is collocated). Reuse the
+  smoke pressure-projection plumbing (divergence → Jacobi/MGPCG → gradient subtract),
+  adapted to face-staggered sampling.
+- **P2G / G2P transfer** with APIC affine moment matrices (Jiang 2015): scatter particle
+  momentum to the grid (int32 fixed-point `atomicAdd`, the WebGPU-Ocean pattern that
+  already underpins our compaction), solve incompressibility on the grid, gather back.
+  FLIP blends `v_new = α·(v_p + Δv_grid) + (1−α)·v_grid_interp`, α≈0.95–0.99. APIC is the
+  stable modern default (no FLIP noise, no PIC smear).
+- **Free surface**: a narrow-band level set or particle-coverage mask marks air/fluid
+  cells; solve pressure only in fluid cells with a free-surface (p=0) air boundary.
+- **Two-way rigid coupling** (user's ask): rasterise each rigid body's velocity + a
+  solid mask onto the MAC grid; treat solids as moving velocity boundary conditions in
+  the pressure solve; integrate the resulting pressure·normal over the solid surface to
+  get buoyancy/drag/torque back onto the PhysX body. This is strictly better than our
+  current per-particle impulse coupling (it captures transmitted hydrostatic pressure,
+  fixing the N5 low-ride floater).
+
+**Two-phase flow (2026 SOTA, the user's spray/foam point):** simulate air as a second
+phase (or a cheap density-ratio drag term) so a fast water surface induces aerodynamic
+drag ∝ v_rel² that rips it into spray/foam *physically*, retiring the ad-hoc
+"speed > X → spawn foam" rule. Stage this AFTER FLIP/APIC lands — it needs the grid
+velocity field of both phases. Reference: Adaptive Phase-Field-FLIP.
+
+**Library option:** rather than hand-roll, evaluate vendoring a proven hybrid core —
+**Taichi** (taichi_elements MLS-MPM/FLIP, Apache-2.0, but Python/JIT — would need the
+C++/AOT path), or porting **nialltl/incremental_mpm** + **taichi_mpm**'s 88-line core to
+GLSL compute (recommended: keeps everything in our engine context, no runtime dep). MPM
+first (section A) because its APIC transfers and grid solve carry directly into FLIP/APIC.
+
+**Effort:** MAC + APIC transfers + free-surface pressure ≈ 3–5 weeks; rigid coupling +1–2;
+two-phase +2–3. Multi-week, own track — not a single round.
+
+## B) Smoke milestone 1 — ✅ SHIPPED (2026-06-13), upgrades below
+
+Done: dense Eulerian grid (96³ default / 128³), semi-Lagrangian advection, vorticity
+confinement, Jacobi pressure projection with free-slip walls, combustion/cooling/
+dissipation, emitter splats, HDR volumetric ray-march with blackbody fire and depth
+occlusion. The original spec (kept below for reference) called for several upgrades not
+in the MVP — **these are the smoke follow-ups:**
+- MacCormack advection with 8-neighbour min/max clamp (we ship semi-Lagrangian — more
+  dissipative; vorticity confinement compensates but MacCormack sharpens detail).
+- Solid coupling: bake the existing OpenVDB SDF + a solid-velocity field into the grid so
+  smoke flows around scene geometry and moving objects (currently free-slip box walls
+  only).
+- Half-res ray-march + bilateral upsample + blue-noise temporal accumulation (we ship a
+  full-res single-frame march; half-res is the iGPU perf win).
+- Light-march into a transmittance volume for proper multi-scatter self-shadow (we ship a
+  cheap 4-tap shadow).
+- Smoke→particle drag (couple the gas velocity onto foam/spray) and pressure forces on
+  rigids.
+
+### Original spec (reference)
 
 Dense **128³ Eulerian grid** on GL 4.5 compute, ~30–40 MB of GL_TEXTURE_3D:
 velocity RGBA16F ×2 (ping-pong), scalars (density/temperature/fuel/spare) RGBA16F ×2,
@@ -53,6 +123,33 @@ Coupling order: solids→smoke via SDF (free) → smoke-drag on foam/spray parti
 pressure forces on rigids later. Sparse bricks only when a use case demands them
 (NVIDIA Flow 2 source, BSD-3, is the architectural reference; PNanoVDB.h for reading
 baked VDBs in GLSL).
+
+## B2) State-of-the-art liquid rendering (the user's CGI-fidelity ask)
+
+We have the screen-space pieces (aniso splats, two-interface refraction, Beer-Lambert,
+HDR) and an offline OpenVDB hero-still mesher. The path to "film CGI" water:
+
+1. **Anisotropic particle meshing as a realtime/near-realtime surface** — promote the
+   hero-still OpenVDB mesher (already in-tree) toward an interactive surface: fit
+   ellipsoids (Yu & Turk weighted PCA — we already compute this for splats) and surface
+   them, OR keep the screen-space surface but drive it from the anisotropic depth (done)
+   plus **flow-advected detail normals** (research brief B5) for moving micro-ripples.
+   A continuous mesh gives the sharp, glass-like refraction sprites can't.
+2. **Physically-based volume shading** — extend the composite to true dielectric volume:
+   per-channel Beer-Lambert absorption by optical depth (have it), plus **subsurface
+   scattering** at thin geometry (wave crests glow green/blue before breaking) via a
+   thickness-driven forward-scatter term, and a proper Fresnel + GGX-rough specular
+   (have F0/Fresnel; add roughness from surface curvature).
+3. **White-water as participating media** — render foam/spray not as opaque sprites but
+   as a heterogeneous scattering medium: accumulate multiple-scattering through the
+   diffuse-particle cloud (cheap analytic dual-lobe phase or a few light-march taps),
+   giving the soft, thick, self-shadowed look. Reuse the SmokePass ray-march machinery
+   on a foam density splat.
+4. **Caustics** beyond the current Wallace splat — temporal accumulation + chromatic
+   dispersion (research brief C).
+
+These are incremental on the existing renderer (days–1 week each), highest-impact first:
+detail normals → SSS → participating-media foam.
 
 ## C) USD import
 
