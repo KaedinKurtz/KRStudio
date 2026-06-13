@@ -16,7 +16,15 @@
 #include "IntersectionSystem.hpp" 
 #include "RenderingSystem.hpp"
 #include "MpmSystem.hpp"
+#include "MaterialLibrary.hpp"
+#include "CadImporter.hpp"
 #include <QActionGroup>
+#include <QToolBar>
+#include <QComboBox>
+#include <QLabel>
+#include <QInputDialog>
+#include <QMessageBox>
+#include <QFileDialog>
 #include "FluidSystem.hpp"
 #include "FlowVisualizerMenu.hpp"
 #include "Helpers.hpp"   
@@ -2237,6 +2245,8 @@ void MainWindow::buildMenuBar()
         });
     }
 
+    buildEngineeringToolbar();  // Phase 4: visible top toolbar (menu bar is hidden)
+
     // --- Simulation ---
     QMenu* simMenu = bar->addMenu(QStringLiteral("&Simulation"));
     // NOTE: Space is taken by the viewport's gizmo-mode cycling, so the
@@ -2271,4 +2281,160 @@ void MainWindow::refreshGizmoAndProperties(ViewportWidget* vp)
 
     // Trigger a redraw
     vp->update();
+}
+
+// ===========================================================================
+// Phase 4: engineering toolbar + CAD / material / heat-source tooling.
+// The menu bar is hidden, so these tools live on a visible QToolBar.
+// ===========================================================================
+entt::entity MainWindow::selectedEntity() const
+{
+    if (!m_scene) return entt::null;
+    auto& reg = m_scene->getRegistry();
+    for (auto e : reg.view<SelectedComponent>()) return e;
+    return entt::null;
+}
+
+void MainWindow::buildEngineeringToolbar()
+{
+    QToolBar* tb = addToolBar(QStringLiteral("Engineering"));
+    tb->setObjectName(QStringLiteral("EngineeringToolbar"));
+    tb->setMovable(false);
+
+    connect(tb->addAction(QStringLiteral("Import CAD (STEP)")), &QAction::triggered,
+            this, &MainWindow::importStepFile);
+    tb->addSeparator();
+
+    // Visualization-mode dropdown -> the Phase 3 hot-swaps.
+    tb->addWidget(new QLabel(QStringLiteral(" Visualize: ")));
+    QComboBox* viz = new QComboBox(tb);
+    viz->addItem(QStringLiteral("PBR (Default)"),      int(MpmSystem::VizMode::Default));
+    viz->addItem(QStringLiteral("Thermal"),            int(MpmSystem::VizMode::Thermal));
+    viz->addItem(QStringLiteral("Stress (von Mises)"), int(MpmSystem::VizMode::VonMises));
+    viz->addItem(QStringLiteral("Strain"),             int(MpmSystem::VizMode::Strain));
+    connect(viz, &QComboBox::currentIndexChanged, this, [this, viz](int) {
+        if (m_renderingSystem && m_renderingSystem->getMpmSystem())
+            m_renderingSystem->getMpmSystem()->setVizMode(MpmSystem::VizMode(viz->currentData().toInt()));
+    });
+    tb->addWidget(viz);
+    tb->addSeparator();
+
+    connect(tb->addAction(QStringLiteral("Assign Material")), &QAction::triggered,
+            this, &MainWindow::assignMaterialToSelection);
+    connect(tb->addAction(QStringLiteral("Add Heat Source")), &QAction::triggered,
+            this, &MainWindow::addHeatSourceToSelection);
+    connect(tb->addAction(QStringLiteral("Inspect")), &QAction::triggered,
+            this, &MainWindow::inspectSelection);
+}
+
+void MainWindow::importStepFile()
+{
+    if (!krs::cad::available()) {
+        QMessageBox::information(this, QStringLiteral("Import CAD"),
+            QStringLiteral("STEP import requires an OpenCASCADE build (opencascade in vcpkg.json, KR_WITH_OCCT)."));
+        return;
+    }
+    const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Import STEP"),
+        QString(), QStringLiteral("STEP files (*.step *.stp);;All files (*)"));
+    if (path.isEmpty() || !m_scene) return;
+    krs::cad::ImportResult r = krs::cad::importStep(*m_scene, path.toStdString());
+    QMessageBox::information(this, QStringLiteral("Import CAD"),
+        QString::fromStdString(r.message) +
+        QStringLiteral("\nSolids: %1   Faces: %2   Attachment frames: %3\nTotal B-Rep volume: %4 m^3")
+            .arg(r.solids).arg(r.faces).arg(r.attachments).arg(r.totalVolume, 0, 'g', 4));
+    refreshGizmoAndProperties();
+}
+
+void MainWindow::assignMaterialToSelection()
+{
+    entt::entity e = selectedEntity();
+    if (e == entt::null || !m_scene) {
+        QMessageBox::information(this, QStringLiteral("Assign Material"), QStringLiteral("Select an entity first."));
+        return;
+    }
+    bool ok = false;
+    const QString id = QInputDialog::getText(this, QStringLiteral("Assign Material"),
+        QStringLiteral("Material name or Materials Project id\n(steel, aluminium, titanium, copper, tungsten, mp-13, ...):"),
+        QLineEdit::Normal, QStringLiteral("steel"), &ok);
+    if (!ok || id.isEmpty()) return;
+    krs::materials::MatProps m = krs::materials::query(id.toStdString());
+    if (!m.valid) {
+        QMessageBox::warning(this, QStringLiteral("Assign Material"),
+            QStringLiteral("Unknown material. Known offline: steel, iron, aluminium, titanium, copper, "
+                           "tungsten, abs, concrete. Set MP_API_KEY (+ pip install mp-api) for live mp-id lookup."));
+        return;
+    }
+    double E = 0.0, nu = 0.0;
+    krs::materials::deriveElastic(m.bulkModulus, m.shearModulus, E, nu);
+    auto& reg = m_scene->getRegistry();
+    auto& mat = reg.get_or_emplace<MaterialComponent>(e);
+    mat.physicalName = m.name; mat.density = float(m.density);
+    mat.bulkModulus = float(m.bulkModulus); mat.shearModulus = float(m.shearModulus);
+    mat.youngsModulus = float(E); mat.poissonRatio = float(nu);
+
+    double vol = mat.volume_m3;                         // OCCT sets this at import
+    if (vol <= 0.0) {                                   // else integrate the triangle mesh
+        if (auto* rm = reg.try_get<RenderableMeshComponent>(e)) {
+            std::vector<glm::vec3> pos; pos.reserve(rm->vertices.size());
+            for (const auto& v : rm->vertices) pos.push_back(v.position);
+            vol = krs::materials::meshVolume(pos, rm->indices);
+            if (auto* xf = reg.try_get<TransformComponent>(e))
+                vol *= double(xf->scale.x) * double(xf->scale.y) * double(xf->scale.z); // local->world scale
+        }
+    }
+    mat.volume_m3 = float(vol);
+    mat.massKg = float(m.density * vol);
+    QMessageBox::information(this, QStringLiteral("Material assigned"),
+        QStringLiteral("%1  (%2)\nDensity: %3 kg/m^3\nBulk K: %4 GPa   Shear G: %5 GPa\n"
+                       "Young E: %6 GPa   Poisson: %7\nVolume: %8 m^3   Mass: %9 kg")
+            .arg(QString::fromStdString(m.name), QString::fromStdString(m.source))
+            .arg(m.density, 0, 'f', 1).arg(m.bulkModulus / 1e9, 0, 'f', 1).arg(m.shearModulus / 1e9, 0, 'f', 1)
+            .arg(E / 1e9, 0, 'f', 1).arg(nu, 0, 'f', 3).arg(vol, 0, 'g', 4).arg(mat.massKg, 0, 'g', 4));
+    refreshGizmoAndProperties();
+}
+
+void MainWindow::addHeatSourceToSelection()
+{
+    entt::entity e = selectedEntity();
+    if (e == entt::null || !m_scene) {
+        QMessageBox::information(this, QStringLiteral("Add Heat Source"), QStringLiteral("Select an entity first."));
+        return;
+    }
+    auto& reg = m_scene->getRegistry();
+    auto& hs = reg.get_or_emplace<HeatSourceComponent>(e);
+    bool ok = false;
+    double t = QInputDialog::getDouble(this, QStringLiteral("Heat Source"),
+        QStringLiteral("Source temperature (deg C):"), hs.temperature, -50.0, 2000.0, 1, &ok);
+    if (ok) hs.temperature = float(t);
+    double r = QInputDialog::getDouble(this, QStringLiteral("Heat Source"),
+        QStringLiteral("Influence radius (m):"), hs.radius, 0.01, 10.0, 2, &ok);
+    if (ok) hs.radius = float(r);
+    refreshGizmoAndProperties();
+}
+
+void MainWindow::inspectSelection()
+{
+    entt::entity e = selectedEntity();
+    if (e == entt::null || !m_scene) {
+        QMessageBox::information(this, QStringLiteral("Inspect"), QStringLiteral("Select an entity first."));
+        return;
+    }
+    auto& reg = m_scene->getRegistry();
+    QString s = QStringLiteral("Selected entity\n\n");
+    if (auto* mat = reg.try_get<MaterialComponent>(e)) {
+        s += QStringLiteral("Material: %1\n  density %2 kg/m^3,  K %3 GPa,  G %4 GPa\n"
+                            "  E %5 GPa,  nu %6\n  volume %7 m^3,  mass %8 kg\n\n")
+                 .arg(mat->physicalName.empty() ? QStringLiteral("(unassigned)") : QString::fromStdString(mat->physicalName))
+                 .arg(mat->density, 0, 'f', 1).arg(mat->bulkModulus / 1e9, 0, 'f', 1).arg(mat->shearModulus / 1e9, 0, 'f', 1)
+                 .arg(mat->youngsModulus / 1e9, 0, 'f', 1).arg(mat->poissonRatio, 0, 'f', 3)
+                 .arg(mat->volume_m3, 0, 'g', 4).arg(mat->massKg, 0, 'g', 4);
+    } else s += QStringLiteral("Material: (none)\n\n");
+    if (auto* hs = reg.try_get<HeatSourceComponent>(e))
+        s += QStringLiteral("Heat source: %1 deg C, radius %2 m (%3)\n")
+                 .arg(hs->temperature, 0, 'f', 0).arg(hs->radius, 0, 'f', 2)
+                 .arg(hs->active ? QStringLiteral("active") : QStringLiteral("inactive"));
+    else s += QStringLiteral("Heat source: (none)\n");
+    if (auto* att = reg.try_get<AttachmentComponent>(e))
+        s += QStringLiteral("\nCAD attachment frames: %1 cylindrical feature(s)").arg(int(att->frames.size()));
+    QMessageBox::information(this, QStringLiteral("Inspect"), s);
 }

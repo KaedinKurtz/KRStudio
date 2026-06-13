@@ -124,6 +124,14 @@ private:
                                    const glm::vec3& pos, const glm::vec3& scale);
     entt::entity duplicateEntity(entt::entity src);
 
+    // --- Engineering toolbar (Phase 4) ---
+    void buildEngineeringToolbar();   // top QToolBar: Import CAD, viz mode, injectors, inspector
+    entt::entity selectedEntity() const; // entity tagged SelectedComponent, or entt::null
+    void assignMaterialToSelection(); // Assign Material dialog -> MaterialComponent + mass
+    void addHeatSourceToSelection();  // Add/tune HeatSourceComponent on the selection
+    void inspectSelection();          // dialog exposing Material + HeatSource of the selection
+    void importStepFile();            // Import CAD (STEP) -> OCCT ingestion
+
     entt::entity m_cameraEntity;
 
     QTimer* m_masterRenderTimer;
