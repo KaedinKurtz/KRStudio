@@ -357,10 +357,39 @@ frames are tiny (16 B, no fragmentation) and the rates are low.
 **Env hooks:** `KRS_MPM_SELFTEST=1` runs all modules; `KRS_HIL_LOOPBACK_SECS=<n>`
 sets the camera loopback window.
 
-### Phase 2 (next)
-Drive the live engine `SimulationController` from `AsyncCoordinator` (physics on the
-1 kHz thread, CAN command frames applied as joint forces on the next tick, encoder/
-torque frames published out); pipe the offscreen sensor render into the camera
-bridge each sensor tick; use `MpmAdjoint` as the gradient backend for a
-trajectory-optimization / system-ID loop and graft the verified adjoint kernels onto
-the GPU forward solver for batched differentiable rollouts.
+### Phase 2 — integration (SHIPPED 2026-06-13)
+The Phase-1 components are now wired into the live engine.
+
+- **CAN telemetry ↔ plant.** `SimulationController` (when `KRS_HIL_CAN` is set)
+  drains incoming `can_frame` effort commands each fixed physics step, applies them
+  as continuous body forces *before* `simulate()`, and publishes each actuator
+  body's pose / velocity / applied-effort back as state frames after
+  `fetchResults`. Entities opt in via `HilActuatorComponent{axisId}`. A CANopen-
+  style `cancodec` packs int16 channels onto the 16-byte SocketCAN frame
+  (cmd 0x200+axis, state 0x180/0x1C0/0x140+axis). **Boundary:** the live sim steps
+  at 240 Hz on the Qt main thread (PhysX is not stepped cross-thread), so the
+  exchange runs in that step, not on the standalone 1 kHz `HilClock` thread —
+  driving PhysX from the HilClock thread is the Phase-3 reconfiguration. No PhysX
+  articulations exist yet, so an "axis" is a rigid-body DOF set. Verified by
+  `CAN_PLANT` (command 8 N → decoded 8 N → mock plant → encoder 0.0400 m within
+  the 1 mm CAN quantization).
+- **Camera → shared memory.** `RenderingSystem::publishHilCameraFrame` reads the
+  finished `finalColorTexture` (RGBA16F) into sysmem and publishes RGBA8 frames to
+  the shared-memory ring at 30 Hz. **Boundary:** GL is thread-affine, so the
+  readback runs on the engine/render thread (the async sensor thread is the ring
+  *consumer*), not literally inside the HilClock sensor thread. Verified live
+  (30 Hz stream into the ring proven bit-exact by `LOOPBACK_FRAME_INTEGRITY`).
+- **Multi-fidelity trajectory verification.** `TrajectoryVerifier::submit` runs a
+  conservative inertial surrogate sweep (flags > 75% yield) and forks only flagged
+  segments to background `std::async` workers running the exact double-precision
+  `MpmAdjoint` stress pass; the planner gets non-blocking `std::future` tokens.
+  Verified by `TRAJECTORY_HIL_LOOP` (transient REJECTED, surrogate-flagged moderate
+  bump cleared SAFE by the exact pass, submit 0.1 ms vs 34 ms/exact).
+
+### Phase 3 (next)
+Run the physics plant *on* the `HilClock` 1 kHz thread (single-owner PhysX scene,
+removing the main-thread 240 Hz coupling) for true hard-RT HIL; PhysX articulations
+(`PxArticulationReducedCoordinate`) so a CAN axis is a real joint, not a free body;
+use `MpmAdjoint` as the gradient backend for trajectory optimization / system-ID,
+and graft the verified adjoint kernels onto the GPU forward solver for batched
+differentiable rollouts.
