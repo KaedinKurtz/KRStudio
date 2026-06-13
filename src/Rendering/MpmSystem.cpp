@@ -21,7 +21,7 @@
 //   v9 mu, lambda, frictionAlpha, materialType
 //   v10 color.rgb, alive
 namespace {
-constexpr int kStride = MpmSystem::kFloatsPerParticle; // 44 floats
+constexpr int kStride = MpmSystem::kFloatsPerParticle; // 48 floats (12 vec4)
 constexpr int kLocal = 64;
 }
 
@@ -39,6 +39,8 @@ void MpmSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core*
         m_ambientT = qEnvironmentVariable("KRS_MPM_AMBIENT").toFloat();
     if (qEnvironmentVariableIsSet("KRS_MPM_HEATX"))
         m_heatExchange = qEnvironmentVariable("KRS_MPM_HEATX").toFloat();
+    if (qEnvironmentVariableIsSet("KRS_MPM_COND_SCALE"))
+        m_conductionScale = qEnvironmentVariable("KRS_MPM_COND_SCALE").toFloat();
     // Initial visualization mode (1 Thermal, 2 VonMises, 3 Strain) for headless grabs.
     const int viz = qEnvironmentVariable("KRS_MPM_VIZ").toInt();
     if (viz >= 1 && viz <= 3) { m_appearance.mode = VizMode(viz); m_calibratePending = true; }
@@ -63,10 +65,11 @@ void MpmSystem::allocate(QOpenGLFunctions_4_3_Core* gl)
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridVelSSBO);
     gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(float)) * cells * 4, nullptr,
                      GL_DYNAMIC_DRAW);
-    // Thermal grid: fixed-point (m*T, m) scatter + two float temperature fields.
+    // Thermal grid: fixed-point (energy, m*c_p, m*c_p*k) scatter + temperature
+    // ping-pong + per-node thermal mass C and conductivity k for Fourier conduction.
     gl->glGenBuffers(1, &m_gridThermSSBO);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridThermSSBO);
-    gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(GLint)) * cells * 2, nullptr,
+    gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(GLint)) * cells * 3, nullptr,
                      GL_DYNAMIC_DRAW);
     gl->glGenBuffers(1, &m_gridTempA);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridTempA);
@@ -74,6 +77,14 @@ void MpmSystem::allocate(QOpenGLFunctions_4_3_Core* gl)
                      GL_DYNAMIC_DRAW);
     gl->glGenBuffers(1, &m_gridTempB);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridTempB);
+    gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(float)) * cells, nullptr,
+                     GL_DYNAMIC_DRAW);
+    gl->glGenBuffers(1, &m_gridC);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridC);
+    gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(float)) * cells, nullptr,
+                     GL_DYNAMIC_DRAW);
+    gl->glGenBuffers(1, &m_gridK);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridK);
     gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(float)) * cells, nullptr,
                      GL_DYNAMIC_DRAW);
     // Per-source thermal-mass accumulator: scatter sums sum(m*c_p) of particles in
@@ -94,6 +105,9 @@ void MpmSystem::shutdown(QOpenGLFunctions_4_3_Core* gl)
     gl->glDeleteBuffers(1, &m_gridThermSSBO);
     gl->glDeleteBuffers(1, &m_gridTempA);
     gl->glDeleteBuffers(1, &m_gridTempB);
+    gl->glDeleteBuffers(1, &m_gridC);
+    gl->glDeleteBuffers(1, &m_gridK);
+    gl->glDeleteBuffers(1, &m_heatAccumSSBO);
     m_initialized = false;
 }
 
@@ -158,6 +172,7 @@ void MpmSystem::seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& regist
         }
         v[39] = float(int(b.material));
         v[40] = b.color.r; v[41] = b.color.g; v[42] = b.color.b; v[43] = 1.0f; // color, alive
+        v[44] = b.thermalConductivity;                              // therm2.x = k (W/m.K)
         m_seedScratch.insert(m_seedScratch.end(), v, v + kStride);
         ++count;
     };
@@ -310,8 +325,10 @@ void MpmSystem::runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_C
     const int pGroups = (m_particleCount + kLocal - 1) / kLocal;
     const int cGroups = (cells + kLocal - 1) / kLocal;
     const GLint zero = 0;
-    // Explicit-diffusion stability cap: kappa*dt/dx^2 <= 1/6 (3D, 6-neighbour).
-    const float uDiff = std::min(m_conductivity * dtFrame / (dx * dx), 1.0f / 6.0f);
+    // Fourier conduction coefficient u_coef = S*dt*dx; the per-cell stability clamp
+    // (u_betaMax) inside the diffuse shader bounds the explicit sweep for any S.
+    const float uCoef = m_conductionScale * dtFrame * dx;
+    const float uBetaMax = 0.5f;
 
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridThermSSBO);
     gl->glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, &zero);
@@ -325,6 +342,8 @@ void MpmSystem::runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_C
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_gridTempA);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, m_gridTempB);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, m_heatAccumSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, m_gridC);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, m_gridK);
 
     scat->use(gl);
     scat->setInt(gl, "u_count", m_particleCount);
@@ -347,7 +366,8 @@ void MpmSystem::runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_C
 
     diff->use(gl);
     diff->setInt(gl, "u_N", m_N);
-    diff->setFloat(gl, "u_diffuse", uDiff);
+    diff->setFloat(gl, "u_coef", uCoef);
+    diff->setFloat(gl, "u_betaMax", uBetaMax);
     gl->glDispatchCompute(cGroups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -391,6 +411,8 @@ void MpmSystem::runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_C
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, 0);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, 0);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, 0);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, 0);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, 0);
 }
 
 void MpmSystem::runSubstep(QOpenGLFunctions_4_3_Core* gl, Shader* p2g, Shader* grid,
@@ -459,8 +481,9 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
 
     auto seedBlock = [&](int material, glm::vec3 center, float half, float spacing,
                          float density, float E, float nu, glm::vec3 v0,
-                         float T0, float meltT, float tempSpanX) {
-        m_seedScratch.clear();
+                         float T0, float meltT, float tempSpanX,
+                         float conductivity = 50.0f, bool append = false) {
+        if (!append) { m_seedScratch.clear(); m_particleCount = 0; }
         int count = 0;
         const float vol = spacing * spacing * spacing;
         const float mass = density * vol;
@@ -484,16 +507,17 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
                     else { v[36] = mu; v[37] = lambda; v[38] = alpha; }
                     v[39] = float(material);
                     v[40] = 0.6f; v[41] = 0.7f; v[42] = 0.9f; v[43] = 1.0f;
+                    v[44] = conductivity;                       // therm2.x = k (W/m.K)
                     m_seedScratch.insert(m_seedScratch.end(), v, v + kStride);
                     ++count;
                 }
-        m_particleCount = count;
+        m_particleCount += count;
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
         gl->glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
                             GLsizeiptr(sizeof(float)) * m_seedScratch.size(), m_seedScratch.data());
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
         const float stiff = (material == 0) ? E * 7.0f : E; // fluid: K*gamma
-        m_maxWaveSpeed = std::max(1.0f, std::sqrt(stiff / density));
+        m_maxWaveSpeed = std::max(append ? m_maxWaveSpeed : 1.0f, std::sqrt(stiff / density));
     };
 
     auto runFor = [&](float seconds, glm::vec3 gravity) {
@@ -632,6 +656,31 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
         check("heat dissipates to ambient", dCool.tempMean < dHot.tempMean - 10.0,
               fmt("Thot", dHot.tempMean) + " -> " + fmt("Tcool", dCool.tempMean));
         m_heatCount = 0; m_ambientT = savedAmb; m_heatExchange = savedHx;
+    }
+    // Test 8 — grid Fourier conduction between two touching bodies of DIFFERENT k
+    // (Phase 4.5). A hot copper-like block (k=400) abuts a cooler block (k=100);
+    // with no ambient sink the heat conducts across the contact via the harmonic-
+    // mean face conductivity, the temperature spread shrinks, and the mass-weighted
+    // mean (energy) is conserved. A modest conduction scale keeps the explicit
+    // sweep below the stability clamp so conservation is exact.
+    {
+        const float savedAmb = m_ambientT, savedHx = m_heatExchange, savedS = m_conductionScale;
+        m_ambientT = 20.0f; m_heatExchange = 0.0f;     // pure conduction, no reservoir
+        m_conductionScale = 18.0f;                     // no per-cell clamping -> exact energy
+        seedBlock(1, glm::vec3(-0.15f, -0.3f, 0), 0.15f, 0.05f, 1000.0f, 5.0e4f, 0.0f,
+                  glm::vec3(0), 80.0f, 1.0e9f, 0.0f, 400.0f, false);  // hot, high-k
+        seedBlock(1, glm::vec3( 0.15f, -0.3f, 0), 0.15f, 0.05f, 1000.0f, 5.0e4f, 0.0f,
+                  glm::vec3(0), 20.0f, 1.0e9f, 0.0f, 100.0f, true);   // cool, lower-k, touching
+        Diag d0 = sample(gl);
+        for (int f = 0; f < 300; ++f) runThermalStep(renderer, gl, 1.0f / 60.0f);
+        Diag d1 = sample(gl);
+        const float spread0 = d0.tempMax - d0.tempMin;
+        const float spread1 = d1.tempMax - d1.tempMin;
+        const float meanErr = std::abs(float(d1.tempMean - d0.tempMean));
+        check("conduction across contact (spread shrinks)", spread1 < 0.8f * spread0,
+              fmt("spread0", spread0) + " -> " + fmt("spread1", spread1));
+        check("conduction conserves energy (mean stable)", meanErr < 6.0f, fmt("meanErr", meanErr));
+        m_ambientT = savedAmb; m_heatExchange = savedHx; m_conductionScale = savedS;
     }
 
     qInfo() << "[MPM selftest] overall:" << (allPass ? "ALL PASS" : "FAILURES PRESENT");

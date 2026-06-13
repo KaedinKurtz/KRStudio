@@ -14,6 +14,7 @@ struct Particle {
     vec4 plastic;   // x Jp (fluid: J), y temperature, z heatCap, w meltTemp
     vec4 matl;      // solids:(mu,lambda,alpha) fluid:(K,gamma) ; w = matType
     vec4 color;     // rgb, w alive(>0)
+    vec4 therm2;    // x thermalConductivity k (W/m.K); yzw reserved
 };
 layout(std430, binding = 0) buffer Particles { Particle p[]; };
 layout(std430, binding = 1) coherent buffer GridInt { int gi[]; };

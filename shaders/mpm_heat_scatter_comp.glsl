@@ -1,12 +1,13 @@
 #version 430 core
-// MLS-MPM thermal stage 1: scatter heat (mass*temperature) and mass to the
-// grid using the same quadratic B-spline weights as the mechanical P2G.
-// Runs once per frame (heat diffuses far slower than momentum).
+// MLS-MPM thermal stage 1: scatter thermal ENERGY (m*c_p*T), thermal MASS (m*c_p)
+// and the k-weighted conductivity (m*c_p*k) to the grid using the same quadratic
+// B-spline weights as the mechanical P2G. Energy basis (not mean temperature) so
+// grid Fourier conduction conserves energy. Runs once per frame.
 layout(local_size_x = 64) in;
 
 struct Particle {
     vec4 posMass; vec4 velVol; vec4 c0, c1, c2; vec4 f0, f1, f2;
-    vec4 plastic; vec4 matl; vec4 color;
+    vec4 plastic; vec4 matl; vec4 color; vec4 therm2; // therm2.x = k (W/m.K)
 };
 layout(std430, binding = 0) buffer Particles { Particle p[]; };
 layout(std430, binding = 3) coherent buffer GridTherm { int gt[]; };
@@ -24,26 +25,28 @@ uniform int   u_heatCount;
 uniform vec4  u_heatSrc[MAX_HEAT];     // xyz world pos, w nominal temperature
 uniform float u_heatRadius[MAX_HEAT];
 
-const float SCALE = 1.0e5;
+// Fixed point: m*c_p*T magnitudes are ~1e4-1e5 per node; 1e3 keeps the summed
+// int well under the +/-2e9 clamp while preserving sub-degree precision.
+const float SCALE = 1.0e3;
 int enc(float f) { return clamp(int(round(f * SCALE)), -2000000000, 2000000000); }
-const float SCALE_ACC = 1.0e3;         // sum(m*c_p) is ~900x larger than mass
-int encA(float f) { return clamp(int(round(f * SCALE_ACC)), -2000000000, 2000000000); }
 
 void main()
 {
     uint i = gl_GlobalInvocationID.x;
     if (i >= uint(u_count)) return;
     if (p[i].color.w <= 0.0) return;
-    float m = p[i].posMass.w;
-    float T = p[i].plastic.y;
+    float m  = p[i].posMass.w;
+    float T  = p[i].plastic.y;
     float cp = p[i].plastic.z;          // heat capacity J/(kg.K)
+    float k  = p[i].therm2.x;           // thermal conductivity W/(m.K)
+    float cm = m * cp;                  // thermal mass m*c_p (J/K)
 
     // Tally this particle's thermal mass to every heat source whose sphere it is
     // inside (energy is later split by this so total injected = power*dt exactly).
     vec3 wpos = p[i].posMass.xyz;
     for (int h = 0; h < u_heatCount; ++h)
         if (distance(wpos, u_heatSrc[h].xyz) <= u_heatRadius[h])
-            atomicAdd(hacc[h], encA(m * cp));
+            atomicAdd(hacc[h], enc(cm));
 
     vec3 Xp = (p[i].posMass.xyz - u_origin) * u_invDx;
     ivec3 base = ivec3(floor(Xp - 0.5));
@@ -62,7 +65,8 @@ void main()
         if (any(lessThan(node, ivec3(0))) || any(greaterThanEqual(node, ivec3(u_N)))) continue;
         float wt = wx[a] * wy[b] * wz[c];
         int cell = (node.z * u_N + node.y) * u_N + node.x;
-        atomicAdd(gt[cell * 2 + 0], enc(wt * m * T));
-        atomicAdd(gt[cell * 2 + 1], enc(wt * m));
+        atomicAdd(gt[cell * 3 + 0], enc(wt * cm * T));   // thermal energy  m*c_p*T
+        atomicAdd(gt[cell * 3 + 1], enc(wt * cm));       // thermal mass    m*c_p
+        atomicAdd(gt[cell * 3 + 2], enc(wt * cm * k));   // k-weighted mass m*c_p*k
     }
 }

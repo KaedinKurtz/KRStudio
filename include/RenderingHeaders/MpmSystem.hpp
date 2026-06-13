@@ -28,9 +28,9 @@ class MpmSystem
 {
 public:
     static constexpr int kMaxParticles = 240000;
-    // std430 particle stride: 11 vec4 (pos/mass, vel/vol, C rows x3,
-    // F rows x3, plastic/thermo, material). Keep in sync with the shaders.
-    static constexpr int kFloatsPerParticle = 11 * 4;
+    // std430 particle stride: 12 vec4 (pos/mass, vel/vol, C cols x3, F cols x3,
+    // plastic/thermo, material, color, therm2{k}). Keep in sync with the shaders.
+    static constexpr int kFloatsPerParticle = 12 * 4;
 
     void initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl);
     void shutdown(QOpenGLFunctions_4_3_Core* gl);
@@ -108,12 +108,18 @@ private:
     GLuint m_gridThermSSBO = 0;         // int[cellCount*2] fixed-point (m*T, m)
     GLuint m_gridTempA = 0;             // float[cellCount] normalized temperature
     GLuint m_gridTempB = 0;             // float[cellCount] diffused temperature
+    GLuint m_gridC = 0;                 // float[cellCount] node thermal mass C (J/K)
+    GLuint m_gridK = 0;                 // float[cellCount] node conductivity k (W/m.K)
     GLuint m_heatAccumSSBO = 0;         // int[kMaxHeatSources] fixed-point sum(m*c_p) per source
     int m_particleCount = 0;
 
-    // Thermodynamics (M4): ambient field + conductivity + Newton exchange.
+    // Thermodynamics (M4 / Phase 4.5): ambient field + Newton exchange + grid
+    // Fourier conduction. m_conductionScale accelerates the physically-slow metal
+    // conduction (alpha ~ 1e-5 m^2/s) to interactive rates; the per-cell stability
+    // clamp keeps the explicit sweep bounded regardless. Env: KRS_MPM_COND_SCALE.
     float m_ambientT = 20.0f;           // °C ambient reservoir
-    float m_conductivity = 0.5f;        // thermal diffusivity proxy (m^2/s)
+    float m_conductivity = 0.5f;        // legacy diffusivity proxy (unused by Fourier path)
+    float m_conductionScale = 2000.0f;  // dimensionless conduction speed multiplier S
     float m_heatExchange = 0.0f;        // 1/s exchange with ambient (0 = off)
     float m_fluidMeltK = 5.0e4f;        // bulk modulus assigned to melted fluid
 

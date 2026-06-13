@@ -7,7 +7,7 @@ layout(local_size_x = 64) in;
 
 struct Particle {
     vec4 posMass; vec4 velVol; vec4 c0, c1, c2; vec4 f0, f1, f2;
-    vec4 plastic; vec4 matl; vec4 color;
+    vec4 plastic; vec4 matl; vec4 color; vec4 therm2; // therm2.x = k (W/m.K)
 };
 layout(std430, binding = 0) buffer Particles { Particle p[]; };
 layout(std430, binding = 5) buffer TempB { float tb[]; };

@@ -12,6 +12,7 @@ struct Particle {
     vec4 plastic;   // x Jp (fluid: J), y temperature, z heatCap, w meltTemp
     vec4 matl;      // solids:(mu,lambda,alpha) fluid:(K,gamma) ; w = matType
     vec4 color;
+    vec4 therm2;    // x thermalConductivity k (W/m.K); yzw reserved
 };
 layout(std430, binding = 0) buffer Particles { Particle p[]; };
 layout(std430, binding = 2) buffer GridVel { vec4 gv[]; };

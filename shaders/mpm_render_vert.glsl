@@ -10,6 +10,7 @@ struct Particle {
     vec4 plastic;   // x Jp/J, y temperature(C), z heatCap, w meltTemp
     vec4 matl;      // x mu, y lambda, z alpha, w materialType
     vec4 color;     // rgb, w alive
+    vec4 therm2;    // x thermalConductivity k (W/m.K); yzw reserved
 };
 layout(std430, binding = 0) buffer Particles { Particle p[]; };
 
