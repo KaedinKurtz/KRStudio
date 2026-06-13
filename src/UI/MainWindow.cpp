@@ -2240,8 +2240,10 @@ void MainWindow::buildMenuBar()
         if (o.mode == MpmSystem::VizMode::Default) a->setChecked(true);
         const MpmSystem::VizMode m = o.mode;
         connect(a, &QAction::triggered, this, [this, m]() {
-            if (m_renderingSystem && m_renderingSystem->getMpmSystem())
+            if (m_renderingSystem && m_renderingSystem->getMpmSystem()) {
                 m_renderingSystem->getMpmSystem()->setVizMode(m); // one-shot auto-calibrates the range
+                m_renderingSystem->renderAllViewports();          // re-render NOW so the swap is instant
+            }
         });
     }
 
@@ -2313,8 +2315,10 @@ void MainWindow::buildEngineeringToolbar()
     viz->addItem(QStringLiteral("Stress (von Mises)"), int(MpmSystem::VizMode::VonMises));
     viz->addItem(QStringLiteral("Strain"),             int(MpmSystem::VizMode::Strain));
     connect(viz, &QComboBox::currentIndexChanged, this, [this, viz](int) {
-        if (m_renderingSystem && m_renderingSystem->getMpmSystem())
+        if (m_renderingSystem && m_renderingSystem->getMpmSystem()) {
             m_renderingSystem->getMpmSystem()->setVizMode(MpmSystem::VizMode(viz->currentData().toInt()));
+            m_renderingSystem->renderAllViewports();  // re-render NOW so the viz swap is instant
+        }
     });
     tb->addWidget(viz);
     tb->addSeparator();
