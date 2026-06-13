@@ -36,6 +36,7 @@
 #include "HilBridges.hpp"
 #include "TrajectoryVerifier.hpp"
 #include "CadImporter.hpp"
+#include "FemSolver.hpp"
 #include "SmokePass.hpp"
 #include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
@@ -581,6 +582,12 @@ void RenderingSystem::initializeSharedResources()
     // feature recognition + exact volume). Pure CPU/OCCT, no GL dependency.
     if (qEnvironmentVariableIntValue("KRS_CAD_SELFTEST") != 0) {
         krs::cad::runSelfTest();
+    }
+
+    // Headless FEM oracle check (axial bar, cantilever vs Euler-Bernoulli, 1D bar
+    // conduction, plate-with-hole stress concentration). Pure CPU/Eigen, no GL.
+    if (qEnvironmentVariableIntValue("KRS_FEM_SELFTEST") != 0) {
+        krs::fem::FemSolver::runSelfTests();
     }
 }
 
