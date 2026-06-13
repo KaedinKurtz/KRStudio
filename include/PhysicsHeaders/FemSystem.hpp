@@ -35,6 +35,9 @@ private:
         FemMaterial material;                      // for the training-data export
         ElasticBC ebc;                             // retained for export (fixed/load masks)
         std::vector<int> sourceCells;              // cells overlapping a heat source
+        // Mirror of the FemResultComponent GL handles, owned here so they can be
+        // freed even after the entity (and its component) is destroyed.
+        unsigned int vao = 0, vboPos = 0, vboScalar = 0, ebo = 0;
     };
     std::unordered_map<entt::entity, Solve> m_solves;
     int m_exportIndex = 0;                         // KRS_FEM_EXPORT running sample index

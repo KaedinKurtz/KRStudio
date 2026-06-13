@@ -58,6 +58,18 @@ template <class T> std::vector<double> toD(const std::vector<T>& v) { return std
 
 void FemSystem::update(entt::registry& reg, QOpenGLFunctions_4_3_Core* gl, MpmSystem* mpm, int vizMode) {
     if (!gl) return;
+    // Prune solves whose entity was destroyed / lost its FemBodyComponent, freeing
+    // their GL buffers (the component is already gone, so this map owns the handles).
+    for (auto it = m_solves.begin(); it != m_solves.end(); ) {
+        const entt::entity e = it->first;
+        if (!reg.valid(e) || !reg.all_of<FemBodyComponent>(e)) {
+            Solve& s = it->second;
+            if (s.vao) gl->glDeleteVertexArrays(1, &s.vao);
+            unsigned int bufs[3] = { s.vboPos, s.vboScalar, s.ebo };
+            gl->glDeleteBuffers(3, bufs);
+            it = m_solves.erase(it);
+        } else ++it;
+    }
     auto view = reg.view<FemBodyComponent, RenderableMeshComponent, TransformComponent, MaterialComponent>();
     for (auto e : view) {
         auto& fb = view.get<FemBodyComponent>(e);
@@ -196,6 +208,7 @@ void FemSystem::update(entt::registry& reg, QOpenGLFunctions_4_3_Core* gl, MpmSy
                 gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, GLsizeiptr(sizeof(unsigned int) * s.indices.size()), s.indices.data(), GL_STATIC_DRAW);
                 gl->glBindVertexArray(0);
                 res.buffersBuilt = true;
+                s.vao = res.vao; s.vboPos = res.vboPos; s.vboScalar = res.vboScalar; s.ebo = res.ebo;
             }
             const int mode = std::clamp(vizMode, 0, 3);
             if (mode >= 1 && res.uploadedMode != mode && !res.vertScalar[mode].empty()) {
@@ -210,6 +223,12 @@ void FemSystem::update(entt::registry& reg, QOpenGLFunctions_4_3_Core* gl, MpmSy
 }
 
 void FemSystem::shutdown(QOpenGLFunctions_4_3_Core* gl) {
+    if (gl) for (auto& kv : m_solves) {
+        Solve& s = kv.second;
+        if (s.vao) gl->glDeleteVertexArrays(1, &s.vao);
+        unsigned int bufs[3] = { s.vboPos, s.vboScalar, s.ebo };
+        gl->glDeleteBuffers(3, bufs);
+    }
     m_solves.clear();
 }
 

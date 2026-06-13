@@ -186,6 +186,14 @@ VoxelFemModel FemSolver::voxelizeMesh(const std::vector<glm::vec3>& verts,
 ElasticResult FemSolver::solveElastic(const VoxelFemModel& m, const FemMaterial& mat, const ElasticBC& bc) {
     ElasticResult r;
     if (!m.valid()) return r;
+    // Well-posedness: a body with NO fixed nodes but under load (gravity / applied
+    // force) has rigid-body modes -> no static equilibrium. The penalty cannot fix
+    // an unconstrained system; bail (ok=false) instead of returning garbage.
+    const bool loaded = glm::length(bc.gravity) > 1e-12 || !bc.nodalForces.empty();
+    if (bc.fixedNodes.empty() && loaded) {
+        std::printf("[FEM] solveElastic: no fixed nodes under load -> unrestrained; skipped.\n");
+        return r;
+    }
     const int nDof = 3 * m.numNodes;
     const auto Ke = hexElastic(mat.E, mat.nu, m.h);
     std::vector<Trip> trips; trips.reserve(m.elements.size() * 24 * 24);
@@ -210,7 +218,10 @@ ElasticResult FemSolver::solveElastic(const VoxelFemModel& m, const FemMaterial&
 
     r.displacement.resize(m.numNodes);
     for (int n = 0; n < m.numNodes; ++n) r.displacement[n] = glm::dvec3(u[3 * n], u[3 * n + 1], u[3 * n + 2]);
-    // Per-element centroid stress -> averaged onto nodes.
+    // Per-element CENTROID stress -> averaged onto nodes. For trilinear hexes this
+    // is the representative element value and is smoothed by nodal averaging --
+    // adequate for the VISUALIZATION field. (Accuracy upgrade: sample the 8 Gauss
+    // points and extrapolate to nodes; ~5-10% better, ROADMAP §L.)
     const auto D = elasticityD(mat.E, mat.nu);
     const auto B0 = strainB(0.0, 0.0, 0.0, m.h);
     std::vector<double> vmAcc(m.numNodes, 0.0), enAcc(m.numNodes, 0.0); std::vector<int> cnt(m.numNodes, 0);
@@ -245,6 +256,14 @@ static ThermalResult solveThermalImpl(const VoxelFemModel& m, const FemMaterial&
     const int n = m.numNodes;
     Eigen::Matrix<double, 8, 8> Kt, Ct; hexThermal(mat.k, mat.rho, mat.cp, m.h, Kt, Ct);
     const bool transient = (Tprev != nullptr) && dt > 0.0;
+    // Well-posedness: a STEADY conduction solve with neither a Dirichlet pin nor a
+    // convective sink is rank-deficient (constant null space) -> SimplicialLDLT may
+    // "succeed" with an arbitrary constant. Require a temperature reference; bail
+    // otherwise. (Transient is always well-posed via the Ct/dt mass term.)
+    if (!transient && bc.dirichlet.empty() && (bc.surfaceNodes.empty() || bc.convection <= 0.0)) {
+        std::printf("[FEM] solveThermalSteady: no Dirichlet pin or convective sink -> singular; skipped.\n");
+        return r;
+    }
     std::vector<Trip> trips; trips.reserve(m.elements.size() * 64);
     Vec f = Vec::Zero(n);
     for (const auto& e : m.elements) {
