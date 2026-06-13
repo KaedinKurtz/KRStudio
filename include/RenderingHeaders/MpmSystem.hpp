@@ -74,6 +74,7 @@ public:
         float tempMin = 0.0f;
         float tempMax = 0.0f;
         int fluidCount = 0;      // particles currently of Fluid type (post-melt)
+        float minY = 0.0f;       // lowest particle-centre y (floor-contact check)
     };
     Diag sample(QOpenGLFunctions_4_3_Core* gl);
 
@@ -138,7 +139,8 @@ private:
 
     glm::vec3 m_gravity{ 0.0f, -9.81f, 0.0f };
     float m_maxWaveSpeed = 10.0f;       // max sqrt(stiffness/density), for CFL
-    float m_renderRadius = 0.02f;       // point-sprite radius (~half spacing)
+    float m_floorFriction = 0.4f;       // Coulomb friction at the grid floor (Phase 5)
+    float m_renderRadius = 0.02f;       // point-sprite radius (= dx; floor-contact offset)
     std::vector<float> m_seedScratch;   // CPU staging for seeding
 
     Appearance m_appearance;            // Phase 3 visualization mode + ranges

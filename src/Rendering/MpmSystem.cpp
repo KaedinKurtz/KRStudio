@@ -182,7 +182,10 @@ void MpmSystem::seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& regist
     float minSpacing = 0.04f;
     for (auto e : registry.view<MpmBodyComponent>())
         minSpacing = std::min(minSpacing, std::max(registry.get<MpmBodyComponent>(e).particleSpacing, 0.01f));
-    m_renderRadius = 0.5f * minSpacing;
+    // Render splat radius = particle spacing dx (Phase 5 Task 1): splats overlap so
+    // the body reads as a coherent SURFACE (not a sparse spring-net), and this same
+    // radius is the floor-contact offset so the visual matches the collision.
+    m_renderRadius = minSpacing;
     for (auto e : registry.view<MpmBodyComponent, TransformComponent>()) {
         const auto& b = registry.get<MpmBodyComponent>(e);
         const auto& xf = registry.get<TransformComponent>(e);
@@ -454,6 +457,7 @@ void MpmSystem::runSubstep(QOpenGLFunctions_4_3_Core* gl, Shader* p2g, Shader* g
     grid->setFloat(gl, "u_dt", sdt);
     grid->setVec3(gl, "u_gravity", gravity);
     grid->setInt(gl, "u_bound", 2);
+    grid->setFloat(gl, "u_floorFriction", m_floorFriction);
     gl->glDispatchCompute(cGroups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -467,6 +471,10 @@ void MpmSystem::runSubstep(QOpenGLFunctions_4_3_Core* gl, Shader* p2g, Shader* g
     g2p->setFloat(gl, "u_dt", sdt);
     g2p->setFloat(gl, "u_thetaC", 0.025f);
     g2p->setFloat(gl, "u_thetaS", 0.0075f);
+    // Floor plane = origin.y + bound*dx (the no-penetration band top, world y=0 in
+    // the live domain); offset particle centres by the effective radius so surfaces rest on it.
+    g2p->setFloat(gl, "u_floorY", m_origin.y + 2.0f * dx);
+    g2p->setFloat(gl, "u_radius", m_renderRadius);
     gl->glDispatchCompute(pGroups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
@@ -686,6 +694,26 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
         check("conduction conserves energy (mean stable)", meanErr < 6.0f, fmt("meanErr", meanErr));
         m_ambientT = savedAmb; m_heatExchange = savedHx; m_conductionScale = savedS;
     }
+    // Test 9 — floor contact (Phase 5 Task 1). An elastic block dropped under gravity
+    // must settle with its lowest particle CENTRE at floor + radius (no penetration);
+    // the splat radius is the contact offset, so surfaces rest ON the floor.
+    {
+        const float savedR = m_renderRadius;
+        const float spacing = 0.05f;
+        m_renderRadius = spacing;                       // splat radius = dx (Task 1.3)
+        const float dx = m_size.x / float(m_N);
+        const float floorY = m_origin.y + 2.0f * dx;    // grid floor plane (bound=2)
+        seedBlock(1, glm::vec3(0.0f, -0.8f, 0.0f), 0.2f, spacing, 2700.0f, 2.0e6f, 0.33f,
+                  glm::vec3(0), 20.0f, 1.0e9f, 0.0f);
+        runFor(2.0f, glm::vec3(0.0f, -9.81f, 0.0f));    // drop + settle
+        Diag d = sample(gl);
+        const float floorPlusR = floorY + m_renderRadius;
+        check("floor: no penetration (minY >= floor + radius)", d.minY >= floorPlusR - 1.0e-3f,
+              fmt("minY", d.minY) + " floor+r " + std::to_string(floorPlusR));
+        check("floor: block actually settled near floor", d.minY <= floorPlusR + 4.0f * spacing,
+              fmt("minY", d.minY) + " floor+r " + std::to_string(floorPlusR));
+        m_renderRadius = savedR;
+    }
 
     qInfo() << "[MPM selftest] overall:" << (allPass ? "ALL PASS" : "FAILURES PRESENT");
     // Restore empty state so the live scene seeds fresh from the registry.
@@ -761,6 +789,7 @@ MpmSystem::Diag MpmSystem::sample(QOpenGLFunctions_4_3_Core* gl)
     double tempAccum = 0.0;
     d.tempMin = 1.0e30f;
     d.tempMax = -1.0e30f;
+    d.minY = 1.0e30f;
     for (int i = 0; i < m_particleCount; ++i) {
         const float* p = &buf[size_t(i) * kStride];
         if (p[43] <= 0.0f) continue;
@@ -769,6 +798,7 @@ MpmSystem::Diag MpmSystem::sample(QOpenGLFunctions_4_3_Core* gl)
         d.comPosition += glm::dvec3(p[0], p[1], p[2]) * m;
         d.comVelocity += glm::dvec3(p[4], p[5], p[6]) * m;
         d.maxSpeed = std::max(d.maxSpeed, glm::length(glm::vec3(p[4], p[5], p[6])));
+        d.minY = std::min(d.minY, p[1]);  // lowest particle-centre y
         const float T = p[33];           // plastic.y = temperature
         tempAccum += T * m;
         d.tempMin = std::min(d.tempMin, T);
@@ -781,6 +811,6 @@ MpmSystem::Diag MpmSystem::sample(QOpenGLFunctions_4_3_Core* gl)
         d.comVelocity /= d.totalMass;
         d.tempMean = tempAccum / d.totalMass;
     }
-    if (d.live == 0) { d.tempMin = 0.0f; d.tempMax = 0.0f; }
+    if (d.live == 0) { d.tempMin = 0.0f; d.tempMax = 0.0f; d.minY = 0.0f; }
     return d;
 }

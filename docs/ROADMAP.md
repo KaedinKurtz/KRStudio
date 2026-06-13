@@ -610,3 +610,87 @@ Docked live thermal inspector; STEP assembly hierarchy; non-cylindrical CAD
 features; a curated local material cache; and -- now that conduction is on the
 grid -- radiative/convective surface boundary conditions and temperature-dependent
 material properties.
+
+---
+
+## L) Phase 5 — True FEM stress & thermal on rigid/mesh bodies (2026-06-13)
+
+> Note: the Phase-5 directive says "ROADMAP §K", but §K is already Phase 4.5. To
+> avoid clobbering it, Phase 5 is documented here as **§L** (the next section).
+
+### L.0 Reconnaissance findings (what exists today)
+- **Rigid path**: `RigidBodyComponent` (Static/Kinematic/Dynamic, mass) → PhysX actor
+  in `SimulationController::createActorForEntity`. Per-entity geometry is a SURFACE
+  triangle mesh only (`RenderableMeshComponent` of `Vertex{pos,normal,uv,tangent,
+  bitangent}` — struct is FULL, no spare attribute). OCCT `CadImporter` produces only
+  `Poly_Triangulation` (surface) + an exact `GProp` volume — **there is NO volume/tet
+  mesh anywhere**. `MaterialComponent` already carries every FEM input (E, ν, ρ, k, c_p,
+  SI, default 6061-T6). `HeatSourceComponent` gives Watts/radius (Phase 4.5 Neumann).
+- **Contact forces are NOT exposed to the ECS** — `BenchContactLogger` sees PhysX
+  contacts for instrumentation only; `CollisionData.impulse_magnitude` is an unpopulated
+  placeholder. (Boundary decision below.)
+- **Viz**: the cold→hot `ramp()` + per-particle scalar (temperature / StVK von Mises
+  from F / ‖Green strain‖) lives ONLY in `mpm_render_vert.glsl`; `MpmPass` sets
+  `u_vizMode/u_rangeMin/u_rangeMax`; `autoCalibrate()` does an on-demand CPU min/max SSBO
+  readback. Regular meshes draw through `OpaquePass` (6 gbuffer shader variants, VAO locs
+  0–4) with **no per-vertex scalar path today**.
+- **Build deps**: **Eigen3 is present** (transitive dep of libigl 2.6.0, already linked;
+  `<Eigen/Sparse>`, `SimplicialLDLT` available — NO vcpkg change needed). **ONNX Runtime
+  is NOT present** (mature vcpkg port; add as build-optional). **TetGen NOT present.**
+  Async template = `TrajectoryVerifier` (`std::async` → `std::future` polled non-blocking,
+  240 Hz never stalls). New module → `src/Physics/` + `include/PhysicsHeaders/` (GLOB).
+
+### L.1 DECISION — volume discretization: voxel/immersed HEX FEM on the MPM grid
+Chosen: **(B) immersed hexahedral FEM on the existing regular background grid**, NOT
+(A) TetGen tets. Justification (web-researched, sources in commit msgs):
+- Reuses the MPM grid + SDF/occupancy infrastructure — **zero meshing pipeline**.
+- TetGen requires a watertight, oriented, self-intersection-free surface; the failure
+  mode for dirty/arbitrary BREP is "no mesh at all" — unacceptable for an interactive
+  engine. Reserved as an offline high-accuracy path later.
+- First cut = classic **voxel FEM** (used in CT/bone analysis): a cell with occupancy
+  > 0.5 (SDF < 0 at centre) becomes one trilinear 8-node hex; precompute the 24×24
+  elastic Kᵉ (BᵀDB, 2×2×2 Gauss) and 8×8 thermal Kᵉ (∇Nᵀ k ∇N) ONCE for the cubic cell
+  and reuse for every full element (only material scales) — a major simplification
+  unique to a regular grid. System is sparse SPD → Eigen.
+- Known accuracy penalty: a staircased boundary gives local stress artifacts and
+  trilinear hexes shear-lock in bending (cantilever tip deflection under-predicts).
+  Mitigation this phase: enough elements + report the measured ratio; documented Phase-2
+  upgrade = finite-cell (octree-integrated cut cells + α≈1e-6 fictitious stiffness +
+  weak/Nitsche Dirichlet BCs).
+- Solver: Eigen **SimplicialLDLT** (factor once, reuse across load cases / transient time
+  steps) for ≤~50–100k DOF; **ConjugateGradient + Diagonal/IncompleteCholesky** above.
+
+### L.2 DECISION — async cadence
+FEM assembly+solve run on a background worker (`std::async`, mirroring TrajectoryVerifier);
+the 240 Hz `SimulationController::tick()` polls the `std::future` with `wait_for(0)` and
+publishes nodal fields to a `FemResultComponent` only when ready — never blocks. Structural
+re-solve on geometry/BC/material change (dirty flag); transient thermal stepped at a
+throttled cadence (implicit/backward-Euler so the step is unconditionally stable and the
+matrix is reused).
+
+### L.3 DECISION — learned surrogate (HONEST landscape)
+There is **no drop-in pretrained "foundation model for FEA"** that ingests an arbitrary 3D
+mesh + material + BCs and returns a stress/heat field via ONNX. The 2025–26 physics
+foundation models (GPhyT, Walrus, PDE-FM, Poseidon, PhysiX) are fluid/continuum-dynamics
+oriented, mostly grid-based/2D, research prototypes — explicitly NOT solid-mechanics/thermal
+FEA, none shipped as an FEA ONNX file. MeshGraphNets / FNO / DeepONet are trained per
+problem-class on simulation data, not general pretrained drop-ins. ONNX Runtime itself IS a
+mature vcpkg port usable from C++.
+→ Plan: TRAIN our own surrogate on the Phase-5 FEM oracle. Recommended architecture given a
+voxel-hex grid = a **3D CNN / U-Net per-voxel regressor** (fixed tensor shapes, clean ONNX
+export, matches our structured grid; material as per-voxel channels E/ν/k, BCs as
+mask/SDF channels; output = stress-tensor components or temperature per voxel). A
+MeshGraphNets-class GNN is the alternative if true topology generality is needed, but
+accept ONNX export caveats (scatter_reduce numerical bugs, dynamic-shape friction) and
+add a PyTorch-vs-ONNX round-trip CI check. Task 5 ships only the `SurrogateField`
+INTERFACE + a stub + the FEM data-export; the FEM oracle stays the source of truth.
+
+### L.4 DECISION — boundary calls
+- **FEM loads**: since PhysX contact reaction forces are not in the ECS, the FEM oracle's
+  loads this phase are the **gravity body force (ρg) + user-tagged Dirichlet fixities +
+  explicit applied forces / HeatSource Watts**, not live contact reactions. Exposing
+  PhysX per-contact impulses to the ECS (a real `PxSimulationEventCallback` → a
+  `ContactReaction` component) is a documented follow-up, not this phase.
+- **Geometry source**: the FEM uses the body's RENDER mesh (RenderableMeshComponent), not
+  the cooked physics collision shape (which is a convex hull for dynamics).
+- **MPM stays for soft/large-deformation**; rigid solids get rigid + FEM (policy §L / Task 4).

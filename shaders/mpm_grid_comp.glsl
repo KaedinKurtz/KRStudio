@@ -9,7 +9,8 @@ layout(std430, binding = 2) buffer GridVel { vec4 gv[]; };
 uniform int   u_N;
 uniform float u_dt;
 uniform vec3  u_gravity;
-uniform int   u_bound;     // guard-cell band width for wall BC
+uniform int   u_bound;        // guard-cell band width for wall BC
+uniform float u_floorFriction;// Coulomb friction coefficient at the floor (0 = frictionless)
 
 const float INV_SCALE = 1.0 / 1.0e7;
 
@@ -34,10 +35,20 @@ void main()
         // wall (material slides along and can leave, but cannot penetrate).
         if (cx < u_bound        && v.x < 0.0) v.x = 0.0;
         if (cx >= u_N - u_bound && v.x > 0.0) v.x = 0.0;
-        if (cy < u_bound        && v.y < 0.0) v.y = 0.0;
         if (cy >= u_N - u_bound && v.y > 0.0) v.y = 0.0;
         if (cz < u_bound        && v.z < 0.0) v.z = 0.0;
         if (cz >= u_N - u_bound && v.z > 0.0) v.z = 0.0;
+        // FLOOR (y-): no-penetration + Coulomb friction. The tangential velocity
+        // is reduced by at most mu * |normal velocity removed| (Coulomb cone).
+        if (cy < u_bound && v.y < 0.0) {
+            float vn = -v.y;          // inward normal speed that gets removed
+            v.y = 0.0;
+            float vtl = length(v.xz);
+            if (vtl > 1e-8) {
+                float reduce = min(vtl, u_floorFriction * vn);
+                v.xz *= (1.0 - reduce / vtl);
+            }
+        }
     }
     gv[idx] = vec4(v, m);
 }

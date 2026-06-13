@@ -26,6 +26,10 @@ uniform float u_dt;
 // Snow plastic clamp bounds.
 uniform float u_thetaC;   // critical compression (e.g. 0.025)
 uniform float u_thetaS;   // critical stretch     (e.g. 0.0075)
+// Floor: no-penetration plane (world y) + particle radius, so SURFACES (not
+// centres) stop at the floor.
+uniform float u_floorY;   // world-y of the floor plane (= origin.y + bound*dx)
+uniform float u_radius;   // particle effective radius (= splat radius = dx)
 
 void jacobiRotateSym(inout mat3 S, inout mat3 V, int pp, int qq)
 {
@@ -129,6 +133,10 @@ void main()
     vec3 lo = u_origin + 1.6 * u_dx;
     vec3 hi = u_origin + vec3(domain) - 1.6 * u_dx;
     pos = clamp(pos, lo, hi);
+    // Floor: keep the particle SURFACE above the floor plane (centre >= floor +
+    // radius), so the rendered splat rests ON the floor instead of sinking ~half
+    // a cell. This is the position-level backstop to the grid velocity BC.
+    pos.y = max(pos.y, u_floorY + u_radius);
 
     float matType = p[i].matl.w;
     mat3 F = mat3(p[i].f0.xyz, p[i].f1.xyz, p[i].f2.xyz);
