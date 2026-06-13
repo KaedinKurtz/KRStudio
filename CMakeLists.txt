@@ -314,6 +314,12 @@ target_link_libraries(RoboticsSoftware PRIVATE
   sqlite3
 )
 
+# HIL bridges: high-resolution timer (winmm) + Winsock for the UDP loopback
+# camera/CAN transport on Windows. SocketCAN/v4l2loopback backends are Linux.
+if(WIN32)
+  target_link_libraries(RoboticsSoftware PRIVATE winmm ws2_32)
+endif()
+
 # Link urdfdom using the older variable-based method.
 if(urdfdom_LIBRARIES)
   target_link_libraries(RoboticsSoftware PRIVATE ${urdfdom_LIBRARIES})
