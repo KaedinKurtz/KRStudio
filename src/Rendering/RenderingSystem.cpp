@@ -34,6 +34,7 @@
 #include "MpmAdjoint.hpp"
 #include "HilClock.hpp"
 #include "HilBridges.hpp"
+#include "TrajectoryVerifier.hpp"
 #include "SmokePass.hpp"
 #include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
@@ -572,6 +573,7 @@ void RenderingSystem::initializeSharedResources()
         krs::mpmad::runSelfTests();   // CPU adjoint gradient checks (ADJOINT_GRADIENT_CHECK)
         krs::hil::runJitterSelfTest();// HIL_JITTER (1 kHz deterministic loop)
         krs::hil::runBridgeSelfTest();// LOOPBACK_FRAME_INTEGRITY + CAN round-trip
+        krs::hil::runTrajectoryHilSelfTest(); // TRAJECTORY_HIL_LOOP (multi-fidelity verify)
     }
 }
 

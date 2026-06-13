@@ -523,6 +523,49 @@ static GradCheck checkControlGradient(Mat material, double tol)
 GradCheck checkElasticGradient() { return checkControlGradient(Mat::Elastic, 1e-5); }
 GradCheck checkSandGradient() { return checkControlGradient(Mat::Sand, 1e-4); }
 
+// von Mises of the Cauchy stress sigma = tau/J for a Neo-Hookean F.
+static double vonMises(const mat3& F, double mu, double lambda)
+{
+    mat3 tau = elasticTau(F, mu, lambda);                   // Kirchhoff stress
+    double J = glm::determinant(F);
+    double inv = 1.0 / std::max(std::abs(J), 1e-9);
+    mat3 s = inv * tau;                                     // Cauchy stress
+    double s11 = s[0][0], s22 = s[1][1], s33 = s[2][2];
+    double s12 = 0.5 * (s[1][0] + s[0][1]), s23 = 0.5 * (s[2][1] + s[1][2]), s31 = 0.5 * (s[0][2] + s[2][0]);
+    return std::sqrt(0.5 * ((s11 - s22) * (s11 - s22) + (s22 - s33) * (s22 - s33) + (s33 - s11) * (s33 - s11))
+                     + 3.0 * (s12 * s12 + s23 * s23 + s31 * s31)); // von Mises invariant
+}
+
+StressEval evaluatePeakStress(double accel, double youngsE, double nu,
+                              double density, double yieldStress)
+{
+    Sim sim; sim.cfg.N = 24; sim.cfg.dx = 0.08; sim.cfg.origin = vec3(-1.0, -0.16, -1.0);
+    sim.cfg.dt = 1.0e-3; sim.cfg.steps = 60; sim.cfg.bound = 2;
+    // The trajectory segment's peak acceleration loads the sample as an
+    // amplified body force (inertial load), with a lateral component so the
+    // block shears against the floor constraint rather than only compressing.
+    sim.cfg.gravity = vec3(0.35 * accel, -(accel + 9.81), 0.0);
+    const double mu = youngsE / (2.0 * (1.0 + nu));
+    const double lambda = youngsE * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
+    const double sp = 0.04;
+    vec3 c0(0.0, 0.18, 0.0);                                // block rests just above the floor (y=0)
+    for (int ix = 0; ix < 6; ++ix) for (int iy = 0; iy < 6; ++iy) for (int iz = 0; iz < 6; ++iz) {
+        Particle p; p.x = c0 + (vec3(ix, iy, iz) - 2.5) * sp;
+        p.mass = density * sp * sp * sp; p.vol = sp * sp * sp;
+        p.mu = mu; p.lambda = lambda; p.material = Mat::Elastic;
+        sim.p.push_back(p);
+    }
+    double maxVM = 0.0;
+    for (int s = 0; s < sim.cfg.steps; ++s) {
+        sim.stepForward();
+        for (const auto& p : sim.p) maxVM = std::max(maxVM, vonMises(p.F, mu, lambda)); // peak over rollout
+    }
+    StressEval e; e.maxVonMises = maxVM; e.yield = yieldStress;
+    // A non-finite peak means the load drove the sample unstable — also unsafe.
+    e.exceeded = !std::isfinite(maxVM) || maxVM > yieldStress; e.steps = sim.cfg.steps;
+    return e;
+}
+
 bool runSelfTests()
 {
     auto log = [](const char* name, const GradCheck& g) {

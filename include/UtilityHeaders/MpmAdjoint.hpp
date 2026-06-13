@@ -67,6 +67,19 @@ struct GradCheck {
     std::vector<double> numeric;
 };
 
+/// Peak-stress evaluation of an elastic sample under a body acceleration — the
+/// "heavy exact" pass behind the trajectory verifier. Drops a clamped elastic
+/// block, loads it with the given acceleration, runs the double-precision
+/// forward MLS-MPM and reports the peak von Mises Cauchy stress vs the yield.
+struct StressEval {
+    double maxVonMises = 0.0; // Pa, peak over particles and the rollout
+    double yield = 0.0;       // Pa
+    bool exceeded = false;    // maxVonMises > yield
+    int steps = 0;
+};
+StressEval evaluatePeakStress(double accel, double youngsE, double nu,
+                              double density, double yieldStress);
+
 /// Headless verification suite hooks (Task 3 modules).
 bool runSelfTests();              // runs all adjoint checks, logs PASS/FAIL
 GradCheck checkSvdAdjoint();      // standalone SVD-adjoint FD check
