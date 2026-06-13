@@ -35,6 +35,7 @@
 #include "HilClock.hpp"
 #include "HilBridges.hpp"
 #include "TrajectoryVerifier.hpp"
+#include "CadImporter.hpp"
 #include "SmokePass.hpp"
 #include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
@@ -574,6 +575,12 @@ void RenderingSystem::initializeSharedResources()
         krs::hil::runJitterSelfTest();// HIL_JITTER (1 kHz deterministic loop)
         krs::hil::runBridgeSelfTest();// LOOPBACK_FRAME_INTEGRITY + CAN round-trip
         krs::hil::runTrajectoryHilSelfTest(); // TRAJECTORY_HIL_LOOP (multi-fidelity verify)
+    }
+
+    // Headless OCCT pipeline check (STEP round-trip + B-Rep meshing + cylindrical
+    // feature recognition + exact volume). Pure CPU/OCCT, no GL dependency.
+    if (qEnvironmentVariableIntValue("KRS_CAD_SELFTEST") != 0) {
+        krs::cad::runSelfTest();
     }
 }
 

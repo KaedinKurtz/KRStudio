@@ -24,6 +24,7 @@
     "v-hacd",
     "libigl",
     "urdfdom",
-    "urdfdom-headers"
+    "urdfdom-headers",
+    "opencascade"
   ]
 }

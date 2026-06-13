@@ -465,3 +465,79 @@ MPM (15 checks), adjoint, HIL and `KRS_BENCH` (7/7) suites stay green.
 Continuous coloured surfaces for the deformable bodies (graft the scalar onto the
 SSF / OpenVDB mesher); grid-to-mesh thermal sampling on rigid arms for true
 surface scorch maps; a GPU min/max reduction for auto-range at >1M particles.
+
+---
+
+## J) CAD pipeline & engineering UI overhaul (Phase 4 — 2026-06-13)
+
+Transforms the engine toward a CAE workspace: STEP ingestion, material ground
+truth, and an engineering toolbar.
+
+### J.1 Engineering UI & Qt layout trade-offs (Task 1)
+The visible top bar is a `.ui`-generated custom `StaticToolbar`; the real
+`QMainWindow` menu bar is hidden (`menuBar()->setVisible(false)`). A consequence
+worth recording: the Phase-3 visualization menu added under *View* was never
+visible. Phase 4 resolves this.
+
+**Trade-off chosen:** rather than hand-edit the uic-generated `StaticToolbar` .ui
+(fragile, regenerated) or re-show the menu bar (breaks the clean look), the
+engineering tools live on a standard `QToolBar` added via
+`QMainWindow::addToolBar`. It docks in the toolbar area above the central widget,
+sitting just above the custom `StaticToolbar`. Cost: two stacked toolbars (a
+minor vertical-space cost); benefit: zero coupling to the generated UI, trivially
+extensible, and it finally surfaces the viz control. The toolbar carries: Import
+CAD (STEP), a Visualization-mode dropdown (PBR/Thermal/Stress/Strain ->
+`setVizMode`), Assign Material, Add Heat Source, Inspect.
+
+Legacy "game-engine" spawns (primitives, lights) were already off the main
+workflow (they live only on the hidden menu bar / right-click context menu), so
+no removal was needed — they are simply not surfaced on the engineering toolbar.
+
+The ECS inspector is dialog-based (Assign Material / Add Heat Source / Inspect),
+reading and writing the selected entity (tracked by the `SelectedComponent` tag)
+MaterialComponent + HeatSourceComponent. A docked live-editing panel is a future
+refinement; dialogs were the lower-risk path that avoided weaving into the
+existing gridPropertiesWidget.
+
+### J.2 OCCT STEP ingestion + feature recognition (Tasks 2-3)
+`CadImporter` (behind `KR_WITH_OCCT`; opencascade added to vcpkg.json):
+`STEPControl_Reader` -> `TopoDS_Shape`; one ECS entity per `TopAbs_SOLID`;
+`BRepMesh_IncrementalMesh` triangulation (adaptive deflection = 0.4% of the
+solid bbox diagonal) emitted into `RenderableMeshComponent` with smooth normals;
+`GProp_GProps` exact B-Rep volume onto the MaterialComponent. Feature
+recognition: `TopExp_Explorer` over faces, `BRep_Tool::Surface` ->
+`Geom_CylindricalSurface` down-cast; each cylinder's `Axis()` + `Radius()` become
+an `AttachmentFrame` (hole vs shaft from face orientation) on an
+`AttachmentComponent` for kinematic anchoring.
+
+**Build trade-off:** OpenCASCADE is not pre-installed; it is built once via vcpkg
+(~30-45 min). The CAD module is guarded by `KR_WITH_OCCT` with an `#else` stub so
+the engine builds and the toolbar degrades gracefully without OCCT. Linked via
+`${OpenCASCADE_LIBRARIES}` (the whole toolkit set) rather than naming `TKSTEP`,
+because OCCT 7.8/8.0 renamed the STEP toolkit to `TKDESTEP` — the config variable
+is version-robust.
+
+### J.3 Materials Project ground truth (Task 4)
+`krs::materials::query` resolves a name or mp-id to SI density / bulk / shear
+modulus. Live path: a Python `mp_api.client.MPRester` subprocess (used only when
+`MP_API_KEY` is set + mp-api installed); offline path: a canonical-material table
+(steel, aluminium, titanium, copper, tungsten, ...). `deriveElastic` gives E, nu
+from K, G. Mass = density x volume, where volume is the OCCT B-Rep `GProp`
+volume (or a signed-tetrahedra integral of the triangle mesh for non-CAD bodies).
+
+**Constraint on this machine:** network reaches the MP API, but there is no API
+key and mp-api is not installed, so live queries cannot authenticate here — the
+offline DB is the verified path; the live path activates when a key is provided.
+Live mp-api field names/units follow the documented API and are best-effort
+(unverified here).
+
+### Verification
+KRS_BENCH 7/7 throughout. UI: engineering toolbar confirmed visible by grab.
+Materials: offline values + derived E/nu sanity-checked (steel E~204 GPa,
+nu~0.29). OCCT: a headless CAD self-test (box-minus-cylinder STEP round-trip:
+solid count, cylinder-feature detection, GProp volume) gates Tasks 2-3.
+
+### Phase 5 (next)
+A docked live-editing engineering inspector; STEP assembly hierarchy / instance
+naming; non-cylindrical features (planar mating faces, threaded holes); a curated
+local material cache so common mp-ids resolve offline.

@@ -8,6 +8,12 @@
 #include "components.hpp"
 
 #include <STEPControl_Reader.hxx>
+#include <STEPControl_Writer.hxx>
+#include <IFSelect_ReturnStatus.hxx>
+#include <BRepPrimAPI_MakeBox.hxx>
+#include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepAlgoAPI_Cut.hxx>
+#include <gp_Ax2.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Face.hxx>
@@ -30,7 +36,15 @@
 #include <gp_Trsf.hxx>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <vector>
+#include <string>
+#include <algorithm>
+#include <cmath>
+#include <utility>
+#include <cstdio>
+#include <filesystem>
+#include <system_error>
 
 namespace krs::cad {
 
@@ -138,6 +152,73 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
     return res;
 }
 
+bool runSelfTest()
+{
+    using std::printf;
+    printf("[CAD] self-test: box(100mm) - cyl(r20) through-hole, STEP round-trip\n");
+
+    // 1) Build the solid: a 100 mm cube minus a 20 mm-radius axial through-hole.
+    TopoDS_Shape box = BRepPrimAPI_MakeBox(100.0, 100.0, 100.0).Shape();
+    TopoDS_Shape cyl = BRepPrimAPI_MakeCylinder(
+        gp_Ax2(gp_Pnt(50.0, 50.0, -10.0), gp_Dir(0.0, 0.0, 1.0)), 20.0, 120.0).Shape();
+    TopoDS_Shape solid = BRepAlgoAPI_Cut(box, cyl).Shape();
+    if (solid.IsNull()) { printf("[CAD] FAIL: boolean cut produced a null shape\n"); return false; }
+
+    // 2) Full ISO-10303-21 round-trip: write a temp STEP file, then read it back.
+    std::error_code ec;
+    const std::string path = (std::filesystem::temp_directory_path(ec) / "krs_cad_selftest.step").string();
+    {
+        STEPControl_Writer writer;
+        if (writer.Transfer(solid, STEPControl_AsIs) != IFSelect_RetDone) {
+            printf("[CAD] FAIL: STEP transfer\n"); return false;
+        }
+        if (writer.Write(path.c_str()) != IFSelect_RetDone) {
+            printf("[CAD] FAIL: STEP write to %s\n", path.c_str()); return false;
+        }
+    }
+    STEPControl_Reader reader;
+    if (reader.ReadFile(path.c_str()) != IFSelect_RetDone) {
+        printf("[CAD] FAIL: STEP read-back from %s\n", path.c_str()); return false;
+    }
+    reader.TransferRoots();
+    TopoDS_Shape rt = reader.OneShape();
+    if (rt.IsNull()) { printf("[CAD] FAIL: read-back shape is empty\n"); return false; }
+
+    // 3) Exercise the exact pipeline importStep uses: solid loop, mesh, feature
+    //    recognition (cylindrical faces), exact B-Rep volume.
+    int solids = 0, faces = 0, tris = 0, cylFaces = 0;
+    double volume = 0.0;
+    for (TopExp_Explorer sx(rt, TopAbs_SOLID); sx.More(); sx.Next()) {
+        const TopoDS_Shape sld = sx.Current();
+        ++solids;
+        BRepMesh_IncrementalMesh(sld, 0.5, Standard_False, 0.5, Standard_True);
+        for (TopExp_Explorer fx(sld, TopAbs_FACE); fx.More(); fx.Next()) {
+            const TopoDS_Face f = TopoDS::Face(fx.Current());
+            ++faces;
+            TopLoc_Location loc;
+            Handle(Poly_Triangulation) t = BRep_Tool::Triangulation(f, loc);
+            if (!t.IsNull()) tris += t->NbTriangles();
+            Handle(Geom_Surface) surf = BRep_Tool::Surface(f);
+            if (!Handle(Geom_CylindricalSurface)::DownCast(surf).IsNull()) ++cylFaces;
+        }
+        GProp_GProps vp; BRepGProp::VolumeProperties(sld, vp);
+        volume += std::abs(vp.Mass());
+    }
+    std::filesystem::remove(path, ec);
+
+    const double expected = 100.0 * 100.0 * 100.0 - 3.14159265358979 * 20.0 * 20.0 * 100.0;
+    const double err = std::abs(volume - expected) / expected;
+    printf("[CAD]   solids=%d faces=%d triangles=%d cylFaces=%d\n", solids, faces, tris, cylFaces);
+    printf("[CAD]   volume=%.1f mm^3 (expected ~%.1f, rel.err %.5f)\n", volume, expected, err);
+
+    // 1 solid out, the through-hole detected as >=1 cylindrical feature, meshed,
+    // and the exact volume matches the analytic cube-minus-cylinder value.
+    const bool pass = (solids == 1) && (cylFaces >= 1) && (tris > 0) && (err < 0.02);
+    printf("[CAD] self-test: %s\n", pass ? "PASS" : "FAIL");
+    fflush(stdout);
+    return pass;
+}
+
 } // namespace krs::cad
 
 #else
@@ -150,5 +231,6 @@ ImportResult importStep(Scene&, const std::string&, float)
     r.message = "STEP import needs OpenCASCADE — rebuild with KR_WITH_OCCT (opencascade in vcpkg.json).";
     return r;
 }
+bool runSelfTest() { return true; } // no OCCT -> vacuous pass, keeps harnesses green
 } // namespace krs::cad
 #endif

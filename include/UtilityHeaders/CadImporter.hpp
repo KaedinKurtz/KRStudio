@@ -30,4 +30,11 @@ bool available();
 /// millimetres) to engine metres (default 0.001 = mm).
 ImportResult importStep(Scene& scene, const std::string& path, float metersPerUnit = 0.001f);
 
+/// Headless verification of the OCCT pipeline (gated by KRS_CAD_SELFTEST): builds
+/// a box-minus-cylinder solid, round-trips it through a temp STEP file, then
+/// re-reads + meshes + recognizes the cylindrical feature + computes the GProp
+/// volume, asserting solid count / triangle count / cylinder detection / volume.
+/// Returns true on PASS (always true in the no-OCCT stub). Requires no GL context.
+bool runSelfTest();
+
 } // namespace krs::cad

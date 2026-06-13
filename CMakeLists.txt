@@ -409,6 +409,20 @@ if(ENABLE_OPENVDB)
   endif()
 endif()
 
+# --- OpenCASCADE (STEP CAD ingestion + feature recognition, Phase 4) ---
+# Link the config's full toolkit set rather than naming TKSTEP/TKBRep directly:
+# OCCT 7.8/8.0 reorganised the data-exchange toolkits (TKSTEP -> TKDESTEP), so
+# ${OpenCASCADE_LIBRARIES} is the version-robust way to pull in the readers.
+find_package(OpenCASCADE CONFIG QUIET)
+if(OpenCASCADE_FOUND)
+  target_include_directories(RoboticsSoftware PRIVATE ${OpenCASCADE_INCLUDE_DIR})
+  target_link_libraries(RoboticsSoftware PRIVATE ${OpenCASCADE_LIBRARIES})
+  target_compile_definitions(RoboticsSoftware PRIVATE KR_WITH_OCCT)
+  message(STATUS "OpenCASCADE ${OpenCASCADE_VERSION} found; STEP import enabled (KR_WITH_OCCT).")
+else()
+  message(STATUS "OpenCASCADE not found; STEP import compiled out (CadImporter stub).")
+endif()
+
 # --- Chrono ---
 set(KR_HAS_CHRONO 0)
 if(ENABLE_CHRONO)
