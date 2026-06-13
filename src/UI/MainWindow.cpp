@@ -408,54 +408,34 @@ MainWindow::MainWindow(QWidget* parent)
             }
         }
 
-        // Demo mesh: the dragon, centered in front of the default camera.
-        // (Skipped under KRS_BENCH: its convex hull at the origin would
-        // intercept benchmark projectiles — found the hard way.
-        //  Skipped under KRS_FLUID_DEMO: minimal fluid-rendering test scene.)
-        QString dragonPath = assetDir + "Dragon.stl";
-        MeshID dragonId =
-            (qEnvironmentVariableIsSet("KRS_BENCH") || qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
-             || qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") || qEnvironmentVariableIsSet("KRS_MPM_DEMO")
-             || qEnvironmentVariableIsSet("KRS_HEAT_DEMO"))
-            ? MeshID::None
-            : ResourceManager::instance().loadMesh(dragonPath);
-
-        auto& registry = m_scene->getRegistry();
-
-        TransformComponent t;
-        t.translation = glm::vec3(0.0f, 0.0f, 0.0f);
-        t.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f); // identity (w,x,y,z)
-        t.scale = glm::vec3(1.0f);
-
-        entt::entity e = SceneBuilder::spawnMeshInstance(*m_scene, dragonId, t);
-        if (registry.valid(e)) {
-            if (hasDemoTextures) {
-                registry.emplace_or_replace<MaterialDirectoryTag>(e, demoTexDir.toStdString());
-                registry.emplace_or_replace<ParallaxMaterialTag>(e);
-            }
-            // SceneBuilder already tags UV vs TriPlanar for you; add TriPlanar here only if you want to force it.
-
-            auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
-            mat.heightScale = 0.1f;
-            mat.albedoTiling = glm::vec2(0.5f); // chunkier rock: 2 m per tile
-            registry.emplace_or_replace<TagComponent>(e, std::string("Dragon"));
-            // Rigid collision comes from AutoCollisionComponent (attached at
-            // spawn): static scenery resolves to the EXACT cooked triangle
-            // mesh — balls rest in the dragon's actual concavities now.
-            // Exact-shape fluid collision: SDF baked from the mesh at Play.
-            registry.emplace_or_replace<SDFColliderComponent>(e);
-
-            // A tap above the dragon: water flows over the actual sculpture.
-            entt::entity dragonTap = registry.create();
-            registry.emplace<TransformComponent>(dragonTap, glm::vec3(0.0f, 3.5f, 0.0f),
+        // Default boot content: a 6061-aluminium MLS-MPM block on the floor with a
+        // heater at one face. This is the VISUALIZATION TARGET -- the toolbar's
+        // Visualize dropdown (PBR/Thermal/Stress/Strain) recolours its particles
+        // immediately (MPM bodies seed at boot, not just on Play), and on Play the
+        // heater drives Fourier conduction through it. (Replaces the old decorative
+        // dragon mesh.) Skipped under the demo/bench scenes, which spawn their own.
+        if (!qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
+            && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") && !qEnvironmentVariableIsSet("KRS_MPM_DEMO")
+            && !qEnvironmentVariableIsSet("KRS_HEAT_DEMO")) {
+            auto& registry = m_scene->getRegistry();
+            entt::entity block = registry.create();
+            registry.emplace<TransformComponent>(block, glm::vec3(0.0f, 0.4f, 0.0f),
                                                  glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
-            auto& dem = registry.emplace<FluidEmitterComponent>(dragonTap);
-            dem.ratePerSecond = 400.0f;
-            dem.initialSpeed = 1.0f;
-            dem.spreadDegrees = 8.0f;
-            dem.emitterRadius = 0.08f;
-            dem.particleLifetime = 25.0f;
-            registry.emplace<TagComponent>(dragonTap, std::string("Dragon.Tap"));
+            auto& b = registry.emplace<MpmBodyComponent>(block);   // defaults = 6061 aluminium
+            b.material = MpmMaterial::Elastic;
+            b.halfExtents = glm::vec3(0.32f);
+            b.particleSpacing = 0.05f;
+            b.youngsModulus = 2.0e6f;          // firm but explicit-stable (real 6061 ~68.9 GPa)
+            registry.emplace<TagComponent>(block, std::string("Aluminium Block"));
+
+            entt::entity heater = registry.create();
+            registry.emplace<TransformComponent>(heater, glm::vec3(-0.4f, 0.4f, 0.0f),
+                                                 glm::quat(1, 0, 0, 0), glm::vec3(0.15f));
+            auto& hs = registry.emplace<HeatSourceComponent>(heater);
+            hs.power = 3.0e6f;                 // W into the block's near face (Neumann)
+            hs.radius = 0.3f;
+            hs.temperature = 320.0f;           // nominal glow colour
+            registry.emplace<TagComponent>(heater, std::string("Heater"));
         }
     }
 

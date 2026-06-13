@@ -19,7 +19,9 @@ namespace {
 // rho kg/m^3, K/G Pa, cp J/(kg.K), k W/(m.K). cp/k are CRC/MatWeb handbook values
 // (the Materials Project summary endpoint does not expose thermal properties).
 struct Entry { const char* key; const char* name; double rho, K, G, cp, k; };
-const std::array<Entry, 14> kTable = { {
+const std::array<Entry, 16> kTable = { {
+    { "6061",      "Aluminium 6061-T6", 2700.0,  67.5e9, 25.9e9, 896.0, 167.0 },
+    { "al6061",    "Aluminium 6061-T6", 2700.0,  67.5e9, 25.9e9, 896.0, 167.0 },
     { "steel",     "Steel (Fe alloy)", 7850.0, 160.0e9, 79.3e9, 466.0,  50.0 },
     { "iron",      "Iron (Fe)",        7874.0, 170.0e9, 82.0e9, 449.0,  80.0 },
     { "mp-13",     "Iron (Fe)",        7874.0, 170.0e9, 82.0e9, 449.0,  80.0 },

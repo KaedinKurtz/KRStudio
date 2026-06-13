@@ -241,13 +241,17 @@ void MpmSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
                        entt::registry& registry, float dt)
 {
     if (!m_initialized) return;
-    // Paused mode-switch: recalibrate the colour range against the static state.
-    if (m_calibratePending && !m_playing && m_particleCount > 0) { autoCalibrate(gl); m_calibratePending = false; }
-    if (!m_playing) return;
+    // Seed MPM bodies on the first update REGARDLESS of play state, so the
+    // particles render (and the Visualize dropdown can recolour them) immediately
+    // at boot while paused -- not only after Play. setSimulationPlaying() is
+    // event-driven (fires on state change, never per-frame), so this runs once.
     if (!m_seeded) {
         seedBodies(gl, registry);
         m_seeded = true;
     }
+    // Paused mode-switch: recalibrate the colour range against the static state.
+    if (m_calibratePending && !m_playing && m_particleCount > 0) { autoCalibrate(gl); m_calibratePending = false; }
+    if (!m_playing) return;
     if (m_particleCount <= 0) return;
     // Dynamic normalization: recalibrate the active viz range on mode change and
     // periodically (~0.75 s) so the gradient tracks the live, evolving field.

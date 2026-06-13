@@ -182,19 +182,21 @@ struct MaterialComponent
     std::shared_ptr<Cubemap> prefilteredEnvMap = nullptr;
     std::shared_ptr<Texture2D> brdfLUT = nullptr;
 
-    // --- Physical / engineering (Phase 4) ---
+    // --- Physical / engineering (Phase 4 / 4.5) ---
     // Empirical ground-truth properties (from the Materials Project / offline DB).
-    // SI units; 0 density = "not assigned". Populated by the Assign Material tool.
-    std::string physicalName;          // e.g. "Steel (Fe)", or an mp-id like "mp-13"
-    float density = 0.0f;              // kg/m^3
-    float bulkModulus = 0.0f;          // Pa
-    float shearModulus = 0.0f;         // Pa
-    float youngsModulus = 0.0f;        // Pa (derived from K, G)
-    float poissonRatio = 0.0f;         // - (derived from K, G)
+    // SI units. DEFAULTS to Aluminium 6061-T6 -- every body reports 6061 unless the
+    // Assign Material tool explicitly overwrites it. (volume/mass stay 0 until a
+    // geometry is measured.)
+    std::string physicalName = "Aluminium 6061-T6";
+    float density = 2700.0f;           // kg/m^3
+    float bulkModulus = 67.5e9f;       // Pa   (E=68.9 GPa, nu=0.33)
+    float shearModulus = 25.9e9f;      // Pa
+    float youngsModulus = 68.9e9f;     // Pa
+    float poissonRatio = 0.33f;        // -
     float volume_m3 = 0.0f;            // computed from the mesh / OCCT B-Rep
     float massKg = 0.0f;               // density * volume
-    float specificHeat = 0.0f;         // c_p, J/(kg.K)   (thermal — Phase 4.5)
-    float thermalConductivity = 0.0f;  // k,  W/(m.K)     (thermal — Phase 4.5)
+    float specificHeat = 896.0f;       // c_p, J/(kg.K)   (thermal — Phase 4.5)
+    float thermalConductivity = 167.0f;// k,  W/(m.K)     (6061-T6; thermal — Phase 4.5)
 };
 
 // --- soft Body components ---
@@ -878,20 +880,25 @@ enum class MpmMaterial : int {
 /// A block of MLS-MPM material seeded when the simulation starts (like
 /// FluidVolumeComponent, but for the unified continuum solver). The entity
 /// transform's translation is the box centre; halfExtents (× scale) the box.
+// Defaults are Aluminium 6061-T6 (density/c_p/k), matching MaterialComponent.
+// NOTE: youngsModulus is a STABILITY-BOUNDED proxy, NOT 6061's real 68.9 GPa --
+// the explicit MLS-MPM solver cannot integrate metal stiffness (sound speed
+// sqrt(E/rho) would force a vanishing CFL step); the real modulus lives in the
+// engineering MaterialComponent. Demos override these per body.
 struct MpmBodyComponent {
     MpmMaterial material = MpmMaterial::Elastic;
     glm::vec3 halfExtents = { 0.25f, 0.25f, 0.25f };
     float particleSpacing = 0.04f;   // metres between seeded particles
-    float density = 1000.0f;         // kg/m^3
-    float youngsModulus = 1.0e5f;    // Pa (elastic/sand/snow stiffness)
-    float poissonRatio = 0.3f;       // -
+    float density = 2700.0f;         // kg/m^3 (6061 aluminium)
+    float youngsModulus = 1.0e5f;    // Pa — explicit-stability proxy (see note above)
+    float poissonRatio = 0.33f;      // - (6061)
     float viscosity = 0.0f;          // Pa·s dynamic viscosity (fluid; 0 = inviscid)
     float frictionDegrees = 35.0f;   // sand internal friction angle
     float temperature = 20.0f;       // initial temperature (°C)
-    float meltTemperature = 1.0e9f;  // °C; crossing it converts a solid to fluid
-    float heatCapacity = 900.0f;     // c_p, J/(kg.K) — per-particle thermal mass = mass*c_p
-    float thermalConductivity = 50.0f; // k, W/(m.K) — Fourier conduction (Phase 4.5)
-    glm::vec3 color = { 0.8f, 0.7f, 0.5f };
+    float meltTemperature = 1.0e9f;  // °C; crossing it converts a solid to fluid (inert by default)
+    float heatCapacity = 896.0f;     // c_p, J/(kg.K) — per-particle thermal mass = mass*c_p (6061)
+    float thermalConductivity = 167.0f; // k, W/(m.K) — 6061-T6 Fourier conduction (Phase 4.5)
+    glm::vec3 color = { 0.82f, 0.83f, 0.85f }; // aluminium grey
     glm::vec3 initialVelocity = { 0.0f, 0.0f, 0.0f };
 };
 
