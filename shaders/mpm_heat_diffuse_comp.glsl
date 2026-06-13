@@ -5,9 +5,11 @@
 // flux between cells of different k -- two solid bodies touching on the grid):
 //   flux_face = kface*(T_nbr - T_n),   kface = 2 k_n k_nbr / (k_n + k_nbr)
 //   dT_n      = (S*dt*dx / C_n) * sum_faces flux_face
-// C_n is the node thermal mass (J/K); the pairwise flux is antisymmetric so total
-// energy is conserved. A per-cell stability clamp bounds the explicit update for
-// any dt/k. S is a speed multiplier: real metals conduct on minute timescales at
+// C_n is the node thermal mass (J/K). The per-face conductance is clamped
+// SYMMETRICALLY (identical on both sides of a face), so the pairwise flux stays
+// antisymmetric and energy is conserved exactly even where the clamp is active at
+// heterogeneous-k interfaces; the clamp also makes the update unconditionally
+// stable. S is a speed multiplier: real metals conduct on minute timescales at
 // this grid resolution, so S accelerates conduction to interactive rates.
 layout(local_size_x = 64) in;
 
@@ -36,8 +38,14 @@ void main()
 
     float kn = gk[idx];
     float Cn = gc[idx];
-    float acc  = 0.0;   // sum kface*(Tn - T)
-    float ksum = 0.0;   // sum kface
+    // Net energy into this cell (J), summed over faces. The per-face conductance
+    // a_f is SYMMETRIC (both cells compute the same value from kface, C_n, C_nbr),
+    // so the pairwise flux a_f*(T_nbr - T_n) is exactly antisymmetric -> total
+    // energy is conserved even at heterogeneous-k interfaces and even when clamped.
+    // a_f is capped at betaMax*min(C_n,C_nbr)/6 so each cell's sum a_f/C <= betaMax:
+    // the update T + dE/C_n is then a convex combination of neighbour temperatures
+    // (non-negative weights summing to 1) -> unconditionally stable.
+    float dE = 0.0;
     ivec3 offs[6] = ivec3[6](ivec3(1,0,0), ivec3(-1,0,0), ivec3(0,1,0),
                              ivec3(0,-1,0), ivec3(0,0,1), ivec3(0,0,-1));
     for (int f = 0; f < 6; ++f) {
@@ -47,16 +55,12 @@ void main()
         float Tn = ta[nidx];
         if (Tn < -1.0e8) continue;                        // material boundary = insulated
         float knb = gk[nidx];
+        float Cnb = gc[nidx];
         float kf = (kn + knb > 1.0e-12) ? (2.0 * kn * knb) / (kn + knb) : 0.0; // harmonic mean
-        acc  += kf * (Tn - T);
-        ksum += kf;
+        float aF = u_coef * kf;                           // nominal face conductance (J/K)
+        float aMax = u_betaMax * min(Cn, Cnb) * (1.0 / 6.0); // symmetric stability cap
+        aF = min(aF, aMax);
+        dE += aF * (Tn - T);                              // antisymmetric energy flux
     }
-
-    float dT = 0.0;
-    if (Cn > 1.0e-9 && ksum > 1.0e-12) {
-        float beta  = u_coef * ksum / Cn;                 // would-be diagonal weight
-        float scale = (beta > u_betaMax) ? (u_betaMax / beta) : 1.0; // stability clamp
-        dT = scale * (u_coef / Cn) * acc;
-    }
-    tb[idx] = T + dT;
+    tb[idx] = T + ((Cn > 1.0e-9) ? dE / Cn : 0.0);
 }
