@@ -393,3 +393,75 @@ removing the main-thread 240 Hz coupling) for true hard-RT HIL; PhysX articulati
 use `MpmAdjoint` as the gradient backend for trajectory optimization / system-ID,
 and graft the verified adjoint kernels onto the GPU forward solver for batched
 differentiable rollouts.
+
+---
+
+## I) Deep visualization & dynamic thermodynamics (Phase 3 — SHIPPED 2026-06-13)
+
+### I.1 Multi-mode physics visualizer
+The viewport hot-swaps between **Default (PBR)**, **Thermal**, **Stress (von
+Mises)** and **Strain** via *View > Physics Visualization* (or `KRS_MPM_VIZ=1/2/3`).
+The MLS-MPM particle splats are recoloured per-particle in the render vertex
+shader: thermal reads the stored temperature; stress/strain are computed from
+the deformation gradient F. Range is auto-calibrated from the live field on mode
+change and every ~0.75 s (dynamic normalization), and is also directly
+configurable. Rigid meshes show heat via an emissive tint (below), so a hot body
+glows in any mode.
+
+### I.2 Projection strategy & performance trade-off (Task 3 deliverable)
+**Chosen: direct per-particle splat recolour — zero projection cost.** The
+physics scalars (temperature, F) already live per-particle in the solver SSBO, so
+the render shader maps scalar → colour in the *same* vertex invocation that
+places the splat. There is no separate projection pass and no added draw cost
+over the existing particle render.
+
+Alternatives considered and why they were not used as the default:
+- **Distance-weighted scatter/gather particle → high-poly surface mesh.** Naive
+  cost is O(meshVerts × nearbyParticles); even with a grid acceleration
+  structure it adds a per-frame pass and a readback/bind dependency between the
+  solver and the mesh draw. Unjustified when the deformable bodies *are* the
+  particles — meshing them first only to recolour them is pure overhead.
+- **Grid-to-mesh interpolation.** The MPM thermal grid is a dense field a mesh
+  vertex could trilinearly sample; this is the right tool for tinting an
+  *external* surface (e.g. a rigid arm) by the surrounding temperature, and is
+  available via the smoke/MPM grid getters. Kept as an option, not the default.
+
+**Stress proxy trade-off.** The visualized von Mises uses the StVK 2nd-Piola
+stress from the Green strain `E = ½(FᵀF − I)` and the body Lamé params — **no
+SVD in the render shader**. This is exact in the small/moderate-strain regime and
+visually faithful elsewhere; it differs slightly from the solver's fixed-corotated
+stress (which needs the SVD) but costs a few matrix ops per particle instead of a
+full Jacobi SVD, keeping the recolour effectively free at 60 fps. Strain mode
+shows ‖E‖ directly.
+
+**Rigid meshes → emissive tint (CPU).** Bodies carrying heat (a
+`HeatSourceComponent`, or anything the thermo system marks hot) are visualized by
+driving `MaterialComponent.emissiveColor` from their temperature on the CPU —
+reusing the existing emissive G-buffer path, touching none of the five gbuffer
+shader variants. Cost is one ECS write per hot body per frame.
+
+**Auto-range cost.** Dynamic normalization reads the particle buffer back to the
+CPU at ~1.3 Hz (mode-change + every 45 frames) to compute min/max — the same
+readback used for diagnostics, negligible at demo particle counts; at very high
+counts it would move to a GPU min/max reduction (noted, not yet needed).
+
+### I.3 Dynamic thermodynamics
+- **Flame → MPM:** the heat-gather samples the SmokeSystem temperature texture at
+  each particle where the domains overlap (flame g=1 ≈ 600 °C), so a fire scorches
+  material in its plume.
+- **HeatSourceComponent:** motor-coil / friction heat — drives MPM particles within
+  a radius toward a target temperature (up to 8 sources/frame) and glows the
+  source mesh.
+- **Conduction & dissipation:** particles relax toward the hottest local influence
+  and diffuse among themselves, so heat spreads through a body and bleeds to cool
+  ambient when the source is removed.
+
+**Verification:** `HEAT_SOURCE` self-test — a body warms 20 → 250 °C under a
+source then dissipates to 20 °C when removed; thermal/stress viz confirmed by
+grabs (flame-heated particles render hot, sand-collapse stress 0–6600 Pa). The
+MPM (15 checks), adjoint, HIL and `KRS_BENCH` (7/7) suites stay green.
+
+### Phase 4 (next)
+Continuous coloured surfaces for the deformable bodies (graft the scalar onto the
+SSF / OpenVDB mesher); grid-to-mesh thermal sampling on rigid arms for true
+surface scorch maps; a GPU min/max reduction for auto-range at >1M particles.
