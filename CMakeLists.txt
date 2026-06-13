@@ -106,6 +106,8 @@ if(MSVC)
   # SDF baking TU includes them, so scope /permissive- to that file.
   set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Rendering/SdfBaker.cpp"
     PROPERTIES COMPILE_OPTIONS "/permissive-;/Zc:__cplusplus")
+  set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Rendering/FluidMesher.cpp"
+    PROPERTIES COMPILE_OPTIONS "/permissive-;/Zc:__cplusplus")
 endif()
 
 

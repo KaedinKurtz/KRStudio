@@ -1,6 +1,9 @@
 #include "FluidPropertiesWidget.hpp"
 #include "RenderingSystem.hpp"
 #include "FluidSystem.hpp"
+#include "FluidMesher.hpp"
+#include "Scene.hpp"
+#include <QApplication>
 
 #include <QVBoxLayout>
 #include <QGridLayout>
@@ -295,6 +298,13 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
 
         m_clearCache = new QPushButton(QStringLiteral("Clear cache"), box);
         g->addWidget(m_clearCache, 3, 0, 1, 2);
+
+        m_meshFrame = new QPushButton(QStringLiteral("Mesh current frame (hero still)"), box);
+        m_meshFrame->setToolTip(QStringLiteral(
+            "Reconstruct a REAL triangle surface from the scrubbed cache frame\n"
+            "(OpenVDB level set). View-independent, film-quality stills —\n"
+            "blocks the UI for a few seconds on large frames."));
+        g->addWidget(m_meshFrame, 4, 0, 1, 2);
         layout->addWidget(box);
     }
 
@@ -320,6 +330,45 @@ FluidPropertiesWidget::FluidPropertiesWidget(RenderingSystem* renderer, QWidget*
             m_scrubSlider->setRange(0, 0);
             m_cacheInfo->setText(QStringLiteral("no baked frames"));
         }
+    });
+    connect(m_meshFrame, &QPushButton::clicked, this, [this]() {
+        FluidSystem* fluid = m_renderer ? m_renderer->getFluidSystem() : nullptr;
+        if (!fluid) return;
+        FluidCache::Frame frame;
+        if (!fluid->cache().readFrame(m_scrubSlider->value(), frame)
+            || frame.particleCount() == 0) {
+            m_cacheInfo->setText(QStringLiteral("No baked frame to mesh — record first"));
+            return;
+        }
+        std::vector<glm::vec3> positions;
+        positions.reserve(size_t(frame.particleCount()));
+        for (int i = 0; i < frame.particleCount(); ++i) {
+            const float* src = frame.data.data() + size_t(i) * 8;
+            if (src[3] > 0.0f) positions.emplace_back(src[0], src[1], src[2]);
+        }
+        m_cacheInfo->setText(QStringLiteral("Meshing %1 particles…").arg(positions.size()));
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+        RenderableMeshComponent mesh;
+        const bool ok = krs::meshFluidParticles(positions, fluid->params().particleRadius, mesh);
+        QApplication::restoreOverrideCursor();
+        if (!ok) {
+            m_cacheInfo->setText(QStringLiteral("Meshing failed"));
+            return;
+        }
+        auto& reg = m_renderer->getScene().getRegistry();
+        const entt::entity e = reg.create();
+        const auto vertCount = mesh.vertices.size();
+        const auto triCount = mesh.indices.size() / 3;
+        reg.emplace<RenderableMeshComponent>(e, std::move(mesh));
+        reg.emplace<TransformComponent>(e);
+        reg.emplace<TagComponent>(e, std::string("FluidMesh"));
+        auto& mat = reg.emplace<MaterialComponent>(e);
+        mat.albedoColor = fluid->appearance().color;
+        mat.roughness = 0.08f;
+        mat.metallic = 0.0f;
+        m_cacheInfo->setText(QStringLiteral("Hero mesh: %1 verts, %2 tris")
+                                 .arg(vertCount)
+                                 .arg(triCount));
     });
     auto* cacheTimer = new QTimer(this);
     connect(cacheTimer, &QTimer::timeout, this, [this]() {

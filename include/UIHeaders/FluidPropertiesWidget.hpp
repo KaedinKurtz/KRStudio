@@ -66,4 +66,5 @@ private:
     QSlider* m_scrubSlider = nullptr;
     QLabel* m_cacheInfo = nullptr;
     QPushButton* m_clearCache = nullptr;
+    QPushButton* m_meshFrame = nullptr;
 };

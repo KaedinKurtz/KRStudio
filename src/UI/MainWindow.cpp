@@ -38,6 +38,7 @@
 #include "FluidPropertiesWidget.hpp"
 #include "TextureBrowserWidget.hpp"
 #include "AssetBrowserWidget.hpp"
+#include "FluidMesher.hpp"
 #include "BenchmarkRunner.hpp"
 
 #include <QDir>
@@ -866,6 +867,34 @@ MainWindow::MainWindow(QWidget* parent)
         QTimer::singleShot(1500, this, [this]() {
             spawnMeshAssetAt(qEnvironmentVariable("KRS_TEST_SPAWN_MESH"),
                              glm::vec3(0.0f, 1.0f, 0.0f));
+        });
+    }
+
+    // Test hook: KRS_MESHER_SELFTEST=1 meshes a synthetic particle ball
+    // through the OpenVDB hero-still path and spawns the result.
+    if (qEnvironmentVariableIsSet("KRS_MESHER_SELFTEST")) {
+        QTimer::singleShot(1500, this, [this]() {
+            std::vector<glm::vec3> pts;
+            const float d = 0.025f, R = 0.35f;
+            for (float x = -R; x <= R; x += d)
+                for (float y = -R; y <= R; y += d)
+                    for (float z = -R; z <= R; z += d)
+                        if (x * x + y * y + z * z <= R * R)
+                            pts.emplace_back(x, y + 1.0f, z);
+            RenderableMeshComponent mesh;
+            if (!krs::meshFluidParticles(pts, d, mesh)) {
+                qWarning() << "[MesherSelftest] FAILED";
+                return;
+            }
+            auto& reg = m_scene->getRegistry();
+            const entt::entity e = reg.create();
+            reg.emplace<RenderableMeshComponent>(e, std::move(mesh));
+            reg.emplace<TransformComponent>(e);
+            reg.emplace<TagComponent>(e, std::string("MesherSelftest"));
+            auto& mat = reg.emplace<MaterialComponent>(e);
+            mat.albedoColor = glm::vec3(0.1f, 0.4f, 0.75f);
+            mat.roughness = 0.08f;
+            qInfo() << "[MesherSelftest] OK:" << pts.size() << "particles";
         });
     }
 
