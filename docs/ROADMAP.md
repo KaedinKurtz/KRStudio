@@ -17,30 +17,66 @@ browsers, mesh-native materials, emitter/sink/smoke/fire placement tooling.
 advection, vorticity confinement, Jacobi pressure projection, combustion) + SmokePass
 (HDR volumetric ray-march, blackbody fire emission, depth-occluded), FluidSinkComponent
 + GPU compaction, water turbulence, Gas properties dock, Add-menu/right-click sources.
-This closes the smoke/fire item below; the remaining tracks are the SOTA upgrades the
-user called out (FLIP/APIC, two-phase flow, participating-media rendering) and the
-robotics stack.
+
+**Realized 2026-06-13 (MLS-MPM round):** a GPU **MLS-MPM continuum solver**
+(`MpmSystem`, Hu 2018) unifying fluid, elastic, sand and snow in one framework —
+APIC transfers, deformation-gradient F tracking, fixed-corotated Neo-Hookean (GLSL
+3×3 SVD), Drucker-Prager sand, and a coupled **thermal field** (grid heat diffusion +
+phase change that melts solids to fluid in-solver). Fixed-point int-atomic P2G/G2P on
+a uniform grid; CFL-adaptive substeps; lit point-sprite rendering (`MpmPass`); demos
+(`KRS_MPM_DEMO=1..5`). Verified by a headless analytic suite (`KRS_MPM_SELFTEST`,
+14/14): free-fall v=g·t to 7e-6, exact mass conservation, bounded fluid/elastic/sand
+rest, sand column collapse, heat diffusion 55→0.6 °C with mean conserved to 0.06 °C,
+729/729 particles melting on phase change. This closes section A below.
+
+The remaining tracks are the SOTA upgrades the user called out (the heavier
+incompressible-projection + sparse-grid layer in §A1, two-phase flow,
+participating-media rendering) and the robotics stack.
 
 **Where we're going:** an MQTT-connected robot-training engine that imports USD
 scenes and trains policies Isaac-Sim-style, with film-grade fluids and smoke.
 
 ---
 
-## A) Next fluid solver: GPU MLS-MPM (decision made)
+## A) GPU MLS-MPM — ✅ SHIPPED (2026-06-13)
 
 | Option | Verdict |
 |---|---|
-| **GPU MLS-MPM** | **Build next.** ~1M particles real-time on a 4080-class GPU (1.33M @ 68 fps on V100, arXiv:2111.00699). Water + sand + snow + viscous + elastoplastic in ONE framework, and it deletes the neighbour search entirely. 2–4 weeks to first water. |
-| GPU DFSPH | Skip — costs more (persistent neighbour lists, two iterative loops) and yields less (water only, ~20 steps/s @ 1.2M on a 3090). |
-| FLIP/APIC | Defer post-Vulkan. MPM's APIC transfer code is ~80 % reusable if we go there. |
+| **GPU MLS-MPM** | **DONE.** Built as `MpmSystem`: 3 GLSL compute kernels (P2G with int32 fixed-point atomicAdd, grid update, G2P) + APIC affine transfers + deformation-gradient F. Materials: weakly-compressible Tait fluid, fixed-corotated Neo-Hookean elastic (branch-light 3×3 Jacobi SVD), Drucker-Prager sand, Stomakhin snow clamp, plus a coupled thermal field with phase change. Uniform dense grid (64³ iGPU / 96³ CUDA), CFL-adaptive substeps. Verified 14/14 against analytic ground truth. |
+| GPU DFSPH | Skipped — costs more (persistent neighbour lists, two iterative loops) and yields less (water only). |
+| FLIP/APIC | Subsumed — MLS-MPM *is* the APIC route; explicit stress reaches all the materials. The incompressible-projection variant is §A1 below. |
 | Neural surrogates | Nothing production-ready for liquids; re-evaluate in 12 months. |
 
-Implementation sketch: 3 GLSL compute kernels (P2G with int32 fixed-point atomicAdd —
-the proven WebGPU-Ocean pattern — grid update, G2P), APIC transfers, dense grid first,
-claymore-style block-sparse past ~2M particles. CFL substeps 2–10/frame. Start from
-nialltl/incremental_mpm + taichi_mpm's 88-line core. Tiers: 780M ~100–150k, 4080 0.5–1M+.
-Keep the PBF tier shipping until MPM water reaches parity; keep CPU DFSPH as offline
-ground truth (enable its Jeske-2023 implicit surface tension).
+What shipped: the explicit MLS-MPM stress formulation, which reaches fluid + elastic
++ sand + snow + thermo on a dense uniform grid **without** a global pressure solve or a
+sparse grid. Tiers in practice: 780M ~100–240k particles, 4080 0.5–1M+. The PBF tier
+stays shipping for screen-space water surface; CPU DFSPH remains the offline ground truth.
+
+## A1) Heavier next layer over the explicit core — IC-PCG projection + sparse grid
+
+These were on the user's wish list. Neither is required for the materials above — the
+explicit Tait EOS already gives weakly-compressible water — so they are deliberately
+deferred as a *quality/scale* layer, not correctness. Documented here as the concrete
+next step:
+
+- **Monolithic incompressible pressure solve (PCG + Incomplete-Cholesky).** Replace the
+  fluid's weakly-compressible EOS with a true divergence-free Chorin projection: after the
+  grid-momentum update, assemble the sparse pressure-Poisson system over fluid cells
+  (multi-phase water/air via per-cell phase masks and a ghost-fluid free surface, p=0 in
+  air) and solve `A p = div(v)` with a **Preconditioned Conjugate Gradient** + an
+  **Incomplete-Cholesky(0)** preconditioner, then subtract ∇p. The smoke solver's existing
+  divergence→Jacobi→gradient plumbing is the scaffold; the work is (a) a matrix-free SpMV
+  over the MAC grid, (b) the IC(0) factorization/apply on GL 4.3 compute (no double-precision
+  atomics — use a damped-Jacobi or red-black SSOR preconditioner if IC(0)'s serial triangular
+  solves prove too divergent on GPU), (c) the CG reductions via fixed-point or two-pass
+  float sums. Buys hard incompressibility (no EOS ringing, larger stable dt for water). Effort
+  ~2–4 weeks; the explicit path stays the default and ground truth.
+- **Sparse voxel grid (OpenVDB/NanoVDB or a custom block-radix tree).** The current grid is
+  dense (memory ∝ N³), fine at 64–96³ but wasteful for large mostly-empty domains. A
+  claymore-style block-sparse grid (allocate 4³/8³ bricks only where particles live) lifts the
+  ceiling toward multi-million particles on the 4080 and large open scenes. NanoVDB (PNanoVDB.h)
+  reads on GPU; allocation/compaction is the work. Effort ~2–3 weeks. Pursue only when a real
+  scene needs >~1M particles or a domain too big to keep dense.
 
 ## A2) FLIP/APIC hybrid liquid — the next big solver after MPM groundwork
 
