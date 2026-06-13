@@ -541,3 +541,72 @@ solid count, cylinder-feature detection, GProp volume) gates Tasks 2-3.
 A docked live-editing engineering inspector; STEP assembly hierarchy / instance
 naming; non-cylindrical features (planar mating faces, threaded holes); a curated
 local material cache so common mp-ids resolve offline.
+
+---
+
+## K) Engineering UI hotfix + energy-based thermal physics (Phase 4.5 — 2026-06-13)
+
+### K.1 Visualization-mode repaint hotfix (Task 1)
+The Phase-3 viz selectors (engineering-toolbar combo + View-menu action group)
+called `MpmSystem::setVizMode` but never repainted, so the PBR/Thermal/Stress/
+Strain swap waited for the next engine frame (one ~33ms fallback tick away). Since
+the recolour is purely shader-uniform-driven (`MpmPass` uploads `u_vizMode`/range
+every frame), both connect sites now call `RenderingSystem::renderAllViewports()`
+right after `setVizMode` to re-run the pass and present immediately. A plain
+`update()` is insufficient -- `ViewportWidget::paintGL` only re-blits the last
+finished engine frame.
+
+### K.2 Volumetric heat generation in Watts (Task 2 -- Neumann)
+`HeatSourceComponent.power` (W) replaces the fixed-target (Dirichlet) coupling.
+Each thermal step a source injects `Q = power*dt` of energy into the material in
+its radius. The scatter pass accumulates the total thermal mass `C_total = sum(m*c_p)`
+of in-radius particles (a per-source SSBO); the gather applies the uniform
+`dT = power*dt / C_total` to each. This is exactly energy-conserving (total added
+= `power*dt`, independent of particle count) and honours per-particle mass + c_p.
+`c_p` (`plastic.z`) is now data-driven from `MpmBodyComponent.heatCapacity`
+(previously a hardcoded 900). Materials gain SI `specificHeat` and
+`thermalConductivity`, sourced from the offline handbook table (the MP summary
+endpoint exposes neither, so live queries graft them from the table by id).
+
+### K.3 Grid-based Fourier conduction (Task 3 -- div(k grad T))
+The mean-temperature, single-coefficient diffusion is replaced by an
+energy-conserving Fourier conduction on the background grid, which naturally
+couples different ECS bodies that touch on the grid:
+- **P2G**: scatter thermal energy (m*c_p*T), thermal mass (m*c_p) and the
+  k-weighted mass (m*c_p*k).
+- **Grid**: node `T = energy/thermalMass`, node `k = kAccum/thermalMass`, decoded
+  node thermal mass `C`.
+- **Diffuse**: one explicit sweep of `dT_n = (S*dt*dx / C_n) * sum_faces kface*(T_nbr-T_n)`,
+  with **`kface` the harmonic mean** `2 k_n k_nbr/(k_n+k_nbr)` (correct
+  series-resistance flux between unequal-k cells). The per-face conductance is
+  clamped SYMMETRICALLY (`a_f = min(S*dt*dx*kface, betaMax*min(C_n,C_nbr)/6)`,
+  `betaMax=0.5`), so the pairwise flux stays antisymmetric -> energy is conserved
+  exactly even where the clamp is active, and the update is a convex combination
+  of neighbour temperatures -> unconditionally stable. (An earlier per-cell clamp
+  leaked energy at heterogeneous-k interfaces; caught by the adversarial review.)
+- **G2P**: interpolate the diffused temperature back to particles.
+
+Per-particle `k` required a 12th particle vec4 (`therm2.x`), growing the stride
+44 -> 48 floats across all five MPM shaders (`MpmPass` draws by SSBO `gl_VertexID`,
+so no vertex-attribute stride to touch).
+
+**Trade-off (conduction scale):** real metals conduct on minute timescales at this
+grid resolution (`alpha = k/(rho*c_p) ~ 1e-5 m^2/s`, dx ~ 0.05 m -> a per-frame
+physical diffusion far below one cell). A dimensionless `m_conductionScale` (S,
+default 2000, env `KRS_MPM_COND_SCALE`) accelerates conduction to interactive
+rates; the stability clamp keeps it bounded, and the harmonic mean preserves the
+relative inter-material fluxes. Exact energy conservation holds in the unclamped
+regime (the self-test uses a modest S so its assertion is exact).
+
+### Verification
+KRS_MPM_SELFTEST 18/18 PASS, including the new CONDUCTION test: two touching
+blocks of different k (400 vs 100 W/m.K) equilibrate (spread 60C -> 0.36C) with
+the mass-weighted mean (energy) conserved to 0.4C. The energy-basis refactor keeps
+the diffusion/melt/Watts tests green; all mechanical checks pass (the 48-float
+stride is consistent everywhere). KRS_BENCH 7/7.
+
+### Phase 5 (next, unchanged from J)
+Docked live thermal inspector; STEP assembly hierarchy; non-cylindrical CAD
+features; a curated local material cache; and -- now that conduction is on the
+grid -- radiative/convective surface boundary conditions and temperature-dependent
+material properties.
