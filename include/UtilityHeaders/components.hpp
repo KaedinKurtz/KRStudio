@@ -181,6 +181,18 @@ struct MaterialComponent
     std::shared_ptr<Cubemap> envMap = nullptr;
     std::shared_ptr<Cubemap> prefilteredEnvMap = nullptr;
     std::shared_ptr<Texture2D> brdfLUT = nullptr;
+
+    // --- Physical / engineering (Phase 4) ---
+    // Empirical ground-truth properties (from the Materials Project / offline DB).
+    // SI units; 0 density = "not assigned". Populated by the Assign Material tool.
+    std::string physicalName;          // e.g. "Steel (Fe)", or an mp-id like "mp-13"
+    float density = 0.0f;              // kg/m^3
+    float bulkModulus = 0.0f;          // Pa
+    float shearModulus = 0.0f;         // Pa
+    float youngsModulus = 0.0f;        // Pa (derived from K, G)
+    float poissonRatio = 0.0f;         // - (derived from K, G)
+    float volume_m3 = 0.0f;            // computed from the mesh / OCCT B-Rep
+    float massKg = 0.0f;               // density * volume
 };
 
 // --- soft Body components ---
@@ -897,6 +909,19 @@ struct HeatSourceComponent {
     float temperature = 150.0f;  // °C the source drives nearby material toward
     float radius = 0.4f;         // m influence sphere
     bool  active = true;
+};
+
+/// A mounting/anchor frame auto-detected on an ingested CAD solid (Phase 4): a
+/// cylindrical hole or shaft face recovered from the B-Rep, giving a kinematic
+/// solver a mathematically exact attachment point in the body's local frame.
+struct AttachmentFrame {
+    glm::vec3 localPosition{ 0.0f }; // point on the cylinder axis (entity-local)
+    glm::vec3 localAxis{ 0.0f, 1.0f, 0.0f }; // unit axis direction (entity-local)
+    float radius = 0.0f;             // m
+    bool isHole = true;              // hole (concave) vs shaft (convex)
+};
+struct AttachmentComponent {
+    std::vector<AttachmentFrame> frames; // all cylinder features found on the solid
 };
 
 struct Pose6D                // or using Pose6D = glm::mat4;
