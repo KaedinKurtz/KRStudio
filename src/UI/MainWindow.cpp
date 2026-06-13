@@ -2375,6 +2375,7 @@ void MainWindow::assignMaterialToSelection()
     mat.physicalName = m.name; mat.density = float(m.density);
     mat.bulkModulus = float(m.bulkModulus); mat.shearModulus = float(m.shearModulus);
     mat.youngsModulus = float(E); mat.poissonRatio = float(nu);
+    mat.specificHeat = float(m.specificHeat); mat.thermalConductivity = float(m.thermalConductivity);
 
     double vol = mat.volume_m3;                         // OCCT sets this at import
     if (vol <= 0.0) {                                   // else integrate the triangle mesh
@@ -2390,10 +2391,12 @@ void MainWindow::assignMaterialToSelection()
     mat.massKg = float(m.density * vol);
     QMessageBox::information(this, QStringLiteral("Material assigned"),
         QStringLiteral("%1  (%2)\nDensity: %3 kg/m^3\nBulk K: %4 GPa   Shear G: %5 GPa\n"
-                       "Young E: %6 GPa   Poisson: %7\nVolume: %8 m^3   Mass: %9 kg")
+                       "Young E: %6 GPa   Poisson: %7\nVolume: %8 m^3   Mass: %9 kg\n"
+                       "c_p: %10 J/kg.K   k: %11 W/m.K")
             .arg(QString::fromStdString(m.name), QString::fromStdString(m.source))
             .arg(m.density, 0, 'f', 1).arg(m.bulkModulus / 1e9, 0, 'f', 1).arg(m.shearModulus / 1e9, 0, 'f', 1)
-            .arg(E / 1e9, 0, 'f', 1).arg(nu, 0, 'f', 3).arg(vol, 0, 'g', 4).arg(mat.massKg, 0, 'g', 4));
+            .arg(E / 1e9, 0, 'f', 1).arg(nu, 0, 'f', 3).arg(vol, 0, 'g', 4).arg(mat.massKg, 0, 'g', 4)
+            .arg(m.specificHeat, 0, 'f', 0).arg(m.thermalConductivity, 0, 'f', 2));
     refreshGizmoAndProperties();
 }
 
@@ -2407,12 +2410,16 @@ void MainWindow::addHeatSourceToSelection()
     auto& reg = m_scene->getRegistry();
     auto& hs = reg.get_or_emplace<HeatSourceComponent>(e);
     bool ok = false;
-    double t = QInputDialog::getDouble(this, QStringLiteral("Heat Source"),
-        QStringLiteral("Source temperature (deg C):"), hs.temperature, -50.0, 2000.0, 1, &ok);
-    if (ok) hs.temperature = float(t);
+    double p = QInputDialog::getDouble(this, QStringLiteral("Heat Source"),
+        QStringLiteral("Heat-generation power (W) injected into the radius\n(volumetric, Neumann; 0 = colour/glow only):"),
+        hs.power, 0.0, 1.0e9, 1, &ok);
+    if (ok) hs.power = float(p);
     double r = QInputDialog::getDouble(this, QStringLiteral("Heat Source"),
         QStringLiteral("Influence radius (m):"), hs.radius, 0.01, 10.0, 2, &ok);
     if (ok) hs.radius = float(r);
+    double t = QInputDialog::getDouble(this, QStringLiteral("Heat Source"),
+        QStringLiteral("Nominal temperature (deg C) for the emissive glow:"), hs.temperature, -50.0, 2000.0, 1, &ok);
+    if (ok) hs.temperature = float(t);
     refreshGizmoAndProperties();
 }
 
@@ -2427,15 +2434,17 @@ void MainWindow::inspectSelection()
     QString s = QStringLiteral("Selected entity\n\n");
     if (auto* mat = reg.try_get<MaterialComponent>(e)) {
         s += QStringLiteral("Material: %1\n  density %2 kg/m^3,  K %3 GPa,  G %4 GPa\n"
-                            "  E %5 GPa,  nu %6\n  volume %7 m^3,  mass %8 kg\n\n")
+                            "  E %5 GPa,  nu %6\n  volume %7 m^3,  mass %8 kg\n"
+                            "  c_p %9 J/kg.K,  k %10 W/m.K\n\n")
                  .arg(mat->physicalName.empty() ? QStringLiteral("(unassigned)") : QString::fromStdString(mat->physicalName))
                  .arg(mat->density, 0, 'f', 1).arg(mat->bulkModulus / 1e9, 0, 'f', 1).arg(mat->shearModulus / 1e9, 0, 'f', 1)
                  .arg(mat->youngsModulus / 1e9, 0, 'f', 1).arg(mat->poissonRatio, 0, 'f', 3)
-                 .arg(mat->volume_m3, 0, 'g', 4).arg(mat->massKg, 0, 'g', 4);
+                 .arg(mat->volume_m3, 0, 'g', 4).arg(mat->massKg, 0, 'g', 4)
+                 .arg(mat->specificHeat, 0, 'f', 0).arg(mat->thermalConductivity, 0, 'f', 2);
     } else s += QStringLiteral("Material: (none)\n\n");
     if (auto* hs = reg.try_get<HeatSourceComponent>(e))
-        s += QStringLiteral("Heat source: %1 deg C, radius %2 m (%3)\n")
-                 .arg(hs->temperature, 0, 'f', 0).arg(hs->radius, 0, 'f', 2)
+        s += QStringLiteral("Heat source: %1 W, %2 deg C nominal, radius %3 m (%4)\n")
+                 .arg(hs->power, 0, 'f', 1).arg(hs->temperature, 0, 'f', 0).arg(hs->radius, 0, 'f', 2)
                  .arg(hs->active ? QStringLiteral("active") : QStringLiteral("inactive"));
     else s += QStringLiteral("Heat source: (none)\n");
     if (auto* att = reg.try_get<AttachmentComponent>(e))

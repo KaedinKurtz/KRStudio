@@ -11,6 +11,8 @@ struct Particle {
 };
 layout(std430, binding = 0) buffer Particles { Particle p[]; };
 layout(std430, binding = 5) buffer TempB { float tb[]; };
+layout(std430, binding = 6) readonly buffer HeatAccum { int hacc[]; }; // sum(m*c_p) per source
+const float INV_ACC = 1.0e-3;        // matches SCALE_ACC in mpm_heat_scatter
 
 uniform int   u_count;
 uniform int   u_N;
@@ -21,12 +23,14 @@ uniform float u_heatExchange;   // Newton exchange rate with ambient (1/s)
 uniform float u_dtFrame;
 uniform float u_fluidK;         // bulk modulus assigned to newly-melted fluid
 
-// Heat sources (HeatSourceComponent): drive nearby particles toward a target T.
+// Heat sources (HeatSourceComponent): inject a volumetric power (Watts) into the
+// material inside each radius. dT = power*dt / sum(m*c_p) (energy-conserving;
+// the sum is accumulated per source in the scatter pass).
 const int MAX_HEAT = 8;
-uniform int  u_heatCount;
-uniform vec4 u_heatSrc[MAX_HEAT];    // xyz world pos, w target temperature (C)
+uniform int   u_heatCount;
+uniform vec4  u_heatSrc[MAX_HEAT];    // xyz world pos, w nominal temperature (C)
 uniform float u_heatRadius[MAX_HEAT];
-uniform float u_heatRate;            // source coupling rate (1/s)
+uniform float u_heatPower[MAX_HEAT];  // W volumetric heat-generation rate
 
 // Smoke/flame thermal grid coupling (sampled where it overlaps the MPM domain).
 uniform int       u_smokeOn;
@@ -79,12 +83,17 @@ void main()
             if (st > target) { target = st; rate = max(rate, u_smokeRate * texture(u_smokeScalars, uvw).g); }
         }
     }
+    Tnew += rate * u_dtFrame * (target - Tnew);          // ambient/smoke Newton exchange
+
+    // Volumetric heat generation (Neumann): each source injects power*dt of energy
+    // into the material in its radius, shared by thermal mass so every particle in
+    // the sphere warms by the same dT = power*dt / sum(m*c_p). Total added = power*dt.
     for (int h = 0; h < u_heatCount; ++h) {              // motor coil / friction sources
-        if (distance(pos, u_heatSrc[h].xyz) <= u_heatRadius[h] && u_heatSrc[h].w > target) {
-            target = u_heatSrc[h].w; rate = max(rate, u_heatRate);
+        if (distance(pos, u_heatSrc[h].xyz) <= u_heatRadius[h]) {
+            float Ctot = float(hacc[h]) * INV_ACC;       // sum(m*c_p) over the sphere (J/K)
+            if (Ctot > 1.0e-6) Tnew += (u_heatPower[h] * u_dtFrame) / Ctot;
         }
     }
-    Tnew += rate * u_dtFrame * (target - Tnew);          // Newton exchange / conduction-dissipation
     p[i].plastic.y = Tnew;
 
     // Phase change: a solid (matType > 0) that crosses its melt threshold

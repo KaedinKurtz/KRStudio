@@ -10,14 +10,24 @@ struct Particle {
 };
 layout(std430, binding = 0) buffer Particles { Particle p[]; };
 layout(std430, binding = 3) coherent buffer GridTherm { int gt[]; };
+layout(std430, binding = 6) coherent buffer HeatAccum { int hacc[]; }; // sum(m*c_p) per source
 
 uniform int   u_count;
 uniform int   u_N;
 uniform vec3  u_origin;
 uniform float u_invDx;
 
+// Heat sources: accumulate the thermal mass of particles inside each radius so
+// the gather can inject a mass-weighted, energy-conserving dT from Watts.
+const int MAX_HEAT = 8;
+uniform int   u_heatCount;
+uniform vec4  u_heatSrc[MAX_HEAT];     // xyz world pos, w nominal temperature
+uniform float u_heatRadius[MAX_HEAT];
+
 const float SCALE = 1.0e5;
 int enc(float f) { return clamp(int(round(f * SCALE)), -2000000000, 2000000000); }
+const float SCALE_ACC = 1.0e3;         // sum(m*c_p) is ~900x larger than mass
+int encA(float f) { return clamp(int(round(f * SCALE_ACC)), -2000000000, 2000000000); }
 
 void main()
 {
@@ -26,6 +36,14 @@ void main()
     if (p[i].color.w <= 0.0) return;
     float m = p[i].posMass.w;
     float T = p[i].plastic.y;
+    float cp = p[i].plastic.z;          // heat capacity J/(kg.K)
+
+    // Tally this particle's thermal mass to every heat source whose sphere it is
+    // inside (energy is later split by this so total injected = power*dt exactly).
+    vec3 wpos = p[i].posMass.xyz;
+    for (int h = 0; h < u_heatCount; ++h)
+        if (distance(wpos, u_heatSrc[h].xyz) <= u_heatRadius[h])
+            atomicAdd(hacc[h], encA(m * cp));
 
     vec3 Xp = (p[i].posMass.xyz - u_origin) * u_invDx;
     ivec3 base = ivec3(floor(Xp - 0.5));

@@ -193,6 +193,8 @@ struct MaterialComponent
     float poissonRatio = 0.0f;         // - (derived from K, G)
     float volume_m3 = 0.0f;            // computed from the mesh / OCCT B-Rep
     float massKg = 0.0f;               // density * volume
+    float specificHeat = 0.0f;         // c_p, J/(kg.K)   (thermal — Phase 4.5)
+    float thermalConductivity = 0.0f;  // k,  W/(m.K)     (thermal — Phase 4.5)
 };
 
 // --- soft Body components ---
@@ -887,6 +889,8 @@ struct MpmBodyComponent {
     float frictionDegrees = 35.0f;   // sand internal friction angle
     float temperature = 20.0f;       // initial temperature (°C)
     float meltTemperature = 1.0e9f;  // °C; crossing it converts a solid to fluid
+    float heatCapacity = 900.0f;     // c_p, J/(kg.K) — per-particle thermal mass = mass*c_p
+    float thermalConductivity = 50.0f; // k, W/(m.K) — Fourier conduction (Phase 4.5)
     glm::vec3 color = { 0.8f, 0.7f, 0.5f };
     glm::vec3 initialVelocity = { 0.0f, 0.0f, 0.0f };
 };
@@ -901,13 +905,19 @@ struct HilActuatorComponent {
     glm::vec3 lastEffort{ 0.0f }; // last commanded force [N] (the torque metric reported back)
 };
 
-/// Internal heat generation (Phase 3): a motor coil / friction source or an
-/// external hot object. Each thermal step it drives MPM particles within
-/// `radius` toward `temperature`; if the entity has a MaterialComponent its
-/// emissive is tinted by the temperature so a hot rigid body glows.
+/// Internal heat generation (Phase 3 / 4.5): a motor coil / friction source or
+/// an external hot object. Two coupling modes:
+///   - `power` > 0  : a volumetric heat-generation rate (Neumann). Each thermal
+///                    step it injects Q = power * dt of energy into the material
+///                    inside `radius`, raising temperature by Q / (mass * c_p)
+///                    (energy-conserving, distributed by thermal mass).
+///   - `temperature`: a nominal hot colour for the emissive glow + the smoke
+///                    comparison. (Legacy Dirichlet "drive toward T" behaviour
+///                    is superseded by the Watts model when power > 0.)
 struct HeatSourceComponent {
-    float temperature = 150.0f;  // °C the source drives nearby material toward
+    float temperature = 150.0f;  // °C nominal (glow colour / smoke reference)
     float radius = 0.4f;         // m influence sphere
+    float power = 0.0f;          // W volumetric heat-generation rate (Neumann)
     bool  active = true;
 };
 

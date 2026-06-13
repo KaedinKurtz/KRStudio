@@ -39,11 +39,17 @@ def main() -> int:
                 print(json.dumps({"error": "not found: " + mid}))
                 return 0
             d = docs[0]
+            # specific_heat (c_p, J/kg.K) and thermal_conductivity (k, W/m.K) are
+            # attempted here, but the MP *summary* endpoint does not expose them,
+            # so they come back 0; the engine grafts c_p/k from its offline table
+            # by id. SI thermal units pass through unscaled.
             print(json.dumps({
                 "name": str(getattr(d, "formula_pretty", mid)),
                 "rho": float(getattr(d, "density", 0) or 0) * 1000.0,   # g/cm^3 -> kg/m^3
                 "K": float(getattr(d, "bulk_modulus", 0) or 0) * 1e9,   # GPa -> Pa
                 "G": float(getattr(d, "shear_modulus", 0) or 0) * 1e9,  # GPa -> Pa
+                "cp": float(getattr(d, "specific_heat", 0) or 0),       # J/kg.K (0 if absent)
+                "k": float(getattr(d, "thermal_conductivity", 0) or 0),  # W/m.K (0 if absent)
             }))
     except Exception as exc:  # noqa: BLE001 - report any failure to the caller as JSON
         print(json.dumps({"error": str(exc)}))

@@ -18,9 +18,11 @@ namespace krs::materials {
 
 struct MatProps {
     std::string name;
-    double density = 0.0;       // kg/m^3
-    double bulkModulus = 0.0;   // Pa
-    double shearModulus = 0.0;  // Pa
+    double density = 0.0;             // kg/m^3
+    double bulkModulus = 0.0;         // Pa
+    double shearModulus = 0.0;        // Pa
+    double specificHeat = 0.0;        // c_p, J/(kg.K)  (thermal — Phase 4.5)
+    double thermalConductivity = 0.0; // k,  W/(m.K)    (thermal — Phase 4.5)
     bool valid = false;
     std::string source;         // "Materials Project (...)" or "offline DB"
 };

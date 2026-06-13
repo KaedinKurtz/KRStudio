@@ -76,6 +76,12 @@ void MpmSystem::allocate(QOpenGLFunctions_4_3_Core* gl)
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridTempB);
     gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(float)) * cells, nullptr,
                      GL_DYNAMIC_DRAW);
+    // Per-source thermal-mass accumulator: scatter sums sum(m*c_p) of particles in
+    // each heat source's radius so the gather can inject a mass-weighted dT (Watts).
+    gl->glGenBuffers(1, &m_heatAccumSSBO);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_heatAccumSSBO);
+    gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(GLint)) * kMaxHeatSources, nullptr,
+                     GL_DYNAMIC_DRAW);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
@@ -140,7 +146,7 @@ void MpmSystem::seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& regist
         // F columns (20..31) = identity
         v[20] = 1.0f; v[25] = 1.0f; v[30] = 1.0f;
         v[32] = 1.0f;                                               // Jp (fluid: J)
-        v[33] = b.temperature; v[34] = 900.0f; v[35] = meltT;       // temp, Cp, meltT
+        v[33] = b.temperature; v[34] = b.heatCapacity; v[35] = meltT; // temp, Cp (J/kg.K), meltT
         // matl: solids store (mu, lambda, frictionAlpha); fluid stores
         // (bulkK, gamma) so the shader can pick an EOS instead of Lame.
         if (b.material == MpmMaterial::Fluid) {
@@ -273,8 +279,9 @@ void MpmSystem::collectHeatSources(entt::registry& registry)
         if (!hs.active) continue;
         const auto& xf = registry.get<TransformComponent>(e);
         if (m_heatCount < kMaxHeatSources) {
-            m_heatSrc[m_heatCount] = glm::vec4(xf.translation, hs.temperature); // pos + target T
+            m_heatSrc[m_heatCount] = glm::vec4(xf.translation, hs.temperature); // pos + nominal T
             m_heatRadius[m_heatCount] = hs.radius;
+            m_heatPower[m_heatCount] = hs.power;                                // W (Neumann)
             ++m_heatCount;
         }
         // A hot rigid body glows: drive its emissive from the source temperature
@@ -309,17 +316,27 @@ void MpmSystem::runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_C
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_gridThermSSBO);
     gl->glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, &zero);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_heatAccumSSBO);   // per-source sum(m*c_p)
+    gl->glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, &zero);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_particleSSBO);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, m_gridThermSSBO);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, m_gridTempA);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, m_gridTempB);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, m_heatAccumSSBO);
 
     scat->use(gl);
     scat->setInt(gl, "u_count", m_particleCount);
     scat->setInt(gl, "u_N", m_N);
     scat->setVec3(gl, "u_origin", m_origin);
     scat->setFloat(gl, "u_invDx", invDx);
+    // Heat sources also given to scatter so it can sum sum(m*c_p) per source.
+    scat->setInt(gl, "u_heatCount", m_heatCount);
+    for (int h = 0; h < m_heatCount; ++h) {
+        scat->setVec4(gl, ("u_heatSrc[" + std::to_string(h) + "]").c_str(), m_heatSrc[h]);
+        scat->setFloat(gl, ("u_heatRadius[" + std::to_string(h) + "]").c_str(), m_heatRadius[h]);
+    }
     gl->glDispatchCompute(pGroups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -343,12 +360,13 @@ void MpmSystem::runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_C
     gath->setFloat(gl, "u_heatExchange", m_heatExchange);
     gath->setFloat(gl, "u_dtFrame", dtFrame);
     gath->setFloat(gl, "u_fluidK", m_fluidMeltK);
-    // Heat sources (HeatSourceComponent), collected in update().
+    // Heat sources (HeatSourceComponent), collected in update(). Volumetric power
+    // (Watts) is injected as dT = power*dt / sum(m*c_p) over particles in radius.
     gath->setInt(gl, "u_heatCount", m_heatCount);
-    gath->setFloat(gl, "u_heatRate", 6.0f);
     for (int h = 0; h < m_heatCount; ++h) {
         gath->setVec4(gl, ("u_heatSrc[" + std::to_string(h) + "]").c_str(), m_heatSrc[h]);
         gath->setFloat(gl, ("u_heatRadius[" + std::to_string(h) + "]").c_str(), m_heatRadius[h]);
+        gath->setFloat(gl, ("u_heatPower[" + std::to_string(h) + "]").c_str(), m_heatPower[h]);
     }
     // Flame/smoke grid coupling: sample the smoke temperature field where it
     // overlaps the MPM domain so a flame scorches the material.
@@ -372,6 +390,7 @@ void MpmSystem::runThermalStep(RenderingSystem& renderer, QOpenGLFunctions_4_3_C
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, 0);
     gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, 0);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, 0);
 }
 
 void MpmSystem::runSubstep(QOpenGLFunctions_4_3_Core* gl, Shader* p2g, Shader* grid,
@@ -599,14 +618,16 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
         m_ambientT = 20.0f; m_heatExchange = 0.5f;
         seedBlock(1, glm::vec3(0, -0.4f, 0), 0.22f, 0.05f, 1000.0f, 8.0e4f, 0.3f,
                   glm::vec3(0), 20.0f, 1.0e9f, 0.0f);
-        m_heatCount = 1; m_heatSrc[0] = glm::vec4(0, -0.4f, 0, 250.0f); m_heatRadius[0] = 0.6f;
+        // Volumetric heat-generation source (Watts / Neumann): 5 MW into the block.
+        m_heatCount = 1; m_heatSrc[0] = glm::vec4(0, -0.4f, 0, 250.0f);
+        m_heatRadius[0] = 0.6f; m_heatPower[0] = 5.0e6f;
         Diag d0 = sample(gl);
         for (int f = 0; f < 90; ++f) runThermalStep(renderer, gl, 1.0f / 60.0f);
         Diag dHot = sample(gl);
-        m_heatCount = 0; m_heatExchange = 3.0f;                 // source off -> dissipate to cool ambient
+        m_heatCount = 0; m_heatPower[0] = 0.0f; m_heatExchange = 3.0f; // source off -> dissipate
         for (int f = 0; f < 180; ++f) runThermalStep(renderer, gl, 1.0f / 60.0f);
         Diag dCool = sample(gl);
-        check("heat source warms body", dHot.tempMean > d0.tempMean + 30.0,
+        check("heat source warms body (Watts)", dHot.tempMean > d0.tempMean + 30.0,
               fmt("T0", d0.tempMean) + " -> " + fmt("Thot", dHot.tempMean));
         check("heat dissipates to ambient", dCool.tempMean < dHot.tempMean - 10.0,
               fmt("Thot", dHot.tempMean) + " -> " + fmt("Tcool", dCool.tempMean));

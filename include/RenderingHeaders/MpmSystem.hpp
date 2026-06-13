@@ -108,6 +108,7 @@ private:
     GLuint m_gridThermSSBO = 0;         // int[cellCount*2] fixed-point (m*T, m)
     GLuint m_gridTempA = 0;             // float[cellCount] normalized temperature
     GLuint m_gridTempB = 0;             // float[cellCount] diffused temperature
+    GLuint m_heatAccumSSBO = 0;         // int[kMaxHeatSources] fixed-point sum(m*c_p) per source
     int m_particleCount = 0;
 
     // Thermodynamics (M4): ambient field + conductivity + Newton exchange.
@@ -116,11 +117,13 @@ private:
     float m_heatExchange = 0.0f;        // 1/s exchange with ambient (0 = off)
     float m_fluidMeltK = 5.0e4f;        // bulk modulus assigned to melted fluid
 
-    // Heat sources (Phase 3): HeatSourceComponent entities drive nearby
-    // particles toward their temperature; the smoke/flame grid is sampled too.
+    // Heat sources (Phase 3 / 4.5): HeatSourceComponent entities inject a
+    // volumetric power (W) into the material in their radius (Neumann); the
+    // smoke/flame grid is sampled too. m_heatSrc.w carries the nominal glow temp.
     static constexpr int kMaxHeatSources = 8;
-    glm::vec4 m_heatSrc[kMaxHeatSources]{}; // xyz world pos, w target temperature (C)
+    glm::vec4 m_heatSrc[kMaxHeatSources]{}; // xyz world pos, w nominal temperature (C)
     float m_heatRadius[kMaxHeatSources]{};  // m influence radius
+    float m_heatPower[kMaxHeatSources]{};   // W volumetric heat-generation rate
     int m_heatCount = 0;
 
     bool m_initialized = false;
