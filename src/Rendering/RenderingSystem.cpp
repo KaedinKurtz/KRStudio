@@ -359,6 +359,7 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("fluid_caustics", std::vector<std::string>{ (shaderDir + "fluid_caustics_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_caustics_apply", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_caustics_apply_frag.glsl").toStdString());
         loadAndStoreShader("fluid_aniso", std::vector<std::string>{ (shaderDir + "fluid_aniso_comp.glsl").toStdString() });
+        loadAndStoreShader("fluid_compact", std::vector<std::string>{ (shaderDir + "fluid_compact_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_emit", std::vector<std::string>{ (shaderDir + "fluid_foam_emit_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_update", std::vector<std::string>{ (shaderDir + "fluid_foam_update_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_render", (shaderDir + "fluid_foam_vert.glsl").toStdString(), (shaderDir + "fluid_foam_frag.glsl").toStdString());

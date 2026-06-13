@@ -160,6 +160,9 @@ private:
 
     void bakeSdfColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
     void seedVolumes(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
+    /// GPU stream-compaction: pack live particles to the front of the SSBO
+    /// (reclaims dead slots so emitter/sink flows reach steady state).
+    void compactParticles(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl);
     void emitFromEmitters(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry, float dt);
     void uploadColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
     void appendParticles(QOpenGLFunctions_4_3_Core* gl, const std::vector<glm::vec4>& posLife,
@@ -202,6 +205,8 @@ private:
 
     // --- GPU resources (engine context) ---
     GLuint m_particleSSBO = 0;  // {vec4 posLife; vec4 vel; vec4 pred;} * kMaxParticles
+    GLuint m_compactSSBO = 0;   // scratch target for stream-compaction
+    GLuint m_liveCountSSBO = 0; // single uint: live count after compaction
     GLuint m_gridHeadSSBO = 0;  // int per cell
     GLuint m_gridNextSSBO = 0;  // int per particle
     GLuint m_colliderUBO = 0;   // boxes + spheres, std140

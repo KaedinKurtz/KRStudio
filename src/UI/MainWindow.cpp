@@ -1901,7 +1901,63 @@ void MainWindow::onViewportContextMenu(const QPoint& globalPos, const glm::vec3&
     addPrim(QStringLiteral("Sphere"), Primitive::IcoSphere, glm::vec3(0.5f));
     addPrim(QStringLiteral("Cylinder"), Primitive::Cylinder, glm::vec3(0.5f, 1.0f, 0.5f));
 
+    QMenu* simMenu = menu.addMenu(QStringLiteral("Add simulation source"));
+    simMenu->addAction(QStringLiteral("Water Tap"), [this, worldPos]() {
+        spawnSimSourceAt(SimSource::WaterTap, worldPos + glm::vec3(0, 0.5f, 0));
+    });
+    simMenu->addAction(QStringLiteral("Water Drain (sink)"), [this, worldPos]() {
+        spawnSimSourceAt(SimSource::WaterSink, worldPos + glm::vec3(0, 0.2f, 0));
+    });
+    simMenu->addAction(QStringLiteral("Smoke Emitter"), [this, worldPos]() {
+        spawnSimSourceAt(SimSource::SmokeEmitter, worldPos + glm::vec3(0, 0.2f, 0));
+    });
+    simMenu->addAction(QStringLiteral("Fire Emitter"), [this, worldPos]() {
+        spawnSimSourceAt(SimSource::FireEmitter, worldPos + glm::vec3(0, 0.2f, 0));
+    });
+
     menu.exec(globalPos);
+}
+
+void MainWindow::spawnSimSourceAt(SimSource kind, const glm::vec3& worldPos)
+{
+    if (!m_scene) return;
+    auto& reg = m_scene->getRegistry();
+    // A small visible marker so the source can be selected, moved and tuned.
+    const char* name = kind == SimSource::WaterTap     ? "WaterTap"
+                     : kind == SimSource::WaterSink    ? "WaterDrain"
+                     : kind == SimSource::SmokeEmitter ? "SmokeEmitter"
+                                                       : "FireEmitter";
+    entt::entity e = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::IcoSphere),
+                                                  worldPos, glm::vec3(0.12f), name);
+    auto& mat = reg.emplace_or_replace<MaterialComponent>(e);
+    switch (kind) {
+    case SimSource::WaterTap:
+        mat.albedoColor = { 0.2f, 0.5f, 0.95f };
+        { auto& em = reg.emplace<FluidEmitterComponent>(e);
+          em.ratePerSecond = 1200.0f; em.initialSpeed = 1.5f; em.emitterRadius = 0.08f;
+          em.particleLifetime = 18.0f; }
+        break;
+    case SimSource::WaterSink:
+        mat.albedoColor = { 0.1f, 0.1f, 0.15f };
+        reg.emplace<FluidSinkComponent>(e).halfExtents = glm::vec3(0.3f);
+        break;
+    case SimSource::SmokeEmitter:
+        mat.albedoColor = { 0.7f, 0.7f, 0.75f };
+        reg.emplace<SmokeEmitterComponent>(e);
+        break;
+    case SimSource::FireEmitter:
+        mat.albedoColor = { 0.95f, 0.45f, 0.1f };
+        mat.emissiveColor = { 1.0f, 0.4f, 0.05f };
+        mat.emissiveStrength = 2.0f;
+        { auto& sm = reg.emplace<SmokeEmitterComponent>(e);
+          sm.fuelRate = 2.5f; sm.temperature = 1.0f; sm.densityRate = 1.2f;
+          sm.color = { 0.2f, 0.2f, 0.2f }; }
+        break;
+    }
+    for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+    reg.emplace<SelectedComponent>(e);
+    refreshGizmoAndProperties();
+    statusBar()->showMessage(QStringLiteral("Added %1").arg(name), 3000);
 }
 
 void MainWindow::spawnMeshAssetAt(const QString& path, const glm::vec3& worldPos)

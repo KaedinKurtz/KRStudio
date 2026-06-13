@@ -820,6 +820,38 @@ struct FluidVolumeComponent {
     float particleSpacing = 0.05f;   // metres between seeded particles
 };
 
+/**
+ * @brief A box region that DRAINS fluid: particles whose centre enters the
+ * box are killed by the GPU solver. Pairs with an emitter to make a
+ * continuous flow (tap -> drain) without ever filling the domain. The box
+ * is the entity transform's translation +/- halfExtents (world-axis-aligned).
+ */
+struct FluidSinkComponent {
+    bool enabled = true;
+    glm::vec3 halfExtents = { 0.3f, 0.3f, 0.3f };
+};
+
+/**
+ * @brief Emits smoke/fire into the Eulerian gas grid from the entity's
+ * transform location. While the simulation plays, the SmokeSystem splats
+ * density + temperature (+ fuel, for fire) into a sphere each step and
+ * injects an upward jet velocity. Consumed by SmokeSystem.
+ */
+struct SmokeEmitterComponent {
+    bool enabled = true;
+    float radius = 0.18f;            // metres, splat sphere radius
+    float densityRate = 2.4f;        // density added per second at the core
+    float temperature = 1.0f;        // injected temperature (0..1, drives buoyancy)
+    float fuelRate = 0.0f;           // >0 makes it a FIRE emitter (fuel burns -> heat)
+    float jetSpeed = 1.2f;           // m/s upward velocity injected
+    glm::vec3 color = { 0.85f, 0.85f, 0.9f }; // smoke albedo (fire overrides w/ blackbody)
+};
+
+/// Tags the entity whose transform/scale defines the smoke grid domain
+/// (its world AABB). Optional — SmokeSystem falls back to a default box
+/// centred on the first active emitter.
+struct SmokeDomainTag {};
+
 struct Pose6D                // or using Pose6D = glm::mat4;
 {
     glm::vec3 position{ 0.0f };

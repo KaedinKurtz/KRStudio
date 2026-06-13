@@ -30,6 +30,14 @@ const float PI = 3.14159265358979;
 uniform float u_viscosity; // XSPH blend coefficient
 uniform float u_cohesion;  // Akinci 2013 gamma (mapped from sigma N/m)
 
+// Drain regions (FluidSinkComponent): a particle whose committed position
+// lands inside any sink box is killed this step. Keeps tap->drain flows
+// from ever filling the domain.
+const int MAX_SINKS = 8;
+uniform int u_sinkCount;
+uniform vec3 u_sinkMin[MAX_SINKS];
+uniform vec3 u_sinkMax[MAX_SINKS];
+
 float wPoly6(float r2, float h)
 {
     float h2 = h * h;
@@ -98,6 +106,17 @@ void main()
     float speed = length(newVel);
     float maxSpeed = 0.5 * u_h / u_dt;
     if (speed > maxSpeed) newVel *= maxSpeed / speed;
+
+    // Drain: kill particles that entered a sink region.
+    vec3 fp = p[i].pred.xyz;
+    for (int sIdx = 0; sIdx < u_sinkCount; ++sIdx) {
+        if (all(greaterThanEqual(fp, u_sinkMin[sIdx])) &&
+            all(lessThanEqual(fp, u_sinkMax[sIdx]))) {
+            p[i].posLife = vec4(u_domainMin.x, -1000.0, u_domainMin.z, 0.0);
+            p[i].vel = vec4(0.0);
+            return;
+        }
+    }
 
     float life = p[i].posLife.w - u_dt;
     if (life <= 0.0) {

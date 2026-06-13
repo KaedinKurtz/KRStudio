@@ -59,6 +59,12 @@ public:
     ViewportWidget* primaryViewport() const;
     void refreshGizmoAndProperties(ViewportWidget* vp = nullptr);
 
+public:
+    enum class SimSource { WaterTap, WaterSink, SmokeEmitter, FireEmitter };
+    /// Spawn a small marker entity carrying the simulation-source component
+    /// (emitter / sink / smoke / fire) at a world position.
+    void spawnSimSourceAt(SimSource kind, const glm::vec3& worldPos);
+
 public slots:
     /// Load a mesh asset and spawn it at a world position (asset-browser
     /// button and viewport drag-and-drop both land here).

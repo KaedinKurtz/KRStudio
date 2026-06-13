@@ -69,6 +69,15 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
     gl->glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GpuParticle) * kMaxParticles, nullptr, GL_DYNAMIC_DRAW);
 
+    // Stream-compaction scratch + live-count.
+    gl->glGenBuffers(1, &m_compactSSBO);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_compactSSBO);
+    gl->glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GpuParticle) * kMaxParticles, nullptr, GL_DYNAMIC_DRAW);
+    gl->glGenBuffers(1, &m_liveCountSSBO);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_liveCountSSBO);
+    { const GLuint z = 0; gl->glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint), &z, GL_DYNAMIC_DRAW); }
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
     m_h = 2.0f * m_params.particleRadius;
     m_builtRadius = m_params.particleRadius;
     rebuildGrid(gl);
@@ -140,6 +149,8 @@ void FluidSystem::shutdown(QOpenGLFunctions_4_3_Core* gl)
         if (s.texture) gl->glDeleteTextures(1, &s.texture);
     m_sdfColliders.clear();
     gl->glDeleteBuffers(1, &m_particleSSBO);
+    gl->glDeleteBuffers(1, &m_compactSSBO);
+    gl->glDeleteBuffers(1, &m_liveCountSSBO);
     gl->glDeleteBuffers(1, &m_gridHeadSSBO);
     gl->glDeleteBuffers(1, &m_gridNextSSBO);
     gl->glDeleteBuffers(1, &m_colliderUBO);
@@ -404,6 +415,44 @@ void FluidSystem::dispatchAniso(RenderingSystem& renderer, QOpenGLFunctions_4_3_
     m_anisoValid = true;
 }
 
+void FluidSystem::compactParticles(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl)
+{
+    Shader* compact = renderer.getShader("fluid_compact");
+    if (!compact || m_particleCount <= 0) return;
+
+    const int oldCount = m_particleCount;
+    // Zero the live counter.
+    {
+        const GLuint z = 0;
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_liveCountSSBO);
+        gl->glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &z);
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_particleSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, m_compactSSBO);
+    gl->glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, m_liveCountSSBO);
+    compact->use(gl);
+    compact->setInt(gl, "u_particleCount", oldCount);
+    gl->glDispatchCompute((oldCount + 255) / 256, 1, 1);
+    gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    // Copy the packed-front region back into the canonical buffer. Copying
+    // the old count is a safe upper bound — entries beyond the new live
+    // count are never iterated.
+    gl->glBindBuffer(GL_COPY_READ_BUFFER, m_compactSSBO);
+    gl->glBindBuffer(GL_COPY_WRITE_BUFFER, m_particleSSBO);
+    gl->glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0,
+                            GLsizeiptr(sizeof(GpuParticle)) * oldCount);
+    gl->glBindBuffer(GL_COPY_READ_BUFFER, 0);
+    gl->glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+
+    GLuint live = 0;
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_liveCountSSBO);
+    gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(GLuint), &live);
+    gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    m_particleCount = std::min<int>(int(live), kMaxParticles);
+}
+
 void FluidSystem::rebuildGrid(QOpenGLFunctions_4_3_Core* gl)
 {
     if (m_gridHeadSSBO) gl->glDeleteBuffers(1, &m_gridHeadSSBO);
@@ -483,6 +532,20 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
 
     if (!m_sdfsBaked) bakeSdfColliders(gl, registry);
     if (!m_volumesSeeded) seedVolumes(gl, registry);
+
+    // Stream-compaction: pack live particles to the front so emitter+sink
+    // flows reach a steady state. Without this m_particleCount only grows
+    // (appendParticles never reuses parked-dead slots) and a continuous tap
+    // ratchets the pool to the cap, then emission silently stops. Run at the
+    // TOP of the frame so per-index aux buffers (aniso, normals) — which are
+    // recomputed below — stay consistent. Only kicks in when there's
+    // something to reclaim, so the common low-count case pays nothing.
+    if (m_particleCount > 0) {
+        const bool hasSink = !registry.view<FluidSinkComponent>().empty();
+        if (hasSink || m_particleCount > (kMaxParticles * 3) / 5)
+            compactParticles(renderer, gl);
+    }
+
     emitFromEmitters(gl, registry, dt);
     if (m_particleCount == 0) return;
 
@@ -594,6 +657,24 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     // assumes unit-ish masses; with our SI particle masses the stable range
     // sits ~20x lower (gas explosion above it — found empirically).
     finalize->setFloat(gl, "u_cohesion", m_params.surfaceTensionNpm * 0.7f);
+    // Drain regions (FluidSinkComponent), world-axis-aligned boxes.
+    {
+        constexpr int kMaxSinks = 8;
+        int n = 0;
+        for (auto e : registry.view<FluidSinkComponent, TransformComponent>()) {
+            if (n >= kMaxSinks) break;
+            const auto& sink = registry.get<FluidSinkComponent>(e);
+            if (!sink.enabled) continue;
+            const auto& xf = registry.get<TransformComponent>(e);
+            const glm::vec3 he = sink.halfExtents * xf.scale;
+            const glm::vec3 mn = xf.translation - he;
+            const glm::vec3 mx = xf.translation + he;
+            finalize->setVec3(gl, ("u_sinkMin[" + std::to_string(n) + "]").c_str(), mn);
+            finalize->setVec3(gl, ("u_sinkMax[" + std::to_string(n) + "]").c_str(), mx);
+            ++n;
+        }
+        finalize->setInt(gl, "u_sinkCount", n);
+    }
     gl->glDispatchCompute(groups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
