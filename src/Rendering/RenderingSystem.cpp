@@ -28,6 +28,8 @@
 #include "CollisionDebugPass.hpp"
 #include "TonemapPass.hpp"
 #include "GlassPass.hpp"
+#include "SmokeSystem.hpp"
+#include "SmokePass.hpp"
 #include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
 #include "FluidSystem.hpp"
@@ -360,6 +362,16 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("fluid_caustics_apply", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "fluid_caustics_apply_frag.glsl").toStdString());
         loadAndStoreShader("fluid_aniso", std::vector<std::string>{ (shaderDir + "fluid_aniso_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_compact", std::vector<std::string>{ (shaderDir + "fluid_compact_comp.glsl").toStdString() });
+        // Eulerian gas solver compute shaders.
+        loadAndStoreShader("smoke_emit", std::vector<std::string>{ (shaderDir + "smoke_emit_comp.glsl").toStdString() });
+        loadAndStoreShader("smoke_advect", std::vector<std::string>{ (shaderDir + "smoke_advect_comp.glsl").toStdString() });
+        loadAndStoreShader("smoke_curl", std::vector<std::string>{ (shaderDir + "smoke_curl_comp.glsl").toStdString() });
+        loadAndStoreShader("smoke_forces", std::vector<std::string>{ (shaderDir + "smoke_forces_comp.glsl").toStdString() });
+        loadAndStoreShader("smoke_combust", std::vector<std::string>{ (shaderDir + "smoke_combust_comp.glsl").toStdString() });
+        loadAndStoreShader("smoke_divergence", std::vector<std::string>{ (shaderDir + "smoke_divergence_comp.glsl").toStdString() });
+        loadAndStoreShader("smoke_jacobi", std::vector<std::string>{ (shaderDir + "smoke_jacobi_comp.glsl").toStdString() });
+        loadAndStoreShader("smoke_project", std::vector<std::string>{ (shaderDir + "smoke_project_comp.glsl").toStdString() });
+        loadAndStoreShader("smoke_raymarch", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "smoke_raymarch_frag.glsl").toStdString());
         loadAndStoreShader("fluid_foam_emit", std::vector<std::string>{ (shaderDir + "fluid_foam_emit_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_update", std::vector<std::string>{ (shaderDir + "fluid_foam_update_comp.glsl").toStdString() });
         loadAndStoreShader("fluid_foam_render", (shaderDir + "fluid_foam_vert.glsl").toStdString(), (shaderDir + "fluid_foam_frag.glsl").toStdString());
@@ -504,6 +516,9 @@ void RenderingSystem::initializeSharedResources()
     // Glass refracts the lit HDR frame INCLUDING the water, so it runs
     // between the fluid composite and the display transform.
     m_overlayPasses.push_back(std::make_unique<GlassPass>());
+    // Volumetric gas (smoke/fire) composites in linear HDR over the scene,
+    // depth-occluded, before the tonemap.
+    m_overlayPasses.push_back(std::make_unique<SmokePass>());
     // Display transform AFTER the water/foam composite (they blend in linear
     // HDR), BEFORE the gizmo (authored in display space).
     m_overlayPasses.push_back(std::make_unique<TonemapPass>());
@@ -515,6 +530,10 @@ void RenderingSystem::initializeSharedResources()
     // Reference-fidelity CPU tier (real SI units); no-op stub when the
     // SPlisHSPlasH superbuild is disabled.
     m_fluid->setExternalSolver(FluidBackend::DfsphCpu, std::make_unique<DfsphBackend>());
+
+    // Eulerian gas solver (smoke + fire), engine context.
+    m_smoke = std::make_unique<SmokeSystem>();
+    m_smoke->initialize(*this, m_gl);
 
     // 4) Initialize all passes
     qDebug() << "[RenderingSystem] Initializing passes for context" << ctx;
@@ -552,11 +571,13 @@ void RenderingSystem::resizeGLResources()
 void RenderingSystem::setSimulationPlaying(bool playing)
 {
     if (m_fluid) m_fluid->setPlaying(playing);
+    if (m_smoke) m_smoke->setPlaying(playing);
 }
 
 void RenderingSystem::resetFluidSimulation()
 {
     if (m_fluid) m_fluid->reset();
+    if (m_smoke) m_smoke->reset();
 }
 
 void RenderingSystem::requestViewportUpdates()
@@ -612,10 +633,12 @@ void RenderingSystem::renderAllViewports()
     const int qWrite = int(m_gpuQueryFrame % kGpuQueryRing);
     const int qRead = int((m_gpuQueryFrame + 1) % kGpuQueryRing); // oldest slot
 
-    // --- Fluid step (engine context; no-op unless simulation is playing) ---
+    // --- Fluid + gas step (engine context; no-op unless playing) ---
     m_gl->glBeginQuery(GL_TIME_ELAPSED, m_gpuQueries[4][qWrite]);
     if (m_fluid)
         m_fluid->update(*this, m_gl, m_scene->getRegistry(), dt);
+    if (m_smoke)
+        m_smoke->update(*this, m_gl, m_scene->getRegistry(), dt);
     m_gl->glEndQuery(GL_TIME_ELAPSED);
 
     if (m_gpuQueryFrame >= kGpuQueryRing - 1) {
@@ -1156,6 +1179,7 @@ void RenderingSystem::shutdown()
     }
 
     if (m_fluid) m_fluid->shutdown(gl);
+    if (m_smoke) m_smoke->shutdown(gl);
     if (m_frameFence) { gl->glDeleteSync(m_frameFence); m_frameFence = nullptr; }
     if (m_gpuQueriesInitialized) {
         gl->glDeleteQueries(kGpuStages * kGpuQueryRing, &m_gpuQueries[0][0]);

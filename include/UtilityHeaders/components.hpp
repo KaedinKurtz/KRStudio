@@ -839,12 +839,12 @@ struct FluidSinkComponent {
  */
 struct SmokeEmitterComponent {
     bool enabled = true;
-    float radius = 0.18f;            // metres, splat sphere radius
-    float densityRate = 2.4f;        // density added per second at the core
+    float radius = 0.2f;             // metres, splat sphere radius
+    float densityRate = 4.5f;        // density added per second at the core
     float temperature = 1.0f;        // injected temperature (0..1, drives buoyancy)
     float fuelRate = 0.0f;           // >0 makes it a FIRE emitter (fuel burns -> heat)
-    float jetSpeed = 1.2f;           // m/s upward velocity injected
-    glm::vec3 color = { 0.85f, 0.85f, 0.9f }; // smoke albedo (fire overrides w/ blackbody)
+    float jetSpeed = 1.5f;           // m/s upward velocity injected
+    glm::vec3 color = { 0.62f, 0.62f, 0.66f }; // smoke albedo (fire overrides w/ blackbody)
 };
 
 /// Tags the entity whose transform/scale defines the smoke grid domain

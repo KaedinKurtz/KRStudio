@@ -25,6 +25,7 @@ class QOffscreenSurface;
 class QSurface;
 class ViewportWidget;
 class FluidSystem;
+class SmokeSystem;
 class Shader;
 class Scene;
 class OpaquePass;
@@ -132,6 +133,7 @@ public:
 
     // --- Fluid simulation (GPU PBF, stepped on the engine context) ---
     FluidSystem* getFluidSystem() const { return m_fluid.get(); }
+    SmokeSystem* getSmokeSystem() const { return m_smoke.get(); }
     void setSimulationPlaying(bool playing);
     void resetFluidSimulation();
 
@@ -212,6 +214,7 @@ private:
 
     // --- Fluid sim (lives on the engine context) ---
     std::unique_ptr<FluidSystem> m_fluid;
+    std::unique_ptr<SmokeSystem> m_smoke;
 
     // --- Framebuffers ---
     GBufferFBO m_gBuffer;

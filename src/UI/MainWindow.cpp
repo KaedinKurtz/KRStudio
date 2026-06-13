@@ -403,7 +403,8 @@ MainWindow::MainWindow(QWidget* parent)
         //  Skipped under KRS_FLUID_DEMO: minimal fluid-rendering test scene.)
         QString dragonPath = assetDir + "Dragon.stl";
         MeshID dragonId =
-            (qEnvironmentVariableIsSet("KRS_BENCH") || qEnvironmentVariableIsSet("KRS_FLUID_DEMO"))
+            (qEnvironmentVariableIsSet("KRS_BENCH") || qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
+             || qEnvironmentVariableIsSet("KRS_SMOKE_DEMO"))
             ? MeshID::None
             : ResourceManager::instance().loadMesh(dragonPath);
 
@@ -488,9 +489,30 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
+    // --- Smoke/fire test scene (KRS_SMOKE_DEMO): an emitter on the ground
+    //     in front of the default camera. =2 makes it a fire. ---
+    if (qEnvironmentVariableIsSet("KRS_SMOKE_DEMO")) {
+        auto& registry = m_scene->getRegistry();
+        entt::entity e = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::IcoSphere),
+                                                      glm::vec3(1.5f, 0.15f, 0.6f),
+                                                      glm::vec3(0.12f), "SmokeSource");
+        auto& mat = registry.emplace_or_replace<MaterialComponent>(e);
+        auto& sm = registry.emplace<SmokeEmitterComponent>(e);
+        if (qEnvironmentVariable("KRS_SMOKE_DEMO") == QLatin1String("2")) {
+            sm.fuelRate = 2.5f; sm.temperature = 1.0f; sm.densityRate = 1.2f;
+            sm.color = { 0.2f, 0.2f, 0.2f };
+            mat.albedoColor = { 0.95f, 0.45f, 0.1f };
+            mat.emissiveColor = { 1.0f, 0.4f, 0.05f };
+            mat.emissiveStrength = 2.0f;
+        } else {
+            mat.albedoColor = { 0.7f, 0.7f, 0.75f };
+        }
+    }
+
     // --- Physics demo: a small stack of primitives that falls on Play ---
     // (Skipped under KRS_BENCH: benchmarks need a clean world.)
-    if (!qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")) {
+    if (!qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
+        && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO")) {
         auto& registry = m_scene->getRegistry();
         auto addRigidPrimitive = [&](Primitive prim, const char* name, glm::vec3 pos,
                                      glm::vec3 scale, bool sphere) {
