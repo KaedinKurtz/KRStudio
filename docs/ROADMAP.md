@@ -1317,3 +1317,71 @@ import-only); this is the structural property, not a shipped feature — not to 
 
 Code: H3 block deleted from `runArticulationLiveGate`; `runDemoGateD` rebuilt on the A1 serial spec
 (ArticulationGate.cpp); GATE-A "A3" + the PxD6 machinery retained + re-labelled generic. Commit on this.
+
+## R) Phase V — VISIBLE articulated FANUC (per-solid meshes tracking live links) — DESIGN (2026-06-14)
+
+Goal: the imported FANUC STEP (17 solids, one ECS entity each) VISIBLY ARTICULATES, each solid rigidly
+tracking the live serial-articulation link it belongs to. Behind GATE V (V1-V6). On the corrected serial
+structure (ROADMAP Q).
+
+### R.0 Recon (subsystem map, real file:line)
+- **CAD import** (`src/Utility/CadImporter.cpp:118-148`): one `entt::entity` per SOLID; mesh vertices baked
+  in WORLD coords with an IDENTITY `TransformComponent` (components.hpp:414); tag `"STEP solid N"` (1-idx).
+  CRUCIAL: per-solid B-Rep cylinders survive as `AttachmentComponent{vector<AttachmentFrame>}`
+  (`components.hpp:949`), each frame = `{localPosition, localAxis, radius, isHole}` in entity-local ==
+  WORLD coords at rest (identity xform). This is the INDEPENDENT witness for V-assign.
+- **Articulation** (`SimulationController.cpp`): `articLinkPoses()` (:864) returns `[px,py,pz, qx,qy,qz,qw]`
+  per MOVING link (skips fixed root [0]); link index j <-> spec joint j-1; built by `buildArticulation`
+  (:661) = the canonical graph H1/D1 validated. Live drive via `commandJointTorques`(:787) /
+  `setArticJointPositions`(:850). Run loop: MainWindow QTimer (:970) -> `tick()`(:506) -> accumulator ->
+  `stepOnce(1/240)` -> `writeBackTransforms()`(:1108).
+- **THE GAP (V.3)**: `writeBackTransforms()` syncs only rigid-body ACTORS (`m_px->actors`) to
+  TransformComponents; there is NO articulation-link -> entity map and NO articulation writeback. Adding it
+  is V.3.
+- **Render**: solids are already renderable entities (RenderableMeshComponent + TransformComponent); moving
+  a solid = writing its TransformComponent. Since meshes are world-baked at REST, the per-frame transform
+  is the link's DELTA pose: `xform_S(t) = dLink_L(t) = linkPose_L(t) * linkPose_L(0)^-1` (world-frame),
+  applied to the already-world-baked vertices. No local->world rebake needed.
+
+### R.1 Solid -> link assignment (V.1), derived from bores + shared hinges (NOT from the offset-fit)
+Joints (world m): J1 (0,0,0) axis Y; J2 (0,0.74,0.305) axis X; J3 (0,1.815,0.305) axis X; (J4 wrist roll
+axis Z at the real wrist ~ (0,2.065,1.58) -- see R.3, frozen for now). Serial links 0..3 driven J1/J2/J3:
+
+| Link | Joint | Solids | Basis |
+|---|---|---|---|
+| 0 (fixed base) | -- | 16 (pedestal, J1 bearing r237.5), 11, 14 (J1-coaxial brackets) | floor-mounted; hinge{11,14,16} |
+| 1 (J1 yaw Y) | J1 | 13 (carousel / S-axis casting, holds the arm) | above base, behind, carries arm |
+| 2 (J2 shoulder X@0.74) | J2 | 12 (upper arm 1425mm; J2 journal r170 + J3 bore r145.5) | spans J2->J3 |
+| 3 (J3 elbow X@1.815) | J3 | 1 (forearm; J3 bearing r140 + wrist bore + STRUT r11.25), 10 (motor pack), 2/3/5/8 + 4/6/7/9 (bolts, hinge{1,*}), 0 + 15 (wrist, frozen) | spans J3->J4; strut is a RIGID member of J3 (per directive) |
+
+Confidence: J2/J3 split is bore-anchored (clean). J1 base-vs-carousel split (which of 11/14/16/13 yaw)
+is degenerate under the axis-coincidence test (rotation about an axis leaves the axis fixed) and has no
+cross-bore to discriminate -> 11/14 assigned to the FIXED base (conservative: a non-moving bracket is a
+smaller visible error than a non-moving arm part). DOCUMENTED ambiguity, not hidden.
+
+### R.2 V-assign correctness check (the crux; V2 offset-fit is circular -> needs an independent witness)
+Independent witness = the AttachmentComponent bores carried by the assigned links over the demo motion:
+- **coincidenceErr** = max over every shared-hinge (A,B) of the world axis-line deviation between A's bore
+  (carried by dLink_link(A)) and B's bore (carried by dLink_link(B)). A real joint axis is shared by both
+  its links -> stays coincident; ~0 (target < 1 mm) for a correct assignment.
+- **boltStillness** = max relative rotation at BOLT hinges (small r, both sides SAME link) -> must be ~0
+  (internal bolts don't articulate).
+- **jointMotion** = min relative-angle SWEEP at JOINT hinges (J3 {1,12} two-sided) -> must exceed a floor
+  (the joint actually moves -> proof of motion).
+- **NEGATIVE CONTROL** (same rigor as the GATE-D frozen-robot proof): deliberately re-assign ONE solid to a
+  wrong neighbouring link; coincidenceErr (or boltStillness) MUST spike past the bound -> V-assign FAILS.
+  If a mis-assignment were NOT rejected, the check is vacuous and V-assign fails.
+Implement headless (KRS_VASSIGN_SELFTEST) on the REAL imported STEP (OCCT import -> AttachmentComponents)
++ the canonical serial graph + the GATE-D demo motion. No renderer needed.
+
+### R.3 Scope honesty
+Driving J1/J2/J3 only (the three joints whose A1 frames match the CAD). J4-J6 wrist DOF: the A1 J4 frame
+(axis Z at elbow+0.25 Y) does NOT match the real wrist (offset ~1.27 m out in Z along the forearm), so the
+wrist is held RIGID on link 3 for now (correct while J4 is frozen). A true 6-DOF wrist split (real J4/J5/J6
+frames) is a follow-up needing its own re-gate. Stays on the gate-validated 4-link canonical graph (J4
+present but frozen, carries no solids) -> canonical-graph rule intact.
+
+### R.4 GATE V (unchanged contract): V1 coverage (every solid -> a link), V2 transform<1e-6 (dLink compose),
+V3 render pixel +-2px, V4 motion coherence (rigid per link; bores stay coincident == R.2), V5 stability /
+no-regression (overnight 13/13 + KRS_BENCH 7/7 stay green), V6 default boot into the moving FANUC.
+Order: V.1 + V-assign gate (headless, FIRST -- gates the assignment) -> V.3 writeback -> V.2 render -> V.4 boot.
