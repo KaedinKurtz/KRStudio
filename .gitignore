@@ -48,7 +48,7 @@ CMakeUserPresets.json
 # ----- RenderDoc -----
 *.rdc
 
-# ----- Large asset types (don’t need on GitHub) -----
+# ----- Large asset types (donï¿½t need on GitHub) -----
 assets/**/*.hdr
 assets/**/*.exr
 assets/**/*.stl
@@ -66,3 +66,9 @@ assets/.gitkeep
 
 # Local build convenience script (machine-specific paths)
 run_configure.bat
+
+# ----- Phase-A probe artifacts (Pinocchio attempt Â§M.3a, reverted; verify/ logs) -----
+# external/pinocchio = time-boxed Pinocchio clone, decision reverted to the Eigen oracle.
+# verify/ = overnight probe logs + selftest PNGs. Both pollute status; keep out of the tree.
+external/pinocchio/
+verify/

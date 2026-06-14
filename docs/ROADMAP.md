@@ -978,3 +978,49 @@ rigid `KRS_BENCH` 7/7 separately.
   field layer reliably wins the depth test against the coincident base mesh — no fighting.
 - **F1**: replace the FemSystem 20 °C thermal fallback with an unavailable-marker (don't recolor
   what wasn't solved) so a missing thermal solve reads as "no data", not a fabricated cold field.
+
+## N.2) Recovery checkpoint + reconciliation (2026-06-14, post-reboot)
+
+A Windows update rebooted the machine mid-sprint and killed the agent thread. This checkpoint
+re-establishes ground truth from the **repo + gate results**, not prior reports or memory.
+
+- **Protect**: the 83 unpushed commits were pushed to origin (origin/master == HEAD == `5eec994`).
+- **Clean rebuild**: `cmake --build --preset release --clean-first` → `BUILD_EXIT=0` (healthy;
+  reused `vcpkg_installed`, recompiled all first-party + in-tree deps).
+
+**Gates re-run on the freshly-rebuilt binary (real measured numbers):**
+- `KRS_OVERNIGHT_BENCH` = **9/9 gate groups PASS, exit 0** (Phase A oracle, Phase A articulation,
+  FEM, MPM, adjoint <1e-5, HIL jitter, HIL bridges, trajectory verify, OCCT).
+- `KRS_DYN_SELFTEST` ALL PASS: A1 FK 4.578e-16; two-way 0; CRBA-vs-RNEA 2.665e-15; pendulum
+  1.776e-15; RNEA↔ABA 2.731e-14; IK 50/50 (worst 1.76e-07); 4-bar 2.167e-13; Jacobian-FD 7.237e-07;
+  60-tree branching fuzz PASS; mass-scaling 7.105e-15; near-singular IK finite.
+- `KRS_ARTIC_SELFTEST` ALL PASS: A1 maxPos 1.168e-06 m / maxRot 6.401e-07 rad; A2 maxDev 1.396e-06 m
+  / radiusVar 1.589e-06 m; A5 torque→accel maxRel 7.575e-07; A3 FANUC parallelogram residual
+  3.944e-07 m (settled-FK 6.838e-07 m / 2.384e-07 rad).
+- `KRS_BENCH` rigid = **7/7** (fall 0.85%, bounce apex 0.10%, static-friction stick, kinetic-friction
+  slide, projectile 0.31%, fluid column 4.98%, concave cup rest 0%).
+- Observation (non-blocking, pre-existing): `PhysXGpu_64.dll` fails to load (err 126) → CPU PhysX
+  fallback; every gate passes regardless. Follow-up: deploy the GPU DLL into `build/release`.
+
+**Reconciliation — two-sprint plan vs. the actual repo (8-agent verification, wf_f202bfbb):**
+
+| Phase | Status | Evidence / resume point |
+|---|---|---|
+| F0–F3 render correctness | **COMMITTED-NOT-GATED** | F1/F2/F3 fixes in `5eec994` (`FemSystem.cpp:170`, `MpmSystem.cpp:739-784`, `FemVizPass.cpp:36`). **F0 harness `KRS_RENDER_SELFTEST` + G1–G9 absent from source** (only in §N.1). ← **RESUME** |
+| G live FANUC articulation (#116) | NOT-STARTED | `SimulationController.cpp:836` still `PxRigidDynamic::addForce` (Phase-2 fake). No `PxArticulation` in `buildPhysicsWorld`; `JointComponent` declared, never emitted. GATE A passed; GATE H (live) unrun. |
+| H Qt UI completeness | NOT-STARTED | 25 UI components; no control manifest / fuzz / coherence harness (GATE U absent). |
+| I OMPL planning (stretch) | NOT-STARTED | `ompl` not in `vcpkg.json`; no includes. |
+| J reflection + ECS | NOT-STARTED | EnTT registry exists; every object IS an entity. `entt::meta` / round-trip absent (GATE R unrun). |
+| K auto parameter UI | NOT-STARTED | All panels hand-coded; no metadata-driven generator (depends on J). |
+| L MQTT self-broadcast | NOT-STARTED | No mosquitto/paho dep; orphan `mqtt_client_button` UI stub only. |
+| M MQTT command round-trip (stretch) | NOT-STARTED | Depends on L. |
+
+This confirms the expected picture: committed through `5eec994` = Phase A gated + Phase F fixes +
+recon §N; F0/G1–G9 unconfirmed (now confirmed **absent**); Phases G–M unstarted.
+
+**Hygiene**: `assets/FANUC-430 Robot.STEP` committed (load-bearing for Phase A/G; `.gitignore` excludes
+meshes/HDR but not `.STEP`). `external/pinocchio/` + `verify/` are Phase-A probe artifacts → gitignored.
+`external/SPlisHSPlasH` untracked content = generated `Utilities/Version.h` (benign build artifact).
+
+**Resume point**: PART 1 — build the F0 headless render harness + inverse-colormap decode, run gates
+G1–G9 to green (§N.3, next), then Phase F counts as landed and the G–M arc proceeds in order.
