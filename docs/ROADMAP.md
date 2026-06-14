@@ -1085,3 +1085,45 @@ HIL follow-up, independent of the render gates.
   G5 depth-buffer persistence (same FBO bound throughout), G2 LUT-coarseness (range applied identically).
 
 **Phase F is LANDED + GATED.** Next: Phase G — live FANUC articulation (GATE H).
+
+## O) Phase G — live FANUC articulation (GATE H) — DESIGN (2026-06-14)
+
+GATE A (§M.7) validated a *throwaway* `PxArticulationReducedCoordinate` built inside
+`runArticulationGate`. Phase G wires articulation into the **live** `SimulationController`
+sim and validates THAT path against the oracle.
+
+### O.0 Recon (5-agent, wf_65031377)
+- Live path today: `buildPhysicsWorld` (SimulationController.cpp:462) makes a `PxScene`, ground,
+  then one `PxRigidDynamic` per `RigidBodyComponent` (no articulation). CAN effort → `addForce`
+  (the Phase-2 fake, line 836). State published from body pose/vel (`publishCanState`, 846).
+- Validated recipe to REUSE: `ArticulationGate.cpp:75-100` `buildArtic` + `GateSpec`/`makeOracle`
+  (the §M.1a FANUC chain: J1 Y-yaw @ origin; lower X-pivot (0,0.74,0.305); arm-top X-pivot;
+  wrist Z) + the A3 parallelogram `PxD6Joint` close (lock 3 translations, free rotations).
+- **Joint-tree-assignment is ambiguous to auto-detect** (STEP axis clusters need user
+  disambiguation — recon). **DECISION (boundary call, consistent with §M.1a/GATE A)**: assemble
+  the live joint tree from the **validated detected-axis spec**, not the ambiguous auto-clusterer.
+  Emitting `JointComponent` into the scene-graph from CAD anchors + a selection UI is a Phase-H/UI
+  follow-up; the GATE-H numerical contract is met by the validated spec.
+
+### O.1 Architecture
+- Move the validated recipe (`GateSpec`, `makeOracle`, `buildArtic`, helpers) into a shared
+  header so both `ArticulationGate.cpp` (GATE A) and the live path use ONE source of truth.
+- `SimulationController`: `PxImpl` gains `articulation` + `articCache` + `articLinks` +
+  `axisToDof` + `loopD6`. New `buildArticulation()` (called from `buildPhysicsWorld` when a
+  `RobotArticSpec` is set via `setRobotArticulationSpec`) builds the live articulation in the
+  live `PxScene`; it is stepped by the existing `tick()`/`stepOnce` loop automatically.
+- PhysX-free accessors for the gate: dof count, set joint positions, link world poses,
+  command joint torques, joint accelerations, loop residual.
+- CAN: `applyCanCommands` routes an articulated actuator's effort → `cache.jointForce[dof]` +
+  `applyCache(eFORCE)` (retiring the `:836 addForce` fake for the robot); `publishCanState`
+  reads `cache.jointPosition`/`jointVelocity`.
+
+### O.2 GATE H contract (real measured numbers, not relaxed)
+- **H1** FK of the LIVE assembled tree vs oracle FK < 1e-4 over ≥50 random configs.
+- **H2** a commanded CAN torque → live joint accel vs oracle ABA < 1%.
+- **H3** the FANUC parallelogram loop stays closed (residual < 1e-4) in the LIVE sim during motion.
+- **H4** regression: `:836 addForce` fake retired with no silent breakage — `KRS_OVERNIGHT_BENCH`
+  stays 10/10, HIL suite green.
+- Harness `runArticulationLiveGate` (KRS_ARTIC_LIVE_SELFTEST) builds a `SimulationController` +
+  Scene, plays (→ live articulation), drives the live path, compares to the oracle; folded into
+  `KRS_OVERNIGHT_BENCH` as an 11th group. Adversarial review before H is declared closed.
