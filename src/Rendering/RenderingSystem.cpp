@@ -39,7 +39,8 @@
 #include <cstdio>   // std::fflush (KRS_STEP_INSPECT recon dump)
 #include <cstdlib>  // std::_Exit  (KRS_STEP_INSPECT one-shot exit)
 #include "FemSolver.hpp"
-#include "RobotDynamics.hpp"   // Phase A GATE A oracle self-tests
+#include "RobotDynamics.hpp"    // Phase A GATE A oracle self-tests
+#include "ArticulationGate.hpp" // Phase A GATE A PhysX articulation gate
 #include "FemSystem.hpp"
 #include "FemVizPass.hpp"
 #include "SmokePass.hpp"
@@ -613,6 +614,12 @@ void RenderingSystem::initializeSharedResources()
     // (FK / mass-matrix / dynamics / IK / loop-closure). Pure CPU/Eigen, no GL.
     if (qEnvironmentVariableIntValue("KRS_DYN_SELFTEST") != 0) {
         krs::dyn::runSelfTests();
+    }
+
+    // Phase A GATE A (PhysX plant track): PxArticulationReducedCoordinate built
+    // from the same spec as the oracle, validated A1/A2/A3/A5 against it.
+    if (qEnvironmentVariableIntValue("KRS_ARTIC_SELFTEST") != 0) {
+        krs::dyn::runArticulationGate();
     }
 }
 

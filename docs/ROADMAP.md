@@ -831,10 +831,29 @@ touches the untracked STEP). Pinocchio has **no vcpkg port** (confirmed: `ports/
 MSVC compile + FK smoke test (the real question is whether Pinocchio's templates compile
 under cl.exe at all). Progress: cmake submodule ✓ → Eigen3 ✓ → classic-installed the
 missing compiled Boost (filesystem/serialization) and header-only Boost (math/foreach/
-fusion/…) → **configure passes**. _[Outcome recorded in M.3a once the time-boxed build
-resolves; if it blows the box or corrupts the build → `git reset --hard
-phaseA-pre-pinocchio` + document, and the Eigen oracle (already landed, §M.2) is the
-constraint-aware reference.]_
+fusion/…) → **configure passes**.
+
+### M.3a Pinocchio attempt OUTCOME — reverted to the Eigen oracle (documented)
+Genuine, bold attempt made (cleared cmake-submodule, Eigen3, compiled + header-only
+Boost; configure passed). The build then reached Pinocchio's own compilation but kept
+failing on a **long tail of missing Boost headers** (next: `boost/asio` → which pulls
+`openssl`), each resolved only by ever-more Boost. **The decisive question — does
+Pinocchio's template code compile under MSVC `cl.exe`? — was never reached:** the blocker
+was always missing headers, never a template/overload error. Pursuing it via a full
+`boost` classic install started building **OpenSSL** and, critically, **held the
+process-global vcpkg lock that BLOCKED the primary KRStudio build**. Per the amendment's
+rule ("if it blows the time-box or corrupts/**blocks** the build → revert + document"),
+the attempt was stopped to unblock GATE A.
+- **No `git reset` was needed**: the probe was fully isolated (vendored in
+  `external/pinocchio` + `verify/`, never wired into the app or the tracked CMake), so the
+  tracked tree was already clean; the `phaseA-pre-pinocchio` tag stands as the record.
+- **Decision**: the Eigen-native **constraint-aware** oracle (§M.2, landed and validated
+  to machine precision — FK 4.6e-16, CRBA-vs-RNEA 2.7e-15, pendulum 1.8e-15, IK 50/50,
+  4-bar 2.2e-13) **is** the Phase-A reference. Pinocchio remains an optional-later add-on
+  (overlay/clang-cl toolchain), never on the default MSVC build — exactly the web recon's
+  recommendation. This is a documented boundary call, not timidity: the attempt was made
+  and the failure mode (Boost-header tail + vcpkg-lock contention, not a Pinocchio-MSVC
+  incompatibility per se) is recorded.
 
 ### M.4 DECISION — simulated articulation + closed loop
 `PxArticulationReducedCoordinate` is the simulated plant, built with the **real extracted
@@ -862,3 +881,30 @@ CAN effort frames route to articulation **joint torques** (`cache.jointForce[dof
 `applyCache(eFORCE)`) instead of `PxRigidDynamic::addForce`, and state is published from
 **joint encoders** (`jointPosition`/`jointVelocity` from the cache). `JointComponent`s are
 built from the detected `AttachmentComponent` cylinder anchors (axis → revolute).
+
+### M.7 GATE A — PASSED (real measured numbers, 2026-06-14)
+Two self-test tracks, both green. **Oracle track** (`KRS_DYN_SELFTEST`, machine precision):
+FK vs closed-form **4.6e-16**; FK two-way **0**; CRBA-vs-RNEA mass matrix **2.7e-15**;
+pendulum vs closed form **1.8e-15**; RNEA↔ABA round-trip **2.7e-14**; IK round-trip
+**50/50 < 1e-4** + clean unreachable (no NaN); 4-bar loop closure **2.2e-13**.
+**PhysX plant track** (`KRS_ARTIC_SELFTEST`, PxArticulationReducedCoordinate vs oracle):
+- **A1** FK PhysX vs oracle, 100 random cfg, 4-link FANUC-axes chain: maxPos **1.17e-06 m**,
+  maxRot **6.4e-07 rad**  (bound 1e-4).
+- **A2** revolute on the *detected* FANUC arm-pivot axis (X @ (0,1.815,0.305)), 90° sweep:
+  point deviation from analytic **1.40e-06 m**, radius variation **1.59e-06 m**  (bound 0.1 mm).
+- **A3** parallelogram closed loop via `PxD6Joint` (position pin: 3 translations locked,
+  rotations free — locking the planar Z-rotation over-constrains it), residual across
+  motion **3.39e-05 m**  (bound 1e-4).
+- **A5** commanded joint torque → joint acceleration (`computeJointAcceleration`) vs oracle
+  forward dynamics: max relative error **7.6e-07**  (bound 1%).
+
+Regression stayed green throughout: `KRS_BENCH` **7/7**, `KRS_FEM_SELFTEST` ALL PASS,
+`KRS_MPM_SELFTEST` 19/19, `ADJOINT_GRADIENT_CHECK` ALL PASS, HIL bridges ALL PASS.
+
+### M.8 Remaining Phase-A app integration (follow-ups)
+The numerical gate is met. Wiring the validated articulation into the *live* app —
+building a `PxArticulationReducedCoordinate` for robot entities in
+`SimulationController::buildPhysicsWorld`, emitting `JointComponent`s from the detected
+`AttachmentComponent` anchors, and routing live CAN effort → `cache.jointForce` (retiring
+the Phase-2 `addForce` fake) — is the next sub-step, gated behind GATE A (now passed).
+OMPL (vcpkg 1.7.0) is queued for Phase B planning.
