@@ -1156,6 +1156,18 @@ before any GATE-H code.
   (one `PxInitExtensions`/process, used by GATE A + the live path) + `setSceneGravity`. **H3 PASS**:
   live parallelogram loop residual **3.219e-07 m** across a 3-crank sweep under live stepping
   (bound 1e-4); GATE A unregressed (A3 still 3.944e-07), overnight 11/11.
-- **G.3** CAN effort → `cache.jointForce` + retire `:836 addForce`; H2 (torque→accel <1%) + H4
-  regression (overnight 10/10, HIL green). Commit.
+- **G.3** ✅ LANDED — `applyCanCommands` routes an articulated robot's effort → `cache.jointForce`
+  (axis = DOF) + `applyCache(eFORCE)`, **retiring the `:836 addForce` fake** (kept only as the legacy
+  free-rigid-body path, inert when an articulation exists); `publishCanState` reads joint encoders from
+  the cache. **H2 PASS**: CAN torque (cancodec round-trip) → live joint accel vs oracle ABA, maxRel
+  **9.271e-07** over 20 cfg (bound 1%, on par with A5's 7.6e-7). **H4 PASS**: overnight **12/12** (GATE H
+  folded in as a standing group) + `KRS_BENCH` 7/7 + HIL green — no regression from retiring the fake.
 - **G.4** adversarial review → fix confirmed → declare GATE H closed.
+
+### GATE H — PASS (live FANUC articulation, real measured numbers)
+- **H1** live FK vs oracle, 60 cfg: maxPos **1.323e-06 m** / maxRot **6.054e-07 rad** (bound 1e-4).
+- **H2** CAN torque (codec round-trip) → live joint accel vs oracle ABA, 20 cfg: maxRel **9.271e-07** (<1%).
+- **H3** live parallelogram loop (PxD6, 3 cranks): residual **3.219e-07 m** (bound 1e-4).
+- **H4** `:836 addForce` fake retired; overnight **12/12**, KRS_BENCH 7/7, HIL green — no regression.
+The articulation is built by `SimulationController::buildArticulation` in the live `buildPhysicsWorld`,
+stepped by the real sim loop, and driven by the live CAN path — not the GATE-A throwaway.

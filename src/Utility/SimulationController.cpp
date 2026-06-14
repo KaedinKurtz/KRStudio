@@ -760,6 +760,48 @@ void SimulationController::setSceneGravity(float gx, float gy, float gz)
 #endif
 }
 
+bool SimulationController::setArticJointVelocities(const std::vector<float>& qd)
+{
+#if defined(KR_WITH_PHYSX)
+    if (!m_px->articulation || !m_px->articCache) return false;
+    const physx::PxU32 nDof = m_px->articulation->getDofs();
+    if (qd.size() != nDof) return false;
+    for (physx::PxU32 d = 0; d < nDof; ++d) m_px->articCache->jointVelocity[d] = physx::PxReal(qd[d]);
+    m_px->articulation->applyCache(*m_px->articCache, physx::PxArticulationCacheFlag::eVELOCITY);
+    return true;
+#else
+    (void)qd; return false;
+#endif
+}
+
+bool SimulationController::commandJointTorques(const std::vector<float>& tau)
+{
+#if defined(KR_WITH_PHYSX)
+    if (!m_px->articulation || !m_px->articCache) return false;
+    const physx::PxU32 nDof = m_px->articulation->getDofs();
+    if (tau.size() != nDof) return false;
+    for (physx::PxU32 d = 0; d < nDof; ++d) m_px->articCache->jointForce[d] = physx::PxReal(tau[d]);
+    m_px->articulation->applyCache(*m_px->articCache, physx::PxArticulationCacheFlag::eFORCE);
+    return true;
+#else
+    (void)tau; return false;
+#endif
+}
+
+std::vector<float> SimulationController::articJointAccel()
+{
+    std::vector<float> out;
+#if defined(KR_WITH_PHYSX)
+    if (!m_px->articulation || !m_px->articCache) return out;
+    m_px->articulation->commonInit();
+    m_px->articulation->computeJointAcceleration(*m_px->articCache);  // gravity + Coriolis + applied torque
+    const physx::PxU32 nDof = m_px->articulation->getDofs();
+    out.reserve(nDof);
+    for (physx::PxU32 d = 0; d < nDof; ++d) out.push_back(float(m_px->articCache->jointAcceleration[d]));
+#endif
+    return out;
+}
+
 int SimulationController::articDofCount() const
 {
 #if defined(KR_WITH_PHYSX)
@@ -1081,10 +1123,22 @@ void SimulationController::applyCanCommands()
 #if defined(KR_WITH_PHYSX)
     if (!m_can || !m_px->scene) return;
     auto& reg = m_scene->getRegistry();
+    const int nDof = m_px->articulation ? int(m_px->articulation->getDofs()) : 0;
+    bool articTouched = false;
     krs::hil::CanFrame fr;
     while (m_can->recv(fr)) {                              // drain all pending command frames
         int axis; float f[3];
         if (!krs::hil::cancodec::decodeEffort(fr, axis, f)) continue; // ignore non-effort frames
+        // Phase G: an articulated robot routes effort -> JOINT TORQUE (axis = DOF).
+        // This RETIRES the Phase-2 addForce fake (which applied CAN effort as a body
+        // force because no articulation existed); the robot is now a real reduced-
+        // coordinate articulation driven through its cache.
+        if (m_px->articulation && m_px->articCache && axis >= 0 && axis < nDof) {
+            m_px->articCache->jointForce[axis] = PxReal(f[0]);
+            articTouched = true;
+            continue;
+        }
+        // Legacy path: genuine FREE rigid-body actuators (non-articulated) take a force.
         for (auto e : reg.view<HilActuatorComponent>()) {
             auto& act = reg.get<HilActuatorComponent>(e);
             if (act.axisId != axis) continue;
@@ -1092,13 +1146,14 @@ void SimulationController::applyCanCommands()
             if (it != m_px->actors.end()) {
                 auto* dyn = it->second->is<PxRigidDynamic>();
                 if (dyn && !(dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)) {
-                    dyn->addForce(PxVec3(f[0], f[1], f[2]), PxForceMode::eFORCE, true); // continuous force this step
+                    dyn->addForce(PxVec3(f[0], f[1], f[2]), PxForceMode::eFORCE, true);
                     act.lastEffort = { f[0], f[1], f[2] };
                 }
             }
             break;
         }
     }
+    if (articTouched) m_px->articulation->applyCache(*m_px->articCache, PxArticulationCacheFlag::eFORCE);
 #endif
 }
 
@@ -1107,6 +1162,20 @@ void SimulationController::publishCanState()
 #if defined(KR_WITH_PHYSX)
     if (!m_can || !m_px->scene) return;
     auto& reg = m_scene->getRegistry();
+    // Phase G: articulated robot publishes JOINT encoders from the cache (not body pose).
+    if (m_px->articulation && m_px->articCache) {
+        m_px->articulation->copyInternalStateToCache(*m_px->articCache, PxArticulationCacheFlag::ePOSITION);
+        m_px->articulation->copyInternalStateToCache(*m_px->articCache, PxArticulationCacheFlag::eVELOCITY);
+        const PxU32 nDof = m_px->articulation->getDofs();
+        for (PxU32 d = 0; d < nDof; ++d) {
+            float p[3] = { float(m_px->articCache->jointPosition[d]), 0.f, 0.f };
+            float v[3] = { float(m_px->articCache->jointVelocity[d]), 0.f, 0.f };
+            float t[3] = { float(m_px->articCache->jointForce[d]),    0.f, 0.f };
+            m_can->send(krs::hil::cancodec::encodePose(int(d), p));
+            m_can->send(krs::hil::cancodec::encodeVel(int(d), v));
+            m_can->send(krs::hil::cancodec::encodeTorque(int(d), t));
+        }
+    }
     for (auto e : reg.view<HilActuatorComponent>()) {
         auto& act = reg.get<HilActuatorComponent>(e);
         auto it = m_px->actors.find(e);

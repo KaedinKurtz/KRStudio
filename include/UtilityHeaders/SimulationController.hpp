@@ -63,6 +63,9 @@ public:
     std::vector<std::array<float, 7>> articLinkPoses() const;    // per non-root link: pos.xyz + quat.xyzw
     void setSceneGravity(float gx, float gy, float gz);          // gate: isolate the loop constraint
     static bool ensurePhysxExtensions();                        // PxD6Joint needs extensions (once/process)
+    bool setArticJointVelocities(const std::vector<float>& qd);  // applyCache(eVELOCITY)
+    bool commandJointTorques(const std::vector<float>& tau);     // cache.jointForce + applyCache(eFORCE)
+    std::vector<float> articJointAccel();                        // commonInit + computeJointAcceleration
 
     /// Advance the accumulator / step physics. Call once per frame.
     void tick();

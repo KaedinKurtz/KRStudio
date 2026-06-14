@@ -442,8 +442,68 @@ bool runArticulationLiveGate()
     printf("[artic live] H3 live parallelogram loop (D6, 3 cranks): residual=%.3e m  %s\n",
            maxRes, h3pass ? "PASS" : "FAIL");
 
-    const bool pass = h1pass && h3pass;
-    printf("[artic live] %s\n", pass ? "ALL PASS (H1,H3)" : "FAILURES PRESENT");
+    // ---- H2: a commanded CAN torque (codec round-trip) -> live joint accel vs oracle ABA --
+    // Exercises the SAME jointForce routing the live applyCanCommands uses; the torque is
+    // round-tripped through cancodec encode/decode so the gate validates the transmitted
+    // (quantised) command, not the ideal one. Torques are large (>> the int16 quant) so
+    // codec quantisation stays well under the 1% bound (cf. A5's note).
+    double maxRel = 0; bool h2ran = false;
+    {
+        std::vector<GateSpec> a(3);
+        a[0].parent=-1; a[0].axis=Eigen::Vector3d(0,0,1); a[0].ptree=Eigen::Vector3d(0,0,0);
+        a[0].mass=2.0; a[0].com=Eigen::Vector3d(0.2,0,0); a[0].inertiaDiag=Eigen::Vector3d(0.02,0.05,0.06);
+        a[1].parent=0;  a[1].axis=Eigen::Vector3d(0,0,1); a[1].ptree=Eigen::Vector3d(0.4,0,0);
+        a[1].mass=1.5; a[1].com=Eigen::Vector3d(0.15,0,0); a[1].inertiaDiag=Eigen::Vector3d(0.015,0.03,0.04);
+        a[2].parent=1;  a[2].axis=Eigen::Vector3d(0,0,1); a[2].ptree=Eigen::Vector3d(0.3,0,0);
+        a[2].mass=1.0; a[2].com=Eigen::Vector3d(0.1,0,0); a[2].inertiaDiag=Eigen::Vector3d(0.008,0.02,0.025);
+        krs::dyn::RobotArticSpec as; as.fixBase=true;
+        for (const auto& g : a) {
+            krs::dyn::ArticJointSpec j; j.parent=g.parent; j.revolute=true;
+            j.axis={float(g.axis.x()),float(g.axis.y()),float(g.axis.z())};
+            for (int r=0;r<3;++r) for (int c=0;c<3;++c) j.Rtree[r*3+c]=float(g.Rtree(r,c));
+            j.ptree={float(g.ptree.x()),float(g.ptree.y()),float(g.ptree.z())};
+            j.mass=float(g.mass);
+            j.com={float(g.com.x()),float(g.com.y()),float(g.com.z())};
+            j.inertiaDiag={float(g.inertiaDiag.x()),float(g.inertiaDiag.y()),float(g.inertiaDiag.z())};
+            as.joints.push_back(j);
+        }
+        Scene scene3; SimulationController sim3(&scene3);
+        sim3.setRobotArticulationSpec(as);
+        sim3.play();
+        if (sim3.articDofCount()==3) {
+            SerialChain oc3 = makeOracle(a);
+            const Eigen::Vector3d grav(0,-9.81,0);
+            std::mt19937 rng2(424242);
+            std::uniform_real_distribution<double> U(-1.0,1.0);
+            for (int t=0;t<20;++t) {
+                Eigen::VectorXd q(3),qd(3),tauCmd(3);
+                std::vector<float> qf(3),qdf(3),tf(3);
+                for (int i=0;i<3;++i) {
+                    q[i]=U(rng2); qd[i]=0.5*U(rng2);
+                    const float fe[3]={ float(20.0*U(rng2)), 0.f, 0.f };  // >> int16 quant
+                    krs::hil::CanFrame fr2 = krs::hil::cancodec::encodeEffort(i, fe);  // CAN command
+                    int ax; float fd[3]; krs::hil::cancodec::decodeEffort(fr2, ax, fd); // as received
+                    tauCmd[i]=fd[0];
+                    qf[i]=float(q[i]); qdf[i]=float(qd[i]); tf[i]=float(tauCmd[i]);
+                }
+                sim3.setArticJointPositions(qf);
+                sim3.setArticJointVelocities(qdf);
+                sim3.commandJointTorques(tf);                 // same routing as applyCanCommands
+                const std::vector<float> qdd = sim3.articJointAccel();
+                Eigen::VectorXd qddPx(3); for (int i=0;i<3;++i) qddPx[i]=qdd[i];
+                const Eigen::VectorXd qddOr = oc3.forwardDynamics(q,qd,tauCmd,grav);
+                maxRel = std::max(maxRel, (qddPx-qddOr).norm()/std::max(1e-6,qddOr.norm()));
+            }
+            h2ran=true;
+        }
+        sim3.stop();
+    }
+    const bool h2pass = h2ran && maxRel < 0.01;
+    printf("[artic live] H2 CAN torque->accel vs oracle ABA (20 cfg, codec round-trip): maxRel=%.3e  %s\n",
+           maxRel, h2pass ? "PASS" : "FAIL");
+
+    const bool pass = h1pass && h2pass && h3pass;
+    printf("[artic live] %s\n", pass ? "ALL PASS (H1,H2,H3)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }

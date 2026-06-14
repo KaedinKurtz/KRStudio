@@ -628,6 +628,7 @@ void RenderingSystem::initializeSharedResources()
             { "OCCT STEP pipeline (round-trip + features)",  krs::cad::runSelfTest() },
             { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },
+            { "GATE H live articulation (H1/H2/H3 vs oracle)", krs::dyn::runArticulationLiveGate() },
         };
         int fails = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
