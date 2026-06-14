@@ -34,6 +34,9 @@
 #include <gp_Ax1.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Trsf.hxx>
+#include <gp_Cylinder.hxx>
+#include <BRepAdaptor_Surface.hxx>
+#include <GeomAbs_SurfaceType.hxx>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -152,6 +155,142 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
     return res;
 }
 
+// ---------------------------------------------------------------------------
+// Phase A topology recon: dump solids + cluster cylindrical axes into shared
+// hinge lines so the kinematic loops (FANUC parallelogram) are visible.
+// ---------------------------------------------------------------------------
+namespace {
+struct CylAxis {
+    int solid; double px, py, pz; double dx, dy, dz; double radius; bool hole;
+};
+// Canonical infinite-line representation: unit direction (sign-fixed) + the
+// foot of the perpendicular from the origin (point on the line nearest origin).
+struct LineKey { double dx, dy, dz; double fx, fy, fz; };
+LineKey lineOf(const CylAxis& a) {
+    double dx = a.dx, dy = a.dy, dz = a.dz;
+    const double dn = std::sqrt(dx*dx + dy*dy + dz*dz);
+    if (dn > 1e-12) { dx /= dn; dy /= dn; dz /= dn; }
+    // sign-canonicalise so the largest-magnitude component is positive
+    const double ax = std::abs(dx), ay = std::abs(dy), az = std::abs(dz);
+    double s = 1.0;
+    if (az >= ax && az >= ay) s = (dz < 0) ? -1.0 : 1.0;
+    else if (ay >= ax)        s = (dy < 0) ? -1.0 : 1.0;
+    else                      s = (dx < 0) ? -1.0 : 1.0;
+    dx *= s; dy *= s; dz *= s;
+    const double dot = a.px*dx + a.py*dy + a.pz*dz;          // foot = p - (p.d) d
+    return { dx, dy, dz, a.px - dot*dx, a.py - dot*dy, a.pz - dot*dz };
+}
+} // namespace
+
+void inspectStep(const std::string& path)
+{
+    using std::printf;
+    printf("\n========== [STEP INSPECT] %s ==========\n", path.c_str());
+    STEPControl_Reader reader;
+    if (reader.ReadFile(path.c_str()) != IFSelect_RetDone) {
+        printf("[STEP INSPECT] STEPControl_Reader.ReadFile FAILED (path quoting / existence?)\n");
+        fflush(stdout); return;
+    }
+    const int nRoots = int(reader.NbRootsForTransfer());
+    reader.TransferRoots();
+    TopoDS_Shape root = reader.OneShape();
+    if (root.IsNull()) { printf("[STEP INSPECT] no shapes after transfer\n"); fflush(stdout); return; }
+
+    Bnd_Box abb; BRepBndLib::Add(root, abb);
+    double Xn,Yn,Zn,Xx,Yx,Zx; abb.Get(Xn,Yn,Zn,Xx,Yx,Zx);
+    const double diag = std::sqrt((Xx-Xn)*(Xx-Xn)+(Yx-Yn)*(Yx-Yn)+(Zx-Zn)*(Zx-Zn));
+    printf("[STEP INSPECT] roots=%d  assembly bbox: X[%.1f..%.1f] Y[%.1f..%.1f] Z[%.1f..%.1f]  diag=%.1f  (units likely %s)\n",
+           nRoots, Xn,Xx, Yn,Yx, Zn,Zx, diag, diag > 50.0 ? "MILLIMETRES" : "metres");
+
+    std::vector<CylAxis> allAxes;
+    int solidIdx = 0;
+    for (TopExp_Explorer sx(root, TopAbs_SOLID); sx.More(); sx.Next(), ++solidIdx) {
+        const TopoDS_Shape sld = sx.Current();
+        Bnd_Box bb; BRepBndLib::Add(sld, bb);
+        double xn,yn,zn,xx,yx,zx; bb.Get(xn,yn,zn,xx,yx,zx);
+        GProp_GProps vp; BRepGProp::VolumeProperties(sld, vp);
+        const double vol = std::abs(vp.Mass());
+        const gp_Pnt com = vp.CentreOfMass();
+        int faces=0, nPlane=0, nCyl=0, nCone=0, nSphere=0, nTorus=0, nFree=0;
+        std::vector<CylAxis> here;
+        for (TopExp_Explorer fx(sld, TopAbs_FACE); fx.More(); fx.Next()) {
+            const TopoDS_Face f = TopoDS::Face(fx.Current());
+            ++faces;
+            BRepAdaptor_Surface ad(f, Standard_True);          // accounts for face location
+            switch (ad.GetType()) {
+                case GeomAbs_Plane:    ++nPlane;  break;
+                case GeomAbs_Cone:     ++nCone;   break;
+                case GeomAbs_Sphere:   ++nSphere; break;
+                case GeomAbs_Torus:    ++nTorus;  break;
+                case GeomAbs_Cylinder: {
+                    ++nCyl;
+                    const gp_Cylinder c = ad.Cylinder();
+                    const gp_Pnt o = c.Location();
+                    const gp_Dir d = c.Axis().Direction();
+                    CylAxis ca{ solidIdx, o.X(),o.Y(),o.Z(), d.X(),d.Y(),d.Z(),
+                                c.Radius(), (f.Orientation()==TopAbs_REVERSED) };
+                    here.push_back(ca); allAxes.push_back(ca);
+                    break;
+                }
+                default: ++nFree; break;
+            }
+        }
+        printf("\n[solid %d] vol=%.0f  bbox[%.0f..%.0f, %.0f..%.0f, %.0f..%.0f] span(%.0f,%.0f,%.0f)\n",
+               solidIdx, vol, xn,xx, yn,yx, zn,zx, xx-xn, yx-yn, zx-zn);
+        printf("          centroid(%.1f, %.1f, %.1f)  faces=%d [plane %d, cyl %d, cone %d, sph %d, torus %d, free %d]\n",
+               com.X(), com.Y(), com.Z(), faces, nPlane,nCyl,nCone,nSphere,nTorus,nFree);
+        // distinct cylinder bores within this solid (radius+line dedupe)
+        std::vector<LineKey> seen; int shown=0;
+        for (const auto& ca : here) {
+            const LineKey k = lineOf(ca); bool dup=false;
+            for (const auto& s2 : seen) {
+                if (std::abs(k.dx*s2.dx + k.dy*s2.dy + k.dz*s2.dz) > 0.9998 &&
+                    std::sqrt((k.fx-s2.fx)*(k.fx-s2.fx)+(k.fy-s2.fy)*(k.fy-s2.fy)+(k.fz-s2.fz)*(k.fz-s2.fz)) < 1.0)
+                    { dup=true; break; }
+            }
+            if (dup) continue; seen.push_back(k);
+            if (shown++ < 12)
+                printf("            cyl r=%6.2f  o(%.1f,%.1f,%.1f) dir(%.3f,%.3f,%.3f) %s\n",
+                       ca.radius, ca.px,ca.py,ca.pz, ca.dx,ca.dy,ca.dz, ca.hole?"hole":"shaft");
+        }
+    }
+
+    // ---- cross-solid axis clustering => shared hinge lines / closed loops ----
+    printf("\n[STEP INSPECT] total solids=%d, total cylindrical faces=%d\n", solidIdx, int(allAxes.size()));
+    struct Cluster { LineKey key; std::vector<int> solids; int count; double rmin, rmax; };
+    std::vector<Cluster> clusters;
+    for (const auto& ca : allAxes) {
+        const LineKey k = lineOf(ca);
+        int hit = -1;
+        for (size_t i=0;i<clusters.size();++i) {
+            const auto& c = clusters[i].key;
+            if (std::abs(k.dx*c.dx + k.dy*c.dy + k.dz*c.dz) > 0.9995 &&
+                std::sqrt((k.fx-c.fx)*(k.fx-c.fx)+(k.fy-c.fy)*(k.fy-c.fy)+(k.fz-c.fz)*(k.fz-c.fz)) < 2.0)
+                { hit = int(i); break; }
+        }
+        if (hit < 0) { clusters.push_back({k, {ca.solid}, 1, ca.radius, ca.radius}); }
+        else {
+            auto& cl = clusters[hit]; ++cl.count;
+            cl.rmin = std::min(cl.rmin, ca.radius); cl.rmax = std::max(cl.rmax, ca.radius);
+            if (std::find(cl.solids.begin(), cl.solids.end(), ca.solid) == cl.solids.end())
+                cl.solids.push_back(ca.solid);
+        }
+    }
+    printf("[STEP INSPECT] SHARED HINGE CANDIDATES (coaxial cylinders spanning >=2 solids):\n");
+    int shared = 0;
+    for (const auto& cl : clusters) {
+        if (cl.solids.size() < 2) continue;
+        ++shared;
+        printf("   * line foot(%.1f,%.1f,%.1f) dir(%.3f,%.3f,%.3f)  r[%.1f..%.1f]  solids{",
+               cl.key.fx,cl.key.fy,cl.key.fz, cl.key.dx,cl.key.dy,cl.key.dz, cl.rmin,cl.rmax);
+        for (size_t i=0;i<cl.solids.size();++i) printf("%s%d", i?",":"", cl.solids[i]);
+        printf("}  (%d faces)\n", cl.count);
+    }
+    if (!shared) printf("   (none — no two solids share a coaxial cylinder within tolerance)\n");
+    printf("========== [STEP INSPECT END] ==========\n\n");
+    fflush(stdout);
+}
+
 bool runSelfTest()
 {
     using std::printf;
@@ -231,6 +370,7 @@ ImportResult importStep(Scene&, const std::string&, float)
     r.message = "STEP import needs OpenCASCADE — rebuild with KR_WITH_OCCT (opencascade in vcpkg.json).";
     return r;
 }
+void inspectStep(const std::string&) {} // no OCCT -> no-op
 bool runSelfTest() { return true; } // no OCCT -> vacuous pass, keeps harnesses green
 } // namespace krs::cad
 #endif

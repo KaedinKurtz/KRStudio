@@ -30,6 +30,14 @@ bool available();
 /// millimetres) to engine metres (default 0.001 = mm).
 ImportResult importStep(Scene& scene, const std::string& path, float metersPerUnit = 0.001f);
 
+/// Phase A topology recon (gated by KRS_STEP_INSPECT=<path>): loads a STEP
+/// assembly and prints, per solid, its bounding box / centroid / exact volume /
+/// face-type tally and every cylindrical face axis (in assembly coordinates),
+/// then clusters those axes across solids to reveal SHARED hinge lines — i.e.
+/// the revolute joints and any closed kinematic loops (the FANUC parallelogram).
+/// Pure stdout, no scene mutation, no GL. No-op in the no-OCCT build.
+void inspectStep(const std::string& path);
+
 /// Headless verification of the OCCT pipeline (gated by KRS_CAD_SELFTEST): builds
 /// a box-minus-cylinder solid, round-trips it through a temp STEP file, then
 /// re-reads + meshes + recognizes the cylindrical feature + computes the GProp

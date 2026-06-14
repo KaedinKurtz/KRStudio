@@ -36,7 +36,10 @@
 #include "HilBridges.hpp"
 #include "TrajectoryVerifier.hpp"
 #include "CadImporter.hpp"
+#include <cstdio>   // std::fflush (KRS_STEP_INSPECT recon dump)
+#include <cstdlib>  // std::_Exit  (KRS_STEP_INSPECT one-shot exit)
 #include "FemSolver.hpp"
+#include "RobotDynamics.hpp"   // Phase A GATE A oracle self-tests
 #include "FemSystem.hpp"
 #include "FemVizPass.hpp"
 #include "SmokePass.hpp"
@@ -592,10 +595,24 @@ void RenderingSystem::initializeSharedResources()
         krs::cad::runSelfTest();
     }
 
+    // Phase A: STEP topology recon. KRS_STEP_INSPECT=<path> dumps solids +
+    // shared-hinge axis clusters (reveals the FANUC parallelogram loop).
+    if (qEnvironmentVariableIsSet("KRS_STEP_INSPECT")) {
+        krs::cad::inspectStep(qEnvironmentVariable("KRS_STEP_INSPECT").toStdString());
+        std::fflush(stdout);
+        std::_Exit(0);   // recon one-shot — dump topology and terminate cleanly
+    }
+
     // Headless FEM oracle check (axial bar, cantilever vs Euler-Bernoulli, 1D bar
     // conduction, plate-with-hole stress concentration). Pure CPU/Eigen, no GL.
     if (qEnvironmentVariableIntValue("KRS_FEM_SELFTEST") != 0) {
         krs::fem::FemSolver::runSelfTests();
+    }
+
+    // Phase A GATE A (oracle track): Eigen-native Featherstone self-tests
+    // (FK / mass-matrix / dynamics / IK / loop-closure). Pure CPU/Eigen, no GL.
+    if (qEnvironmentVariableIntValue("KRS_DYN_SELFTEST") != 0) {
+        krs::dyn::runSelfTests();
     }
 }
 

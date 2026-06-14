@@ -745,3 +745,120 @@ This phase ships ONLY the scaffold — the FEM solver remains the source of trut
   topology generality is needed, with ONNX scatter/dynamic-shape caveats — §L.3).
 - The trained model would predict the field from the input grid in one forward pass,
   with the FEM oracle kept as ground truth / fallback (the `available()`-false path).
+
+## M) Phase A — Articulation & kinematics on the real FANUC robot (2026-06-14)
+
+> The Phase-A directive said "§K"; that section is Phase 4.5. Phase A is documented
+> here as **§M** (the next free section after §L).
+
+### M.0 Reconnaissance findings (what exists today)
+- **PhysX articulation API is fully available** (PhysX 5.x in the manifest):
+  `PxArticulationReducedCoordinate` (createLink/PxArticulationJointReducedCoordinate
+  setJointType eREVOLUTE/ePRISMATIC/eFIX, setMotion/setLimitParams/setDriveParams),
+  `PxArticulationCache` (jointPosition/Velocity/Force/Acceleration; flags
+  ePOSITION/eVELOCITY/eFORCE write, eACCELERATION read), the analytical utilities
+  (computeMassMatrix / computeGeneralizedGravityForce / computeCoriolisAndCentrifugalForce
+  / computeDenseJacobian / computeJointAcceleration), and `PxD6Joint` for loop closure.
+- **ECS robot model already exists**: rich `JointDescription` (`JointType`
+  FIXED/REVOLUTE/CONTINUOUS/PRISMATIC/PLANAR/FLOATING, `axis`, `origin_xyz/rpy`,
+  `JointLimits`, motor/PID/sensor blocks) + `LinkDescription` (mass, `glm::mat3`
+  inertia, COM offset). `JointComponent{description, parentLink, childLink,
+  currentPosition}` and `LinkComponent` wrap them; `ParentComponent`/`RobotRootComponent`
+  give the tree. **No dynamics state and no PhysX articulation were ever built from these.**
+- **The Phase-2 CAN coupling is the rigid-body-DOF-set FAKE to retire**: incoming
+  effort frames (`can_id 0x200+axis`) are applied via `PxRigidDynamic::addForce(eFORCE)`
+  on a whole body (`HilActuatorComponent`), not a hinge torque. State is published from
+  the body pose/linear-velocity, not joint encoders.
+- **`AttachmentComponent`/`AttachmentFrame`** (Phase 4) already carry OCCT-detected
+  cylinder anchors (localPosition on axis, localAxis, radius, isHole) — the raw material
+  for "detected axes become joints."
+- **Build deps**: Eigen present (via libigl). `urdfdom`/`fcl`/`ccd`/Boost present.
+  OMPL HAS a working vcpkg port (1.7.0, x64-windows) for the core lib — adopt in Phase B.
+
+### M.1 The robot IS real — STEP discovery bug fixed
+The Phase-A robot is the committed asset **`assets/FANUC-430 Robot.STEP`** (10.4 MB).
+The earlier "zero *.step files" was a **discovery bug**: the extension is uppercase
+`.STEP` and the filename contains a space, so a case-sensitive `*.step` glob missed it.
+A new OCCT topology inspector (`krs::cad::inspectStep`, gated by `KRS_STEP_INSPECT=<path>`)
+loads it with `STEPControl_Reader` (quoted full path, space-safe) and confirms it reads.
+**No synthetic assembly is used.**
+
+### M.1a Extracted topology (FANUC M-430iA parallel-link picker, units = mm)
+`inspectStep` reports **17 solids**, assembly bbox X[-416..456] Y[0..2249] Z[-523..1820]
+(**Y is vertical**), and clusters cylindrical faces into shared coaxial "hinge lines".
+The kinematic structure (large-radius bores shared between *structural* solids; tiny
+r3–10 mm bores are fastener pins in solids 2–9, ignored):
+
+| Joint (inferred) | Axis | Line (mm) | Radius | Solids | Role |
+|---|---|---|---|---|---|
+| **J1 base yaw** | **Y** (vertical) | foot (0,0,0) | r 237–330 | {16,11,14} | turret rotation on the pedestal (solid 16) |
+| **Arm top pivot** | **X** | (0,1815,305) | r 140–180 | {1,12} | head casting (1) ↔ long arm (12) |
+| **Wrist roll** | **Z** | (0.7,2065,·) | r 48–140 | {0,1,15} | wrist assembly |
+| **Wrist bend** | **X** | (0,2065,1580) | r 48–111 | {0,15} | wrist assembly |
+
+Solid 12 is the **1425 mm main arm** and carries **two parallel X-axis pivots at Z=305**
+— bottom (335,740,305) r170 to the lower casting (solid 13) and top (290.5,1815,305)
+r145.5 to the head (solid 1). **Two parallel pivots 1075 mm apart on one link is the
+parallelogram-bar signature**: solid 12 is one bar of the four-bar; a parallel passive
+link closes the loop and holds the head orientation constant — the defining feature of
+this picker. **GATE A3 (closed-loop residual < 1e-4) is therefore load-bearing.**
+Per-solid exact B-Rep volumes give link masses (× material density); the structural link
+volumes are base 86.1e6, arm 60.8e6, head 63.6e6, lower casting 41.6e6 mm³.
+
+**Boundary call (rule 6):** STEP is geometry-only — it carries **no joint/DOF metadata**.
+So the *joint identification* (which coaxial bore is a revolute vs a bolt, which links
+form the parallelogram) is **inferred** from large-radius shared-bore clustering + the
+twin-parallel-pivot signature; the *geometry* (axes, pivot points, link inertias) is
+**exact** from the B-Rep. This is documented, not faked.
+
+### M.2 DECISION — dynamics oracle: Eigen-native, constraint-aware (LANDED)
+A self-contained `krs::dyn` oracle (`src/Physics/RobotDynamics.cpp`, MPL/BSD-clean, only
+Eigen) is the analytical reference and the amendment-required independent FK check:
+- FK = homogeneous SE(3) composition; geometric Jacobian; **RNEA** (spatial Newton–Euler
+  inverse dynamics); **CRBA** mass matrix (independent of RNEA → genuine cross-check);
+  forward dynamics q̈ = M⁻¹(τ−b); **DLS IK** (Buss) with e-/step-clamping + limit clamps;
+  **loop-closure** machinery (frame-coincidence constraint residual + Newton solve of the
+  dependent coords) → handles the parallelogram, i.e. it is **constraint-aware**, not a
+  plain serial Featherstone.
+- Self-test battery (`KRS_DYN_SELFTEST`, pure CPU): A1 FK vs closed-form RR + two-way FK
+  agreement; CRBA-vs-RNEA mass-matrix cross-check; pendulum closed-form + RNEA↔ABA
+  round-trip; A4 IK round-trip + clean unreachable handling; 4-bar loop-closure residual.
+
+### M.3 DECISION — Pinocchio attempt (amendment step 3, time-boxed, behind a tag)
+Safety tag **`phaseA-pre-pinocchio`** = `f44c2c4` created first (a hard reset never
+touches the untracked STEP). Pinocchio has **no vcpkg port** (confirmed: `ports/pinocchio`
+404), so "via vcpkg" = a source/overlay build. The genuine, decisive probe = an isolated
+MSVC compile + FK smoke test (the real question is whether Pinocchio's templates compile
+under cl.exe at all). Progress: cmake submodule ✓ → Eigen3 ✓ → classic-installed the
+missing compiled Boost (filesystem/serialization) and header-only Boost (math/foreach/
+fusion/…) → **configure passes**. _[Outcome recorded in M.3a once the time-boxed build
+resolves; if it blows the box or corrupts the build → `git reset --hard
+phaseA-pre-pinocchio` + document, and the Eigen oracle (already landed, §M.2) is the
+constraint-aware reference.]_
+
+### M.4 DECISION — simulated articulation + closed loop
+`PxArticulationReducedCoordinate` is the simulated plant, built with the **real extracted
+FANUC axes** (J1 = Y at origin; arm pivot = X at (0,1815,305); wrist = Z/X near
+(0,2065,·)) and link inertias from the exact solid volumes. The reduced-coordinate tree
+is a spanning tree (cut one parallelogram joint); the loop is closed with a **`PxD6Joint`**
+(revolute → lock 5, free TWIST) at the cut pivot, per the PhysX recon. Torque→accel uses
+the cache protocol (create cache after addArticulation; `jointForce[dof]=τ`,
+`applyCache(eFORCE)`, reapply each step; read via `computeJointAcceleration` /
+`copyInternalStateToCache(eACCELERATION)`), validated against the oracle's ABA.
+
+### M.5 GATE A acceptance (real measured numbers required)
+- **A1** PhysX FK vs oracle FK over 100 random configs (oracle is the analytical ref since
+  Pinocchio is not a guaranteed dep; cross-checked two independent ways at 1e-12 + closed
+  form). PhysX (single-precision) bound ~1e-4.
+- **A2** revolute on a *detected cylinder axis*: 90° sweep, a body point's deviation from
+  the ideal circle about the exact extracted axis < 0.1 mm.
+- **A3** parallelogram loop residual < 1e-4 across motion (oracle Newton-close + PhysX D6).
+- **A4** IK round-trip FK(IK(pose))≈pose < 1e-4 over 50 targets + clean unreachable (no NaN).
+- **A5** commanded CAN torque → joint accel matches oracle ABA/RNEA < 1% (and PhysX
+  analytical utilities cross-checked).
+
+### M.6 DECISION — retire the Phase-2 CAN fake
+CAN effort frames route to articulation **joint torques** (`cache.jointForce[dof]`,
+`applyCache(eFORCE)`) instead of `PxRigidDynamic::addForce`, and state is published from
+**joint encoders** (`jointPosition`/`jointVelocity` from the cache). `JointComponent`s are
+built from the detected `AttachmentComponent` cylinder anchors (axis → revolute).
