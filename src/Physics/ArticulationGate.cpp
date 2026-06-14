@@ -239,14 +239,14 @@ bool runArticulationGate() {
         a.art->release();
     }
 
-    // ---- A3: FANUC parallelogram closed loop via PxD6Joint, residual + FK across motion ----
-    // Real FANUC geometry from the STEP extraction: the 1425 mm main arm carries two
-    // PARALLEL pivots about the X axis at Z=0.305 m — the lower at (0,0.74,0.305) and the
-    // top at (0,1.815,0.305), 1.075 m apart (the parallelogram bar). The three bars rotate
-    // about X (the detected pivot axis), the loop lies in the Y-Z plane, and the cut joint
-    // is pinned back to the REAL top pivot — so this is the FANUC's arm parallelogram, not
-    // a generic unit rhombus. (Coupler width / 2nd ground pivot of the full 4-bar are not
-    // cleanly extractable from the bolt-vs-bearing-ambiguous bores — documented in ROADMAP M.)
+    // ---- A3: GENERIC closed-loop capability via PxD6Joint, residual + FK across motion ----
+    // NOT THE FANUC TOPOLOGY. The FANUC-430 is a SERIAL 6-DOF arm with a J2 counterbalance
+    // strut, not a parallelogram (ROADMAP Q — verified from the assembled STEP geometry).
+    // This sub-gate is RETAINED as a capability proof that PhysX's PxD6 loop closure tracks
+    // the oracle's closeLoops to <1e-4 on a 3-bar closed loop, so the loop machinery stays
+    // exercised for FUTURE closed-chain mechanisms. The dimensions below are a plausible
+    // Y-Z-plane loop (3 bars about X, cut joint pinned back to a fixed anchor); they no
+    // longer assert anything about the FANUC, whose loop-free FK is proven by H1 / GATE D.
     {
         const double L = 1.075;                              // real arm-bar length (Y span)
         const Eigen::Vector3d base(0.0, 0.74, 0.305);        // real lower pivot
@@ -388,61 +388,11 @@ bool runArticulationLiveGate()
     printf("[artic live] H1 live FK vs oracle (%d cfg, 4-link): maxPos=%.3e m  maxRot=%.3e rad  %s\n",
            N, maxPos, maxRot, h1pass ? "PASS" : "FAIL");
 
-    // ---- H3: live FANUC parallelogram loop (PxD6 close), residual under motion ----
-    // Real geometry from A3: 1.075 m arm bar, two parallel X-pivots at Z=0.305, cut
-    // joint pinned to the real top pivot. Built + stepped by the LIVE SimulationController.
-    double maxRes = 0; bool h3ran = false;
-    {
-        const double L = 1.075;
-        const Eigen::Vector3d base(0.0, 0.74, 0.305);
-        const Eigen::Vector3d topPivot(0.0, 0.74 + L, 0.305);
-        const Eigen::Vector3d bar(0, L, 0), axisX(1, 0, 0);
-        std::vector<GateSpec> p(3);
-        p[0].parent = -1; p[0].axis = axisX; p[0].ptree = base;
-        p[1].parent =  0; p[1].axis = axisX; p[1].ptree = bar;
-        p[2].parent =  1; p[2].axis = axisX; p[2].ptree = bar;
-        for (auto& g : p) { g.mass = 160.0; g.com = Eigen::Vector3d(0, 0.5*L, 0); g.inertiaDiag = Eigen::Vector3d(60, 2, 60); }
-        krs::dyn::RobotArticSpec ps; ps.fixBase = true;
-        for (const auto& g : p) {
-            krs::dyn::ArticJointSpec j; j.parent = g.parent; j.revolute = true;
-            j.axis = { float(g.axis.x()), float(g.axis.y()), float(g.axis.z()) };
-            for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) j.Rtree[r*3+c] = float(g.Rtree(r,c));
-            j.ptree = { float(g.ptree.x()), float(g.ptree.y()), float(g.ptree.z()) };
-            j.mass = float(g.mass); j.com = { 0.f, float(0.5*L), 0.f }; j.inertiaDiag = { 60.f, 2.f, 60.f };
-            ps.joints.push_back(j);
-        }
-        ps.loop.enabled = true; ps.loop.tipLink = 2;
-        ps.loop.tipLocal    = { float(bar.x()), float(bar.y()), float(bar.z()) };
-        ps.loop.anchorWorld = { float(topPivot.x()), float(topPivot.y()), float(topPivot.z()) };
-
-        Scene scene2;
-        SimulationController sim2(&scene2);
-        sim2.setRobotArticulationSpec(ps);
-        sim2.play();                       // buildArticulation builds chain + D6 loop
-        sim2.setSceneGravity(0, 0, 0);     // isolate the constraint (like A3)
-        if (sim2.articDofCount() == 3) {
-            SerialChain oc2 = makeOracle(p);
-            const double cranks[3] = { 0.4, 0.7, 1.0 };  // sweep the crank "across motion"
-            for (double crank : cranks) {
-                Eigen::VectorXd q = Eigen::VectorXd::Zero(3); q[0] = crank; q[1] = -crank*1.2; q[2] = crank*0.4;
-                LoopConstraint lc; lc.bodyA = 2; lc.pA = bar; lc.bodyB = -1; lc.pB = topPivot;
-                oc2.closeLoops({ lc }, { 1, 2 }, q, 100, 1e-12);
-                std::vector<float> qf(3); for (int i = 0; i < 3; ++i) qf[i] = float(q[i]);
-                sim2.setArticJointPositions(qf);
-                for (int st = 0; st < 240; ++st) sim2.singleStep();   // settle in the LIVE sim
-                const auto poses2 = sim2.articLinkPoses();            // [2] = 3rd bar
-                const Eigen::Vector3d    tp(poses2[2][0], poses2[2][1], poses2[2][2]);
-                const Eigen::Quaterniond tq(poses2[2][6], poses2[2][3], poses2[2][4], poses2[2][5]);
-                const Eigen::Vector3d tipW = tp + tq.toRotationMatrix() * bar;
-                maxRes = std::max(maxRes, (tipW - topPivot).norm());
-            }
-            h3ran = true;
-        }
-        sim2.stop();
-    }
-    const bool h3pass = h3ran && maxRes < 1e-4;
-    printf("[artic live] H3 live parallelogram loop (D6, 3 cranks): residual=%.3e m  %s\n",
-           maxRes, h3pass ? "PASS" : "FAIL");
+    // NOTE (topology correction, ROADMAP Q): the FANUC-430 is a SERIAL 6-DOF arm with a J2
+    // counterbalance strut, NOT a parallelogram. The former H3 (live PxD6 loop residual) tested
+    // a fictional loop and is REMOVED from the FANUC live gate. H1 (serial FK vs oracle, above)
+    // is the loop-free proof. The PxD6 loop machinery + the generic capability test (GATE A "A3")
+    // are retained for future closed-chain mechanisms, marked NOT the FANUC topology.
 
     // ---- H2: a commanded CAN torque (codec round-trip) -> live joint accel vs oracle ABA --
     // Exercises the SAME jointForce routing the live applyCanCommands uses; the torque is
@@ -504,8 +454,8 @@ bool runArticulationLiveGate()
     printf("[artic live] H2 CAN torque->accel vs oracle ABA (20 cfg, codec round-trip): maxRel=%.3e  %s\n",
            maxRel, h2pass ? "PASS" : "FAIL");
 
-    const bool pass = h1pass && h2pass && h3pass;
-    printf("[artic live] %s\n", pass ? "ALL PASS (H1,H2,H3)" : "FAILURES PRESENT");
+    const bool pass = h1pass && h2pass;   // serial chain: H1 FK + H2 torque->accel (no loop; see ROADMAP Q)
+    printf("[artic live] %s\n", pass ? "ALL PASS (H1,H2 serial)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }
@@ -523,127 +473,114 @@ bool runDemoGateD()
 {
     using std::printf;
     setvbuf(stdout, nullptr, _IONBF, 0);
-    printf("[demo gate] GATE D — FANUC parallelogram pick-and-place stability\n");
+    printf("[demo gate] GATE D - FANUC SERIAL arm pick-and-place stability (loop-free; ROADMAP Q)\n");
 
-    const double L = 1.075;
-    const Eigen::Vector3d base(0.0, 0.74, 0.305), topPivot(0.0, 0.74 + L, 0.305);
-    const Eigen::Vector3d bar(0, L, 0), axisX(1, 0, 0);
-    std::vector<GateSpec> p(3);
-    p[0].parent = -1; p[0].axis = axisX; p[0].ptree = base;
-    p[1].parent =  0; p[1].axis = axisX; p[1].ptree = bar;
-    p[2].parent =  1; p[2].axis = axisX; p[2].ptree = bar;
-    for (auto& g : p) { g.mass = 160.0; g.com = Eigen::Vector3d(0, 0.5*L, 0); g.inertiaDiag = Eigen::Vector3d(60, 2, 60); }
-    krs::dyn::RobotArticSpec ps; ps.fixBase = true;
-    for (const auto& g : p) {
-        krs::dyn::ArticJointSpec j; j.parent = g.parent; j.revolute = true;
-        j.axis = { float(g.axis.x()), float(g.axis.y()), float(g.axis.z()) };
-        for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) j.Rtree[r*3+c] = float(g.Rtree(r,c));
-        j.ptree = { float(g.ptree.x()), float(g.ptree.y()), float(g.ptree.z()) };
-        j.mass = float(g.mass); j.com = { 0.f, float(0.5*L), 0.f }; j.inertiaDiag = { 60.f, 2.f, 60.f };
+    // The validated A1 serial chain (J1 yaw Y, J2/J3 shoulder+elbow X, J4 wrist Z) -- the FANUC's
+    // ACTUAL topology (no parallelogram loop). Modest link masses drive the dynamics; FK is mass-free.
+    std::vector<GateSpec> s(4);
+    s[0].parent=-1; s[0].axis=Eigen::Vector3d(0,1,0); s[0].ptree=Eigen::Vector3d(0,0,0);
+    s[1].parent= 0; s[1].axis=Eigen::Vector3d(1,0,0); s[1].ptree=Eigen::Vector3d(0,0.74,0.305);
+    s[2].parent= 1; s[2].axis=Eigen::Vector3d(1,0,0); s[2].ptree=Eigen::Vector3d(0,1.075,0);
+    s[3].parent= 2; s[3].axis=Eigen::Vector3d(0,0,1); s[3].ptree=Eigen::Vector3d(0,0.25,0);
+    const double linkMass[4] = {4,4,3,2};
+    for (int i=0;i<4;++i){ s[i].mass=linkMass[i]; s[i].com=Eigen::Vector3d(0,0,0); s[i].inertiaDiag=Eigen::Vector3d(1.5,1.5,1.5); }
+    krs::dyn::RobotArticSpec ps; ps.fixBase = true;            // NO loop: serial chain
+    for (const auto& g : s) {
+        krs::dyn::ArticJointSpec j; j.parent=g.parent; j.revolute=true;
+        j.axis={float(g.axis.x()),float(g.axis.y()),float(g.axis.z())};
+        for (int r=0;r<3;++r) for (int c=0;c<3;++c) j.Rtree[r*3+c]=float(g.Rtree(r,c));
+        j.ptree={float(g.ptree.x()),float(g.ptree.y()),float(g.ptree.z())};
+        j.mass=float(g.mass); j.com={0.f,0.f,0.f}; j.inertiaDiag={1.5f,1.5f,1.5f};
         ps.joints.push_back(j);
     }
-    ps.loop.enabled = true; ps.loop.tipLink = 2;
-    ps.loop.tipLocal    = { float(bar.x()), float(bar.y()), float(bar.z()) };
-    ps.loop.anchorWorld = { float(topPivot.x()), float(topPivot.y()), float(topPivot.z()) };
 
-    SerialChain oc = makeOracle(p);
-    auto closedConfig = [&](double crank) {
-        Eigen::VectorXd q = Eigen::VectorXd::Zero(3); q[0]=crank; q[1]=-crank*1.2; q[2]=crank*0.4;
-        LoopConstraint lc; lc.bodyA=2; lc.pA=bar; lc.bodyB=-1; lc.pB=topPivot;
-        oc.closeLoops({lc}, {1,2}, q, 100, 1e-12); return q;
+    SerialChain oc = makeOracle(s);
+    const int nDof = 4;
+    Eigen::VectorXd qA(4); qA << 0.00, 0.30, 0.30, 0.00;       // pick config
+    Eigen::VectorXd qB(4); qB << 0.80, 0.70, 1.00, 0.50;       // place config
+    // Per-joint PD: gains scaled to each joint's reflected inertia (J1 carries the whole arm,
+    // the wrist almost nothing), all comfortably overdamped so the chain is integration-stable
+    // at the PhysX timestep and the dwell settles reach error to << TRACK_TOL.
+    const double Kp[4] = {5000, 3000, 800, 350};
+    const double Kd[4] = { 700,  450, 110,  50};
+    auto smoothV = [](const Eigen::VectorXd& a, const Eigen::VectorXd& b, double t){
+        double sf=t*t*(3.0-2.0*t); return Eigen::VectorXd(a + (b-a)*sf);
     };
-    const double crankA = 0.40, crankB = 1.00;
-    const Eigen::Vector3d zeroG(0,0,0);
-    const double Kp = 1.2e5, Kd = 1.2e4, KdDep = 300.0;   // crank PD + light dependent damping
-    const Eigen::VectorXd qcmdA = closedConfig(crankA);   // loop-consistent seed
-    auto smooth = [](double a, double b, double t){ double s=t*t*(3.0-2.0*t); return a+(b-a)*s; };
 
-    // One demo run: cycles x (A->B + B->A). PD on the CRANK (joint 0, the independent DOF);
-    // the dependent bars follow the D6 with light damping (the 1-DOF mechanism is not fought,
-    // and we track the independent coord, not the oracle's non-unique dependent solution).
-    // Returns max loop residual + max crank tracking error + NaN flag + trajectory checksum.
-    // outputs: maxRes (loop residual, every step), maxLag (peak crank tracking error during
-    // motion), maxSettled (crank error at the END of each dwell = reach accuracy), NaN, checksum.
-    struct DemoResult { double maxRes=0, maxLag=0, maxSettled=0, crankLo=1e30, crankHi=-1e30, checksum=0; bool nan=false, ran=false; };
-    auto runDemo = [&](int cycles, int mTrans, int mDwell, bool driveCrank = true) -> DemoResult {
+    // Outputs: maxFkErr (live link pose vs oracle FK at the live q, EVERY step -- the serial
+    // stability+correctness metric, replacing the fictional loop residual); maxLag (peak joint
+    // tracking error during motion); maxSettled (||q-qcmd|| at the end of each dwell = reach
+    // accuracy); jLo/jHi (elbow joint sweep = proof of motion); full-state checksum; NaN.
+    struct DemoResult { double maxFkErr=0, maxLag=0, maxSettled=0, jLo=1e30, jHi=-1e30, checksum=0; bool nan=false, ran=false; };
+    auto runDemo = [&](int cycles, int mTrans, int mDwell, bool drive = true) -> DemoResult {
         DemoResult R;
         Scene scene; SimulationController sim(&scene);
         sim.setRobotArticulationSpec(ps);
         sim.play();
-        if (sim.articDofCount() != 3) { sim.stop(); return R; }
+        if (sim.articDofCount() != nDof) { sim.stop(); return R; }
         sim.setSceneGravity(0,0,0);
-        { std::vector<float> q0(3); for (int i=0;i<3;++i) q0[i]=float(qcmdA[i]); sim.setArticJointPositions(q0); }
-        auto stepCtl = [&](double crankTgt) -> double {       // returns |crank - target| this step
+        { std::vector<float> q0(nDof); for (int i=0;i<nDof;++i) q0[i]=float(qA[i]); sim.setArticJointPositions(q0); }
+        auto stepCtl = [&](const Eigen::VectorXd& qcmd) -> double {   // returns ||q-qcmd|| this step
             auto qm = sim.articJointPositions(); auto qdm = sim.articJointVelocities();
-            if (qm.size()!=3 || qdm.size()!=3) { R.nan = true; return 0.0; }
-            Eigen::VectorXd q(3), qd(3);
-            for (int i=0;i<3;++i){ q[i]=qm[i]; qd[i]=qdm[i];
-                if (!std::isfinite(qm[i]) || !std::isfinite(qdm[i])) R.nan = true; }
-            // Pure PD on the crank + light damping on the dependent bars. No oracle bias
-            // feedforward: the open-chain Coriolis is INVALID under the D6 loop (q1,q2 are
-            // constrained, not free); at zero gravity / slow motion the PD + damping suffice.
-            Eigen::VectorXd tau = Eigen::VectorXd::Zero(3);
-            if (driveCrank) {                                    // negative control disables the drive
-                tau[0] = Kp*(crankTgt - q[0]) - Kd*qd[0];
-                tau[1] = -KdDep*qd[1];
-                tau[2] = -KdDep*qd[2];
+            const auto poses = sim.articLinkPoses();   // read q, qd AND poses at the SAME instant
+            if (int(qm.size())!=nDof || int(qdm.size())!=nDof) { R.nan=true; return 0.0; }
+            Eigen::VectorXd q(nDof), qd(nDof);
+            for (int i=0;i<nDof;++i){ q[i]=qm[i]; qd[i]=qdm[i];
+                if (!std::isfinite(qm[i])||!std::isfinite(qdm[i])) R.nan=true; }
+            // D1: live link pose vs oracle FK at THIS q (poses + q are both pre-step, so this is a
+            // pure kinematic identity -- no integration lag conflated in -- holding throughout motion)
+            std::vector<Pose> wp; oc.fk(q, wp);
+            if (int(poses.size())==nDof) for (int b=0;b<nDof;++b) {
+                const Eigen::Vector3d pp(poses[b][0],poses[b][1],poses[b][2]);
+                const Eigen::Quaterniond pq(poses[b][6],poses[b][3],poses[b][4],poses[b][5]);
+                const Eigen::AngleAxisd aa(pq.toRotationMatrix().transpose()*wp[b].R);
+                R.maxFkErr = std::max(R.maxFkErr, std::max((pp-wp[b].p).norm(), std::abs(aa.angle())));
             }
-            std::vector<float> tf(3); for (int i=0;i<3;++i) tf[i]=float(tau[i]);
+            R.jLo = std::min(R.jLo, q[2]); R.jHi = std::max(R.jHi, q[2]);   // elbow sweep (proof of motion)
+            for (int i=0;i<nDof;++i) R.checksum += std::abs(q[i]) + std::abs(qd[i]);
+            Eigen::VectorXd tau = Eigen::VectorXd::Zero(nDof);             // per-joint PD (serial; no loop)
+            if (drive) for (int i=0;i<nDof;++i) tau[i] = Kp[i]*(qcmd[i]-q[i]) - Kd[i]*qd[i];
+            std::vector<float> tf(nDof); for (int i=0;i<nDof;++i) tf[i]=float(tau[i]);
             sim.commandJointTorques(tf);
             sim.singleStep();
-            R.crankLo = std::min(R.crankLo, q[0]); R.crankHi = std::max(R.crankHi, q[0]);  // prove motion
-            auto poses = sim.articLinkPoses();
-            if (poses.size()>=3) {
-                Eigen::Vector3d tp(poses[2][0],poses[2][1],poses[2][2]);
-                Eigen::Quaterniond tq(poses[2][6],poses[2][3],poses[2][4],poses[2][5]);
-                R.maxRes = std::max(R.maxRes, (tp + tq.toRotationMatrix()*bar - topPivot).norm());
-            }
-            for (int i=0;i<3;++i) R.checksum += std::abs(q[i]) + std::abs(qd[i]);  // FULL-STATE determinism
-            return std::abs(q[0] - crankTgt);
+            return (q - qcmd).norm();
         };
-        for (int s=0;s<240 && !R.nan;++s) stepCtl(crankA);    // settle (exclude seed transient)
+        for (int st=0;st<240 && !R.nan;++st) stepCtl(qA);            // settle (exclude seed transient)
         for (int cyc=0; cyc<cycles && !R.nan; ++cyc) {
-            const double seq[2][2] = { {crankA,crankB}, {crankB,crankA} };
+            const Eigen::VectorXd* seq[2][2] = { {&qA,&qB}, {&qB,&qA} };
             for (int leg=0; leg<2; ++leg) {
-                for (int m=0; m<mTrans; ++m) R.maxLag = std::max(R.maxLag, stepCtl(smooth(seq[leg][0], seq[leg][1], double(m)/(mTrans-1))));
-                double e = 0; for (int m=0; m<mDwell; ++m) { e = stepCtl(seq[leg][1]); R.maxLag = std::max(R.maxLag, e); }
-                R.maxSettled = std::max(R.maxSettled, e);      // reach accuracy at the end of the dwell
+                for (int m=0; m<mTrans; ++m) R.maxLag = std::max(R.maxLag, stepCtl(smoothV(*seq[leg][0], *seq[leg][1], double(m)/(mTrans-1))));
+                double e=0; for (int m=0; m<mDwell; ++m) { e = stepCtl(*seq[leg][1]); R.maxLag = std::max(R.maxLag, e); }
+                R.maxSettled = std::max(R.maxSettled, e);
             }
         }
-        sim.stop();
-        R.ran = true;
-        return R;
+        sim.stop(); R.ran = true; return R;
     };
 
-    // --- D1: stability over 1000 cycles + PROOF OF MOTION (the crank really sweeps A<->B,
-    // so a stationary/broken robot fails — the residual is measured under ACTUAL motion) ---
+    // --- D1: stability over 1000 cycles, live FK vs oracle <1e-4 EVERY step + PROOF OF MOTION ---
     DemoResult r1 = runDemo(1000, 20, 8);
-    const double sweep1 = r1.crankHi - r1.crankLo;
-    const bool swept1 = sweep1 >= 0.30;   // proves real motion (stationary => ~0)
-    // NEGATIVE CONTROL: prove the motion guard is NON-VACUOUS. With the drive disabled the
-    // articulation is frozen at the seed config -> sweep ~0 -> MUST fail the >=0.30 guard. If a
-    // frozen robot were NOT rejected, the guard would be vacuous and D1 must fail.
-    DemoResult frozen = runDemo(20, 20, 8, /*driveCrank=*/false);
-    const double frozenSweep = frozen.crankHi - frozen.crankLo;
-    const bool guardBites = frozenSweep < 0.30;
-    bool d1 = r1.ran && !r1.nan && r1.maxRes < 1e-4 && swept1 && guardBites;
-    printf("[demo gate]  D1 stability: maxRes=%.3e m crank=[%.3f,%.3f] liveSweep=%.3f | neg-ctrl frozenSweep=%.3e -> guard %s  %s\n",
-           r1.maxRes, r1.crankLo, r1.crankHi, sweep1, frozenSweep, guardBites?"REJECTS(non-vacuous)":"VACUOUS!", d1?"PASS":"FAIL");
+    const double sweep1 = r1.jHi - r1.jLo;
+    const bool swept1 = sweep1 >= 0.30;
+    DemoResult frozen = runDemo(20, 20, 8, /*drive=*/false);    // NEGATIVE CONTROL (frozen => fails guard)
+    const bool guardBites = (frozen.jHi - frozen.jLo) < 0.30;
+    bool d1 = r1.ran && !r1.nan && r1.maxFkErr < 1e-4 && swept1 && guardBites;
+    printf("[demo gate]  D1 stability (serial, live FK vs oracle throughout): maxFkErr=%.3e elbowSweep=%.3f | neg-ctrl frozenSweep=%.3e -> guard %s  %s\n",
+           r1.maxFkErr, sweep1, frozen.jHi-frozen.jLo, guardBites?"REJECTS(non-vacuous)":"VACUOUS!", d1?"PASS":"FAIL");
 
     // --- D2: reach accuracy at each commanded config (long dwell) + reported dynamic lag ---
     DemoResult r2 = runDemo(8, 80, 160);
     const double TRACK_TOL = 0.02;
-    bool d2 = r2.ran && !r2.nan && r2.maxSettled < TRACK_TOL && (r2.crankHi - r2.crankLo) >= 0.30;
-    printf("[demo gate]  D2 tracking: reach-err=%.3e rad (bound %.2f), peak dynamic lag=%.3e rad  %s\n",
+    bool d2 = r2.ran && !r2.nan && r2.maxSettled < TRACK_TOL && (r2.jHi - r2.jLo) >= 0.30;
+    printf("[demo gate]  D2 tracking: reach-err=%.3e rad (bound %.2f, ||q-qcmd||), peak dynamic lag=%.3e rad  %s\n",
            r2.maxSettled, TRACK_TOL, r2.maxLag, d2?"PASS":"FAIL");
 
     // --- D3: no resource growth across 100 build/run/teardown cycles (the leak class) ---
-    runDemo(1, 5, 2);   // warm allocators so the baseline is steady
+    runDemo(1, 5, 2);
     const size_t memBefore = krs::processWorkingSetBytes();
     for (int it=0; it<100; ++it) runDemo(1, 5, 2);
     const size_t memAfter = krs::processWorkingSetBytes();
     const double growthMB = (double(memAfter) - double(memBefore)) / (1024.0*1024.0);
-    bool d3 = growthMB < 4.0;   // 100 builds; 4 MB catches a ~40 KB/build leak
+    bool d3 = growthMB < 4.0;
     printf("[demo gate]  D3 no resource growth (100 build/run/teardown): dWorkingSet=%.2f MB bound=4 %s\n", growthMB, d3?"PASS":"FAIL");
 
     // --- D4: identical commanded motion reproduces an identical FULL-STATE trajectory ---
@@ -652,7 +589,7 @@ bool runDemoGateD()
     printf("[demo gate]  D4 determinism (two runs, full-state checksum): cs1=%.10g cs2=%.10g %s\n", d4a.checksum, d4b.checksum, d4?"PASS":"FAIL");
 
     const bool pass = d1 && d2 && d3 && d4;
-    printf("[demo gate] %s\n", pass ? "ALL PASS (D1-D4)" : "FAILURES PRESENT");
+    printf("[demo gate] %s\n", pass ? "ALL PASS (D1-D4 serial)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }

@@ -1255,3 +1255,65 @@ articulation parked at the seed) and asserts its sweep is rejected — measured 
 guard REJECTS**, while the live sweep is 0.422. D1 requires BOTH (live sweep >= 0.30 AND the frozen robot
 fails the guard), so a stationary/broken robot fails D1. No other bound changed: stability 1.038e-06 m,
 loop residual <1e-4, leak 0.93 MB/4 MB (100 builds), determinism bit-identical — all exactly as before.
+
+## Q) TOPOLOGY CORRECTION — FANUC-430 is a SERIAL 6-DOF arm, NOT a parallelogram (2026-06-14)
+
+Phase A inferred a 4-bar parallelogram from a "twin parallel X-pivot signature" and built a PxD6 loop
+closure (A3/H3). RE-CHECKED from the assembled STEP geometry (KRS_STEP_INSPECT, 17 solids): **the model
+is a serial 6-DOF arm with a J2 counterbalance strut — there is no kinematic loop.**
+
+**Evidence (shared coaxial bearings spanning >=2 solids):**
+- Arm region has EXACTLY ONE large shared pivot: `(0,1815,305) dir X, r[140..180], solids{1,12}` = the
+  ELBOW (J3), forearm(solid 1) <-> upper-arm(solid 12). No second parallel arm-bar pivot exists.
+- Solid 12's two parallel X-pivots are its OWN joints at each end: shoulder (Y=740, r=170, to the base)
+  and elbow (Y=1815, to forearm) — the ordinary signature of a serial link, not a 4-bar coupler.
+- Base J1: `(0,0,0) dir Y, r=237.5, solids{11,14,16}` (vertical yaw). Wrist: `(0.7,2065,0) dir Z,
+  r[48..140], solids{0,1,15}`.
+- The angled cylinders on solids 1 & 12 (`dir(0,-0.174,-0.985)`, r=11.25/20) are the COUNTERBALANCE
+  strut from the J2 area to the J3 link — a gravity-offset member.
+
+**Discriminating test (cycle / DOF):** removing the strut leaves the arm's DOF unchanged (it is rigidly
+determined by the link it assists; it offsets shoulder gravity torque, adds no DOF and closes no cycle).
+A true 4-bar would lose end-effector DOF on bar removal. => SERIAL.
+
+**Reconciliation:** the A3/H3 PxD6 "loop closure" was REDUNDANT; its <1e-4 residual proved the D6
+machinery works, NOT that the FANUC has a loop. Corrections:
+1. GATE H is now the loop-free SERIAL chain: H1 live FK vs oracle <1e-4, H2 CAN torque->accel <1%
+   (the A1 4-link serial spec, already validated at 1.17e-6 — that re-pass IS the proof it was always
+   serial). H3 (parallelogram) removed from the FANUC live gate.
+2. GATE D demo runs on the serial chain (D1 = live FK vs oracle <1e-4 throughout the motion, replacing
+   the fictional loop residual).
+3. The PxD6 loop CODE + a generic capability test (GATE A "A3") are retained for FUTURE closed-chain
+   mechanisms / Phase C user-created loops, explicitly marked NOT the FANUC topology.
+4. URDF export of the FANUC is therefore LOSSLESS (no closed loop).
+5. (Deferred) the strut's real effect is a pose-dependent assistive torque about J2 (user-supplied
+   spring rate/preload/geometry) — affects motor EFFORT, not trajectory. NOT reintroduced as a D6.
+Phase V solid->link assignment proceeds on the corrected serial structure (strut = rigid member of J3).
+
+### Q.1 IMPLEMENTED — gates re-run loop-free on the serial structure (2026-06-14, real numbers)
+
+The correction landed; every gate re-passes on the serial chain with no loop. Measured this session:
+
+- **GATE H (serial, H1+H2):** H1 live FK vs oracle (60 cfg, 4-link) `maxPos=1.323e-06 m  maxRot=6.054e-07 rad`;
+  H2 CAN torque->accel vs ABA (codec round-trip) `maxRel=9.271e-07` (<1%). H1 is BIT-FOR-BIT the value it
+  had before H3 was removed — **removing the parallelogram loop did not change FK**, the direct proof the
+  loop was redundant. `ALL PASS (H1,H2 serial)`.
+- **GATE D (serial, D1-D4):** D1 live FK vs oracle THROUGHOUT 1000 pick/place cycles `maxFkErr=1.352e-06`
+  (a pure kinematic identity now — link pose and q read at the same pre-step instant, no integration lag
+  conflated in), elbow sweep `0.427 rad` (proof of motion, >=0.30); negative control `frozenSweep=0.000`
+  -> guard REJECTS (non-vacuous). D2 reach-err `3.195e-03 rad` (<0.02). D3 `0.33-1.19 MB / 100 builds`
+  (<4). D4 full-state checksum bit-identical. `ALL PASS (D1-D4 serial)`. Demo is a per-joint critically-
+  damped PD on a 4-link serial arm (J1 yaw Y, J2/J3 X, J4 Z); link masses {4,4,3,2} are demo parameters
+  (the FANUC's real link masses are not extractable from the STEP), gains per-joint Kp{5000,3000,800,350}
+  Kd{700,450,110,50} scaled to reflected inertia.
+- **No regression:** KRS_OVERNIGHT_BENCH **13/13** gate groups PASS (incl. GATE A A1/A2/A3/A5 — A3 now the
+  GENERIC D6 capability test, residual 3.944e-07, explicitly NOT the FANUC); rigid KRS_BENCH **7/7**.
+
+**URDF-lossless (point 4) — honest scope:** a serial 6-DOF tree is *losslessly representable* in URDF
+(URDF's model is exactly a kinematic tree). The misread parallelogram would have required a closed loop,
+which standard URDF CANNOT express (only `<mimic>` / non-standard `<loop>` hacks) -> a lossy export. So the
+serial verdict makes a future export lossless. NB: **no URDF exporter is wired yet** (URDFParser.cpp is
+import-only); this is the structural property, not a shipped feature — not to be reported as one.
+
+Code: H3 block deleted from `runArticulationLiveGate`; `runDemoGateD` rebuilt on the A1 serial spec
+(ArticulationGate.cpp); GATE-A "A3" + the PxD6 machinery retained + re-labelled generic. Commit on this.

@@ -23,15 +23,17 @@ namespace krs::dyn {
 bool runArticulationGate();
 
 // Phase G — GATE H: builds the FANUC articulation through the LIVE
-// SimulationController path (buildPhysicsWorld) and validates that live tree
-// against the oracle. H1 (live FK <1e-4, >=50 cfg) here; H2/H3 added in G.2/G.3.
-// Gated by KRS_ARTIC_LIVE_SELFTEST. Vacuous pass without PhysX.
+// SimulationController path (buildPhysicsWorld) and validates that live SERIAL tree
+// against the oracle. H1 (live FK <1e-4, >=50 cfg) + H2 (CAN torque->accel vs ABA <1%).
+// The former H3 (live PxD6 loop residual) is REMOVED: the FANUC-430 is a serial 6-DOF
+// arm with a J2 counterbalance strut, NOT a parallelogram (ROADMAP Q). Gated by
+// KRS_ARTIC_LIVE_SELFTEST. Vacuous pass without PhysX.
 bool runArticulationLiveGate();
 
-// Phase A — GATE D: the default FANUC sandbox demo (repeated pick-and-place on the
-// live parallelogram articulation) measured for stability (D1, loop residual <1e-4
-// throughout >=1000 cycles), tracking (D2), no resource growth (D3), determinism (D4).
-// Gated by KRS_DEMO_SELFTEST. Vacuous pass without PhysX.
+// Phase A — GATE D: the default FANUC sandbox demo (repeated pick-and-place on the live
+// SERIAL articulation) measured for stability (D1, live FK vs oracle <1e-4 throughout
+// >=1000 cycles + proof-of-motion + frozen-robot negative control), reach tracking (D2),
+// no resource growth (D3), determinism (D4). Gated by KRS_DEMO_SELFTEST. Vacuous w/o PhysX.
 bool runDemoGateD();
 
 } // namespace krs::dyn
