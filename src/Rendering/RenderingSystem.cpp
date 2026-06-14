@@ -42,6 +42,7 @@
 #include "FemSolver.hpp"
 #include "RobotDynamics.hpp"    // Phase A GATE A oracle self-tests
 #include "ArticulationGate.hpp" // Phase A GATE A PhysX articulation gate
+#include "VisibleArticGate.hpp" // Phase V GATE V (V.1 / V-assign) solid->link assignment
 #include "FemSystem.hpp"
 #include "FemVizPass.hpp"
 #include "SmokePass.hpp"
@@ -621,6 +622,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase V GATE V (V.1 / V-assign): 17-solid -> serial-link assignment correctness.
+    if (qEnvironmentVariableIntValue("KRS_VASSIGN_SELFTEST") != 0) {
+        std::printf("\n================= KRS_VASSIGN_SELFTEST =================\n");
+        const bool ok = krs::dyn::runVisibleArticGateV();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -638,6 +647,7 @@ void RenderingSystem::initializeSharedResources()
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
+            { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
         };
         int fails = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
