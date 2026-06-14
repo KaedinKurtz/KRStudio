@@ -1403,5 +1403,28 @@ imported solids and the live canonical articulation. Measured:
 V.3 writeback facility added to SimulationController (`setArticulationVizMapping` captures rest link poses;
 `writeBackArticulationViz` drives each solid's TransformComponent by delta=now*rest^-1 each tick, alongside
 the rigid-body writeBackTransforms). Inactive (early-return) unless a Phase-V mapping is set -> zero effect
-on existing paths; KRS_OVERNIGHT_BENCH stays 14/14, lifecycle gate green. Remaining: V.2 render (solids are
-already renderable; the writeback feeds the TransformComponent the renderer consumes) + V.4 default boot.
+on existing paths; KRS_OVERNIGHT_BENCH stays 14/14, lifecycle gate green.
+
+### R.6 COMPLETE — single-source helper, V.2 render, V.4/V.6 boot (2026-06-14, real numbers)
+- **SINGLE SOURCE OF TRUTH**: `krs::fanuc` (FanucArticulation.hpp/cpp) owns the solid->link assignment
+  (`solidLink`), the canonical 4-link spec, and `setupFanucScene` (import -> build articulation -> viz
+  mapping). The V-assign gate, the V.2 render gate, the V.6 boot gate, AND the app boot ALL call it; none
+  hand-rolls an assignment. `assignmentFingerprint()` = "fanuc-v1:33333333333021030"; every gate asserts
+  setup.fingerprint == that frozen string, so editing the map (or an app-side override) trips a gate.
+- **V.2 render gate** (KRS_FANUC_RENDER_SELFTEST): renders the FANUC at two configs through the real mesh
+  path (gbuffer_untextured, MRT0 = world-pos) via the shared helper; per moving link a big solid's
+  front-facing surface vertices are predicted (Cv = linkDelta*restV) and must render at their predicted
+  pixel -- the GPU world-pos read there must match Cv. carousel/upperarm/forearm: 175..1442 landmarks each
+  land at their predicted pixel, worldErr <= 2.5 mm (= 1.1 px-equiv, bound +-2px), screenMove 15..194 px.
+  NEG-CTRL: forearm predicted via link-1 -> 0/108 hits -> REJECTS. (Hit fraction ~25-58% is inter-solid
+  occlusion, reported not gated.)
+- **V.4 demo drive**: `SimulationController::setArticulationDemoDrive` sweeps J1/J2/J3 each tick (kinematic,
+  frame-rate-paced).  **V.6 boot gate** (KRS_FANUC_BOOT_SELFTEST): the EXACT app boot path (setupFanucScene
+  + drive + 60 ticks) moves the forearm 2.053 m, fingerprint canonical; NEG-CTRL (no drive) moves 0.
+- **Default boot (V.4/V6)**: MainWindow ctor boots the FANUC by default (KRS_FEM_DEMO restores the old FEM
+  block; other KRS_*_DEMO take precedence) via the SAME `setupFanucScene` + `setArticulationDemoDrive(true)`.
+  Verified live: the GUI builds the articulation (4 links/4 dofs), logs "[FANUC] ... 17 solids; assignment
+  fanuc-v1:33333333333021030", uploads the solid meshes to the GPU, runs 18 s with no crash.
+- **No regression**: KRS_OVERNIGHT_BENCH **16/16** gate groups PASS (added V.2 render + V.6 boot); rigid
+  KRS_BENCH 7/7. Phase V (visible articulated FANUC) is COMPLETE behind GATE V (V1/V2/V-assign/V.2/V.4/V6).
+  Deferred: a true 6-DOF wrist split (real J4/J5/J6 frames) is a follow-up (R.3); the wrist rides link 3.

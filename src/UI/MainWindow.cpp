@@ -18,6 +18,8 @@
 #include "MpmSystem.hpp"
 #include "MaterialLibrary.hpp"
 #include "CadImporter.hpp"
+#include "FanucArticulation.hpp"   // Phase V: shared FANUC-setup helper (default boot demo)
+#include <filesystem>
 #include <QActionGroup>
 #include <QToolBar>
 #include <QComboBox>
@@ -312,6 +314,22 @@ MainWindow::MainWindow(QWidget* parent)
     // eagerly in the SimulationController constructor).
     m_simulation = std::make_unique<SimulationController>(m_scene.get(), this);
 
+    // Phase V: the visibly-articulating FANUC is the DEFAULT boot scene (ROADMAP R) --
+    // built through the SAME krs::fanuc helper the V-assign / V.2 / V.6 gates validate.
+    // Any other demo (KRS_*_DEMO) or KRS_FEM_DEMO (the classic FEM block) takes precedence;
+    // KRS_FANUC_DEMO forces it on. Needs OpenCASCADE + the deployed STEP asset.
+    const std::string fanucStepPath =
+        (QCoreApplication::applicationDirPath() + QLatin1String("/assets/FANUC-430 Robot.STEP")).toStdString();
+    const bool bootFanuc = krs::cad::available()
+        && std::filesystem::exists(fanucStepPath)
+        && (qEnvironmentVariableIsSet("KRS_FANUC_DEMO")
+            || (!qEnvironmentVariableIsSet("KRS_BENCH")
+                && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
+                && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO")
+                && !qEnvironmentVariableIsSet("KRS_MPM_DEMO")
+                && !qEnvironmentVariableIsSet("KRS_HEAT_DEMO")
+                && !qEnvironmentVariableIsSet("KRS_FEM_DEMO")));
+
     m_gizmoSystem = std::make_unique<GizmoSystem>(*m_scene);
 
     ads::CDockManager::setConfigFlag(ads::CDockManager::ActiveTabHasCloseButton, true);
@@ -416,7 +434,7 @@ MainWindow::MainWindow(QWidget* parent)
         // recolours the surface through the unified ramp. Rigid + FEM is the DEFAULT
         // representation for solids; MPM is reserved for soft / large-deformation
         // bodies (representation policy, ROADMAP §L). Skipped under demo/bench scenes.
-        if (!qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
+        if (!bootFanuc && !qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
             && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") && !qEnvironmentVariableIsSet("KRS_MPM_DEMO")
             && !qEnvironmentVariableIsSet("KRS_HEAT_DEMO")) {
             auto& registry = m_scene->getRegistry();
@@ -597,8 +615,8 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     // --- Physics demo: a small stack of primitives that falls on Play ---
-    // (Skipped under KRS_BENCH: benchmarks need a clean world.)
-    if (!qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
+    // (Skipped under KRS_BENCH: benchmarks need a clean world; and under the FANUC boot.)
+    if (!bootFanuc && !qEnvironmentVariableIsSet("KRS_BENCH") && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
         && !qEnvironmentVariableIsSet("KRS_SMOKE_DEMO") && !qEnvironmentVariableIsSet("KRS_MPM_DEMO")
         && !qEnvironmentVariableIsSet("KRS_HEAT_DEMO")) {
         auto& registry = m_scene->getRegistry();
@@ -680,6 +698,22 @@ MainWindow::MainWindow(QWidget* parent)
             em.emitterRadius = 0.025f;
             em.particleLifetime = 0.0f; // immortal — fills the glass
             registry.emplace<TagComponent>(tap, std::string("Water.Tap"));
+        }
+    }
+
+    // --- Phase V: boot into the visibly-articulating FANUC (default scene) ---
+    // The SAME shared helper + kinematic demo drive the V-assign / V.2 / V.6 gates
+    // validate: the 17 STEP solids track their serial links live, J1/J2/J3 sweep on
+    // play. setupFanucScene imports + builds the canonical articulation + maps the
+    // solids; the sim auto-plays so the arm moves from the first frame.
+    if (bootFanuc) {
+        krs::fanuc::Setup fs = krs::fanuc::setupFanucScene(*m_scene, *m_simulation, fanucStepPath);
+        if (fs.ok) {
+            m_simulation->setArticulationDemoDrive(true);
+            qInfo() << "[FANUC] visible articulated demo booted:" << fs.solids
+                    << "solids; assignment" << QString::fromStdString(fs.fingerprint);
+        } else {
+            qWarning() << "[FANUC] demo setup failed:" << QString::fromStdString(fs.message);
         }
     }
 
