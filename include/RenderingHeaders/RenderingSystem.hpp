@@ -148,6 +148,14 @@ public:
     // folded into KRS_OVERNIGHT_BENCH). Implemented in RenderGates.cpp.
     bool runRenderGates();
 
+    // Phase V GATE V.2: renders the imported FANUC (via the shared krs::fanuc helper)
+    // at two joint configs through the real mesh path + gbuffer_untextured (MRT0 =
+    // world-space position), and confirms tracked features on known solids land at
+    // their predicted pixels (+-2px) -- proving the correct transforms reach the GPU
+    // through the SAME helper the V-assign gate validates. Implemented in
+    // FanucRenderGate.cpp; gated by KRS_FANUC_RENDER_SELFTEST + KRS_OVERNIGHT_BENCH.
+    bool runFanucRenderGateV2();
+
     void setSimulationPlaying(bool playing);
     void resetFluidSimulation();
 

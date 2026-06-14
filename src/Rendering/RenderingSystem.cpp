@@ -598,6 +598,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase V GATE V.2: render the visible FANUC, tracked features -> predicted pixels.
+    if (qEnvironmentVariableIntValue("KRS_FANUC_RENDER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FANUC_RENDER_SELFTEST =================\n");
+        const bool ok = runFanucRenderGateV2();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -644,6 +652,7 @@ void RenderingSystem::initializeSharedResources()
             { "Trajectory HIL multi-fidelity verify",        krs::hil::runTrajectoryHilSelfTest() },
             { "OCCT STEP pipeline (round-trip + features)",  krs::cad::runSelfTest() },
             { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
+            { "GATE V.2 visible FANUC render (features->pixels)", runFanucRenderGateV2() },
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
