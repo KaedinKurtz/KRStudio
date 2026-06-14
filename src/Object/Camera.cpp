@@ -23,7 +23,7 @@ Camera::Camera(glm::vec3 position)
 
     glm::vec3 direction = glm::normalize(m_FocalPoint - m_Position);
     m_Pitch = asin(direction.y);
-    m_Yaw = atan2(direction.x, direction.z);
+    m_Yaw = atan2(direction.z, direction.x); // inverse of updateCameraVectors' front=(cos yaw,·,sin yaw)
 
     updateCameraVectors();
     logState("Camera Initialized");
@@ -123,7 +123,7 @@ void Camera::resetView(float aspectRatio, const glm::vec3& target, float objectV
     m_Position = m_FocalPoint - glm::vec3(0.0f, -0.5f * m_Distance, m_Distance);
     glm::vec3 direction = glm::normalize(m_FocalPoint - m_Position);
     m_Pitch = asin(direction.y);
-    m_Yaw = atan2(direction.x, direction.z);
+    m_Yaw = atan2(direction.z, direction.x); // inverse of updateCameraVectors' front=(cos yaw,·,sin yaw)
     updateCameraVectors();
     logState("Camera View Reset/Reframed");
 }
@@ -138,7 +138,7 @@ void Camera::defaultInitialView() {
     if (m_Distance < 0.01f) m_Distance = 5.0f;
     glm::vec3 direction = glm::normalize(m_FocalPoint - m_Position);
     m_Pitch = asin(direction.y);
-    m_Yaw = atan2(direction.x, direction.z);
+    m_Yaw = atan2(direction.z, direction.x); // inverse of updateCameraVectors' front=(cos yaw,·,sin yaw)
     updateCameraVectors();
     logState("Camera Reset to Default Initial View");
 }
@@ -156,7 +156,7 @@ void Camera::forceRecalculateView(glm::vec3 newPosition, glm::vec3 newTarget, fl
     }
     glm::vec3 direction = glm::normalize(m_FocalPoint - m_Position);
     m_Pitch = asin(direction.y);
-    m_Yaw = atan2(direction.x, direction.z);
+    m_Yaw = atan2(direction.z, direction.x); // inverse of updateCameraVectors' front=(cos yaw,·,sin yaw)
     updateCameraVectors();
     logState("Camera after forceRecalculateView");
 }
@@ -175,6 +175,10 @@ void Camera::setToKnownGoodView() {
 
 void Camera::updateCameraVectors() {
     // Calculate the new front vector
+    // Convention: yaw measured from +X toward +Z. Any code deriving yaw from a
+    // direction MUST use atan2(dir.z, dir.x) to invert this (a prior x/z swap made
+    // forceRecalculateView/resetView/ctor relocate the camera instead of honouring
+    // the requested pose — fixed 2026-06-14).
     glm::vec3 front;
     front.x = cos(m_Yaw) * cos(m_Pitch);
     front.y = sin(m_Pitch);

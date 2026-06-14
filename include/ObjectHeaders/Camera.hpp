@@ -81,6 +81,6 @@ private:
     float m_zFar = 300.0f;  // original far plane
 
     // Camera options
-    float m_Distance;
-    bool  m_IsPerspective;
+    float m_Distance = 5.0f;
+    bool  m_IsPerspective = true;   // also set by every ctor path; default is belt-and-suspenders
 };

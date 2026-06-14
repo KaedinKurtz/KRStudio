@@ -26,6 +26,7 @@
 #include "RenderingSystem.hpp"
 #include "MpmSystem.hpp"
 #include "Shader.hpp"
+#include "Camera.hpp"
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <QtGlobal>
@@ -353,6 +354,22 @@ bool RenderingSystem::runRenderGates()
                              std::max(std::abs(c11.x - (maxx + 1)), std::abs(c11.y - (maxy + 1))));
         check("G7 projection +-1px", err <= 1.5f && maxx > 0,
               "cornerProjErr=%.3f px (CPU vs silhouette), bound=1.5", err, 1.5);
+    }
+
+    // ---- G7b camera pose round-trip: forceRecalculateView must place the camera at
+    // the requested pose (regression guard for the yaw-derivation fix), and the focal
+    // point must project to screen centre through the camera's own view*projection.
+    {
+        const glm::vec3 eye(3.0f, 2.0f, 4.0f), tgt(0.0f, 0.5f, 0.0f);
+        Camera cam;
+        cam.forceRecalculateView(eye, tgt, glm::length(eye - tgt));
+        float poseErr = glm::length(cam.getPosition() - eye);
+        glm::mat4 Vc = cam.getViewMatrix(), Pc = cam.getProjectionMatrix(float(W) / float(H));
+        glm::vec4 fc = Pc * Vc * glm::vec4(tgt, 1.0f); glm::vec3 fn = glm::vec3(fc) / fc.w;
+        float ctrErr = std::max(std::abs((fn.x * 0.5f + 0.5f) * W - W * 0.5f),
+                                std::abs((fn.y * 0.5f + 0.5f) * H - H * 0.5f));
+        check("G7b camera pose", poseErr < 1e-3f && ctrErr < 1.0f,
+              "poseErr=%.4g m, focalCentreErr=%.3f px", poseErr, ctrErr);
     }
 
     // ---- G3 jitter / freeze: N frozen renders identical; freezeRange pins -----
