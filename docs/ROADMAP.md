@@ -1428,3 +1428,27 @@ on existing paths; KRS_OVERNIGHT_BENCH stays 14/14, lifecycle gate green.
 - **No regression**: KRS_OVERNIGHT_BENCH **16/16** gate groups PASS (added V.2 render + V.6 boot); rigid
   KRS_BENCH 7/7. Phase V (visible articulated FANUC) is COMPLETE behind GATE V (V1/V2/V-assign/V.2/V.4/V6).
   Deferred: a true 6-DOF wrist split (real J4/J5/J6 frames) is a follow-up (R.3); the wrist rides link 3.
+
+### R.7 FIX — missing J1->J2 link: the loader skipped OPEN SHELLS (2026-06-14)
+Symptom (user-reported): the link between J1 and J2 (the S-axis casting) did not render, leaving a gap
+between the base (Y<=0.287 m) and the carousel (Y>=0.541 m); everything else loaded + moved correctly.
+Root cause: `CadImporter::importStep` enumerated only `TopAbs_SOLID`. The FANUC J1 casting (and 9 other
+parts) export as OPEN SHELLs, not closed solids -- `inspectStep`'s new ENUMERATION audit confirmed
+**SOLIDs=17, free SHELLs(not in solid)=10**, with free shell 9 spanning exactly the missing Y range.
+Fix:
+- **Importer**: spawn an entity for every renderable body -- SOLIDs, then free SHELLs, then loose FACEs
+  (stable order). 17 -> **27 bodies**; the J1 casting is body 26 (35 580 indices), now rendered.
+- **Assignment** (krs::fanuc::solidLink, kSolidCount 17->27, fingerprint v1->v2): J1 casting shell {26} +
+  fittings {24,25} -> link 1; wrist/tool-flange shells {17..23} -> link 3. The V-assign gate then FAILED
+  (coincDrift 0.177 m) and named the worst hinge: brackets {11,14} share an OFF-AXIS bore with the rotating
+  casting {26}, so they ROTATE WITH J1 -- they were wrongly on the fixed base. Moved {11,14} -> link 1
+  (only the pedestal {16} is truly fixed). The gate then caught a SECOND, genuine false-positive: a r=2 mm
+  pedestal hole collinear (4.4 mm) with a r=7 mm casting hole at the assembly pose -- a COINCIDENTAL
+  alignment across the J1 joint, not a rigid bond. Fixed the gate, not the model: the hinge matcher now
+  requires a SAME hole (radius match within 15% + <3 mm), so coincidental rest-alignments are excluded.
+- **Result**: V-assign coincDrift back to **8.65e-07 m** (worst hinge now the real J3 elbow bearing,
+  r 166/146 mm, coincident), neg-ctrl 1.083 m REJECTS; V.2 render minHits>=112 (J1 region renders); V.6
+  boot moves; fingerprint `fanuc-v2:333333333331211303333333111`. App boots, uploads entity 26 (J1 casting)
+  + all shells to the GPU, runs with no crash. KRS_OVERNIGHT_BENCH 16/16, KRS_BENCH 7/7.
+  Diagnostics added: `inspectStep` ENUMERATION audit (free shells/faces), KRS_FANUC_SOLID_DUMP (per-body
+  verts/indices/bbox/link), and the V-assign worst-drift-hinge line.

@@ -20,7 +20,7 @@ class SimulationController;
 
 namespace krs::fanuc {
 
-constexpr int kSolidCount = 17;   // STEP solids in FANUC-430 Robot.STEP
+constexpr int kSolidCount = 27;   // FANUC-430 renderable bodies: 17 SOLIDs + 10 free SHELLs
 
 // THE assignment. inspectIndex 0..16 (STEP solid (k+1)) -> serial link:
 // 0 fixed base, 1 J1 yaw (carousel), 2 J2 shoulder (upper arm), 3 J3 elbow

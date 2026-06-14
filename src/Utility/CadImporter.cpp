@@ -64,10 +64,19 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
     if (root.IsNull()) { res.message = "STEP contained no shapes"; return res; }
 
     auto& reg = scene.getRegistry();
-    for (TopExp_Explorer solidEx(root, TopAbs_SOLID); solidEx.More(); solidEx.Next()) {
-        const TopoDS_Shape solid = solidEx.Current();
+    // Renderable bodies = every SOLID, PLUS every free SHELL / free FACE not inside a
+    // solid. Many CAD parts (e.g. the FANUC J1 S-axis casting) export as an OPEN SHELL,
+    // not a closed solid -- enumerating only TopAbs_SOLID silently drops them (a missing
+    // render). Order: solids first (stable indices for downstream assignment), then shells,
+    // then loose faces.
+    std::vector<TopoDS_Shape> bodies;
+    for (TopExp_Explorer ex(root, TopAbs_SOLID); ex.More(); ex.Next())               bodies.push_back(ex.Current());
+    for (TopExp_Explorer ex(root, TopAbs_SHELL, TopAbs_SOLID); ex.More(); ex.Next()) bodies.push_back(ex.Current());
+    for (TopExp_Explorer ex(root, TopAbs_FACE,  TopAbs_SHELL); ex.More(); ex.Next()) bodies.push_back(ex.Current());
 
-        // --- meshing quality from the solid's bounding box (adaptive deflection) ---
+    for (const TopoDS_Shape& solid : bodies) {
+
+        // --- meshing quality from the body's bounding box (adaptive deflection) ---
         Bnd_Box bb; BRepBndLib::Add(solid, bb);
         double xmin, ymin, zmin, xmax, ymax, zmax;
         bb.Get(xmin, ymin, zmin, xmax, ymax, zmax);
@@ -201,6 +210,27 @@ void inspectStep(const std::string& path)
     const double diag = std::sqrt((Xx-Xn)*(Xx-Xn)+(Yx-Yn)*(Yx-Yn)+(Zx-Zn)*(Zx-Zn));
     printf("[STEP INSPECT] roots=%d  assembly bbox: X[%.1f..%.1f] Y[%.1f..%.1f] Z[%.1f..%.1f]  diag=%.1f  (units likely %s)\n",
            nRoots, Xn,Xx, Yn,Yx, Zn,Zx, diag, diag > 50.0 ? "MILLIMETRES" : "metres");
+
+    // Enumeration audit: the importer only spawns one entity per SOLID. Geometry that
+    // is a free SHELL (open surface) or loose FACE is invisible to TopAbs_SOLID -> a
+    // missing render. Count what's NOT inside a solid (the J1->J2 link symptom).
+    {
+        int nSolid = 0, nFreeShell = 0, nFreeFace = 0, nFreeWire = 0;
+        for (TopExp_Explorer ex(root, TopAbs_SOLID); ex.More(); ex.Next()) ++nSolid;
+        for (TopExp_Explorer ex(root, TopAbs_SHELL, TopAbs_SOLID); ex.More(); ex.Next()) ++nFreeShell;
+        for (TopExp_Explorer ex(root, TopAbs_FACE,  TopAbs_SHELL); ex.More(); ex.Next()) ++nFreeFace;
+        for (TopExp_Explorer ex(root, TopAbs_WIRE,  TopAbs_FACE ); ex.More(); ex.Next()) ++nFreeWire;
+        printf("[STEP INSPECT] ENUMERATION: SOLIDs=%d  free SHELLs(not in solid)=%d  free FACEs(not in shell)=%d  free WIREs=%d\n",
+               nSolid, nFreeShell, nFreeFace, nFreeWire);
+        // Per free shell: bbox, so a missing part's location is visible.
+        int si = 0;
+        for (TopExp_Explorer ex(root, TopAbs_SHELL, TopAbs_SOLID); ex.More(); ex.Next(), ++si) {
+            Bnd_Box sb; BRepBndLib::Add(ex.Current(), sb);
+            if (sb.IsVoid()) continue;
+            double a,b,c,d,e,f; sb.Get(a,b,c,d,e,f);
+            printf("[STEP INSPECT]   free shell %d: bbox X[%.1f..%.1f] Y[%.1f..%.1f] Z[%.1f..%.1f]\n", si, a,d, b,e, c,f);
+        }
+    }
 
     std::vector<CylAxis> allAxes;
     int solidIdx = 0;

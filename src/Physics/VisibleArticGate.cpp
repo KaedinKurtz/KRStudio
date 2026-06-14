@@ -4,7 +4,7 @@
 // STEP solids with their B-Rep bores (OpenCASCADE). Without either, there is
 // nothing to validate -> vacuous pass.
 #if !defined(KR_WITH_PHYSX) || !defined(KR_WITH_OCCT)
-namespace krs::dyn { bool runVisibleArticGateV() { return true; } bool runFanucBootGateV6() { return true; } }
+namespace krs::dyn { bool runVisibleArticGateV() { return true; } bool runFanucBootGateV6() { return true; } bool runFanucSolidDump() { return true; } }
 #else
 
 #include "ArticulationSpec.hpp"
@@ -68,7 +68,7 @@ bool runVisibleArticGateV()
 {
     using std::printf;
     setvbuf(stdout, nullptr, _IONBF, 0);
-    printf("[vassign] GATE V (V.1 / V-assign) - 17-solid -> serial-link assignment correctness\n");
+    printf("[vassign] GATE V (V.1 / V-assign) - 27-body -> serial-link assignment correctness\n");
 
     // ---- set up the FANUC via the SHARED helper -- the SAME path the app boots ----
     // ONE scene holds both the solids and the live articulation, so the V.3 writeback
@@ -83,7 +83,7 @@ bool runVisibleArticGateV()
     // SINGLE-SOURCE-OF-TRUTH assert: the booted assignment must equal the canonical map
     // AND a frozen expected fingerprint. If solidLink() is ever edited (or the app grows
     // its own override), this trips rather than silently rendering a wrong arm.
-    static const char* kExpectedFingerprint = "fanuc-v1:33333333333021030";
+    static const char* kExpectedFingerprint = "fanuc-v2:333333333331211303333333111";
     const bool fpMatch = (setup.fingerprint == krs::fanuc::assignmentFingerprint())
                       && (setup.fingerprint == kExpectedFingerprint);
     printf("[vassign]  V-source fingerprint: setup=%s canonical=%s expected=%s  %s\n",
@@ -91,7 +91,7 @@ bool runVisibleArticGateV()
            fpMatch ? "PASS" : "FAIL");
 
     // collect the independent witness (B-Rep bores) per solid from the helper's entities
-    std::array<Solid, 17> S;
+    std::array<Solid, krs::fanuc::kSolidCount> S;
     int assignedSolids = 0;
     for (int k = 0; k < krs::fanuc::kSolidCount; ++k) {
         const entt::entity e = setup.solidEntity[k];
@@ -107,10 +107,10 @@ bool runVisibleArticGateV()
             }
         }
     }
-    bool coverage = (assignedSolids == 17);
-    for (int k = 0; k < 17; ++k) if (S[k].present) { const int L = krs::fanuc::solidLink(k); if (L < 0 || L > 3) coverage = false; }
-    printf("[vassign]  V1 coverage: %d/17 solids present, all -> link in [0,3]  %s\n",
-           assignedSolids, coverage ? "PASS" : "FAIL");
+    bool coverage = (assignedSolids == krs::fanuc::kSolidCount);
+    for (int k = 0; k < krs::fanuc::kSolidCount; ++k) if (S[k].present) { const int L = krs::fanuc::solidLink(k); if (L < 0 || L > 3) coverage = false; }
+    printf("[vassign]  V1 coverage: %d/%d bodies present, all -> link in [0,3]  %s\n",
+           assignedSolids, krs::fanuc::kSolidCount, coverage ? "PASS" : "FAIL");
 
     // rest link poses at q=0 (setupFanucScene left the arm at its STEP assembly pose)
     auto p0 = sim.articLinkPoses();                          // [J1body, J2body, J3body, J4body]
@@ -141,7 +141,7 @@ bool runVisibleArticGateV()
         // TransformComponent to the (world-baked) vertices, so we compare a few real
         // points on each solid (its bore endpoints) transformed by the written
         // component vs by the canonical link delta. Meters, float-storage-limited.
-        for (int k = 0; k < 17; ++k) {
+        for (int k = 0; k < krs::fanuc::kSolidCount; ++k) {
             if (!S[k].present) continue;
             const int L = krs::fanuc::solidLink(k);
             if (L < 1 || L > 3) continue;                    // base solids unmapped (stay at rest)
@@ -168,18 +168,25 @@ bool runVisibleArticGateV()
     printf("[vassign]  V2 writeback world-pos vs canonical link delta: maxErr=%.3e m (bound 1e-05, float floor ~1.1e-6)  %s\n",
            v2Err, v2 ? "PASS" : "FAIL");
 
-    // ---- shared hinges: coaxial bore pairs across DIFFERENT solids (rest pose) ----
+    // ---- shared hinges: coaxial bore pairs across DIFFERENT solids that are a REAL shared
+    // hole (a bolt or a bearing), so the constraint "they stay coincident on the same link /
+    // the joint axis" is physical. A coincidental rest-alignment of two DIFFERENT holes (e.g.
+    // the J1 casting's r=7 mm bolt collinear with the pedestal's r=2 mm hole at the assembly
+    // pose) is NOT a rigid connection -- it legitimately drifts across the J1 joint -- so it
+    // must be excluded or it false-positives. Filters: parallel axes, <3 mm line distance,
+    // AND matching radius (same hole) ----
     std::vector<Hinge> hinges;
-    for (int kA = 0; kA < 17; ++kA) {
+    for (int kA = 0; kA < krs::fanuc::kSolidCount; ++kA) {
         if (!S[kA].present) continue;
-        for (int kB = kA + 1; kB < 17; ++kB) {
+        for (int kB = kA + 1; kB < krs::fanuc::kSolidCount; ++kB) {
             if (!S[kB].present) continue;
             for (int iA = 0; iA < int(S[kA].bores.size()); ++iA)
             for (int iB = 0; iB < int(S[kB].bores.size()); ++iB) {
                 const Bore& bA = S[kA].bores[iA];
                 const Bore& bB = S[kB].bores[iB];
                 if (std::abs(glm::dot(bA.A0, bB.A0)) < 0.999) continue;            // parallel axes
-                if (ptLine(bB.P0, bA.P0, bA.A0) > 0.005) continue;                 // <5 mm line distance
+                if (ptLine(bB.P0, bA.P0, bA.A0) > 0.003) continue;                 // <3 mm line distance
+                if (std::abs(bA.r - bB.r) > 0.15 * std::max(bA.r, bB.r) + 1e-4) continue; // SAME hole (radius match)
                 hinges.push_back({ kA, iA, kB, iB });
             }
         }
@@ -191,7 +198,8 @@ bool runVisibleArticGateV()
     // (each pair is only coaxial to within the 5 mm match tol) cancels out and the
     // number is the purely MOTION-induced incoherence: ~0 for a correct assignment,
     // huge when a solid is carried by the wrong link.
-    auto metric = [&](const std::array<int,17>& asn, double& coincDrift, double& jointMot) {
+    int worstA = -1, worstB = -1, worstLA = -1, worstLB = -1; double worstRA = 0, worstRB = 0, worstRest = 0;
+    auto metric = [&](const std::array<int, krs::fanuc::kSolidCount>& asn, double& coincDrift, double& jointMot) {
         coincDrift = 0.0; jointMot = 0.0;
         for (const Hinge& h : hinges) {
             const int LA = asn[h.kA], LB = asn[h.kB];
@@ -206,18 +214,22 @@ bool runVisibleArticGateV()
                 const double dev = std::max(ptLine(PB, PA, DA),
                                             ptLine(PB + 0.5 * DB, PA, DA));        // position + angular drift
                 if (t == 0) dev0 = dev;
-                coincDrift = std::max(coincDrift, std::abs(dev - dev0));
+                const double drift = std::abs(dev - dev0);
+                if (drift > coincDrift) { coincDrift = drift; worstA = h.kA; worstB = h.kB; worstLA = LA; worstLB = LB;
+                                          worstRA = bA.r; worstRB = bB.r; worstRest = dev0; }
                 if (LA != LB) sweep = std::max(sweep, relAngle(dl[t][LA], dl[t][LB]));
             }
             if (LA != LB) jointMot = std::max(jointMot, sweep);
         }
     };
 
-    std::array<int,17> asn{};
-    for (int k = 0; k < 17; ++k) asn[k] = krs::fanuc::solidLink(k);
+    std::array<int, krs::fanuc::kSolidCount> asn{};
+    for (int k = 0; k < krs::fanuc::kSolidCount; ++k) asn[k] = krs::fanuc::solidLink(k);
 
     double coincDrift = 0, jointMot = 0;
     metric(asn, coincDrift, jointMot);
+    printf("[vassign]  worst-drift hinge: body %d (link %d) <-> body %d (link %d)  rA=%.4f rB=%.4f restDist=%.4f m\n",
+           worstA, worstLA, worstB, worstLB, worstRA, worstRB, worstRest);
     // V-assign positive: bores stay coherent under motion (drift <1 mm) AND the joints
     // really move (>0.2 rad). The 1 mm bound is motion-induced drift, NOT absolute
     // coincidence, so it is purely numerical for a correct assignment.
@@ -231,7 +243,7 @@ bool runVisibleArticGateV()
     // wrist hinges it shares with the forearm (link 3) must then DRIFT as the elbow
     // bends -> coincDrift spikes far past the bound. If it did NOT, the witness would
     // be vacuous and V-assign must fail.
-    std::array<int,17> bad = asn; bad[15] = 2;               // solid 15 (wrist) -> wrong link
+    std::array<int, krs::fanuc::kSolidCount> bad = asn; bad[15] = 2;               // solid 15 (wrist) -> wrong link
     double driftBad = 0, motBad = 0;
     metric(bad, driftBad, motBad);
     const bool guardBites = driftBad > 0.10;                 // a real mis-assignment is grossly rejected
@@ -290,6 +302,36 @@ bool runFanucBootGateV6()
                                      : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
+}
+
+bool runFanucSolidDump()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    const std::string path = krs::fanuc::findStepAsset();
+    Scene scene;
+    krs::cad::ImportResult ir = krs::cad::importStep(scene, path, 0.001f);
+    printf("[fanuc dump] import ok=%d solids=%d attachments=%d (%s)\n",
+           int(ir.ok), ir.solids, ir.attachments, path.c_str());
+    auto& reg = scene.getRegistry();
+    int n = 0, emptyIdx = 0;
+    for (auto e : reg.view<TagComponent, RenderableMeshComponent>()) {
+        const std::string& tag = reg.get<TagComponent>(e).tag;
+        const std::string pfx = "STEP solid ";
+        if (tag.rfind(pfx, 0) != 0) continue;
+        const int k = std::atoi(tag.c_str() + pfx.size()) - 1;
+        const auto& m = reg.get<RenderableMeshComponent>(e);
+        glm::vec3 lo(1e9f), hi(-1e9f);
+        for (const auto& v : m.vertices) { lo = glm::min(lo, v.position); hi = glm::max(hi, v.position); }
+        const int link = (k >= 0 && k < krs::fanuc::kSolidCount) ? krs::fanuc::solidLink(k) : -1;
+        printf("[fanuc dump]  solid %2d ent %u: verts=%zu indices=%zu link=%d bbox=[%.3f,%.3f,%.3f]..[%.3f,%.3f,%.3f]%s\n",
+               k, (unsigned)e, m.vertices.size(), m.indices.size(), link,
+               lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, m.indices.empty() ? "  <-- EMPTY (will NOT render)" : "");
+        ++n; if (m.indices.empty()) ++emptyIdx;
+    }
+    printf("[fanuc dump] %d renderable solids, %d with EMPTY indices\n", n, emptyIdx);
+    fflush(stdout);
+    return true;
 }
 
 } // namespace krs::dyn

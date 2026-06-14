@@ -7,21 +7,31 @@
 namespace krs::fanuc {
 
 // --- THE assignment (single source of truth) -------------------------------
-// Derived from the bore / shared-hinge connectivity (ROADMAP R.1), NOT the
-// offset-fit. Base {16,11,14}; carousel {13}; upper arm {12}; everything else
-// (forearm + strut + bolts + wrist) rides the J3 elbow link.
+// Body index = import enumeration order: SOLIDs 0..16, then free SHELLs 17..26
+// (CadImporter now spawns open shells too -- the FANUC J1 S-axis casting is an
+// open shell, body 26). Derived from bore / shared-hinge connectivity + the
+// shell bboxes (ROADMAP R.7), NOT the offset-fit.
+//   link 0 base : solid {16} (the floor-bolted pedestal ONLY)
+//   link 1 J1   : the S-axis casting shell {26} + carousel solid {13} + the brackets
+//                 {11,14} bolted to the casting + its lower fittings shells {24,25} --
+//                 the previously-MISSING J1->J2 link. (V-assign caught {11,14}: they
+//                 share an OFF-AXIS bore with the rotating casting {26}, so they rotate
+//                 with J1 -- they are NOT part of the fixed base.)
+//   link 2 J2   : upper arm {12}
+//   link 3 J3   : everything else (forearm + strut + bolts + wrist solids, and the
+//                 wrist/tool-flange shells {17..23}; J4 frozen so they ride link 3)
 int solidLink(int inspectIndex)
 {
     const int k = inspectIndex;
-    if (k == 16 || k == 11 || k == 14) return 0;   // pedestal + base brackets (J1-coaxial)
-    if (k == 13) return 1;                         // carousel / S-axis casting
-    if (k == 12) return 2;                         // upper arm (J2 journal + J3 bore)
-    return 3;                                       // forearm + strut + bolts + wrist (J4 frozen)
+    if (k == 16) return 0;                                                        // fixed pedestal only
+    if (k == 13 || k == 11 || k == 14 || k == 24 || k == 25 || k == 26) return 1; // J1 rotating assembly
+    if (k == 12) return 2;                                                        // upper arm
+    return 3;                                                                     // forearm + strut + bolts + wrist
 }
 
 std::string assignmentFingerprint()
 {
-    std::string fp = "fanuc-v1:";                  // schema tag so the format is self-describing
+    std::string fp = "fanuc-v2:";                  // v2: free shells enumerated (27 bodies)
     for (int k = 0; k < kSolidCount; ++k) fp += char('0' + solidLink(k));  // links are 0..3 -> single digit
     return fp;
 }

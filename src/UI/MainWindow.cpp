@@ -711,7 +711,7 @@ MainWindow::MainWindow(QWidget* parent)
         if (fs.ok) {
             m_simulation->setArticulationDemoDrive(true);
             qInfo() << "[FANUC] visible articulated demo booted:" << fs.solids
-                    << "solids; assignment" << QString::fromStdString(fs.fingerprint);
+                    << "bodies (solids+shells); assignment" << QString::fromStdString(fs.fingerprint);
         } else {
             qWarning() << "[FANUC] demo setup failed:" << QString::fromStdString(fs.message);
         }

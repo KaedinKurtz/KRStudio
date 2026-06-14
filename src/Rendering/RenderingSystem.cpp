@@ -614,6 +614,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase V diagnostic: dump per-solid vert/index/bbox/link for the imported FANUC.
+    if (qEnvironmentVariableIntValue("KRS_FANUC_SOLID_DUMP") != 0) {
+        std::printf("\n================= KRS_FANUC_SOLID_DUMP =================\n");
+        const bool ok = krs::dyn::runFanucSolidDump();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");

@@ -29,4 +29,9 @@ bool runVisibleArticGateV();
 // without PhysX/OpenCASCADE.
 bool runFanucBootGateV6();
 
+// Diagnostic (KRS_FANUC_SOLID_DUMP): imports the FANUC STEP and dumps every
+// enumerated solid's vertex/index counts, world bbox and assigned link, so a
+// non-rendering / under-enumerated / empty-mesh solid is visible. Returns true.
+bool runFanucSolidDump();
+
 } // namespace krs::dyn
