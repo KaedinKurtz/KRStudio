@@ -66,6 +66,8 @@ public:
     bool setArticJointVelocities(const std::vector<float>& qd);  // applyCache(eVELOCITY)
     bool commandJointTorques(const std::vector<float>& tau);     // cache.jointForce + applyCache(eFORCE)
     std::vector<float> articJointAccel();                        // commonInit + computeJointAcceleration
+    std::vector<float> articJointPositions();                    // copyInternalStateToCache(ePOSITION) readback
+    std::vector<float> articJointVelocities();                   // copyInternalStateToCache(eVELOCITY) readback
 
     /// Advance the accumulator / step physics. Call once per frame.
     void tick();

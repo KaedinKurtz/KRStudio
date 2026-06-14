@@ -28,4 +28,10 @@ bool runArticulationGate();
 // Gated by KRS_ARTIC_LIVE_SELFTEST. Vacuous pass without PhysX.
 bool runArticulationLiveGate();
 
+// Phase A — GATE D: the default FANUC sandbox demo (repeated pick-and-place on the
+// live parallelogram articulation) measured for stability (D1, loop residual <1e-4
+// throughout >=1000 cycles), tracking (D2), no resource growth (D3), determinism (D4).
+// Gated by KRS_DEMO_SELFTEST. Vacuous pass without PhysX.
+bool runDemoGateD();
+
 } // namespace krs::dyn

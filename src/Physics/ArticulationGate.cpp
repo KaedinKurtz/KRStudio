@@ -4,6 +4,7 @@
 namespace krs::dyn {
 bool runArticulationGate() { return true; }      // vacuous pass
 bool runArticulationLiveGate() { return true; }  // vacuous pass
+bool runDemoGateD() { return true; }             // vacuous pass
 }
 #else
 
@@ -17,6 +18,7 @@ bool runArticulationLiveGate() { return true; }  // vacuous pass
 #include <algorithm>
 #include "SimulationController.hpp"   // Phase G: drive the LIVE articulation path
 #include "Scene.hpp"
+#include "SysMem.hpp"                 // Phase A GATE D: D3 resource-growth probe
 
 using namespace physx;
 
@@ -504,6 +506,140 @@ bool runArticulationLiveGate()
 
     const bool pass = h1pass && h2pass && h3pass;
     printf("[artic live] %s\n", pass ? "ALL PASS (H1,H2,H3)" : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
+// Phase A — GATE D: the default FANUC sandbox demo. The validated A3 parallelogram is
+// driven through a repeated, smooth pick-and-place (crank A<->B) by a PD + Coriolis-
+// compensation controller feeding cache.jointForce (the Phase-G command interface). PD
+// drives only the crank (joint 0); the D6 loop + damping resolve the dependent bars, so
+// the 1-DOF mechanism is not over-actuated. Zero gravity isolates the loop constraint
+// (as GATE-H H3 does), making D1's "<1e-4 throughout the motion" a clean, non-vacuous
+// measure of loop closure under ACTUAL commanded motion.
+// ===========================================================================
+bool runDemoGateD()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[demo gate] GATE D — FANUC parallelogram pick-and-place stability\n");
+
+    const double L = 1.075;
+    const Eigen::Vector3d base(0.0, 0.74, 0.305), topPivot(0.0, 0.74 + L, 0.305);
+    const Eigen::Vector3d bar(0, L, 0), axisX(1, 0, 0);
+    std::vector<GateSpec> p(3);
+    p[0].parent = -1; p[0].axis = axisX; p[0].ptree = base;
+    p[1].parent =  0; p[1].axis = axisX; p[1].ptree = bar;
+    p[2].parent =  1; p[2].axis = axisX; p[2].ptree = bar;
+    for (auto& g : p) { g.mass = 160.0; g.com = Eigen::Vector3d(0, 0.5*L, 0); g.inertiaDiag = Eigen::Vector3d(60, 2, 60); }
+    krs::dyn::RobotArticSpec ps; ps.fixBase = true;
+    for (const auto& g : p) {
+        krs::dyn::ArticJointSpec j; j.parent = g.parent; j.revolute = true;
+        j.axis = { float(g.axis.x()), float(g.axis.y()), float(g.axis.z()) };
+        for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) j.Rtree[r*3+c] = float(g.Rtree(r,c));
+        j.ptree = { float(g.ptree.x()), float(g.ptree.y()), float(g.ptree.z()) };
+        j.mass = float(g.mass); j.com = { 0.f, float(0.5*L), 0.f }; j.inertiaDiag = { 60.f, 2.f, 60.f };
+        ps.joints.push_back(j);
+    }
+    ps.loop.enabled = true; ps.loop.tipLink = 2;
+    ps.loop.tipLocal    = { float(bar.x()), float(bar.y()), float(bar.z()) };
+    ps.loop.anchorWorld = { float(topPivot.x()), float(topPivot.y()), float(topPivot.z()) };
+
+    SerialChain oc = makeOracle(p);
+    auto closedConfig = [&](double crank) {
+        Eigen::VectorXd q = Eigen::VectorXd::Zero(3); q[0]=crank; q[1]=-crank*1.2; q[2]=crank*0.4;
+        LoopConstraint lc; lc.bodyA=2; lc.pA=bar; lc.bodyB=-1; lc.pB=topPivot;
+        oc.closeLoops({lc}, {1,2}, q, 100, 1e-12); return q;
+    };
+    const double crankA = 0.40, crankB = 1.00;
+    const Eigen::Vector3d zeroG(0,0,0);
+    const double Kp = 1.2e5, Kd = 1.2e4, KdDep = 300.0;   // crank PD + light dependent damping
+    const Eigen::VectorXd qcmdA = closedConfig(crankA);   // loop-consistent seed
+    auto smooth = [](double a, double b, double t){ double s=t*t*(3.0-2.0*t); return a+(b-a)*s; };
+
+    // One demo run: cycles x (A->B + B->A). PD on the CRANK (joint 0, the independent DOF);
+    // the dependent bars follow the D6 with light damping (the 1-DOF mechanism is not fought,
+    // and we track the independent coord, not the oracle's non-unique dependent solution).
+    // Returns max loop residual + max crank tracking error + NaN flag + trajectory checksum.
+    // outputs: maxRes (loop residual, every step), maxLag (peak crank tracking error during
+    // motion), maxSettled (crank error at the END of each dwell = reach accuracy), NaN, checksum.
+    auto runDemo = [&](int cycles, int mTrans, int mDwell,
+                       double& maxRes, double& maxLag, double& maxSettled, bool& sawNaN, double& checksum) -> bool {
+        Scene scene; SimulationController sim(&scene);
+        sim.setRobotArticulationSpec(ps);
+        sim.play();
+        if (sim.articDofCount() != 3) { sim.stop(); return false; }
+        sim.setSceneGravity(0,0,0);
+        { std::vector<float> q0(3); for (int i=0;i<3;++i) q0[i]=float(qcmdA[i]); sim.setArticJointPositions(q0); }
+        maxRes = 0; maxLag = 0; maxSettled = 0; sawNaN = false; checksum = 0;
+        auto stepCtl = [&](double crankTgt) -> double {       // returns |crank - target| this step
+            auto qm = sim.articJointPositions(); auto qdm = sim.articJointVelocities();
+            if (qm.size()!=3 || qdm.size()!=3) { sawNaN = true; return 0.0; }
+            Eigen::VectorXd q(3), qd(3);
+            for (int i=0;i<3;++i){ q[i]=qm[i]; qd[i]=qdm[i];
+                if (!std::isfinite(qm[i]) || !std::isfinite(qdm[i])) sawNaN = true; }
+            Eigen::VectorXd bias = oc.biasForces(q, qd, zeroG);   // Coriolis (g=0)
+            Eigen::VectorXd tau(3);
+            tau[0] = bias[0] + Kp*(crankTgt - q[0]) - Kd*qd[0];   // PD on the crank
+            tau[1] = bias[1] - KdDep*qd[1];                       // dependent bars follow the D6
+            tau[2] = bias[2] - KdDep*qd[2];
+            std::vector<float> tf(3); for (int i=0;i<3;++i) tf[i]=float(tau[i]);
+            sim.commandJointTorques(tf);
+            sim.singleStep();
+            auto poses = sim.articLinkPoses();
+            if (poses.size()>=3) {
+                Eigen::Vector3d tp(poses[2][0],poses[2][1],poses[2][2]);
+                Eigen::Quaterniond tq(poses[2][6],poses[2][3],poses[2][4],poses[2][5]);
+                maxRes = std::max(maxRes, (tp + tq.toRotationMatrix()*bar - topPivot).norm());
+                checksum += std::abs(tp.x())+std::abs(tp.y())+std::abs(tp.z());
+            }
+            return std::abs(q[0] - crankTgt);
+        };
+        for (int s=0;s<240 && !sawNaN;++s) stepCtl(crankA);    // settle (exclude seed transient)
+        for (int cyc=0; cyc<cycles && !sawNaN; ++cyc) {
+            const double seq[2][2] = { {crankA,crankB}, {crankB,crankA} };
+            for (int leg=0; leg<2; ++leg) {
+                for (int m=0; m<mTrans; ++m) maxLag = std::max(maxLag, stepCtl(smooth(seq[leg][0], seq[leg][1], double(m)/(mTrans-1))));
+                double e = 0; for (int m=0; m<mDwell; ++m) { e = stepCtl(seq[leg][1]); maxLag = std::max(maxLag, e); }
+                maxSettled = std::max(maxSettled, e);          // reach accuracy at the end of the dwell
+            }
+        }
+        sim.stop();
+        return true;
+    };
+
+    // --- D1: stability over 1000 fast cycles (loop residual <1e-4 every step, no NaN) ---
+    double res1=0, lag1=0, set1=0, cs1=0; bool nan1=false;
+    bool ran = runDemo(1000, 20, 8, res1, lag1, set1, nan1, cs1);
+    bool d1 = ran && !nan1 && res1 < 1e-4;
+    printf("[demo gate]  D1 stability (1000 cyc, no NaN, loop res throughout): maxRes=%.3e m  %s\n", res1, d1?"PASS":"FAIL");
+
+    // --- D2: reach accuracy at each commanded config (long dwell) + reported dynamic lag ---
+    double res2=0, lag2=0, set2=0, cs2=0; bool nan2=false;
+    runDemo(8, 80, 160, res2, lag2, set2, nan2, cs2);
+    const double TRACK_TOL = 0.02;
+    bool d2 = !nan2 && set2 < TRACK_TOL;
+    printf("[demo gate]  D2 tracking: reach-err=%.3e rad (bound %.2f), peak dynamic lag=%.3e rad  %s\n",
+           set2, TRACK_TOL, lag2, d2?"PASS":"FAIL");
+
+    // --- D3: no resource growth across repeated build/run/teardown (the leak class) ---
+    const size_t memBefore = krs::processWorkingSetBytes();
+    { double r,l,s,c; bool n; for (int it=0; it<20; ++it) runDemo(5, 20, 6, r, l, s, n, c); }
+    const size_t memAfter = krs::processWorkingSetBytes();
+    const double growthMB = (double(memAfter) - double(memBefore)) / (1024.0*1024.0);
+    bool d3 = growthMB < 8.0;
+    printf("[demo gate]  D3 no resource growth (20 build/run/teardown): dWorkingSet=%.2f MB bound=8 %s\n", growthMB, d3?"PASS":"FAIL");
+
+    // --- D4: identical commanded motion reproduces an identical trajectory ---
+    double ra,la,sa,ca,rb,lb,sb,cb; bool na,nb;
+    runDemo(50, 30, 12, ra, la, sa, na, ca);
+    runDemo(50, 30, 12, rb, lb, sb, nb, cb);
+    bool d4 = std::abs(ca - cb) < 1e-9 * std::max(1.0, std::abs(ca));
+    printf("[demo gate]  D4 determinism (two runs, trajectory checksum): cs1=%.10g cs2=%.10g %s\n", ca, cb, d4?"PASS":"FAIL");
+
+    const bool pass = d1 && d2 && d3 && d4;
+    printf("[demo gate] %s\n", pass ? "ALL PASS (D1-D4)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }

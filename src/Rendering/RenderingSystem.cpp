@@ -613,6 +613,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase A GATE D: FANUC sandbox demo stability (pick-and-place over >=1000 cycles).
+    if (qEnvironmentVariableIntValue("KRS_DEMO_SELFTEST") != 0) {
+        std::printf("\n================= KRS_DEMO_SELFTEST =================\n");
+        const bool ok = krs::dyn::runDemoGateD();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -629,6 +637,7 @@ void RenderingSystem::initializeSharedResources()
             { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },
             { "GATE H live articulation (H1/H2/H3 vs oracle)", krs::dyn::runArticulationLiveGate() },
+            { "GATE D FANUC demo stability (D1-D4)",          krs::dyn::runDemoGateD() },
         };
         int fails = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");

@@ -812,6 +812,32 @@ std::vector<float> SimulationController::articJointAccel()
     return out;
 }
 
+std::vector<float> SimulationController::articJointPositions()
+{
+    std::vector<float> out;
+#if defined(KR_WITH_PHYSX)
+    if (!m_px->articulation || !m_px->articCache) return out;
+    m_px->articulation->copyInternalStateToCache(*m_px->articCache, physx::PxArticulationCacheFlag::ePOSITION);
+    const physx::PxU32 nDof = m_px->articulation->getDofs();
+    out.reserve(nDof);
+    for (physx::PxU32 d = 0; d < nDof; ++d) out.push_back(float(m_px->articCache->jointPosition[d]));
+#endif
+    return out;
+}
+
+std::vector<float> SimulationController::articJointVelocities()
+{
+    std::vector<float> out;
+#if defined(KR_WITH_PHYSX)
+    if (!m_px->articulation || !m_px->articCache) return out;
+    m_px->articulation->copyInternalStateToCache(*m_px->articCache, physx::PxArticulationCacheFlag::eVELOCITY);
+    const physx::PxU32 nDof = m_px->articulation->getDofs();
+    out.reserve(nDof);
+    for (physx::PxU32 d = 0; d < nDof; ++d) out.push_back(float(m_px->articCache->jointVelocity[d]));
+#endif
+    return out;
+}
+
 int SimulationController::articDofCount() const
 {
 #if defined(KR_WITH_PHYSX)

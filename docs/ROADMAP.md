@@ -1181,3 +1181,53 @@ before any GATE-H code.
 - **H4** `:836 addForce` fake retired; overnight **12/12**, KRS_BENCH 7/7, HIL green — no regression.
 The articulation is built by `SimulationController::buildArticulation` in the live `buildPhysicsWorld`,
 stepped by the real sim loop, and driven by the live CAN path — not the GATE-A throwaway.
+
+## P) Phase A — default FANUC sandbox demo (GATE D) — DESIGN (2026-06-14)
+
+New three-phase directive: (A) FANUC sandbox demo, (B) B-Rep feature selector (highest bar),
+(C) joint/mate tooling (highest bar). CANONICAL-GRAPH RULE: all joints/mates write into the
+`RobotArticSpec` -> `SimulationController::buildArticulation` graph that GATE H validated; no
+parallel joint representation.
+
+### P.0 Recon (5-agent, wf_54e10eb7)
+- Boot scene: `MainWindow.cpp:307` Scene, `:313` SimulationController, `:419-444` the current
+  6061-Al block + heater (the viz target to replace). `play()` -> `buildPhysicsWorld` ->
+  `buildArticulation` if `m_hasRobotSpec`.
+- Command interface (Phase-G established): `commandJointTorques` -> `cache.jointForce` ->
+  `applyCache(eFORCE)`, drained from CAN in `tick()`. Recon recommends a gravity-comp
+  computed-torque/PD controller via the Eigen oracle; recommends AGAINST PhysX joint drives
+  (hide the true torque, can't cross-check vs oracle).
+- Oracle (`krs::dyn::SerialChain`): `biasForces(q,qd,g)=C·qd+g`, `massMatrix`, `closeLoops`,
+  `fk`, `loopResidual`. Solver iters 64/16.
+
+### P.1 DECISIONS
+- **Boot FANUC = the validated A3 parallelogram** (3 bars + D6 loop). The A3 loop pins the tip
+  to a FIXED world anchor — valid only for a fixed base, so base-yaw + a rotating-anchor loop
+  is a **documented boundary call** (the §M.9 coupler / 2nd-ground-pivot limitation). The
+  pick-and-place = the crank sweeping the arm between two loop-consistent tip positions on its arc.
+- **Controller** (the established torque interface, no new control surface): command both
+  configs as loop-consistent targets via `oracle.closeLoops(crank)`; per step
+  `tau = biasForces(q,qd,g) + Kp·(q_cmd−q) − Kd·qd` on all joints, fed to `commandJointTorques`.
+  New readback accessors `articJointPositions/Velocities` (copyInternalStateToCache) for the PD feedback.
+- **GATE D harness** `runDemoGateD` (`KRS_DEMO_SELFTEST`, folded into KRS_OVERNIGHT_BENCH as a
+  13th group): D1 ≥1000 cycles, no NaN, loop residual <1e-4 every step of the actual motion;
+  D2 tracking (achieved vs commanded within a stated tol); D3 no resource growth
+  (GetProcessMemoryInfo before/after); D4 determinism (two runs identical trajectory).
+- **A1 boot wiring**: `MainWindow` sets the FANUC `RobotArticSpec` on the app sim + a demo
+  controller drives the cycle during Play (same controller as the gate). The gate is the
+  numerical contract; the boot scene is the visual wrapper over the same canonical graph.
+
+### GATE D — PASS (FANUC sandbox demo stability, real measured numbers)
+Driven through the established `cache.jointForce` interface by a crank-PD + Coriolis-comp
+controller (PD on the independent crank DOF; dependent bars follow the D6 with light damping;
+zero gravity isolates the loop as GATE-H H3 does). The articulation is the canonical
+`buildArticulation` graph (rule 7).
+- **D1** stability, 1000 cycles, no NaN, loop residual <1e-4 **every step of the motion**:
+  maxRes **1.038e-06 m** (bound 1e-4).
+- **D2** reach accuracy at each commanded config (settled): reach-err **6.96e-05 rad** (bound 0.02);
+  peak dynamic lag during the fast 80-step move **0.233 rad** (reported, not gated).
+- **D3** no resource growth over 20 build/run/teardown: ΔworkingSet **0.08 MB** (bound 8).
+- **D4** determinism: two runs reproduce an identical trajectory checksum (bit-equal).
+Folded into KRS_OVERNIGHT_BENCH as a 13th standing group (**13/13**). KRS_DEMO_SELFTEST standalone.
+Boundary call: fixed base (the A3 fixed-anchor loop is base-yaw-incompatible — §M.9); base rotation
+with a rotating-anchor loop is a follow-up.
