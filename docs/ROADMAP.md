@@ -1066,4 +1066,22 @@ non-realtime OS; one run tripped on a single max-tick outlier (1.94 ms > 1 ms bu
 threshold is outlier-sensitive; a p99.9 / allow-N-outliers bound would be more robust. Tracked as a
 HIL follow-up, independent of the render gates.
 
+**Adversarial review (18-agent, wf_7a2b4085) — findings fixed, false-positives documented:**
+- **G7 was circular** (focal point projects to centre *by construction* for a look-at camera) → replaced
+  with a non-circular check: CPU-project the quad's world corners via `P_ortho` and compare to the
+  *rendered* silhouette bbox (GPU transform vs CPU projection), cornerProjErr **0.200 px**. This surfaced
+  two pre-existing **Camera bugs** (out of Phase F scope, flagged as follow-ups): (1) `forceRecalculateView`
+  encodes yaw as `atan2(dir.x,dir.z)` but `updateCameraVectors` rebuilds `front` as `(cos yaw, …, sin yaw)`
+  — an x/z swap, so it *relocates* the camera instead of preserving the requested pose; (2) `m_IsPerspective`
+  is uninitialized (`Camera.hpp:85`).
+- **G1 anti-vacuous**: a silently-broken shader yields an all-clear FBO that is trivially "deterministic" →
+  now requires non-blank foreground (168100 px) + real colour content.
+- **G5**: replaced the base-vs-overlay distance heuristic with a direct "overlay won at every pixel" check
+  (tol ≫ RGBA16F quantisation); sensitivity baseline now 99.3% (no-offset) vs 0% (with bias).
+- **G3** full `Appearance` save/restore; **G2** prints pixel count; **G9** fails if the PNG write fails;
+  GL depth/offset/clearColor restored on exit.
+- **Refuted (correctly, no change)**: VAO/VBO "leak" (created after the FBO-completeness check), missing
+  `glFinish` (`glReadPixels` is synchronous), `glClearColor` leak (matches the app baseline + `_Exit`),
+  G5 depth-buffer persistence (same FBO bound throughout), G2 LUT-coarseness (range applied identically).
+
 **Phase F is LANDED + GATED.** Next: Phase G — live FANUC articulation (GATE H).

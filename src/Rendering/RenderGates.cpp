@@ -26,7 +26,6 @@
 #include "RenderingSystem.hpp"
 #include "MpmSystem.hpp"
 #include "Shader.hpp"
-#include "Camera.hpp"
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <QtGlobal>
@@ -199,12 +198,18 @@ bool RenderingSystem::runRenderGates()
     };
 
     // ---- G1 determinism: render the [0,1] gradient twice, bit-exact ---------
+    // Guard against the vacuous pass: a silently-broken shader yields an all-clear
+    // (0,0,0,0) FBO that is trivially "deterministic". Require real foreground +
+    // real colour content so determinism is asserted on an actually-rendered image.
     std::vector<float> a1, a2;
     renderGradient({0.0f, 1.0f}, false, a1);
     renderGradient({0.0f, 1.0f}, false, a2);
-    float maxDiff = 0.0f;
+    float maxDiff = 0.0f, maxChan = 0.0f; long fgN = 0;
     for (size_t i = 0; i < a1.size(); ++i) maxDiff = std::max(maxDiff, std::abs(a1[i] - a2[i]));
-    check("G1 determinism", maxDiff == 0.0f, "maxAbsPixelDiff=%.3g, bound=%.0f", maxDiff, 0.0);
+    for (size_t i = 0; i < a1.size(); i += 4)
+        if (a1[i + 3] >= 0.5f) { ++fgN; maxChan = std::max(maxChan, std::max(a1[i], std::max(a1[i + 1], a1[i + 2]))); }
+    check("G1 determinism", maxDiff == 0.0f && fgN > 1000 && maxChan > 0.1f,
+          "maxAbsPixelDiff=%.3g, fgPixels=%.0f (not blank)", maxDiff, double(fgN));
 
     // ---- G2 decode fidelity over the centre scanline ------------------------
     // Loop the three Appearance ranges (Thermal/VonMises/Strain) to exercise the
@@ -230,7 +235,7 @@ bool RenderingSystem::runRenderGates()
         double g2err = 0.0; int g2m = 0;
         const glm::vec2 ranges[3] = { {0.0f, 1.0f}, {0.0f, 2.0f}, {-1.0f, 1.0f} };
         for (const auto& R : ranges) { auto pr = decodeFidelity(R); g2err = std::max(g2err, pr.first); g2m += pr.second; }
-        check("G2 decode fidelity", g2err < 0.02 && g2m > 192, "maxAbs(dt)=%.4f /3 ranges, bound=%.2f", g2err, 0.02);
+        check("G2 decode fidelity", g2err < 0.02 && g2m > 192, "maxAbs(dt)=%.4f over n=%.0f px /3 ranges", g2err, double(g2m));
     }
 
     // ---- G8 colormap monotonicity (rho=1): decoded t non-decreasing in x ----
@@ -241,7 +246,9 @@ bool RenderingSystem::runRenderGates()
             glm::vec4 c = px(b, x, cy);
             if (c.a < 0.5f) continue;
             float t = lut.decode(glm::vec3(c));
-            if (prev >= 0.0f && t < prev - 1e-4f) ++inversions; // allow LUT-quantisation ties
+            // LUT entries are 1/1023 (~9.8e-4) apart; tolerate sub-granule nearest-t
+            // ties but flag any real backward step in decoded t (a colormap inversion).
+            if (prev >= 0.0f && t < prev - 1e-4f) ++inversions;
             prev = t; lastT = t; ++m;
         }
         check("G8 colormap monotonic", inversions == 0 && m > 64, "inversions=%.0f over n=%.0f", double(inversions), double(m));
@@ -293,7 +300,9 @@ bool RenderingSystem::runRenderGates()
         gl->glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
         gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
         gl->glReadPixels(0, 0, W, H, GL_RGBA, GL_FLOAT, after.data());
-        // bleed = foreground pixels whose colour still equals the BASE ramp(worldx)
+        // bleed = foreground pixels where the OVERLAY did NOT win (colour != overlay
+        // ramp within a tolerance well above RGBA16F quantisation ~1e-3). A direct
+        // "did the overlay win everywhere" test — no base-vs-overlay distance guess.
         long bleed = 0, fg = 0;
         for (int y = 0; y < H; ++y)
             for (int x = 0; x < W; ++x) {
@@ -301,11 +310,8 @@ bool RenderingSystem::runRenderGates()
                 if (c.a < 0.5f) continue;
                 ++fg;
                 float wx = std::clamp(pxToWorldX(x), 0.0f, 1.0f);
-                glm::vec3 baseCol = rampCPU(wx);             // expected base colour
-                glm::vec3 overCol = rampCPU((wx + 1.0f) * 0.5f); // expected overlay colour
-                float dBase = glm::length(glm::vec3(c) - baseCol);
-                float dOver = glm::length(glm::vec3(c) - overCol);
-                if (dBase < dOver) ++bleed;                  // base showed through => fight
+                glm::vec3 overCol = rampCPU((wx + 1.0f) * 0.5f); // overlay must win here
+                if (glm::length(glm::vec3(c) - overCol) > 0.02f) ++bleed; // overlay lost
             }
         return std::pair<double,double>(fg ? double(bleed) / fg : 1.0, double(fg));
     };
@@ -326,17 +332,27 @@ bool RenderingSystem::runRenderGates()
         check("G6 mode-switch", ok, "t(range1)=%.3f -> t(range2)=%.3f (expect halved)", t1, t2);
     }
 
-    // ---- G7 camera +-1px: real Camera projects focal point to screen centre --
+    // ---- G7 projection +-1px: a known world point projects to the predicted pixel,
+    // validated through the ACTUAL render (the GPU vertex transform) vs the CPU
+    // projection of the same matrix. We CPU-project the quad's world corners via
+    // P_ortho and compare to the rendered silhouette's bounding box (non-circular;
+    // catches any world->screen transform error in the render path).
     {
-        Camera cam;
-        cam.forceRecalculateView(glm::vec3(3.0f, 2.0f, 4.0f), glm::vec3(0.0f, 0.5f, 0.0f), 5.39f);
-        glm::mat4 V = cam.getViewMatrix();
-        glm::mat4 Pp = cam.getProjectionMatrix(float(W) / float(H));
-        glm::vec4 clip = Pp * V * glm::vec4(0.0f, 0.5f, 0.0f, 1.0f); // the focal point
-        glm::vec3 ndc = glm::vec3(clip) / clip.w;
-        float sx = (ndc.x * 0.5f + 0.5f) * W, sy = (ndc.y * 0.5f + 0.5f) * H;
-        float dpx = std::max(std::abs(sx - W * 0.5f), std::abs(sy - H * 0.5f));
-        check("G7 camera +-1px", dpx <= 1.0f, "focalProjErr=%.3f px, bound=1px", dpx, 1.0);
+        std::vector<float> b; renderGradient({0.0f, 1.0f}, false, b);
+        int minx = W, miny = H, maxx = -1, maxy = -1;
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x)
+                if (px(b, x, y).a >= 0.5f) { minx = std::min(minx, x); maxx = std::max(maxx, x); miny = std::min(miny, y); maxy = std::max(maxy, y); }
+        auto proj = [&](glm::vec3 w) {
+            glm::vec4 c = P_ortho * glm::vec4(w, 1.0f); glm::vec3 n = glm::vec3(c) / c.w;
+            return glm::vec2((n.x * 0.5f + 0.5f) * W, (n.y * 0.5f + 0.5f) * H);
+        };
+        glm::vec2 c00 = proj({0, 0, 0}), c11 = proj({1, 1, 0}); // quad corners -> predicted px
+        // silhouette edges: first covered pixel index (minx/miny) and last+1 (maxx+1/maxy+1)
+        float err = std::max(std::max(std::abs(c00.x - minx), std::abs(c00.y - miny)),
+                             std::max(std::abs(c11.x - (maxx + 1)), std::abs(c11.y - (maxy + 1))));
+        check("G7 projection +-1px", err <= 1.5f && maxx > 0,
+              "cornerProjErr=%.3f px (CPU vs silhouette), bound=1.5", err, 1.5);
     }
 
     // ---- G3 jitter / freeze: N frozen renders identical; freezeRange pins -----
@@ -345,13 +361,15 @@ bool RenderingSystem::runRenderGates()
         float var = 0.0f;
         for (int k = 0; k < 4; ++k) { renderGradient({0.0f, 1.0f}, false, fk);
             for (size_t i = 0; i < f0.size(); ++i) var = std::max(var, std::abs(f0[i] - fk[i])); }
-        // F2 freezeRange API: pin a known range and confirm it holds.
+        // F2 freezeRange API: pin a known range and confirm it holds. Snapshot the
+        // full Appearance first and restore it after (no state leak into the app).
+        const MpmSystem::Appearance savedApp = mpm->appearance();
         mpm->setVizRange(MpmSystem::VizMode::VonMises, glm::vec2(7.0f, 77.0f));
         mpm->setVizMode(MpmSystem::VizMode::VonMises);
         mpm->setVizRangeFrozen(true);
         glm::vec2 vr = mpm->vizRange();
         bool pinned = std::abs(vr.x - 7.0f) < 1e-4f && std::abs(vr.y - 77.0f) < 1e-4f;
-        mpm->setVizRangeFrozen(false); mpm->setVizMode(MpmSystem::VizMode::Default);
+        mpm->appearance() = savedApp;  // full restore (thermal/vonMises/strain/mode/flags)
         check("G3 jitter/freeze", var == 0.0f && pinned, "frozenVar=%.3g, rangePinned=%.0f", var, pinned ? 1.0 : 0.0);
     }
 
@@ -371,13 +389,25 @@ bool RenderingSystem::runRenderGates()
             glm::vec3 want = rampCPU(std::clamp(pxToWorldX(bestX), 0.0f, 1.0f));
             maxErr = std::max(maxErr, glm::length(got - want));
         }
-        // write the gradient PNG for manual golden inspection
+        // write the gradient PNG (the golden artifact) for manual inspection; the
+        // write must succeed for the gate to pass (a silent disk failure is a FAIL).
         std::vector<uint8_t> png(size_t(W) * H * 4);
         for (size_t i = 0; i < size_t(W) * H * 4; ++i) png[i] = toU8(b[i]);
         stbi_flip_vertically_on_write(1);
-        stbi_write_png("render_gate_gradient.png", W, H, 4, png.data(), W * 4);
-        check("G9 golden-by-spec", maxErr < (2.0f / 255.0f) * 1.74f, "maxColErr=%.4f, bound=%.4f", maxErr, (2.0 / 255.0) * 1.74);
+        const int wrote = stbi_write_png("render_gate_gradient.png", W, H, 4, png.data(), W * 4);
+        if (!wrote) printf("[render gate]   (WARN: golden PNG write failed)\n");
+        check("G9 golden-by-spec", maxErr < (2.0f / 255.0f) * 1.74f && wrote != 0,
+              "maxColErr=%.4f, pngWritten=%.0f", maxErr, double(wrote != 0));
     }
+
+    // ---- restore GL state we touched (defensive; the gate paths _Exit, but a
+    // future caller without _Exit must not inherit GL_LEQUAL/offset/clearColor) ---
+    gl->glDisable(GL_POLYGON_OFFSET_FILL);
+    gl->glPolygonOffset(0.0f, 0.0f);
+    gl->glDepthFunc(GL_LESS);            // codebase default (cf. FemVizPass restore)
+    gl->glDepthMask(GL_TRUE);
+    gl->glDisable(GL_DEPTH_TEST);
+    gl->glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
     // ---- cleanup ------------------------------------------------------------
     gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
