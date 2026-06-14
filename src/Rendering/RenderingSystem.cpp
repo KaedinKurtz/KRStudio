@@ -675,7 +675,7 @@ void RenderingSystem::initializeSharedResources()
             { "HIL bridges (camera loopback + CAN)",         krs::hil::runBridgeSelfTest() },
             { "Trajectory HIL multi-fidelity verify",        krs::hil::runTrajectoryHilSelfTest() },
             { "OCCT STEP pipeline (round-trip + features)",  krs::cad::runSelfTest() },
-            { "GATE U world-scale B-Rep UVs (U1 + U4)",      krs::cad::runUvGateU() },
+            { "GATE U B-Rep UVs (U1 scale/U2 continuity/U3/U4)", krs::cad::runUvGateU() },
             { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
             { "GATE V.2 visible FANUC render (features->pixels)", runFanucRenderGateV2() },
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },

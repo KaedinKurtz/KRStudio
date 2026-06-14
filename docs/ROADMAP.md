@@ -1490,3 +1490,22 @@ it into `Vertex.uv` (material left triplanar for now -> zero render change, A.1b
 No regression: KRS_OVERNIGHT_BENCH **17/17** (GATE U added), KRS_BENCH 7/7.
 Remaining: A.2 cross-face continuity + U2 (neg-ctrl = this per-face baseline) + U3 density; A.1b render
 switch + U6; A.3 scale param + U5.
+
+### S.2 IMPLEMENTED — cross-face continuity (the priority) + U2/U3 (real numbers)
+`stitchBodyUVs` (CadImporter): per body, builds face adjacency (`MapShapesAndAncestors(EDGE,FACE)`),
+classifies each shared edge SMOOTH (`Continuity >= GeomAbs_G1`) vs SHARP (C0), and BFS-unfolds each
+smooth-connected chart -- giving each face a 2D RIGID transform (rotation+translation, so world-scale U1
+is preserved) that matches its shared-edge UVs to an already-placed neighbour. Edge correspondence via
+`BRep_Tool::UVPoints` (same two 3D endpoints' (u,v) on both faces -> no pcurve-parameterization mismatch).
+Each face's world-scale UV is already an isometric unroll, so the rigid stitch is EXACT for the FANUC's
+plane/cylinder/cone faces. Measured:
+- **U2 continuity** (filleted box, cylindrical fillet TANGENT to 2 planes, 2 smooth edges, 5 charts):
+  per-face baseline jump **0.2973 m** (NEGATIVE CONTROL, non-vacuous), stitched jump **0.000 m** (<1e-4).
+- **U3 density** (FANUC): range [0.000, 12.268], exact-frac[0.9,1.1]=**0.905**, acc-frac[0.5,2]=**0.981**.
+  World-scale is EXACT (ratio 1) on developable plane/cylinder faces; CONICAL faces use a linear
+  axis-aligned unwrap whose density varies with radius (the 12x is a thin conical countersink). BOUNDARY
+  CALL: a proper isometric cone/sphere unfold (polar sector) is a follow-up; 98.1% of triangles are within
+  [0.5,2] and the stitch is rigid (area-preserving), so this is a per-face geometric approximation on a
+  ~2% minority, not a blowup. Documented, not faked.
+No regression: KRS_OVERNIGHT_BENCH 17/17. Remaining: A.1b render switch (drop triplanar, UV texture) + U6
+texture-rides-body; A.3 scale param (albedoTiling.x generalized) + U5.

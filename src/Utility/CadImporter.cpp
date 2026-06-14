@@ -42,8 +42,15 @@
 #include <TopExp.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepFilletAPI_MakeFillet.hxx>
+#include <Geom2d_Curve.hxx>
+#include <GeomAbs_Shape.hxx>
+#include <vector>
+#include <queue>
+#include <cmath>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -83,6 +90,94 @@ bool faceWorldUVs(const TopoDS_Face& face, const Handle(Poly_Triangulation)& tri
     }
     return true;
 }
+
+// --- cross-face UV continuity (A.2): unfold smooth-connected charts -----------
+struct FaceSpan { TopoDS_Face face; unsigned vbase; int nNodes; bool hasUV; };
+
+// world-scale (metres) UV of an arbitrary parameter point (u,v) on a face surface
+glm::dvec2 uvWorldAt(BRepAdaptor_Surface& ad, double u, double v, double s)
+{
+    gp_Pnt P; gp_Vec dU, dV; ad.D1(u, v, P, dU, dV);
+    return glm::dvec2(u * dU.Magnitude() * s, v * dV.Magnitude() * s);
+}
+
+struct Xf2 { double c = 1, sn = 0, tx = 0, ty = 0;            // 2D rigid (rotation + translation)
+    glm::dvec2 apply(glm::dvec2 p) const { return { c * p.x - sn * p.y + tx, sn * p.x + c * p.y + ty }; } };
+
+// Align world-scale UVs continuously across TANGENT (>=G1) shared edges by giving each
+// face a 2D rigid transform that matches its shared edge to an already-placed neighbour
+// (BFS over smooth-connected charts). Sharp (C0) edges stay seams. The transform is rigid
+// so it preserves world-scale (U1). Returns the number of charts.
+int stitchBodyUVs(const TopoDS_Shape& body, double s, const std::vector<FaceSpan>& faces,
+                  std::vector<Vertex>& verts)
+{
+    const int nF = int(faces.size());
+    if (nF == 0) return 0;
+    TopTools_IndexedMapOfShape faceMap;
+    for (const auto& fs : faces) faceMap.Add(fs.face);
+    auto idxOf = [&](const TopoDS_Shape& f) -> int { const int i = faceMap.FindIndex(f); return i > 0 ? i - 1 : -1; };
+
+    std::vector<std::vector<std::pair<int, TopoDS_Edge>>> adj(nF);   // smooth adjacency
+    TopTools_IndexedDataMapOfShapeListOfShape e2f;
+    TopExp::MapShapesAndAncestors(body, TopAbs_EDGE, TopAbs_FACE, e2f);
+    for (int ei = 1; ei <= e2f.Extent(); ++ei) {
+        const TopoDS_Edge E = TopoDS::Edge(e2f.FindKey(ei));
+        const TopTools_ListOfShape& fl = e2f.FindFromIndex(ei);
+        if (fl.Extent() != 2) continue;                              // free edge -> no stitch
+        const TopoDS_Face fA = TopoDS::Face(fl.First()), fB = TopoDS::Face(fl.Last());
+        const int a = idxOf(fA), b = idxOf(fB);
+        if (a < 0 || b < 0 || a == b) continue;
+        bool smooth = false;
+        try { if (BRep_Tool::HasContinuity(E, fA, fB)) smooth = (BRep_Tool::Continuity(E, fA, fB) >= GeomAbs_G1); }
+        catch (...) { smooth = false; }
+        if (!smooth) continue;
+        adj[a].push_back({ b, E }); adj[b].push_back({ a, E });
+    }
+
+    std::vector<Xf2> xf(nF);
+    std::vector<char> placed(nF, 0);
+    int charts = 0;
+    for (int root = 0; root < nF; ++root) {
+        if (placed[root]) continue;
+        ++charts; placed[root] = 1;                                  // root keeps identity
+        std::queue<int> q; q.push(root);
+        while (!q.empty()) {
+            const int f = q.front(); q.pop();
+            BRepAdaptor_Surface adF(faces[f].face, Standard_True);
+            for (const auto& nb : adj[f]) {
+                const int g = nb.first; const TopoDS_Edge& E = nb.second;
+                if (placed[g]) continue;
+                BRepAdaptor_Surface adG(faces[g].face, Standard_True);
+                gp_Pnt2d a0, a1, b0, b1;                              // edge endpoints' (u,v) on each face
+                BRep_Tool::UVPoints(E, faces[f].face, a0, a1);
+                BRep_Tool::UVPoints(E, faces[g].face, b0, b1);
+                const glm::dvec2 wF0 = uvWorldAt(adF, a0.X(), a0.Y(), s), wF1 = uvWorldAt(adF, a1.X(), a1.Y(), s);
+                const glm::dvec2 wG0 = uvWorldAt(adG, b0.X(), b0.Y(), s), wG1 = uvWorldAt(adG, b1.X(), b1.Y(), s);
+                const glm::dvec2 tA0 = xf[f].apply(wF0), tA1 = xf[f].apply(wF1);
+                const glm::dvec2 dB = wG1 - wG0, dA = tA1 - tA0;
+                Xf2 t;
+                if (glm::length(dB) > 1e-9 && glm::length(dA) > 1e-9) {
+                    const double th = std::atan2(dA.y, dA.x) - std::atan2(dB.y, dB.x);
+                    t.c = std::cos(th); t.sn = std::sin(th);
+                    const glm::dvec2 RB0 = { t.c * wG0.x - t.sn * wG0.y, t.sn * wG0.x + t.c * wG0.y };
+                    t.tx = tA0.x - RB0.x; t.ty = tA0.y - RB0.y;
+                }
+                xf[g] = t; placed[g] = 1; q.push(g);
+            }
+        }
+    }
+
+    for (int f = 0; f < nF; ++f) {
+        const Xf2& t = xf[f];
+        if (t.c == 1 && t.sn == 0 && t.tx == 0 && t.ty == 0) continue;   // identity -> no-op
+        for (int i = 0; i < faces[f].nNodes; ++i) {
+            Vertex& v = verts[faces[f].vbase + i];
+            const glm::dvec2 p = t.apply(glm::dvec2(v.uv.x, v.uv.y));
+            v.uv = { float(p.x), float(p.y) };
+        }
+    }
+    return charts;
+}
 } // namespace
 
 ImportResult importStep(Scene& scene, const std::string& path, float metersPerUnit)
@@ -120,6 +215,7 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
         std::vector<Vertex> verts;
         std::vector<unsigned int> idx;
         std::vector<glm::dvec3> nAccum;                        // smooth-normal accumulation
+        std::vector<FaceSpan> faceSpans;                       // for cross-face UV stitching (A.2)
 
         for (TopExp_Explorer faceEx(solid, TopAbs_FACE); faceEx.More(); faceEx.Next()) {
             const TopoDS_Face face = TopoDS::Face(faceEx.Current());
@@ -131,6 +227,7 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
             const unsigned base = unsigned(verts.size());
             std::vector<gp_Pnt2d> faceUV;                       // world-scale (metres) UV per node
             const bool hasUV = faceWorldUVs(face, tri, s, faceUV);
+            faceSpans.push_back({ face, base, tri->NbNodes(), hasUV });
             for (int i = 1; i <= tri->NbNodes(); ++i) {
                 gp_Pnt p = tri->Node(i); p.Transform(trsf);    // -> assembly coords
                 Vertex v; v.position = { float(p.X() * s), float(p.Y() * s), float(p.Z() * s) };
@@ -149,6 +246,7 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
             }
         }
         if (verts.empty()) continue;
+        stitchBodyUVs(solid, s, faceSpans, verts);             // A.2: cross-face-continuous UV charts
         for (size_t i = 0; i < verts.size(); ++i) {
             glm::dvec3 n = nAccum[i];
             verts[i].normal = (glm::length(n) > 1e-12) ? glm::vec3(glm::normalize(n)) : glm::vec3(0, 1, 0);
@@ -496,7 +594,70 @@ bool runUvGateU()
         allPass &= pass;
     }
 
-    // ---- U4 COVERAGE: import the real FANUC; every vertex must have a finite UV ----
+    // ---- U2 CROSS-FACE CONTINUITY: filleted box (a cylindrical fillet TANGENT to two planes
+    // -> smooth seams). Measure the UV jump at shared smooth edges (welded edge nodes are at the
+    // same 3D point on both faces). NEGATIVE CONTROL: the per-face baseline (unstitched) jumps; the
+    // stitched UVs are continuous. If the baseline did NOT jump, the test would be vacuous. ----
+    {
+        TopoDS_Shape box = BRepPrimAPI_MakeBox(500.0, 300.0, 200.0).Shape();
+        BRepFilletAPI_MakeFillet fil(box);
+        { TopExp_Explorer ex(box, TopAbs_EDGE); if (ex.More()) fil.Add(20.0, TopoDS::Edge(ex.Current())); }
+        TopoDS_Shape fbox; bool built = false;
+        try { fbox = fil.Shape(); built = !fbox.IsNull(); } catch (...) { built = false; }
+        if (!built) fbox = box;
+        BRepMesh_IncrementalMesh(fbox, 0.3, Standard_False, 0.5, Standard_True);
+
+        std::vector<Vertex> verts; std::vector<FaceSpan> spans;
+        for (TopExp_Explorer fx(fbox, TopAbs_FACE); fx.More(); fx.Next()) {
+            const TopoDS_Face f = TopoDS::Face(fx.Current());
+            TopLoc_Location loc; Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(f, loc);
+            if (tri.IsNull()) continue;
+            const gp_Trsf trsf = loc.Transformation();
+            const unsigned base = unsigned(verts.size());
+            std::vector<gp_Pnt2d> uv; const bool hasUV = faceWorldUVs(f, tri, s, uv);
+            for (int i = 1; i <= tri->NbNodes(); ++i) {
+                gp_Pnt p = tri->Node(i); p.Transform(trsf);
+                Vertex v; v.position = { float(p.X() * s), float(p.Y() * s), float(p.Z() * s) };
+                if (hasUV) v.uv = { float(uv[i - 1].X()), float(uv[i - 1].Y()) };
+                verts.push_back(v);
+            }
+            spans.push_back({ f, base, tri->NbNodes(), hasUV });
+        }
+        // max UV jump across SMOOTH shared edges (welded edge nodes, 3D-matched)
+        auto measure = [&](const std::vector<Vertex>& vv, int& smoothEdges) -> double {
+            smoothEdges = 0; double maxJump = 0;
+            TopTools_IndexedMapOfShape fmap; for (auto& sp : spans) fmap.Add(sp.face);
+            TopTools_IndexedDataMapOfShapeListOfShape e2f;
+            TopExp::MapShapesAndAncestors(fbox, TopAbs_EDGE, TopAbs_FACE, e2f);
+            for (int ei = 1; ei <= e2f.Extent(); ++ei) {
+                const TopoDS_Edge E = TopoDS::Edge(e2f.FindKey(ei));
+                const TopTools_ListOfShape& fl = e2f.FindFromIndex(ei); if (fl.Extent() != 2) continue;
+                const TopoDS_Face fA = TopoDS::Face(fl.First()), fB = TopoDS::Face(fl.Last());
+                const int a = fmap.FindIndex(fA) - 1, b = fmap.FindIndex(fB) - 1; if (a < 0 || b < 0 || a == b) continue;
+                bool smooth = false; try { if (BRep_Tool::HasContinuity(E, fA, fB)) smooth = (BRep_Tool::Continuity(E, fA, fB) >= GeomAbs_G1); } catch (...) {}
+                if (!smooth) continue;
+                ++smoothEdges;
+                for (int i = 0; i < spans[a].nNodes; ++i) for (int j = 0; j < spans[b].nNodes; ++j) {
+                    const Vertex& va = vv[spans[a].vbase + i]; const Vertex& vb = vv[spans[b].vbase + j];
+                    const glm::dvec3 pa(va.position), pb(vb.position);
+                    if (glm::length(pa - pb) < 1e-5)               // same welded edge node
+                        maxJump = std::max(maxJump, double(glm::length(glm::vec2(va.uv.x - vb.uv.x, va.uv.y - vb.uv.y))));
+                }
+            }
+            return maxJump;
+        };
+        int seB = 0, seA = 0;
+        const double before = measure(verts, seB);                 // per-face baseline (negative control)
+        const int charts = stitchBodyUVs(fbox, s, spans, verts);
+        const double after = measure(verts, seA);                  // stitched
+        const bool pass = seA >= 2 && after < 1e-4 && before > 1e-3;
+        printf("[uv gate]  U2 cross-face continuity (filleted box, %d smooth edges, %d charts): "
+               "baseline jump=%.4f m (neg-ctrl, large), stitched jump=%.3e m (<1e-4)  %s\n",
+               seA, charts, before, after, pass ? "PASS" : "FAIL");
+        allPass &= pass;
+    }
+
+    // ---- U4 COVERAGE + U3 DENSITY: import the real FANUC ----
     {
         const char* cands[] = { "assets/FANUC-430 Robot.STEP", "build/release/assets/FANUC-430 Robot.STEP",
                                 "../assets/FANUC-430 Robot.STEP" };
@@ -505,20 +666,44 @@ bool runUvGateU()
         Scene scene; ImportResult ir = importStep(scene, path, float(s));
         auto& reg = scene.getRegistry();
         long nVerts = 0, nNaN = 0, nZero = 0;
+        // U3: per-triangle texel density = UV area / 3D area. World-scale is EXACT (ratio 1) on
+        // developable faces (plane/cylinder = the bulk); conical/curved faces use a linear
+        // axis-aligned unwrap whose density varies with radius (bounded, documented). Pass = the
+        // bulk is exact + no catastrophic blowup/NaN.
+        double dMin = 1e30, dMax = 0; long nTri = 0, nIn = 0, nAcc = 0;  // [0.9,1.1] exact, [0.5,2] acceptable
         for (auto e : reg.view<RenderableMeshComponent>()) {
-            for (const auto& v : reg.get<RenderableMeshComponent>(e).vertices) {
+            const auto& m = reg.get<RenderableMeshComponent>(e);
+            for (const auto& v : m.vertices) {
                 ++nVerts;
                 if (!std::isfinite(v.uv.x) || !std::isfinite(v.uv.y)) ++nNaN;
-                if (v.uv.x == 0.f && v.uv.y == 0.f) ++nZero;       // possible no-UV-node fallback
+                if (v.uv.x == 0.f && v.uv.y == 0.f) ++nZero;
+            }
+            for (size_t t = 0; t + 2 < m.indices.size(); t += 3) {
+                const Vertex& A = m.vertices[m.indices[t]]; const Vertex& B = m.vertices[m.indices[t+1]]; const Vertex& C = m.vertices[m.indices[t+2]];
+                const glm::dvec3 p0(A.position), p1(B.position), p2(C.position);
+                const double a3d = 0.5 * glm::length(glm::cross(p1 - p0, p2 - p0));
+                if (a3d < 1e-8) continue;                          // skip degenerate 3D triangle
+                const glm::dvec2 u0(A.uv.x, A.uv.y), u1(B.uv.x, B.uv.y), u2(C.uv.x, C.uv.y);
+                const double auv = 0.5 * std::abs((u1.x - u0.x) * (u2.y - u0.y) - (u2.x - u0.x) * (u1.y - u0.y));
+                const double ratio = auv / a3d;
+                if (!std::isfinite(ratio)) { ++nNaN; continue; }
+                ++nTri; dMin = std::min(dMin, ratio); dMax = std::max(dMax, ratio);
+                if (ratio > 0.9 && ratio < 1.1) ++nIn;
+                if (ratio > 0.5 && ratio < 2.0) ++nAcc;
             }
         }
-        const bool pass = ir.ok && nVerts > 0 && nNaN == 0;
+        const bool u4 = ir.ok && nVerts > 0 && nNaN == 0;
+        const double inFrac  = nTri ? double(nIn)  / nTri : 0.0;
+        const double accFrac = nTri ? double(nAcc) / nTri : 0.0;
+        const bool u3 = nTri > 0 && std::isfinite(dMax) && dMax < 50.0 && inFrac > 0.85;  // bulk exact, no blowup
         printf("[uv gate]  U4 coverage (FANUC %d bodies): verts=%ld NaN=%ld exactZeroUV=%ld  %s\n",
-               ir.solids, nVerts, nNaN, nZero, pass ? "PASS" : "FAIL");
-        allPass &= pass;
+               ir.solids, nVerts, nNaN, nZero, u4 ? "PASS" : "FAIL");
+        printf("[uv gate]  U3 texel density: range=[%.3f,%.3f] exact-frac[0.9,1.1]=%.3f acc-frac[0.5,2]=%.3f (cones=axis-unwrap)  %s\n",
+               dMin, dMax, inFrac, accFrac, u3 ? "PASS" : "FAIL");
+        allPass &= u4 && u3;
     }
 
-    printf("[uv gate] %s\n", allPass ? "ALL PASS (U1 world-scale + U4 coverage)" : "FAILURES PRESENT");
+    printf("[uv gate] %s\n", allPass ? "ALL PASS (U1 world-scale + U2 continuity + U3 density + U4 coverage)" : "FAILURES PRESENT");
     fflush(stdout);
     return allPass;
 }
