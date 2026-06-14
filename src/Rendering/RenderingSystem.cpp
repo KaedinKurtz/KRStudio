@@ -587,6 +587,15 @@ void RenderingSystem::initializeSharedResources()
     // groups). The rigid-body KRS_BENCH (7 analytic checks) runs via its own
     // BenchmarkRunner path on a built sim world and is reported separately.
     // ------------------------------------------------------------------
+    // Phase F GATE G (F0): standalone headless render self-test. Validates the
+    // colormap encoding / determinism / depth-bias / projection (G1-G9).
+    if (qEnvironmentVariableIntValue("KRS_RENDER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_RENDER_SELFTEST =================\n");
+        const bool ok = runRenderGates();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -600,6 +609,7 @@ void RenderingSystem::initializeSharedResources()
             { "HIL bridges (camera loopback + CAN)",         krs::hil::runBridgeSelfTest() },
             { "Trajectory HIL multi-fidelity verify",        krs::hil::runTrajectoryHilSelfTest() },
             { "OCCT STEP pipeline (round-trip + features)",  krs::cad::runSelfTest() },
+            { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
         };
         int fails = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");

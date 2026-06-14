@@ -1024,3 +1024,46 @@ meshes/HDR but not `.STEP`). `external/pinocchio/` + `verify/` are Phase-A probe
 
 **Resume point**: PART 1 — build the F0 headless render harness + inverse-colormap decode, run gates
 G1–G9 to green (§N.3, next), then Phase F counts as landed and the G–M arc proceeds in order.
+
+## N.3) Phase F GATE G — F0 render harness + G1–G9 (2026-06-14, LANDED + GATED)
+
+F1/F2/F3 were committed in `5eec994` but unlocked by no gate; F0 (the headless render self-test)
+and G1–G9 did not exist in source. Built now.
+
+**F0 harness** (`src/Rendering/RenderGates.cpp`, `RenderingSystem::runRenderGates()`): env var
+`KRS_RENDER_SELFTEST` (standalone, `_Exit(#fail)`) + folded into `KRS_OVERNIGHT_BENCH` as a 10th
+gate group. Renders a deterministic scalar-gradient mesh through the **real `fem_viz` colormap
+shader** (the encoding under test) to a private RGBA16F FBO on the engine context, reads back via
+the `publishHilCameraFrame` `glReadPixels` pattern, and inverse-decodes with a 1024-sample nearest-t
+ramp LUT (a CPU mirror of the GLSL `ramp()` — G2 is the drift canary). Writes
+`render_gate_gradient.png` for inspection.
+
+**Scope (honest)**: these gates lock the field→colour ENCODING + range normalization + depth-bias +
+camera projection — the primitives F1/F2/F3 touch. Field VALUES are gated separately by
+`KRS_FEM/MPM_SELFTEST`; representation under test = the fem_viz mesh recolour (MPM splats share the
+byte-identical `ramp()`). A live-solver-field decode through the MPM splat path is the documented v2
+extension.
+
+**GATE G — PASS (real measured numbers):**
+- **G1** determinism: render twice, maxAbsPixelDiff = **0** (bit-exact).
+- **G2** decode fidelity: inverse-decode recovers the known t, maxAbs(dt) = **0.0006** over 3 ranges
+  ([0,1], [0,2], [-1,1]); bound 0.02.
+- **G3** jitter/freeze: 4 frozen renders, variance = **0**; `freezeRange` pins the range (F2).
+- **G4** projection⊂mask: **100%** of a 33×33 projected grid lands in the silhouette; bound 90%.
+- **G5** z-fight: coincident overlay under `GL_LESS` bleeds **100%** without bias, **0%** with
+  `glPolygonOffset(-1,-1)` (F3) — sensitivity proven; bound 0.1%.
+- **G6** mode-switch: doubling the range halves decoded t in the SAME render (0.813 → **0.407**).
+- **G7** camera ±1px: the real `Camera` projects the focal point to screen centre, err **0.000 px**.
+- **G8** colormap monotonic: decoded t strictly non-decreasing along the gradient, **0** inversions
+  over n=410 (Spearman ρ = 1).
+- **G9** golden-by-spec: known-t sample pixels equal `ramp(t)`, maxColErr = **0.0006**; bound 0.0136.
+
+Overnight bench with the gate folded in: **10/10 groups PASS** (exit 0).
+
+**Observation (pre-existing, not Phase F)**: `HIL jitter` is a wall-clock 1 kHz loop test on a
+non-realtime OS; one run tripped on a single max-tick outlier (1.94 ms > 1 ms budget; p99 fine at
+0.02 ms) under build load, then passed **3/3** on re-run (max 0.18–0.32 ms). The absolute-max
+threshold is outlier-sensitive; a p99.9 / allow-N-outliers bound would be more robust. Tracked as a
+HIL follow-up, independent of the render gates.
+
+**Phase F is LANDED + GATED.** Next: Phase G — live FANUC articulation (GATE H).

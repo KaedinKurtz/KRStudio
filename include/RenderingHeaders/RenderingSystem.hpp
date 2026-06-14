@@ -142,6 +142,12 @@ public:
     FluidSystem* getFluidSystem() const { return m_fluid.get(); }
     SmokeSystem* getSmokeSystem() const { return m_smoke.get(); }
     MpmSystem* getMpmSystem() const { return m_mpm.get(); }
+
+    // Phase F GATE G (F0): headless render self-test — validates the colormap
+    // encoding / determinism / depth-bias / projection (KRS_RENDER_SELFTEST,
+    // folded into KRS_OVERNIGHT_BENCH). Implemented in RenderGates.cpp.
+    bool runRenderGates();
+
     void setSimulationPlaying(bool playing);
     void resetFluidSimulation();
 
