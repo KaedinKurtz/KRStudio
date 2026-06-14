@@ -1,0 +1,119 @@
+#include "FanucArticulation.hpp"
+
+#include <array>
+#include <filesystem>
+#include <system_error>
+
+namespace krs::fanuc {
+
+// --- THE assignment (single source of truth) -------------------------------
+// Derived from the bore / shared-hinge connectivity (ROADMAP R.1), NOT the
+// offset-fit. Base {16,11,14}; carousel {13}; upper arm {12}; everything else
+// (forearm + strut + bolts + wrist) rides the J3 elbow link.
+int solidLink(int inspectIndex)
+{
+    const int k = inspectIndex;
+    if (k == 16 || k == 11 || k == 14) return 0;   // pedestal + base brackets (J1-coaxial)
+    if (k == 13) return 1;                         // carousel / S-axis casting
+    if (k == 12) return 2;                         // upper arm (J2 journal + J3 bore)
+    return 3;                                       // forearm + strut + bolts + wrist (J4 frozen)
+}
+
+std::string assignmentFingerprint()
+{
+    std::string fp = "fanuc-v1:";                  // schema tag so the format is self-describing
+    for (int k = 0; k < kSolidCount; ++k) fp += char('0' + solidLink(k));  // links are 0..3 -> single digit
+    return fp;
+}
+
+krs::dyn::RobotArticSpec canonicalSpec()
+{
+    using krs::dyn::ArticJointSpec;
+    krs::dyn::RobotArticSpec ps; ps.fixBase = true;
+    auto addJ = [&](int parent, float ax, float ay, float az, float px, float py, float pz) {
+        ArticJointSpec j; j.parent = parent; j.revolute = true;
+        j.axis = { ax, ay, az };
+        j.Rtree = { 1,0,0, 0,1,0, 0,0,1 };
+        j.ptree = { px, py, pz };
+        j.mass = 1.0f; j.com = { 0,0,0 }; j.inertiaDiag = { 0.1f, 0.1f, 0.1f };
+        ps.joints.push_back(j);
+    };
+    addJ(-1, 0,1,0,  0.f, 0.f,    0.f);     // J1 base yaw   (Y @ origin)
+    addJ( 0, 1,0,0,  0.f, 0.74f,  0.305f);  // J2 shoulder   (X @ 0.74,0.305)
+    addJ( 1, 1,0,0,  0.f, 1.075f, 0.f);     // J3 elbow      (X, +1.075 -> world 1.815,0.305)
+    addJ( 2, 0,0,1,  0.f, 0.25f,  0.f);     // J4 wrist roll (Z) -- present but FROZEN
+    return ps;
+}
+
+std::string findStepAsset()
+{
+    const char* cands[] = {
+        "assets/FANUC-430 Robot.STEP",
+        "build/release/assets/FANUC-430 Robot.STEP",
+        "../assets/FANUC-430 Robot.STEP",
+        "KRStudio/assets/FANUC-430 Robot.STEP",
+    };
+    std::error_code ec;
+    for (const char* c : cands) if (std::filesystem::exists(c, ec)) return c;
+    return cands[0];
+}
+
+} // namespace krs::fanuc
+
+// --- scene setup (needs both OpenCASCADE import + PhysX articulation) -------
+#if defined(KR_WITH_OCCT) && defined(KR_WITH_PHYSX)
+
+#include "CadImporter.hpp"
+#include "SimulationController.hpp"
+#include "Scene.hpp"
+#include "components.hpp"
+#include <cstdlib>
+
+namespace krs::fanuc {
+
+Setup setupFanucScene(Scene& scene, SimulationController& sim, const std::string& stepPath)
+{
+    Setup out;
+    out.solidEntity.assign(kSolidCount, entt::null);
+    out.movingLinkEntities.assign(4, {});
+
+    krs::cad::ImportResult ir = krs::cad::importStep(scene, stepPath, 0.001f);
+    out.solids = ir.solids;
+    if (!ir.ok) { out.message = "STEP import failed: " + ir.message; return out; }
+    if (ir.solids != kSolidCount) { out.message = "expected 17 solids, got " + std::to_string(ir.solids); return out; }
+
+    auto& reg = scene.getRegistry();
+    for (auto e : reg.view<TagComponent>()) {
+        const std::string& tag = reg.get<TagComponent>(e).tag;
+        const std::string pfx = "STEP solid ";
+        if (tag.rfind(pfx, 0) != 0) continue;
+        const int k = std::atoi(tag.c_str() + pfx.size()) - 1;   // 1-indexed tag -> 0-based inspect idx
+        if (k < 0 || k >= kSolidCount) continue;
+        out.solidEntity[k] = e;
+        const int L = solidLink(k);
+        if (L >= 1 && L <= 4) out.movingLinkEntities[L - 1].push_back(e);   // base (L0) unmapped -> static
+    }
+
+    sim.setRobotArticulationSpec(canonicalSpec());
+    sim.play();                                  // buildPhysicsWorld -> buildArticulation
+    if (sim.articDofCount() != 4) { out.message = "articulation dof != 4"; return out; }
+    sim.setSceneGravity(0, 0, 0);                // kinematic demo drive -> gravity irrelevant
+    { std::vector<float> q0(4, 0.f); sim.setArticJointPositions(q0); }   // rest = STEP assembly pose
+    sim.setArticulationVizMapping(out.movingLinkEntities);              // captures rest link poses
+
+    out.fingerprint = assignmentFingerprint();
+    out.ok = true;
+    out.message = "ok";
+    return out;
+}
+
+} // namespace krs::fanuc
+
+#else
+
+namespace krs::fanuc {
+Setup setupFanucScene(Scene&, SimulationController&, const std::string&)
+{ Setup out; out.message = "built without OpenCASCADE/PhysX"; return out; }
+}
+
+#endif

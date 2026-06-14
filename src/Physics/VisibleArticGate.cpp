@@ -12,6 +12,7 @@ namespace krs::dyn { bool runVisibleArticGateV() { return true; } }
 #include "Scene.hpp"
 #include "components.hpp"
 #include "CadImporter.hpp"
+#include "FanucArticulation.hpp"   // SINGLE SOURCE OF TRUTH for the solid->link assignment + setup
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -57,28 +58,9 @@ struct Bore { glm::dvec3 P0; glm::dvec3 A0; double r; };       // rest world axi
 struct Solid { bool present=false; entt::entity ent{entt::null}; std::vector<Bore> bores; };
 struct Hinge { int kA, iA, kB, iB; };                          // a shared (coaxial) bore pair
 
-// 17 solids (inspect index 0..16) -> serial link. Links: 0 fixed base, 1 J1 yaw,
-// 2 J2 shoulder, 3 J3 elbow (carries the forearm, the counterbalance STRUT, the
-// bolt heads, and the wrist held rigid while J4 is frozen). Derived from the
-// shared-hinge connectivity (ROADMAP R.1), NOT from the offset-fit.
-int assignLink(int k) {
-    if (k == 16 || k == 11 || k == 14) return 0;              // pedestal + base brackets (J1-coaxial)
-    if (k == 13) return 1;                                   // carousel / S-axis casting
-    if (k == 12) return 2;                                   // upper arm (J2 journal + J3 bore)
-    return 3;                                                // forearm + strut + bolts + wrist
-}
-
-// locate the FANUC STEP next to the working dir or the deployed assets folder
-std::string findStep() {
-    const char* cands[] = {
-        "assets/FANUC-430 Robot.STEP",
-        "build/release/assets/FANUC-430 Robot.STEP",
-        "../assets/FANUC-430 Robot.STEP",
-    };
-    std::error_code ec;
-    for (const char* c : cands) if (std::filesystem::exists(c, ec)) return c;
-    return cands[0];
-}
+// NOTE: the solid->link assignment + the canonical spec + the scene setup live in
+// krs::fanuc (FanucArticulation.hpp) -- the SINGLE SOURCE OF TRUTH shared with the
+// app boot scene. This gate consumes that helper so it validates exactly what boots.
 
 } // namespace
 
@@ -88,28 +70,33 @@ bool runVisibleArticGateV()
     setvbuf(stdout, nullptr, _IONBF, 0);
     printf("[vassign] GATE V (V.1 / V-assign) - 17-solid -> serial-link assignment correctness\n");
 
-    // ---- import the real STEP -> 17 entities with auto-detected B-Rep bores ----
+    // ---- set up the FANUC via the SHARED helper -- the SAME path the app boots ----
     // ONE scene holds both the solids and the live articulation, so the V.3 writeback
-    // (link pose -> solid TransformComponent) can be exercised end-to-end (V2).
+    // (link pose -> solid TransformComponent) is exercised end-to-end (V2).
     Scene scene;
-    const std::string path = findStep();
-    krs::cad::ImportResult ir = krs::cad::importStep(scene, path, 0.001f);
-    if (!ir.ok) { printf("[vassign] FAIL: STEP import failed (%s): %s\n", path.c_str(), ir.message.c_str()); return false; }
-    if (ir.solids != 17) { printf("[vassign] FAIL: expected 17 solids, got %d (%s)\n", ir.solids, path.c_str()); return false; }
-
+    SimulationController sim(&scene);
+    const std::string path = krs::fanuc::findStepAsset();
+    krs::fanuc::Setup setup = krs::fanuc::setupFanucScene(scene, sim, path);
+    if (!setup.ok) { printf("[vassign] FAIL: setupFanucScene (%s): %s\n", path.c_str(), setup.message.c_str()); sim.stop(); return false; }
     auto& reg = scene.getRegistry();
+
+    // SINGLE-SOURCE-OF-TRUTH assert: the booted assignment must equal the canonical map
+    // AND a frozen expected fingerprint. If solidLink() is ever edited (or the app grows
+    // its own override), this trips rather than silently rendering a wrong arm.
+    static const char* kExpectedFingerprint = "fanuc-v1:33333333333021030";
+    const bool fpMatch = (setup.fingerprint == krs::fanuc::assignmentFingerprint())
+                      && (setup.fingerprint == kExpectedFingerprint);
+    printf("[vassign]  V-source fingerprint: setup=%s canonical=%s expected=%s  %s\n",
+           setup.fingerprint.c_str(), krs::fanuc::assignmentFingerprint().c_str(), kExpectedFingerprint,
+           fpMatch ? "PASS" : "FAIL");
+
+    // collect the independent witness (B-Rep bores) per solid from the helper's entities
     std::array<Solid, 17> S;
     int assignedSolids = 0;
-    for (auto e : reg.view<TagComponent>()) {
-        const std::string& tag = reg.get<TagComponent>(e).tag;
-        const std::string pfx = "STEP solid ";
-        if (tag.rfind(pfx, 0) != 0) continue;
-        const int N = std::atoi(tag.c_str() + pfx.size());   // 1-indexed
-        const int k = N - 1;
-        if (k < 0 || k >= 17) continue;
-        S[k].present = true;
-        S[k].ent = e;
-        ++assignedSolids;
+    for (int k = 0; k < krs::fanuc::kSolidCount; ++k) {
+        const entt::entity e = setup.solidEntity[k];
+        if (e == entt::null || !reg.valid(e)) continue;
+        S[k].present = true; S[k].ent = e; ++assignedSolids;
         if (reg.any_of<AttachmentComponent>(e)) {
             for (const auto& f : reg.get<AttachmentComponent>(e).frames) {
                 const glm::dvec3 A0(f.localAxis.x, f.localAxis.y, f.localAxis.z);
@@ -120,48 +107,14 @@ bool runVisibleArticGateV()
             }
         }
     }
-    // V1 coverage: every imported solid present + maps to a valid link
     bool coverage = (assignedSolids == 17);
-    for (int k = 0; k < 17; ++k) if (S[k].present) { const int L = assignLink(k); if (L < 0 || L > 3) coverage = false; }
+    for (int k = 0; k < 17; ++k) if (S[k].present) { const int L = krs::fanuc::solidLink(k); if (L < 0 || L > 3) coverage = false; }
     printf("[vassign]  V1 coverage: %d/17 solids present, all -> link in [0,3]  %s\n",
            assignedSolids, coverage ? "PASS" : "FAIL");
 
-    // ---- build the canonical serial articulation (A1 4-link, GATE-H/D validated) ----
-    RobotArticSpec ps; ps.fixBase = true;
-    auto addJ = [&](int parent, float ax, float ay, float az, float px, float py, float pz) {
-        ArticJointSpec j; j.parent = parent; j.revolute = true;
-        j.axis = { ax, ay, az };
-        j.Rtree = { 1,0,0, 0,1,0, 0,0,1 };
-        j.ptree = { px, py, pz };
-        j.mass = 1.0f; j.com = { 0,0,0 }; j.inertiaDiag = { 0.1f, 0.1f, 0.1f };
-        ps.joints.push_back(j);
-    };
-    addJ(-1, 0,1,0,  0.f,    0.f,   0.f);     // J1 base yaw  (Y @ origin)
-    addJ( 0, 1,0,0,  0.f,    0.74f, 0.305f);  // J2 shoulder  (X @ 0.74,0.305)
-    addJ( 1, 1,0,0,  0.f,    1.075f,0.f);     // J3 elbow     (X, +1.075 from J2 => world 1.815,0.305)
-    addJ( 2, 0,0,1,  0.f,    0.25f, 0.f);     // J4 wrist roll (Z) -- present but FROZEN
-
-    SimulationController sim(&scene);
-    sim.setRobotArticulationSpec(ps);
-    sim.play();
-    if (sim.articDofCount() != 4) { printf("[vassign] FAIL: live articulation dof=%d (expected 4)\n", sim.articDofCount()); sim.stop(); return false; }
-    sim.setSceneGravity(0,0,0);
-
-    // rest link poses at q=0 (the STEP assembly pose the meshes are baked in)
-    { std::vector<float> q0(4, 0.f); sim.setArticJointPositions(q0); }
+    // rest link poses at q=0 (setupFanucScene left the arm at its STEP assembly pose)
     auto p0 = sim.articLinkPoses();                          // [J1body, J2body, J3body, J4body]
     if (int(p0.size()) != 4) { printf("[vassign] FAIL: articLinkPoses size=%d\n", int(p0.size())); sim.stop(); return false; }
-
-    // ---- V.3 mapping: each MOVING link (0-based) -> its solid entities; rest = q=0 ----
-    // movingLink m drives serial link (m+1): m0=J1 carousel, m1=J2 upper arm, m2=J3 forearm
-    // group, m3=J4 (frozen, no solids). Base solids (link 0) are unmapped -> stay at rest.
-    std::vector<std::vector<entt::entity>> movingLinkEntities(4);
-    for (int k = 0; k < 17; ++k) {
-        if (!S[k].present) continue;
-        const int L = assignLink(k);
-        if (L >= 1 && L <= 4) movingLinkEntities[L - 1].push_back(S[k].ent);
-    }
-    sim.setArticulationVizMapping(movingLinkEntities);       // captures rest link poses
     std::array<DPose,4> rest;                                // index = link 0..3
     rest[0] = DPose{};                                       // link 0 = fixed base (never moves)
     rest[1] = fromArr(p0[0]); rest[2] = fromArr(p0[1]); rest[3] = fromArr(p0[2]);
@@ -190,7 +143,7 @@ bool runVisibleArticGateV()
         // component vs by the canonical link delta. Meters, float-storage-limited.
         for (int k = 0; k < 17; ++k) {
             if (!S[k].present) continue;
-            const int L = assignLink(k);
+            const int L = krs::fanuc::solidLink(k);
             if (L < 1 || L > 3) continue;                    // base solids unmapped (stay at rest)
             const auto& xf = reg.get<TransformComponent>(S[k].ent);
             const glm::dquat xq(double(xf.rotation.w), double(xf.rotation.x), double(xf.rotation.y), double(xf.rotation.z));
@@ -261,7 +214,7 @@ bool runVisibleArticGateV()
     };
 
     std::array<int,17> asn{};
-    for (int k = 0; k < 17; ++k) asn[k] = assignLink(k);
+    for (int k = 0; k < 17; ++k) asn[k] = krs::fanuc::solidLink(k);
 
     double coincDrift = 0, jointMot = 0;
     metric(asn, coincDrift, jointMot);
@@ -285,8 +238,8 @@ bool runVisibleArticGateV()
     printf("[vassign]  neg-ctrl (solid15->link2): coincDrift=%.3e m -> guard %s\n",
            driftBad, guardBites ? "REJECTS(non-vacuous)" : "VACUOUS!");
 
-    const bool pass = coverage && v2 && vCoherent && vMotion && guardBites && !hinges.empty();
-    printf("[vassign] %s\n", pass ? "ALL PASS (V1 + V2 + V-assign + neg-ctrl)" : "FAILURES PRESENT");
+    const bool pass = coverage && fpMatch && v2 && vCoherent && vMotion && guardBites && !hinges.empty();
+    printf("[vassign] %s\n", pass ? "ALL PASS (V-source + V1 + V2 + V-assign + neg-ctrl)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }
