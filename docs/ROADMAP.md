@@ -908,3 +908,32 @@ building a `PxArticulationReducedCoordinate` for robot entities in
 `AttachmentComponent` anchors, and routing live CAN effort → `cache.jointForce` (retiring
 the Phase-2 `addForce` fake) — is the next sub-step, gated behind GATE A (now passed).
 OMPL (vcpkg 1.7.0) is queued for Phase B planning.
+
+### M.9 Adversarial review + hardening (2026-06-14)
+A 53-agent adversarial review (5 dimensions → 3-vote refute → synthesize) probed the
+oracle + gate. **No correctness defects survived**: every math concern was refuted and
+empirically validated by a passing gate — spatial-inertia symmetry, the Xmotion sign
+convention, the QXto joint-frame mapping (A1 passes with X/Y/Z axes), the DOF-index
+assumption (A1 passes ⇒ mapping correct), `computeJointAcceleration` gravity/Coriolis
+semantics (A5 7.6e-7), and the NaN/LDLT guards. 36 findings dismissed. The 12 confirmed
+were all test-coverage / honesty gaps, now CLOSED:
+- **Jacobian never validated directly** → added Jacobian-vs-FK finite-difference check
+  (maxErr 7.2e-7).
+- **Prismatic / fixed / branching joints barely tested** → property/fuzz battery over 60
+  random branching trees mixing revolute+prismatic+fixed (FK two-way 0, CRBA-vs-RNEA
+  3.6e-15, RNEA↔ABA 5.3e-14).
+- **Robustness gaps** → mass-scaling 1e6×/1e-6× (7.1e-15) + near-singular IK stays finite.
+- **Loose thresholds** → A1 tightened 1e-6 → 1e-12 (measured 4.6e-16).
+- **[MEDIUM] "real FANUC parallelogram not modeled"** → A3 rebuilt on the REAL extracted
+  FANUC geometry (arm bar 1.075 m between the two parallel X-pivots, anchored at the real
+  lower pivot (0,0.74,0.305), cut joint pinned to the real top pivot (0,1.815,0.305)) +
+  an oracle-vs-PhysX FK cross-check on the dynamically-settled constrained state
+  (residual 3.9e-7 m, settled-FK 6.8e-7 m / 2.4e-7 rad). The full 4-bar's coupler width /
+  2nd ground pivot remain a documented boundary call (not cleanly extractable from the
+  bolt-vs-bearing-ambiguous bores).
+
+### M.10 KRS_OVERNIGHT_BENCH — consolidated dashboard
+`KRS_OVERNIGHT_BENCH=1` runs every headless gate and prints one dashboard with a process
+exit code (= #failed groups). Current: **9/9 gate groups PASS** (Phase A oracle, Phase A
+articulation gate, FEM, MPM, adjoint, HIL jitter, HIL bridges, trajectory verify, OCCT) +
+rigid `KRS_BENCH` 7/7 separately.

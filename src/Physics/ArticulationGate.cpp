@@ -232,25 +232,33 @@ bool runArticulationGate() {
         a.art->release();
     }
 
-    // ---- A3: parallelogram closed loop via PxD6Joint, residual across motion ----
+    // ---- A3: FANUC parallelogram closed loop via PxD6Joint, residual + FK across motion ----
+    // Real FANUC geometry from the STEP extraction: the 1425 mm main arm carries two
+    // PARALLEL pivots about the X axis at Z=0.305 m — the lower at (0,0.74,0.305) and the
+    // top at (0,1.815,0.305), 1.075 m apart (the parallelogram bar). The three bars rotate
+    // about X (the detected pivot axis), the loop lies in the Y-Z plane, and the cut joint
+    // is pinned back to the REAL top pivot — so this is the FANUC's arm parallelogram, not
+    // a generic unit rhombus. (Coupler width / 2nd ground pivot of the full 4-bar are not
+    // cleanly extractable from the bolt-vs-bearing-ambiguous bores — documented in ROADMAP M.)
     {
-        const double aLen = 1.0;
+        const double L = 1.075;                              // real arm-bar length (Y span)
+        const Eigen::Vector3d base(0.0, 0.74, 0.305);        // real lower pivot
+        const Eigen::Vector3d topPivot(0.0, 0.74 + L, 0.305);// real top pivot (0,1.815,0.305)
+        const Eigen::Vector3d axisX(1,0,0), bar(0, L, 0);
         std::vector<GateSpec> s(3);
-        s[0].parent=-1; s[0].axis=Eigen::Vector3d(0,0,1); s[0].ptree=Eigen::Vector3d(0,0,0);
-        s[1].parent=0;  s[1].axis=Eigen::Vector3d(0,0,1); s[1].ptree=Eigen::Vector3d(aLen,0,0);
-        s[2].parent=1;  s[2].axis=Eigen::Vector3d(0,0,1); s[2].ptree=Eigen::Vector3d(aLen,0,0);
-        for (auto& g : s){ g.mass=1.0; g.com=Eigen::Vector3d(0.5*aLen,0,0); g.inertiaDiag=Eigen::Vector3d(0.01,0.1,0.1); }
+        s[0].parent=-1; s[0].axis=axisX; s[0].ptree=base;
+        s[1].parent=0;  s[1].axis=axisX; s[1].ptree=bar;
+        s[2].parent=1;  s[2].axis=axisX; s[2].ptree=bar;
+        for (auto& g : s){ g.mass=160.0; g.com=Eigen::Vector3d(0,0.5*L,0); g.inertiaDiag=Eigen::Vector3d(60,2,60); }
         SerialChain oc = makeOracle(s);
         std::vector<Pose> wp0; oc.fk(Eigen::VectorXd::Zero(3), wp0);
         Artic a = buildArtic(phys, mat, s, wp0);
-        // close: tip of link3 (body2) local (aLen,0,0) pinned to world anchor (aLen,0,0).
-        // a revolute pin: lock 3 translations + 2 swings, free TWIST about Z.
-        const PxTransform tipLocal(PxVec3(float(aLen),0,0));
-        const PxTransform anchorWorld(PxVec3(float(aLen),0,0));
+        // close: tip of body2 (local +bar) pinned to the REAL top pivot. Position pin:
+        // lock 3 translations, free all rotations (locking the planar rotation the 4-bar
+        // needs would over-constrain it and the solver would fight the natural config).
+        const PxTransform tipLocal(V(bar));
+        const PxTransform anchorWorld(V(topPivot));
         PxD6Joint* d6 = PxD6JointCreate(*phys, nullptr, anchorWorld, a.links[3], tipLocal);
-        // Position pin: lock the 3 translations (closes the loop in position),
-        // free all rotations. Locking a rotation the planar 4-bar needs (Z) would
-        // over-constrain it and the solver would fight the natural configuration.
         d6->setMotion(PxD6Axis::eX, PxD6Motion::eLOCKED);
         d6->setMotion(PxD6Axis::eY, PxD6Motion::eLOCKED);
         d6->setMotion(PxD6Axis::eZ, PxD6Motion::eLOCKED);
@@ -259,25 +267,34 @@ bool runArticulationGate() {
         d6->setMotion(PxD6Axis::eTWIST,  PxD6Motion::eFREE);
         scene->addArticulation(*a.art);
         PxArticulationCache* cache = a.art->createCache();
+        const PxU32 nDof = a.art->getDofs();
         scene->setGravity(PxVec3(0,0,0));        // isolate the constraint (no sag)
-        // settle, then sample residual across a few crank angles
-        double maxRes = 0;
-        const double cranks[3] = {0.5, 0.8, 1.1};
+        double maxRes = 0, maxFkPos = 0, maxFkRot = 0;
+        const double cranks[3] = {0.4, 0.7, 1.0};            // sweep the crank "across motion"
         for (double crank : cranks) {
-            // seed a closed-ish config via the oracle, push into the articulation
             Eigen::VectorXd q = Eigen::VectorXd::Zero(3); q[0]=crank; q[1]=-crank*1.2; q[2]=crank*0.4;
-            LoopConstraint lc; lc.bodyA=2; lc.pA=Eigen::Vector3d(aLen,0,0); lc.bodyB=-1; lc.pB=Eigen::Vector3d(aLen,0,0);
+            LoopConstraint lc; lc.bodyA=2; lc.pA=bar; lc.bodyB=-1; lc.pB=topPivot;
             oc.closeLoops({lc}, {1,2}, q, 100, 1e-12);
-            for (PxU32 d=0; d<a.art->getDofs(); ++d) { cache->jointPosition[d]=PxReal(q[d]); cache->jointVelocity[d]=0.0f; }
+            for (PxU32 d=0; d<nDof; ++d) { cache->jointPosition[d]=PxReal(q[d]); cache->jointVelocity[d]=0.0f; }
             a.art->applyCache(*cache, PxArticulationCacheFlag::ePOSITION);
             a.art->applyCache(*cache, PxArticulationCacheFlag::eVELOCITY);
             for (int step=0; step<240; ++step) { scene->simulate(1.0f/240.0f); scene->fetchResults(true); }
             const PxTransform tipW = a.links[3]->getGlobalPose().transform(tipLocal);
-            const double res = (E(tipW.p) - Eigen::Vector3d(aLen,0,0)).norm();
-            maxRes = std::max(maxRes, res);
+            maxRes = std::max(maxRes, (E(tipW.p) - topPivot).norm());
+            // FK cross-check on the SETTLED constrained state: oracle FK vs PhysX per link
+            a.art->copyInternalStateToCache(*cache, PxArticulationCacheFlag::ePOSITION);
+            Eigen::VectorXd qs(nDof); for (PxU32 d=0; d<nDof; ++d) qs[d]=cache->jointPosition[d];
+            std::vector<Pose> wps; oc.fk(qs, wps);
+            for (int b=0;b<3;++b) {
+                const PxTransform gp = a.links[b+1]->getGlobalPose();
+                maxFkPos = std::max(maxFkPos, (E(gp.p) - wps[b].p).norm());
+                Eigen::AngleAxisd aa(E(gp.q).transpose() * wps[b].R);
+                maxFkRot = std::max(maxFkRot, std::abs(aa.angle()));
+            }
         }
-        const bool pass = maxRes < 1e-4;
-        printf("[artic gate]  A3 parallelogram D6 loop residual (across motion): max=%.3e m  %s\n", maxRes, pass?"PASS":"FAIL");
+        const bool pass = maxRes < 1e-4 && maxFkPos < 1e-4 && maxFkRot < 1e-4;
+        printf("[artic gate]  A3 FANUC parallelogram loop: residual=%.3e m  settled-FK pos=%.3e m rot=%.3e rad  %s\n",
+               maxRes, maxFkPos, maxFkRot, pass?"PASS":"FAIL");
         allPass &= pass;
         cache->release();
         d6->release();

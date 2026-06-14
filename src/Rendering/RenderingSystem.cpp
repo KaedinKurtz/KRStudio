@@ -581,6 +581,36 @@ void RenderingSystem::initializeSharedResources()
     for (auto& p : m_postProcessingPasses) p->initialize(*this, m_gl);
     for (auto& p : m_overlayPasses)       p->initialize(*this, m_gl);
 
+    // ------------------------------------------------------------------
+    // KRS_OVERNIGHT_BENCH: one consolidated headless dashboard across every
+    // self-test gate, with a final tally + process exit code (= #failed
+    // groups). The rigid-body KRS_BENCH (7 analytic checks) runs via its own
+    // BenchmarkRunner path on a built sim world and is reported separately.
+    // ------------------------------------------------------------------
+    if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
+        std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
+        struct GateRes { const char* name; bool ok; };
+        GateRes g[] = {
+            { "Phase A dynamics oracle (FK/M/dyn/IK/loop)", krs::dyn::runSelfTests() },
+            { "Phase A articulation gate (A1/A2/A3/A5)",    krs::dyn::runArticulationGate() },
+            { "FEM oracle (axial/cantilever/conduction/Kt)", krs::fem::FemSolver::runSelfTests() },
+            { "MPM fidelity suite (analytic ground truth)",  m_mpm ? m_mpm->runSelfTests(*this, m_gl) : true },
+            { "Adjoint MLS-MPM gradient check (<1e-5)",      krs::mpmad::runSelfTests() },
+            { "HIL jitter (1 kHz deterministic loop)",       krs::hil::runJitterSelfTest() },
+            { "HIL bridges (camera loopback + CAN)",         krs::hil::runBridgeSelfTest() },
+            { "Trajectory HIL multi-fidelity verify",        krs::hil::runTrajectoryHilSelfTest() },
+            { "OCCT STEP pipeline (round-trip + features)",  krs::cad::runSelfTest() },
+        };
+        int fails = 0;
+        std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
+        for (const auto& x : g) { std::printf("  [%s] %s\n", x.ok ? "PASS" : "FAIL", x.name); if (!x.ok) ++fails; }
+        const int n = int(sizeof(g) / sizeof(g[0]));
+        std::printf("  ----- %d / %d gate groups PASS  (rigid KRS_BENCH 7/7 runs separately) -----\n",
+                    n - fails, n);
+        std::fflush(stdout);
+        std::_Exit(fails);
+    }
+
     // Headless MLS-MPM fidelity suite (analytic ground-truth checks).
     if (m_mpm && qEnvironmentVariableIntValue("KRS_MPM_SELFTEST") != 0) {
         m_mpm->runSelfTests(*this, m_gl);

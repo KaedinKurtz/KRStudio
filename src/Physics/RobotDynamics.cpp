@@ -327,6 +327,34 @@ SerialChain randomChain(int n, std::mt19937& rng) {
     }
     return c;
 }
+
+// Random BRANCHING tree mixing revolute / prismatic / fixed joints (property/fuzz):
+// parent[i] is any earlier body (or world) so the tree can branch.
+SerialChain randomTree(int n, std::mt19937& rng, bool allowPrismatic, bool allowFixed) {
+    std::uniform_real_distribution<double> U(-1.0, 1.0), P(0.05, 0.5), Mu(0.4, 3.0);
+    SerialChain c;
+    for (int i = 0; i < n; ++i) {
+        DynJoint j;
+        std::uniform_int_distribution<int> par(-1, i - 1);
+        j.parent = (i == 0) ? -1 : par(rng);              // branching
+        const double r = U(rng);
+        if (allowFixed && r > 0.7)      j.type = JType::Fixed;
+        else if (allowPrismatic && r < -0.4) j.type = JType::Prismatic;
+        else                            j.type = JType::Revolute;
+        Eigen::Vector3d ax(U(rng), U(rng), U(rng));
+        if (ax.norm() < 1e-3) ax = Eigen::Vector3d::UnitZ();
+        j.axis = ax.normalized();
+        j.Rtree = Eigen::AngleAxisd(U(rng) * 3.14159,
+                    Eigen::Vector3d(U(rng), U(rng), U(rng)).normalized()).toRotationMatrix();
+        j.ptree = Eigen::Vector3d(P(rng), U(rng) * 0.2, U(rng) * 0.2);
+        DynBody b; b.mass = Mu(rng);
+        b.com = Eigen::Vector3d(U(rng) * 0.1, U(rng) * 0.1, U(rng) * 0.1);
+        Eigen::Matrix3d A; for (int r2 = 0; r2 < 3; ++r2) for (int cc = 0; cc < 3; ++cc) A(r2, cc) = U(rng);
+        b.inertiaCom = A * A.transpose() * 0.05 + Eigen::Matrix3d::Identity() * 0.02;
+        c.addBody(j, b);
+    }
+    return c;
+}
 } // namespace
 
 bool runSelfTests() {
@@ -354,7 +382,7 @@ bool runSelfTests() {
             const double yc = L1*std::sin(q[0]) + L2*std::sin(q[0]+q[1]);
             maxErr = std::max(maxErr, (p - Eigen::Vector3d(xc,yc,0)).norm());
         }
-        const bool pass = maxErr < 1e-6;
+        const bool pass = maxErr < 1e-12;   // exact fp composition; measured ~5e-16
         printf("[dyn selftest]  A1 FK vs closed-form RR: maxErr=%.3e  %s\n", maxErr, pass?"PASS":"FAIL");
         allPass &= pass;
     }
@@ -506,6 +534,113 @@ bool runSelfTests() {
         }
         const bool pass = maxRes < 1e-4;   // GATE A3 bound (expect ~1e-12)
         printf("[dyn selftest]  loop-closure (4-bar) residual: max=%.3e  %s\n", maxRes, pass?"PASS":"FAIL");
+        allPass &= pass;
+    }
+
+    // --- Jacobian vs finite-difference of FK (independent geometric-Jacobian check) ---
+    {
+        const double h = 1e-6;
+        double maxErr = 0;
+        std::uniform_real_distribution<double> A(-2.5,2.5), Pl(-0.2,0.2);
+        for (int trial=0; trial<25; ++trial) {
+            const int n = 4 + (trial % 3);
+            SerialChain c = randomChain(n, rng);
+            Eigen::VectorXd q(n); for (int i=0;i<n;++i) q[i]=A(rng);
+            const int body = n-1;
+            const Eigen::Vector3d pl(Pl(rng),Pl(rng),Pl(rng));
+            const Eigen::MatrixXd J = c.jacobian(q, body, pl);
+            const Pose p0 = c.bodyPose(q, body);
+            const Eigen::Vector3d pw0 = p0.p + p0.R*pl;
+            for (int j=0;j<n;++j) {
+                Eigen::VectorXd qp=q; qp[j]+=h;
+                const Pose pp = c.bodyPose(qp, body);
+                const Eigen::Vector3d pwp = pp.p + pp.R*pl;
+                const Eigen::Vector3d dlin = (pwp - pw0)/h;                 // ∂(point)/∂q_j
+                Eigen::AngleAxisd aa(pp.R * p0.R.transpose());
+                const Eigen::Vector3d dang = aa.axis()*aa.angle()/h;        // ∂(orientation)/∂q_j
+                maxErr = std::max(maxErr, (J.block<3,1>(0,j)-dlin).norm()); // linear rows
+                maxErr = std::max(maxErr, (J.block<3,1>(3,j)-dang).norm()); // angular rows
+            }
+        }
+        const bool pass = maxErr < 1e-5;   // FD truncation floor
+        printf("[dyn selftest]  Jacobian vs FK finite-diff: maxErr=%.3e  %s\n", maxErr, pass?"PASS":"FAIL");
+        allPass &= pass;
+    }
+
+    // --- property/fuzz: random BRANCHING trees mixing revolute/prismatic/FIXED joints ---
+    {
+        double maxFk=0, maxM=0, maxAsym=0, maxRt=0; int built=0;
+        const Eigen::Vector3d grav(0,-9.81,0);
+        std::uniform_real_distribution<double> A(-2.0,2.0);
+        for (int trial=0; trial<60; ++trial) {
+            const int nb = 3 + (trial % 6);
+            SerialChain c = randomTree(nb, rng, /*prismatic*/true, /*fixed*/true);
+            const int nq = c.nq();
+            if (nq == 0) continue;
+            ++built;
+            Eigen::VectorXd q(nq),qd(nq),qdd(nq);
+            for (int i=0;i<nq;++i){q[i]=A(rng);qd[i]=A(rng);qdd[i]=A(rng);}
+            std::vector<Pose> wp; c.fk(q,wp);
+            for (int b=0;b<c.nbody();++b) {                                 // FK two independent ways
+                const int d=c.dofOf(b); const double qv=(d>=0)?q[d]:0.0;
+                const DynJoint& j=c.joint(b);
+                Eigen::Matrix3d Rj=Eigen::Matrix3d::Identity(); Eigen::Vector3d pj=Eigen::Vector3d::Zero();
+                if (j.type==JType::Revolute) Rj=Eigen::AngleAxisd(qv,j.axis.normalized()).toRotationMatrix();
+                else if (j.type==JType::Prismatic) pj=j.axis.normalized()*qv;
+                const Eigen::Matrix3d Rr=j.Rtree*Rj; const Eigen::Vector3d pr=j.ptree+j.Rtree*pj;
+                Pose exp;
+                if (j.parent<0){exp.R=Rr;exp.p=pr;}
+                else {exp.R=wp[j.parent].R*Rr; exp.p=wp[j.parent].p+wp[j.parent].R*pr;}
+                maxFk=std::max(maxFk,(exp.p-wp[b].p).norm());
+                maxFk=std::max(maxFk,(exp.R-wp[b].R).norm());
+            }
+            const Eigen::MatrixXd Mc=c.massMatrix(q);                       // CRBA vs RNEA columns
+            Eigen::MatrixXd Mr(nq,nq);
+            for (int i=0;i<nq;++i){Eigen::VectorXd e=Eigen::VectorXd::Zero(nq);e[i]=1.0;
+                Mr.col(i)=c.rnea(q,Eigen::VectorXd::Zero(nq),e,Eigen::Vector3d::Zero());}
+            maxM=std::max(maxM,(Mc-Mr).cwiseAbs().maxCoeff());
+            maxAsym=std::max(maxAsym,(Mc-Mc.transpose()).cwiseAbs().maxCoeff());
+            const Eigen::VectorXd tau=c.rnea(q,qd,qdd,grav);                 // RNEA<->ABA round-trip
+            const Eigen::VectorXd qdd2=c.forwardDynamics(q,qd,tau,grav);
+            maxRt=std::max(maxRt,(qdd-qdd2).cwiseAbs().maxCoeff());
+        }
+        const bool pass = maxFk<1e-12 && maxM<1e-8 && maxAsym<1e-8 && maxRt<1e-7;
+        printf("[dyn selftest]  fuzz %d branching trees (rev/prism/fixed): FK=%.2e M=%.2e asym=%.2e RNEAvABA=%.2e  %s\n",
+               built, maxFk, maxM, maxAsym, maxRt, pass?"PASS":"FAIL");
+        allPass &= pass;
+    }
+
+    // --- mass-scaling robustness (1e6x and 1e-6x masses) ---
+    {
+        double maxRt=0;
+        const Eigen::Vector3d grav(0,-9.81,0);
+        std::uniform_real_distribution<double> A(-2.0,2.0);
+        for (double sc : {1e6, 1e-6}) {
+            SerialChain c; const int n=4;
+            for (int i=0;i<n;++i){DynJoint j; j.type=JType::Revolute; j.parent=i-1;
+                j.axis=Eigen::Vector3d(A(rng),A(rng),A(rng)).normalized(); j.ptree=Eigen::Vector3d(0.3,0,0);
+                DynBody b; b.mass=2.0*sc; b.inertiaCom=Eigen::Matrix3d::Identity()*0.1*sc; c.addBody(j,b);}
+            Eigen::VectorXd q(n),qd(n),qdd(n); for(int i=0;i<n;++i){q[i]=A(rng);qd[i]=A(rng);qdd[i]=A(rng);}
+            const Eigen::VectorXd tau=c.rnea(q,qd,qdd,grav);
+            const Eigen::VectorXd qdd2=c.forwardDynamics(q,qd,tau,grav);
+            maxRt=std::max(maxRt,(qdd-qdd2).cwiseAbs().maxCoeff());
+        }
+        const bool pass = maxRt < 1e-6;
+        printf("[dyn selftest]  mass-scaling (1e6x / 1e-6x) RNEA<->ABA: maxErr=%.3e  %s\n", maxRt, pass?"PASS":"FAIL");
+        allPass &= pass;
+    }
+
+    // --- near-singular IK must stay finite (no NaN at a fully-extended config) ---
+    {
+        SerialChain c;       // planar 3R, links of length 1, reach ~3
+        for (int i=0;i<3;++i){DynJoint j; j.type=JType::Revolute; j.parent=i-1; j.axis=Eigen::Vector3d::UnitZ();
+            if(i>0)j.ptree=Eigen::Vector3d(1.0,0,0); DynBody b; b.mass=1.0; c.addBody(j,b);}
+        Pose target; target.p=Eigen::Vector3d(3.5,0,0);   // just beyond reach -> singular boundary
+        Eigen::VectorXd q=Eigen::VectorXd::Zero(3);
+        const auto res=c.ik(target,2,q,0.05,200,1e-7);
+        const bool pass = q.allFinite();                  // graceful: finite regardless of ok
+        printf("[dyn selftest]  near-singular IK stays finite (posErr=%.3e, ok=%d): %s\n",
+               res.posErr, int(res.ok), pass?"PASS":"FAIL");
         allPass &= pass;
     }
 
