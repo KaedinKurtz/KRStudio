@@ -219,9 +219,12 @@ void TextureBrowserWidget::applyToSelection()
         req.tilingOverride = float(m_tiling->value());
         if (parallax) {
             reg.emplace_or_replace<ParallaxMaterialTag>(e);
-            // Parallax path needs triplanar projection (it has no UVs).
-            reg.emplace_or_replace<TriPlanarMaterialTag>(e);
-            reg.remove<UVTexturedMaterialTag>(e);
+            // The parallax/POM shader is triplanar (world-space). Bodies with REAL UVs (imported CAD)
+            // must STAY on their UV mapping, so only switch primitives (no UVs) to triplanar; UV bodies
+            // keep UVTexturedMaterialTag and render the pack through their UVs (no parallax displacement).
+            if (!reg.all_of<UVTexturedMaterialTag>(e)) {
+                reg.emplace_or_replace<TriPlanarMaterialTag>(e);
+            }
         } else {
             reg.remove<ParallaxMaterialTag>(e);
         }

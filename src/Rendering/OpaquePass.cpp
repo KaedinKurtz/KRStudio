@@ -181,10 +181,14 @@ void OpaquePass::execute(const RenderFrameContext& context)
         // ===================================================================
         // ## STEP 1: SHADER SELECTION
         // ===================================================================
+        // A body with REAL per-vertex UVs (UVTexturedMaterialTag, e.g. imported CAD) must sample its
+        // material in OBJECT space through those UVs -- never world-space triplanar/parallax. So UV wins:
+        // even if a material apply added TriPlanar/Parallax (e.g. a height-map pack), the UV path is used.
+        const bool isUVTextured = context.registry.all_of<UVTexturedMaterialTag>(ent);
         const bool isTessellated = context.registry.all_of<TessellatedMaterialTag>(ent);
-        const bool isTriPlanar = context.registry.all_of<TriPlanarMaterialTag>(ent);
+        const bool isTriPlanar = !isUVTextured && context.registry.all_of<TriPlanarMaterialTag>(ent);
         const bool hasTexture = mat && mat->albedoMap;
-        const bool isParallax = context.registry.all_of<ParallaxMaterialTag>(ent);
+        const bool isParallax = !isUVTextured && context.registry.all_of<ParallaxMaterialTag>(ent);
         if (isParallax && isTriPlanar && hasTexture) {
             activeShader = pomShader;
         }

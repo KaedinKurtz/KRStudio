@@ -1574,3 +1574,18 @@ does not fully read it. It also ADVERSARIALLY REFUTED part of the C3 framing.
 No regression: KRS_OVERNIGHT_BENCH **18/18** (GATE C3 added), KRS_BENCH 7/7, GUI boots clean.
 Remaining: C2/C1 -- the GPU SDF live-tracking + fluid->SDF impulse (FluidSystem.cpp + the fluid compute
 shader); these need the fluid running for visual verification of the ghost being gone.
+
+### S.5 FIX — applied textures stay on the body-frame UV path + per-body tiling (user-reported)
+Symptom: the world-scale UV checker rode the body correctly, but APPLYING a material from the texture
+browser reverted the body to world-space (triplanar) projection, and the texels-per-metre (tiling) bar
+did not rescale it. Root cause (one): OpaquePass never consulted `UVTexturedMaterialTag`; the texture
+apply (`TextureBrowserWidget::applyToSelection`) FORCED `TriPlanarMaterialTag` + removed
+`UVTexturedMaterialTag` whenever the pack had a height map (parallax) -> the body fell off the
+`gbuffer_textured` (uvShader) path, so neither its UVs nor `u_texture_scale = albedoTiling.x` applied.
+Fix (render-side, authoritative): OpaquePass `isTriPlanar/isParallax = !isUVTextured && ...` so a body with
+real UVs ALWAYS samples in object space through its UVs (no world-space swimming), and the apply keeps
+`UVTexturedMaterialTag` on UV bodies (only primitives switch to triplanar; UV bodies render the pack
+through their UVs, no parallax displacement). With the body back on the uvShader, the per-body
+`albedoTiling.x` (ObjectPropertiesWidget tiling spinbox) again drives `u_texture_scale`. No regression:
+KRS_OVERNIGHT_BENCH 18/18, app boots clean. (Visual: apply any pack -> it now wraps in body-frame UV;
+the tiling bar rescales it per body.)
