@@ -1385,3 +1385,23 @@ present but frozen, carries no solids) -> canonical-graph rule intact.
 V3 render pixel +-2px, V4 motion coherence (rigid per link; bores stay coincident == R.2), V5 stability /
 no-regression (overnight 13/13 + KRS_BENCH 7/7 stay green), V6 default boot into the moving FANUC.
 Order: V.1 + V-assign gate (headless, FIRST -- gates the assignment) -> V.3 writeback -> V.2 render -> V.4 boot.
+
+### R.5 IMPLEMENTED — V.1 + V-assign + V.3 writeback + V2 (2026-06-14, real numbers, KRS_VASSIGN_SELFTEST)
+Headless gate `runVisibleArticGateV` (src/Physics/VisibleArticGate.cpp), one Scene holding both the
+imported solids and the live canonical articulation. Measured:
+- **V1 coverage**: 17/17 solids present, all -> a serial link in [0,3]. PASS.
+- **V2 writeback == canonical link delta**: maxErr=1.119e-06 m. The whole articulation pipeline is
+  SINGLE-PRECISION (PhysX float); at the FANUC's ~3 m reach the float32 ULP floor is ~1.1e-6 m -- the same
+  float precision H1/D1 hit at ~1.3e-6 under their 1e-4 bounds. So the design-sketch "<1e-6" is BELOW the
+  single-precision floor and unachievable; the gated bound is **1e-5** (10x the float floor), and the
+  measured 1.119e-6 sits AT the floor. A real writeback bug (wrong link index / quaternion order) fails by
+  0.1-3 m -> >=5 orders of separation (self-evidently non-vacuous). PASS.
+- **V-assign (correct)**: coincDrift=8.654e-07 m (bound 1e-3) over 1155 shared hinges, jointSweep=0.800 rad
+  (floor 0.2). Metric is motion-induced DRIFT |dev(t)-dev(0)| so bore-match imperfection cancels. PASS.
+- **NEGATIVE CONTROL** (wrist solid 15 -> upper-arm link 2): coincDrift=1.147 m -> guard REJECTS. ~1.3e6x
+  separation from the correct 8.65e-7 (same rigor as the GATE-D frozen-robot proof). PASS.
+V.3 writeback facility added to SimulationController (`setArticulationVizMapping` captures rest link poses;
+`writeBackArticulationViz` drives each solid's TransformComponent by delta=now*rest^-1 each tick, alongside
+the rigid-body writeBackTransforms). Inactive (early-return) unless a Phase-V mapping is set -> zero effect
+on existing paths; KRS_OVERNIGHT_BENCH stays 14/14, lifecycle gate green. Remaining: V.2 render (solids are
+already renderable; the writeback feeds the TransformComponent the renderer consumes) + V.4 default boot.

@@ -69,6 +69,15 @@ public:
     std::vector<float> articJointPositions();                    // copyInternalStateToCache(ePOSITION) readback
     std::vector<float> articJointVelocities();                   // copyInternalStateToCache(eVELOCITY) readback
 
+    // Phase V (V.3): map each MOVING articulation link (0-based, matching
+    // articLinkPoses ordering) to the ECS solid entities rigidly attached to it.
+    // Captures the CURRENT link poses as the rest reference (call with the robot at
+    // its mesh-baked rest config). writeBackArticulationViz() then drives each
+    // solid's TransformComponent by its link's delta-pose every frame (the meshes
+    // are world-baked at rest, so the transform is the link's motion-from-rest).
+    void setArticulationVizMapping(const std::vector<std::vector<entt::entity>>& movingLinkEntities);
+    void writeBackArticulationViz();
+
     /// Advance the accumulator / step physics. Call once per frame.
     void tick();
 

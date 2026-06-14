@@ -54,7 +54,7 @@ double ptLine(const glm::dvec3& X, const glm::dvec3& P, const glm::dvec3& d) {
 }
 
 struct Bore { glm::dvec3 P0; glm::dvec3 A0; double r; };       // rest world axis line + radius
-struct Solid { bool present=false; std::vector<Bore> bores; };
+struct Solid { bool present=false; entt::entity ent{entt::null}; std::vector<Bore> bores; };
 struct Hinge { int kA, iA, kB, iB; };                          // a shared (coaxial) bore pair
 
 // 17 solids (inspect index 0..16) -> serial link. Links: 0 fixed base, 1 J1 yaw,
@@ -89,13 +89,15 @@ bool runVisibleArticGateV()
     printf("[vassign] GATE V (V.1 / V-assign) - 17-solid -> serial-link assignment correctness\n");
 
     // ---- import the real STEP -> 17 entities with auto-detected B-Rep bores ----
-    Scene cadScene;
+    // ONE scene holds both the solids and the live articulation, so the V.3 writeback
+    // (link pose -> solid TransformComponent) can be exercised end-to-end (V2).
+    Scene scene;
     const std::string path = findStep();
-    krs::cad::ImportResult ir = krs::cad::importStep(cadScene, path, 0.001f);
+    krs::cad::ImportResult ir = krs::cad::importStep(scene, path, 0.001f);
     if (!ir.ok) { printf("[vassign] FAIL: STEP import failed (%s): %s\n", path.c_str(), ir.message.c_str()); return false; }
     if (ir.solids != 17) { printf("[vassign] FAIL: expected 17 solids, got %d (%s)\n", ir.solids, path.c_str()); return false; }
 
-    auto& reg = cadScene.getRegistry();
+    auto& reg = scene.getRegistry();
     std::array<Solid, 17> S;
     int assignedSolids = 0;
     for (auto e : reg.view<TagComponent>()) {
@@ -106,6 +108,7 @@ bool runVisibleArticGateV()
         const int k = N - 1;
         if (k < 0 || k >= 17) continue;
         S[k].present = true;
+        S[k].ent = e;
         ++assignedSolids;
         if (reg.any_of<AttachmentComponent>(e)) {
             for (const auto& f : reg.get<AttachmentComponent>(e).frames) {
@@ -138,8 +141,7 @@ bool runVisibleArticGateV()
     addJ( 1, 1,0,0,  0.f,    1.075f,0.f);     // J3 elbow     (X, +1.075 from J2 => world 1.815,0.305)
     addJ( 2, 0,0,1,  0.f,    0.25f, 0.f);     // J4 wrist roll (Z) -- present but FROZEN
 
-    Scene artScene;
-    SimulationController sim(&artScene);
+    SimulationController sim(&scene);
     sim.setRobotArticulationSpec(ps);
     sim.play();
     if (sim.articDofCount() != 4) { printf("[vassign] FAIL: live articulation dof=%d (expected 4)\n", sim.articDofCount()); sim.stop(); return false; }
@@ -149,13 +151,27 @@ bool runVisibleArticGateV()
     { std::vector<float> q0(4, 0.f); sim.setArticJointPositions(q0); }
     auto p0 = sim.articLinkPoses();                          // [J1body, J2body, J3body, J4body]
     if (int(p0.size()) != 4) { printf("[vassign] FAIL: articLinkPoses size=%d\n", int(p0.size())); sim.stop(); return false; }
+
+    // ---- V.3 mapping: each MOVING link (0-based) -> its solid entities; rest = q=0 ----
+    // movingLink m drives serial link (m+1): m0=J1 carousel, m1=J2 upper arm, m2=J3 forearm
+    // group, m3=J4 (frozen, no solids). Base solids (link 0) are unmapped -> stay at rest.
+    std::vector<std::vector<entt::entity>> movingLinkEntities(4);
+    for (int k = 0; k < 17; ++k) {
+        if (!S[k].present) continue;
+        const int L = assignLink(k);
+        if (L >= 1 && L <= 4) movingLinkEntities[L - 1].push_back(S[k].ent);
+    }
+    sim.setArticulationVizMapping(movingLinkEntities);       // captures rest link poses
     std::array<DPose,4> rest;                                // index = link 0..3
     rest[0] = DPose{};                                       // link 0 = fixed base (never moves)
     rest[1] = fromArr(p0[0]); rest[2] = fromArr(p0[1]); rest[3] = fromArr(p0[2]);
 
-    // sweep J1/J2/J3 (J4 frozen) and capture each link's delta-pose over the motion
+    // sweep J1/J2/J3 (J4 frozen). At each pose capture the canonical link delta AND
+    // exercise the live V.3 writeback; V2 = the writeback's TransformComponents must
+    // match the canonical delta (from articLinkPoses) to <1e-6.
     const int T = 40;
     std::vector<std::array<DPose,4>> dl(T);
+    double v2Err = 0.0;
     for (int t = 0; t < T; ++t) {
         const double a = double(t) / (T - 1);
         std::vector<float> q = { float(0.6*a), float(0.5*a), float(0.8*a), 0.f };
@@ -166,8 +182,38 @@ bool runVisibleArticGateV()
         dl[t][1] = deltaOf(fromArr(pp[0]), rest[1]);
         dl[t][2] = deltaOf(fromArr(pp[1]), rest[2]);
         dl[t][3] = deltaOf(fromArr(pp[2]), rest[3]);
+
+        sim.writeBackArticulationViz();                      // V.3: drive solid TransformComponents
+        // V2 measures the RENDERED world-position error: the renderer applies the
+        // TransformComponent to the (world-baked) vertices, so we compare a few real
+        // points on each solid (its bore endpoints) transformed by the written
+        // component vs by the canonical link delta. Meters, float-storage-limited.
+        for (int k = 0; k < 17; ++k) {
+            if (!S[k].present) continue;
+            const int L = assignLink(k);
+            if (L < 1 || L > 3) continue;                    // base solids unmapped (stay at rest)
+            const auto& xf = reg.get<TransformComponent>(S[k].ent);
+            const glm::dquat xq(double(xf.rotation.w), double(xf.rotation.x), double(xf.rotation.y), double(xf.rotation.z));
+            const glm::dvec3 xt(xf.translation.x, xf.translation.y, xf.translation.z);
+            for (const Bore& b : S[k].bores) {
+                for (double off : { 0.0, 0.1 }) {            // two points on the bore axis -> position + angle
+                    const glm::dvec3 x = b.P0 + off * b.A0;
+                    const glm::dvec3 wWrite = xq * x + xt;            // what the renderer draws
+                    const glm::dvec3 wCanon = applyPt(dl[t][L], x);   // canonical link delta
+                    v2Err = std::max(v2Err, glm::length(wWrite - wCanon));
+                }
+            }
+        }
     }
     sim.stop();
+    // V2 bound 1e-5 m: the whole articulation pipeline is single-precision (PhysX
+    // float), so at the FANUC's ~3 m reach a float32 transform bottoms out at the
+    // ULP floor (~1.1e-6 m here) -- the same float precision H1/D1 hit at ~1.3e-6
+    // under their 1e-4 bounds. 1e-5 is 10x the float floor and still rejects any
+    // real writeback bug (wrong link index / quaternion order fails by 0.1-3 m).
+    const bool v2 = v2Err < 1e-5;
+    printf("[vassign]  V2 writeback world-pos vs canonical link delta: maxErr=%.3e m (bound 1e-05, float floor ~1.1e-6)  %s\n",
+           v2Err, v2 ? "PASS" : "FAIL");
 
     // ---- shared hinges: coaxial bore pairs across DIFFERENT solids (rest pose) ----
     std::vector<Hinge> hinges;
@@ -239,8 +285,8 @@ bool runVisibleArticGateV()
     printf("[vassign]  neg-ctrl (solid15->link2): coincDrift=%.3e m -> guard %s\n",
            driftBad, guardBites ? "REJECTS(non-vacuous)" : "VACUOUS!");
 
-    const bool pass = coverage && vCoherent && vMotion && guardBites && !hinges.empty();
-    printf("[vassign] %s\n", pass ? "ALL PASS (V1 + V-assign + neg-ctrl)" : "FAILURES PRESENT");
+    const bool pass = coverage && v2 && vCoherent && vMotion && guardBites && !hinges.empty();
+    printf("[vassign] %s\n", pass ? "ALL PASS (V1 + V2 + V-assign + neg-ctrl)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }

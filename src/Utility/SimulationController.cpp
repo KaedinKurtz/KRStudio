@@ -76,6 +76,10 @@ struct SimulationController::PxImpl
     PxArticulationCache* articCache = nullptr;
     std::vector<PxArticulationLink*> articLinks;   // [0]=fixed root, [b+1]=joint b
     PxD6Joint* loopD6 = nullptr;                    // parallelogram closure (added in G.2)
+    // Phase V (V.3): per MOVING-link (0-based) solid entities + the rest link-pose
+    // inverse, so writeBackArticulationViz drives each solid by its link delta-pose.
+    std::vector<std::vector<entt::entity>> articVizEntities;
+    std::vector<PxTransform> articVizRestInv;
 #if PX_SUPPORT_GPU_PHYSX
     PxCudaContextManager* cudaContextManager = nullptr;
 #endif
@@ -529,7 +533,7 @@ void SimulationController::tick()
     // wall clock — caught by the free-fall benchmark). The 0.25 s frame
     // clamp above already prevents a death spiral.
 
-    if (steps > 0) writeBackTransforms();
+    if (steps > 0) { writeBackTransforms(); writeBackArticulationViz(); }
 }
 
 // ===========================================================================
@@ -671,6 +675,8 @@ void SimulationController::buildArticulation()
         m_px->scene->removeArticulation(*m_px->articulation);
         m_px->articulation->release(); m_px->articulation = nullptr;
         m_px->articLinks.clear();
+        m_px->articVizEntities.clear();   // V.3: stale link->entity map must not outlive its links
+        m_px->articVizRestInv.clear();
     }
     const auto& js = m_robotSpec.joints;
     const int n = int(js.size());
@@ -1125,6 +1131,47 @@ void SimulationController::writeBackTransforms()
             const PxVec3 av = dyn->getAngularVelocity();
             rb->linearVelocity = { lv.x, lv.y, lv.z };
             rb->angularVelocity = { av.x, av.y, av.z };
+        }
+    }
+#endif
+}
+
+// ===========================================================================
+// Phase V (V.3): articulation-link -> solid-mesh writeback. The imported FANUC
+// solids are baked in WORLD coords at the rest config; each solid rigidly tracks
+// its assigned MOVING link by the link's delta-from-rest pose (delta*rest = now),
+// written into the TransformComponent the renderer already consumes.
+// ===========================================================================
+void SimulationController::setArticulationVizMapping(const std::vector<std::vector<entt::entity>>& movingLinkEntities)
+{
+#if defined(KR_WITH_PHYSX)
+    m_px->articVizEntities = movingLinkEntities;
+    m_px->articVizRestInv.clear();
+    if (!m_px->articulation) return;
+    // moving links are articLinks[1..]; capture their current poses as the rest reference
+    for (size_t i = 1; i < m_px->articLinks.size(); ++i)
+        m_px->articVizRestInv.push_back(m_px->articLinks[i]->getGlobalPose().getInverse());
+#else
+    (void)movingLinkEntities;
+#endif
+}
+
+void SimulationController::writeBackArticulationViz()
+{
+#if defined(KR_WITH_PHYSX)
+    if (!m_px->articulation || m_px->articVizEntities.empty() || !m_scene) return;
+    auto& reg = m_scene->getRegistry();
+    const size_t nMoving = m_px->articLinks.empty() ? 0 : m_px->articLinks.size() - 1;
+    for (size_t i = 0; i < m_px->articVizEntities.size() && i < nMoving && i < m_px->articVizRestInv.size(); ++i) {
+        const PxTransform now   = m_px->articLinks[i + 1]->getGlobalPose();
+        const PxTransform delta = now * m_px->articVizRestInv[i];   // delta * rest = now
+        const glm::vec3 t{ delta.p.x, delta.p.y, delta.p.z };
+        const glm::quat q{ delta.q.w, delta.q.x, delta.q.y, delta.q.z };
+        for (entt::entity e : m_px->articVizEntities[i]) {
+            if (!reg.valid(e) || !reg.all_of<TransformComponent>(e)) continue;
+            auto& xf = reg.get<TransformComponent>(e);
+            xf.translation = t;
+            xf.rotation = q;
         }
     }
 #endif
