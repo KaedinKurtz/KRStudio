@@ -622,6 +622,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase A GATE U: world-scale + coverage of the B-Rep UV generation.
+    if (qEnvironmentVariableIntValue("KRS_UV_SELFTEST") != 0) {
+        std::printf("\n================= KRS_UV_SELFTEST =================\n");
+        const bool ok = krs::cad::runUvGateU();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -667,6 +675,7 @@ void RenderingSystem::initializeSharedResources()
             { "HIL bridges (camera loopback + CAN)",         krs::hil::runBridgeSelfTest() },
             { "Trajectory HIL multi-fidelity verify",        krs::hil::runTrajectoryHilSelfTest() },
             { "OCCT STEP pipeline (round-trip + features)",  krs::cad::runSelfTest() },
+            { "GATE U world-scale B-Rep UVs (U1 + U4)",      krs::cad::runUvGateU() },
             { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
             { "GATE V.2 visible FANUC render (features->pixels)", runFanucRenderGateV2() },
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },

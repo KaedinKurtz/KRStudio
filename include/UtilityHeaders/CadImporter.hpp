@@ -45,4 +45,10 @@ void inspectStep(const std::string& path);
 /// Returns true on PASS (always true in the no-OCCT stub). Requires no GL context.
 bool runSelfTest();
 
+/// Phase A GATE U (gated by KRS_UV_SELFTEST): validates the world-scale B-Rep UV
+/// generation. U1 world-scale on a controlled box + cylinder (UV area/circumference
+/// match the metre geometry to <1%); U4 coverage on the real FANUC (every vertex a
+/// finite UV). Returns true on PASS (vacuous pass in the no-OCCT stub). No GL needed.
+bool runUvGateU();
+
 } // namespace krs::cad

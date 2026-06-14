@@ -1452,3 +1452,41 @@ Fix:
   + all shells to the GPU, runs with no crash. KRS_OVERNIGHT_BENCH 16/16, KRS_BENCH 7/7.
   Diagnostics added: `inspectStep` ENUMERATION audit (free shells/faces), KRS_FANUC_SOLID_DUMP (per-body
   verts/indices/bbox/link), and the V-assign worst-drift-hinge line.
+
+## S) Phase A — CROSS-FACE-CONTINUOUS WORLD-SCALE UV GENERATION (GATE U) — DESIGN + A.1a (2026-06-14)
+
+Goal: real UVs on imported B-Rep meshes, WORLD-SCALE (1 UV unit = 1 m of surface arc length) and
+CROSS-FACE CONTINUOUS, replacing the world-space triplanar projection (whose texture does NOT ride a
+moving body). Behind GATE U.
+
+### S.0 Recon (3-agent workflow wf_1301efe8): OCCT / render / infra
+- OCCT: `Poly_Triangulation::HasUVNodes()/UVNode(i)` gives per-node parameter (u,v) (BRepMesh stores them
+  by default; guard + fallback). `BRepAdaptor_Surface::D1(u,v,P,dU,dV)` gives the metric -> arc-length per
+  uv unit = |dU|,|dV| (x metersPerUnit): plane->1, cylinder u->R, height->1. Adjacency via
+  `TopExp::MapShapesAndAncestors(EDGE,FACE)`; tangent test `BRep_Tool::Continuity(e,fA,fB) >= GeomAbs_G1`
+  (guard `HasContinuity`); seam mapping via `BRep_Tool::CurveOnSurface(e,f)->Value(t)` -> (u,v) on each
+  face. All topology valid ONLY inside the CadImporter body loop (TopoDS discarded after).
+- Render: write `Vertex.uv` (components.hpp:435), drop `TriPlanarMaterialTag`, set `MaterialComponent.albedoMap`
+  -> OpaquePass picks the `gbuffer_textured` uvShader (OpaquePass.cpp:200); `u_texture_scale = albedoTiling.x`.
+- Infra: xatlas is NOT present (vendor jpcy/xatlas MIT under external/ ONLY if an analytic face defeats
+  parameterization -- the FANUC is plane/cylinder/cone so analytic suffices, deferred). NO reflection
+  registry (entt::meta bundled but unused); material params are a `MaterialComponent` field + a Qt widget.
+  `albedoTiling.x` is ALREADY "world tiles/metre" -> the texels-per-metre control (A4) generalizes it.
+
+### S.0a BOUNDARY CALL — world-scale (metres) vs [0,1] atlas
+U1 ("S metres -> S UV units") and U4 ("in-[0,1] atlas") only reconcile if the deliverable is WORLD-SCALE
+TILING UVs (metres) consumed by a repeating (GL_REPEAT) texture -- so metre-scale UVs are valid and U4 is
+read as validity/coverage/no-cross-chart-overlap. Smooth-connected faces become one continuous chart;
+charts are laid out non-overlapping. A literal unique-texture-per-chart [0,1] atlas (xatlas bake) is a
+documented follow-up, NOT the foundation. This is the scalable texturing foundation the directive names.
+
+### S.1a IMPLEMENTED — world-scale per-face UVs + GATE U (U1, U4) (real numbers, KRS_UV_SELFTEST)
+`faceWorldUVs` (CadImporter.cpp): per node, uv = param * |dP/dparam| * metersPerUnit (arc length from the
+surface param origin; EXACT for plane/cylinder/cone/sphere, local-linear for BSpline). The importer bakes
+it into `Vertex.uv` (material left triplanar for now -> zero render change, A.1b switches it). Measured:
+- **U1 world-scale**: box 0.5x0.3x0.2 m -> 6 faces, maxAreaRelErr **0.0000** (<0.01); cylinder R=0.1 m ->
+  circumference relErr **0.0000**, height relErr **0.0000**. Exact.
+- **U4 coverage**: FANUC 27 bodies, 55 824 verts, **0 NaN**, 193 exact-zero UVs (param-origin nodes).
+No regression: KRS_OVERNIGHT_BENCH **17/17** (GATE U added), KRS_BENCH 7/7.
+Remaining: A.2 cross-face continuity + U2 (neg-ctrl = this per-face baseline) + U3 density; A.1b render
+switch + U6; A.3 scale param + U5.

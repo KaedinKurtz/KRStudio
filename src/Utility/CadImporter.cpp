@@ -37,6 +37,13 @@
 #include <gp_Cylinder.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <GeomAbs_SurfaceType.hxx>
+#include <gp_Vec.hxx>
+#include <gp_Pnt2d.hxx>
+#include <TopExp.hxx>
+#include <TopoDS_Edge.hxx>
+#include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
+#include <TopTools_ListOfShape.hxx>
+#include <BRepPrimAPI_MakeCylinder.hxx>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -52,6 +59,31 @@
 namespace krs::cad {
 
 bool available() { return true; }
+
+namespace {
+// Per-node WORLD-SCALE (metres) UV from the face's B-Rep surface parameterization.
+// uv = param * |dP/dparam| * metersPerUnit = arc length from the surface's parameter origin.
+// EXACT for plane / cylinder / cone / sphere (the metric is constant along each iso-line);
+// for general curved surfaces (BSpline) it is the local-linear approximation at tessellation
+// scale. Returns false if the face has no UV nodes (caller falls back to no-UV / triplanar).
+bool faceWorldUVs(const TopoDS_Face& face, const Handle(Poly_Triangulation)& tri,
+                  double metersPerUnit, std::vector<gp_Pnt2d>& outUV)
+{
+    if (tri.IsNull() || !tri->HasUVNodes()) return false;
+    BRepAdaptor_Surface ad(face, Standard_True);
+    const int n = tri->NbNodes();
+    outUV.resize(n);
+    for (int i = 1; i <= n; ++i) {
+        const gp_Pnt2d uv = tri->UVNode(i);
+        gp_Pnt P; gp_Vec dU, dV;
+        ad.D1(uv.X(), uv.Y(), P, dU, dV);
+        const double mU = dU.Magnitude() * metersPerUnit;   // metres of arc per 1 unit of u
+        const double mV = dV.Magnitude() * metersPerUnit;   // metres of arc per 1 unit of v
+        outUV[i - 1] = gp_Pnt2d(uv.X() * mU, uv.Y() * mV);
+    }
+    return true;
+}
+} // namespace
 
 ImportResult importStep(Scene& scene, const std::string& path, float metersPerUnit)
 {
@@ -97,9 +129,12 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
             if (tri.IsNull()) continue;
             const gp_Trsf trsf = loc.Transformation();
             const unsigned base = unsigned(verts.size());
+            std::vector<gp_Pnt2d> faceUV;                       // world-scale (metres) UV per node
+            const bool hasUV = faceWorldUVs(face, tri, s, faceUV);
             for (int i = 1; i <= tri->NbNodes(); ++i) {
                 gp_Pnt p = tri->Node(i); p.Transform(trsf);    // -> assembly coords
                 Vertex v; v.position = { float(p.X() * s), float(p.Y() * s), float(p.Z() * s) };
+                if (hasUV) v.uv = { float(faceUV[i - 1].X()), float(faceUV[i - 1].Y()) }; // metres; tiled at render
                 verts.push_back(v); nAccum.emplace_back(0.0);
             }
             const bool rev = (face.Orientation() == TopAbs_REVERSED);
@@ -388,6 +423,106 @@ bool runSelfTest()
     return pass;
 }
 
+// ===========================================================================
+// GATE U (Phase A): world-scale + coverage of the B-Rep UV generation. U1 on a
+// controlled box (planar faces) + cylinder (known circumference); U4 coverage on
+// the real FANUC (every vertex a finite UV). Gated by KRS_UV_SELFTEST.
+// ===========================================================================
+bool runUvGateU()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[uv gate] GATE U - world-scale + coverage UV generation\n");
+    const double s = 0.001;                 // mm -> m (OCCT/STEP default unit)
+    const double PI = std::acos(-1.0);
+    bool allPass = true;
+
+    // ---- U1 WORLD-SCALE: box 500x300x200 mm -> each planar face's UV AREA == its 3D face area ----
+    {
+        TopoDS_Shape box = BRepPrimAPI_MakeBox(500.0, 300.0, 200.0).Shape();
+        BRepMesh_IncrementalMesh(box, 0.5, Standard_False, 0.5, Standard_True);
+        double maxRel = 0; int nFaces = 0; bool nan = false;
+        for (TopExp_Explorer fx(box, TopAbs_FACE); fx.More(); fx.Next()) {
+            const TopoDS_Face f = TopoDS::Face(fx.Current());
+            TopLoc_Location loc; Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(f, loc);
+            std::vector<gp_Pnt2d> uv;
+            if (!faceWorldUVs(f, tri, s, uv)) continue;
+            const gp_Trsf trsf = loc.Transformation();
+            double uMin = 1e30, uMax = -1e30, vMin = 1e30, vMax = -1e30;
+            double lo[3] = { 1e30,1e30,1e30 }, hi[3] = { -1e30,-1e30,-1e30 };
+            for (int i = 1; i <= tri->NbNodes(); ++i) {
+                const double U = uv[i - 1].X(), V = uv[i - 1].Y();
+                if (!std::isfinite(U) || !std::isfinite(V)) nan = true;
+                uMin = std::min(uMin, U); uMax = std::max(uMax, U);
+                vMin = std::min(vMin, V); vMax = std::max(vMax, V);
+                gp_Pnt p = tri->Node(i); p.Transform(trsf);
+                const double P[3] = { p.X() * s, p.Y() * s, p.Z() * s };
+                for (int k = 0; k < 3; ++k) { lo[k] = std::min(lo[k], P[k]); hi[k] = std::max(hi[k], P[k]); }
+            }
+            double ext[3] = { hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2] };
+            std::sort(ext, ext + 3);
+            const double area3d = ext[2] * ext[1];                 // two in-plane dims
+            const double areaUV = (uMax - uMin) * (vMax - vMin);
+            maxRel = std::max(maxRel, std::abs(areaUV - area3d) / std::max(1e-9, area3d));
+            ++nFaces;
+        }
+        const bool pass = nFaces == 6 && maxRel < 0.01 && !nan;
+        printf("[uv gate]  U1 box world-scale (0.5x0.3x0.2 m): %d faces, maxAreaRelErr=%.4f (<0.01), NaN=%d  %s\n",
+               nFaces, maxRel, int(nan), pass ? "PASS" : "FAIL");
+        allPass &= pass;
+    }
+
+    // ---- U1 WORLD-SCALE: cylinder R=100mm H=400mm -> U-span == circumference, V-span == height ----
+    {
+        const double R = 100.0, H = 400.0;
+        TopoDS_Shape cyl = BRepPrimAPI_MakeCylinder(R, H).Shape();
+        BRepMesh_IncrementalMesh(cyl, 0.2, Standard_False, 0.5, Standard_True);
+        double circErr = -1, hErr = -1; bool found = false;
+        for (TopExp_Explorer fx(cyl, TopAbs_FACE); fx.More(); fx.Next()) {
+            const TopoDS_Face f = TopoDS::Face(fx.Current());
+            if (Handle(Geom_CylindricalSurface)::DownCast(BRep_Tool::Surface(f)).IsNull()) continue;
+            TopLoc_Location loc; Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(f, loc);
+            std::vector<gp_Pnt2d> uv; if (!faceWorldUVs(f, tri, s, uv)) continue;
+            double uMin = 1e30, uMax = -1e30, vMin = 1e30, vMax = -1e30;
+            for (const auto& p : uv) { uMin = std::min(uMin, p.X()); uMax = std::max(uMax, p.X());
+                                       vMin = std::min(vMin, p.Y()); vMax = std::max(vMax, p.Y()); }
+            circErr = std::abs((uMax - uMin) - 2 * PI * R * s) / (2 * PI * R * s);
+            hErr    = std::abs((vMax - vMin) - H * s) / (H * s);
+            found = true;
+        }
+        const bool pass = found && circErr < 0.01 && hErr < 0.01;
+        printf("[uv gate]  U1 cylinder world-scale (R=0.1 m): circumference relErr=%.4f, height relErr=%.4f (<0.01)  %s\n",
+               circErr, hErr, pass ? "PASS" : "FAIL");
+        allPass &= pass;
+    }
+
+    // ---- U4 COVERAGE: import the real FANUC; every vertex must have a finite UV ----
+    {
+        const char* cands[] = { "assets/FANUC-430 Robot.STEP", "build/release/assets/FANUC-430 Robot.STEP",
+                                "../assets/FANUC-430 Robot.STEP" };
+        std::string path = cands[0]; std::error_code ec;
+        for (const char* c : cands) if (std::filesystem::exists(c, ec)) { path = c; break; }
+        Scene scene; ImportResult ir = importStep(scene, path, float(s));
+        auto& reg = scene.getRegistry();
+        long nVerts = 0, nNaN = 0, nZero = 0;
+        for (auto e : reg.view<RenderableMeshComponent>()) {
+            for (const auto& v : reg.get<RenderableMeshComponent>(e).vertices) {
+                ++nVerts;
+                if (!std::isfinite(v.uv.x) || !std::isfinite(v.uv.y)) ++nNaN;
+                if (v.uv.x == 0.f && v.uv.y == 0.f) ++nZero;       // possible no-UV-node fallback
+            }
+        }
+        const bool pass = ir.ok && nVerts > 0 && nNaN == 0;
+        printf("[uv gate]  U4 coverage (FANUC %d bodies): verts=%ld NaN=%ld exactZeroUV=%ld  %s\n",
+               ir.solids, nVerts, nNaN, nZero, pass ? "PASS" : "FAIL");
+        allPass &= pass;
+    }
+
+    printf("[uv gate] %s\n", allPass ? "ALL PASS (U1 world-scale + U4 coverage)" : "FAILURES PRESENT");
+    fflush(stdout);
+    return allPass;
+}
+
 } // namespace krs::cad
 
 #else
@@ -402,5 +537,6 @@ ImportResult importStep(Scene&, const std::string&, float)
 }
 void inspectStep(const std::string&) {} // no OCCT -> no-op
 bool runSelfTest() { return true; } // no OCCT -> vacuous pass, keeps harnesses green
+bool runUvGateU() { return true; }  // no OCCT -> vacuous pass
 } // namespace krs::cad
 #endif
