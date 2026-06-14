@@ -565,7 +565,7 @@ bool runDemoGateD()
     // outputs: maxRes (loop residual, every step), maxLag (peak crank tracking error during
     // motion), maxSettled (crank error at the END of each dwell = reach accuracy), NaN, checksum.
     struct DemoResult { double maxRes=0, maxLag=0, maxSettled=0, crankLo=1e30, crankHi=-1e30, checksum=0; bool nan=false, ran=false; };
-    auto runDemo = [&](int cycles, int mTrans, int mDwell) -> DemoResult {
+    auto runDemo = [&](int cycles, int mTrans, int mDwell, bool driveCrank = true) -> DemoResult {
         DemoResult R;
         Scene scene; SimulationController sim(&scene);
         sim.setRobotArticulationSpec(ps);
@@ -582,10 +582,12 @@ bool runDemoGateD()
             // Pure PD on the crank + light damping on the dependent bars. No oracle bias
             // feedforward: the open-chain Coriolis is INVALID under the D6 loop (q1,q2 are
             // constrained, not free); at zero gravity / slow motion the PD + damping suffice.
-            Eigen::VectorXd tau(3);
-            tau[0] = Kp*(crankTgt - q[0]) - Kd*qd[0];
-            tau[1] = -KdDep*qd[1];
-            tau[2] = -KdDep*qd[2];
+            Eigen::VectorXd tau = Eigen::VectorXd::Zero(3);
+            if (driveCrank) {                                    // negative control disables the drive
+                tau[0] = Kp*(crankTgt - q[0]) - Kd*qd[0];
+                tau[1] = -KdDep*qd[1];
+                tau[2] = -KdDep*qd[2];
+            }
             std::vector<float> tf(3); for (int i=0;i<3;++i) tf[i]=float(tau[i]);
             sim.commandJointTorques(tf);
             sim.singleStep();
@@ -616,10 +618,17 @@ bool runDemoGateD()
     // --- D1: stability over 1000 cycles + PROOF OF MOTION (the crank really sweeps A<->B,
     // so a stationary/broken robot fails — the residual is measured under ACTUAL motion) ---
     DemoResult r1 = runDemo(1000, 20, 8);
-    const bool swept1 = (r1.crankHi - r1.crankLo) >= 0.30;   // proves real motion (stationary => 0)
-    bool d1 = r1.ran && !r1.nan && r1.maxRes < 1e-4 && swept1;
-    printf("[demo gate]  D1 stability (1000 cyc, no NaN, loop res throughout, crank swept): maxRes=%.3e m crank=[%.3f,%.3f] %s\n",
-           r1.maxRes, r1.crankLo, r1.crankHi, d1?"PASS":"FAIL");
+    const double sweep1 = r1.crankHi - r1.crankLo;
+    const bool swept1 = sweep1 >= 0.30;   // proves real motion (stationary => ~0)
+    // NEGATIVE CONTROL: prove the motion guard is NON-VACUOUS. With the drive disabled the
+    // articulation is frozen at the seed config -> sweep ~0 -> MUST fail the >=0.30 guard. If a
+    // frozen robot were NOT rejected, the guard would be vacuous and D1 must fail.
+    DemoResult frozen = runDemo(20, 20, 8, /*driveCrank=*/false);
+    const double frozenSweep = frozen.crankHi - frozen.crankLo;
+    const bool guardBites = frozenSweep < 0.30;
+    bool d1 = r1.ran && !r1.nan && r1.maxRes < 1e-4 && swept1 && guardBites;
+    printf("[demo gate]  D1 stability: maxRes=%.3e m crank=[%.3f,%.3f] liveSweep=%.3f | neg-ctrl frozenSweep=%.3e -> guard %s  %s\n",
+           r1.maxRes, r1.crankLo, r1.crankHi, sweep1, frozenSweep, guardBites?"REJECTS(non-vacuous)":"VACUOUS!", d1?"PASS":"FAIL");
 
     // --- D2: reach accuracy at each commanded config (long dwell) + reported dynamic lag ---
     DemoResult r2 = runDemo(8, 80, 160);
