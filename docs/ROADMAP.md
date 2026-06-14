@@ -1231,3 +1231,15 @@ zero gravity isolates the loop as GATE-H H3 does). The articulation is the canon
 Folded into KRS_OVERNIGHT_BENCH as a 13th standing group (**13/13**). KRS_DEMO_SELFTEST standalone.
 Boundary call: fixed base (the A3 fixed-anchor loop is base-yaw-incompatible — §M.9); base rotation
 with a rotating-anchor loop is a follow-up.
+
+### GATE D — adversarial review (wf_edfefdf7) closed
+Fixed CONFIRMED findings: (1) [critical] dropped the oracle `biasForces` feedforward — the open-chain
+Coriolis is invalid for the D6-constrained DOFs; the controller is now pure PD-on-crank + light
+dependent damping (honest, sufficient at zero-g). (2) [high] D4 checksum is now FULL-STATE (all q + qd
+every step, not just link-2 position). (3) [high] D3 strengthened to 100 build/run/teardown cycles,
+bound 4 MB (catches ~40 KB/build) — measured 1.21 MB. (4) [med] D1+D2 now require PROOF OF MOTION
+(crank sweep range ≥ 0.30 rad) so a stationary/broken robot fails — the guard already caught that the
+fast-cycle crank reaches 0.822 (dynamic lag), proving the assertion bites. Refuted (no change): D2 0.02
+rad bound (intentional reach margin), articLinkPoses off-by-one (correct: poses[i]=link i+1), working-set
+volatility (mitigated by 100 cycles + warm-up; the rebuild-leak class is also guarded by the G.4 fix +
+the lifecycle gate). Re-gated ALL PASS: D1 1.038e-06 m, D2 6.96e-05 rad, D3 1.21 MB, D4 bit-identical.

@@ -564,79 +564,83 @@ bool runDemoGateD()
     // Returns max loop residual + max crank tracking error + NaN flag + trajectory checksum.
     // outputs: maxRes (loop residual, every step), maxLag (peak crank tracking error during
     // motion), maxSettled (crank error at the END of each dwell = reach accuracy), NaN, checksum.
-    auto runDemo = [&](int cycles, int mTrans, int mDwell,
-                       double& maxRes, double& maxLag, double& maxSettled, bool& sawNaN, double& checksum) -> bool {
+    struct DemoResult { double maxRes=0, maxLag=0, maxSettled=0, crankLo=1e30, crankHi=-1e30, checksum=0; bool nan=false, ran=false; };
+    auto runDemo = [&](int cycles, int mTrans, int mDwell) -> DemoResult {
+        DemoResult R;
         Scene scene; SimulationController sim(&scene);
         sim.setRobotArticulationSpec(ps);
         sim.play();
-        if (sim.articDofCount() != 3) { sim.stop(); return false; }
+        if (sim.articDofCount() != 3) { sim.stop(); return R; }
         sim.setSceneGravity(0,0,0);
         { std::vector<float> q0(3); for (int i=0;i<3;++i) q0[i]=float(qcmdA[i]); sim.setArticJointPositions(q0); }
-        maxRes = 0; maxLag = 0; maxSettled = 0; sawNaN = false; checksum = 0;
         auto stepCtl = [&](double crankTgt) -> double {       // returns |crank - target| this step
             auto qm = sim.articJointPositions(); auto qdm = sim.articJointVelocities();
-            if (qm.size()!=3 || qdm.size()!=3) { sawNaN = true; return 0.0; }
+            if (qm.size()!=3 || qdm.size()!=3) { R.nan = true; return 0.0; }
             Eigen::VectorXd q(3), qd(3);
             for (int i=0;i<3;++i){ q[i]=qm[i]; qd[i]=qdm[i];
-                if (!std::isfinite(qm[i]) || !std::isfinite(qdm[i])) sawNaN = true; }
-            Eigen::VectorXd bias = oc.biasForces(q, qd, zeroG);   // Coriolis (g=0)
+                if (!std::isfinite(qm[i]) || !std::isfinite(qdm[i])) R.nan = true; }
+            // Pure PD on the crank + light damping on the dependent bars. No oracle bias
+            // feedforward: the open-chain Coriolis is INVALID under the D6 loop (q1,q2 are
+            // constrained, not free); at zero gravity / slow motion the PD + damping suffice.
             Eigen::VectorXd tau(3);
-            tau[0] = bias[0] + Kp*(crankTgt - q[0]) - Kd*qd[0];   // PD on the crank
-            tau[1] = bias[1] - KdDep*qd[1];                       // dependent bars follow the D6
-            tau[2] = bias[2] - KdDep*qd[2];
+            tau[0] = Kp*(crankTgt - q[0]) - Kd*qd[0];
+            tau[1] = -KdDep*qd[1];
+            tau[2] = -KdDep*qd[2];
             std::vector<float> tf(3); for (int i=0;i<3;++i) tf[i]=float(tau[i]);
             sim.commandJointTorques(tf);
             sim.singleStep();
+            R.crankLo = std::min(R.crankLo, q[0]); R.crankHi = std::max(R.crankHi, q[0]);  // prove motion
             auto poses = sim.articLinkPoses();
             if (poses.size()>=3) {
                 Eigen::Vector3d tp(poses[2][0],poses[2][1],poses[2][2]);
                 Eigen::Quaterniond tq(poses[2][6],poses[2][3],poses[2][4],poses[2][5]);
-                maxRes = std::max(maxRes, (tp + tq.toRotationMatrix()*bar - topPivot).norm());
-                checksum += std::abs(tp.x())+std::abs(tp.y())+std::abs(tp.z());
+                R.maxRes = std::max(R.maxRes, (tp + tq.toRotationMatrix()*bar - topPivot).norm());
             }
+            for (int i=0;i<3;++i) R.checksum += std::abs(q[i]) + std::abs(qd[i]);  // FULL-STATE determinism
             return std::abs(q[0] - crankTgt);
         };
-        for (int s=0;s<240 && !sawNaN;++s) stepCtl(crankA);    // settle (exclude seed transient)
-        for (int cyc=0; cyc<cycles && !sawNaN; ++cyc) {
+        for (int s=0;s<240 && !R.nan;++s) stepCtl(crankA);    // settle (exclude seed transient)
+        for (int cyc=0; cyc<cycles && !R.nan; ++cyc) {
             const double seq[2][2] = { {crankA,crankB}, {crankB,crankA} };
             for (int leg=0; leg<2; ++leg) {
-                for (int m=0; m<mTrans; ++m) maxLag = std::max(maxLag, stepCtl(smooth(seq[leg][0], seq[leg][1], double(m)/(mTrans-1))));
-                double e = 0; for (int m=0; m<mDwell; ++m) { e = stepCtl(seq[leg][1]); maxLag = std::max(maxLag, e); }
-                maxSettled = std::max(maxSettled, e);          // reach accuracy at the end of the dwell
+                for (int m=0; m<mTrans; ++m) R.maxLag = std::max(R.maxLag, stepCtl(smooth(seq[leg][0], seq[leg][1], double(m)/(mTrans-1))));
+                double e = 0; for (int m=0; m<mDwell; ++m) { e = stepCtl(seq[leg][1]); R.maxLag = std::max(R.maxLag, e); }
+                R.maxSettled = std::max(R.maxSettled, e);      // reach accuracy at the end of the dwell
             }
         }
         sim.stop();
-        return true;
+        R.ran = true;
+        return R;
     };
 
-    // --- D1: stability over 1000 fast cycles (loop residual <1e-4 every step, no NaN) ---
-    double res1=0, lag1=0, set1=0, cs1=0; bool nan1=false;
-    bool ran = runDemo(1000, 20, 8, res1, lag1, set1, nan1, cs1);
-    bool d1 = ran && !nan1 && res1 < 1e-4;
-    printf("[demo gate]  D1 stability (1000 cyc, no NaN, loop res throughout): maxRes=%.3e m  %s\n", res1, d1?"PASS":"FAIL");
+    // --- D1: stability over 1000 cycles + PROOF OF MOTION (the crank really sweeps A<->B,
+    // so a stationary/broken robot fails — the residual is measured under ACTUAL motion) ---
+    DemoResult r1 = runDemo(1000, 20, 8);
+    const bool swept1 = (r1.crankHi - r1.crankLo) >= 0.30;   // proves real motion (stationary => 0)
+    bool d1 = r1.ran && !r1.nan && r1.maxRes < 1e-4 && swept1;
+    printf("[demo gate]  D1 stability (1000 cyc, no NaN, loop res throughout, crank swept): maxRes=%.3e m crank=[%.3f,%.3f] %s\n",
+           r1.maxRes, r1.crankLo, r1.crankHi, d1?"PASS":"FAIL");
 
     // --- D2: reach accuracy at each commanded config (long dwell) + reported dynamic lag ---
-    double res2=0, lag2=0, set2=0, cs2=0; bool nan2=false;
-    runDemo(8, 80, 160, res2, lag2, set2, nan2, cs2);
+    DemoResult r2 = runDemo(8, 80, 160);
     const double TRACK_TOL = 0.02;
-    bool d2 = !nan2 && set2 < TRACK_TOL;
+    bool d2 = r2.ran && !r2.nan && r2.maxSettled < TRACK_TOL && (r2.crankHi - r2.crankLo) >= 0.30;
     printf("[demo gate]  D2 tracking: reach-err=%.3e rad (bound %.2f), peak dynamic lag=%.3e rad  %s\n",
-           set2, TRACK_TOL, lag2, d2?"PASS":"FAIL");
+           r2.maxSettled, TRACK_TOL, r2.maxLag, d2?"PASS":"FAIL");
 
-    // --- D3: no resource growth across repeated build/run/teardown (the leak class) ---
+    // --- D3: no resource growth across 100 build/run/teardown cycles (the leak class) ---
+    runDemo(1, 5, 2);   // warm allocators so the baseline is steady
     const size_t memBefore = krs::processWorkingSetBytes();
-    { double r,l,s,c; bool n; for (int it=0; it<20; ++it) runDemo(5, 20, 6, r, l, s, n, c); }
+    for (int it=0; it<100; ++it) runDemo(1, 5, 2);
     const size_t memAfter = krs::processWorkingSetBytes();
     const double growthMB = (double(memAfter) - double(memBefore)) / (1024.0*1024.0);
-    bool d3 = growthMB < 8.0;
-    printf("[demo gate]  D3 no resource growth (20 build/run/teardown): dWorkingSet=%.2f MB bound=8 %s\n", growthMB, d3?"PASS":"FAIL");
+    bool d3 = growthMB < 4.0;   // 100 builds; 4 MB catches a ~40 KB/build leak
+    printf("[demo gate]  D3 no resource growth (100 build/run/teardown): dWorkingSet=%.2f MB bound=4 %s\n", growthMB, d3?"PASS":"FAIL");
 
-    // --- D4: identical commanded motion reproduces an identical trajectory ---
-    double ra,la,sa,ca,rb,lb,sb,cb; bool na,nb;
-    runDemo(50, 30, 12, ra, la, sa, na, ca);
-    runDemo(50, 30, 12, rb, lb, sb, nb, cb);
-    bool d4 = std::abs(ca - cb) < 1e-9 * std::max(1.0, std::abs(ca));
-    printf("[demo gate]  D4 determinism (two runs, trajectory checksum): cs1=%.10g cs2=%.10g %s\n", ca, cb, d4?"PASS":"FAIL");
+    // --- D4: identical commanded motion reproduces an identical FULL-STATE trajectory ---
+    DemoResult d4a = runDemo(50, 30, 12), d4b = runDemo(50, 30, 12);
+    bool d4 = std::abs(d4a.checksum - d4b.checksum) < 1e-9 * std::max(1.0, std::abs(d4a.checksum));
+    printf("[demo gate]  D4 determinism (two runs, full-state checksum): cs1=%.10g cs2=%.10g %s\n", d4a.checksum, d4b.checksum, d4?"PASS":"FAIL");
 
     const bool pass = d1 && d2 && d3 && d4;
     printf("[demo gate] %s\n", pass ? "ALL PASS (D1-D4)" : "FAILURES PRESENT");
