@@ -1139,7 +1139,13 @@ the running app's core lifecycle → land it as its own commit with `KRS_BENCH`/
 before any GATE-H code.
 
 ### O.4 Resume plan (gated sub-steps, each commit+push, phaseG-pre is the fallback tag)
-- **G.0** `ensureCore` borrows the PhysX singleton (prerequisite above). Gate: overnight 10/10.
+- **G.0** ✅ LANDED — `ensureCore` borrows the process-wide PhysX singleton (first controller
+  creates+owns; later ones borrow; shared core + `CollisionCookingService` torn down only when the
+  last holder goes, via refcount). Per-instance dispatcher/CUDA kept per-instance. Gates: **G0a**
+  overnight **11/11** (original 10 unregressed + new lifecycle group) + `KRS_BENCH` **7/7**; **G0b**
+  `KRS_SIM_LIFECYCLE_SELFTEST` PASS — 12 create/destroy cycles balanced, 2 coexisting controllers
+  with A torn down first leaving B + core valid and still stepping, refcount returns to base (no
+  double-free/leak). baseRefs=1 confirms the borrow path was exercised.
 - **G.1** shared recipe header + `SimulationController::buildArticulation` from a POD
   `RobotArticSpec` (zero-config link poses = chained (Rtree,ptree)) + `runArticulationLiveGate`
   H1 (live FK vs oracle <1e-4, ≥50 cfg). Commit.

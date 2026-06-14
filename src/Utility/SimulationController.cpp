@@ -79,6 +79,20 @@ struct SimulationController::PxImpl
     // the entity (gizmo/panel) while playing — push it into the actor.
     std::unordered_map<entt::entity, std::pair<glm::vec3, glm::quat>> lastWritten;
 
+    // --- Process-wide PhysX core (G.0) -------------------------------------
+    // PhysX permits exactly ONE PxFoundation/PxPhysics per process. The first
+    // SimulationController CREATES the core; later ones (e.g. the GATE-H live
+    // harness) BORROW it. The shared core + the CollisionCookingService singleton
+    // are torn down only when the LAST holder is destroyed (refcount). The
+    // dispatcher + any CUDA context stay per-instance. Core lifecycle is
+    // single-threaded here (Qt main / headless self-test), so no lock is needed.
+    bool ownsCore = false;
+    inline static PxFoundation* s_foundation = nullptr;
+    inline static PxPhysics*    s_physics    = nullptr;
+    inline static int           s_coreRefs   = 0;
+    static int coreRefCount() { return s_coreRefs; }
+    static bool coreAlive()   { return s_physics != nullptr; }
+
     /// One-time CUDA probe: decides the GPU tiers (PhysX GPU dynamics, SDF
     /// dynamic trimeshes, GPU PBD fluids). Returns -1 path silently on
     /// non-NVIDIA hardware — no DLLs touched, CPU tiers stay default.
@@ -116,25 +130,49 @@ struct SimulationController::PxImpl
     bool ensureCore()
     {
         if (physics) return true;
+        const unsigned nThreads = std::max(1u, std::thread::hardware_concurrency() - 2);
+        if (s_physics) {
+            // Borrow the process-wide singleton; own a per-instance dispatcher only.
+            foundation = s_foundation;
+            physics    = s_physics;
+            ownsCore   = false;
+            dispatcher = PxDefaultCpuDispatcherCreate(nThreads);
+            ++s_coreRefs;
+            qInfo() << "[Sim] PhysX core borrowed (refs=" << s_coreRefs << ")";
+            return true;
+        }
         foundation = PxCreateFoundation(PX_PHYSICS_VERSION, allocator, errorCallback);
         if (!foundation) { qCritical() << "[Sim] PxCreateFoundation failed"; return false; }
         physics = PxCreatePhysics(PX_PHYSICS_VERSION, *foundation, PxTolerancesScale());
-        if (!physics) { qCritical() << "[Sim] PxCreatePhysics failed"; return false; }
-        dispatcher = PxDefaultCpuDispatcherCreate(std::max(1u, std::thread::hardware_concurrency() - 2));
+        if (!physics) { qCritical() << "[Sim] PxCreatePhysics failed"; foundation->release(); foundation = nullptr; return false; }
+        dispatcher = PxDefaultCpuDispatcherCreate(nThreads);
         CollisionCookingService::instance().initialize(physics);
         probeCuda();
-        qInfo() << "[Sim] PhysX" << PX_PHYSICS_VERSION_MAJOR << "." << PX_PHYSICS_VERSION_MINOR << "initialized";
+        s_foundation = foundation; s_physics = physics; ownsCore = true; ++s_coreRefs;
+        qInfo() << "[Sim] PhysX" << PX_PHYSICS_VERSION_MAJOR << "." << PX_PHYSICS_VERSION_MINOR
+                << "initialized (refs=" << s_coreRefs << ")";
         return true;
     }
 
     void releaseCore()
     {
+        // Per-instance resources are always released by this instance.
         if (dispatcher) { dispatcher->release(); dispatcher = nullptr; }
-        if (physics) { physics->release(); physics = nullptr; }
 #if PX_SUPPORT_GPU_PHYSX
         if (cudaContextManager) { cudaContextManager->release(); cudaContextManager = nullptr; }
 #endif
-        if (foundation) { foundation->release(); foundation = nullptr; }
+        // The shared core (+ cooking singleton) is released only when the LAST
+        // holder goes — a borrower's teardown must NOT free what others still use.
+        if (physics || foundation) {
+            if (s_coreRefs > 0) --s_coreRefs;
+            if (s_coreRefs == 0) {
+                CollisionCookingService::instance().shutdown();   // waits for in-flight cooks
+                if (s_physics)    { s_physics->release();    s_physics = nullptr; }
+                if (s_foundation) { s_foundation->release(); s_foundation = nullptr; }
+            }
+            physics = nullptr; foundation = nullptr;
+        }
+        ownsCore = false;
     }
 
     PxMaterial* makeMaterial(const PhysicsMaterial& m)
@@ -339,8 +377,69 @@ SimulationController::~SimulationController()
 {
 #if defined(KR_WITH_PHYSX)
     destroyPhysicsWorld();
-    CollisionCookingService::instance().shutdown(); // waits for in-flight cooks
-    m_px->releaseCore();
+    m_px->releaseCore();   // releaseCore shuts down the cooking singleton + frees the
+                           // shared core only when this is the last holder (refcount).
+#endif
+}
+
+int SimulationController::physxCoreRefCount()
+{
+#if defined(KR_WITH_PHYSX)
+    return PxImpl::s_coreRefs;
+#else
+    return 0;
+#endif
+}
+
+bool SimulationController::physxCoreAlive()
+{
+#if defined(KR_WITH_PHYSX)
+    return PxImpl::s_physics != nullptr;
+#else
+    return false;
+#endif
+}
+
+bool SimulationController::runLifecycleSelfTest()
+{
+#if !defined(KR_WITH_PHYSX)
+    return true;
+#else
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[sim lifecycle] PhysX-core borrow/release across SimulationControllers\n");
+    const int base = PxImpl::s_coreRefs;      // the app's controller already holds >=1 here
+    bool ok = PxImpl::s_physics != nullptr;
+    // (1) repeated create/destroy: each ctor borrows the shared core, dtor releases its ref.
+    for (int i = 0; i < 12 && ok; ++i) {
+        Scene sc;
+        SimulationController sim(&sc);
+        sim.play();           // buildPhysicsWorld on the borrowed core
+        sim.singleStep();
+        sim.stop();
+        if (!PxImpl::s_physics) { ok = false; printf("[sim lifecycle] FAIL: core died in cycle %d\n", i); }
+    }
+    const bool balancedCycles = (PxImpl::s_coreRefs == base);
+    // (2) two coexisting; destroy A first — B and the shared core must survive + still step.
+    bool coreAfterA = false, bStillSteps = false;
+    {
+        Scene scA, scB;
+        auto a = std::make_unique<SimulationController>(&scA);
+        auto b = std::make_unique<SimulationController>(&scB);
+        a->play(); b->play();
+        const int refsBoth = PxImpl::s_coreRefs;     // base + 2
+        a.reset();                                   // tear down A while B holds the core
+        coreAfterA = (PxImpl::s_physics != nullptr) && (PxImpl::s_coreRefs == refsBoth - 1);
+        b->singleStep();                             // B must still simulate (no use-after-free)
+        bStillSteps = (PxImpl::s_physics != nullptr);
+        b.reset();
+    }
+    const bool balancedFinal = (PxImpl::s_coreRefs == base) && ((PxImpl::s_physics != nullptr) == (base > 0));
+    ok = ok && balancedCycles && coreAfterA && bStillSteps && balancedFinal;
+    printf("[sim lifecycle] %s  baseRefs=%d cyclesBalanced=%d coreAliveAfterA=%d Bsteps=%d finalBalanced=%d\n",
+           ok ? "PASS" : "FAIL", base, int(balancedCycles), int(coreAfterA), int(bStillSteps), int(balancedFinal));
+    fflush(stdout);
+    return ok;
 #endif
 }
 

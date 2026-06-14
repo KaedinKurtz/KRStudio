@@ -47,6 +47,13 @@ public slots:
     void stop();
     void singleStep(); // one fixed step; implies pause if currently stopped
 
+public:
+    // G.0 — process-wide PhysX core (borrowed singleton). Introspection for the
+    // lifecycle gate, and the gate itself (borrow/release across controllers).
+    static int  physxCoreRefCount();   // # SimulationControllers holding the shared core
+    static bool physxCoreAlive();      // is the shared PxPhysics valid
+    static bool runLifecycleSelfTest();// G0b: create/destroy + coexist with no crash/double-free
+
     /// Advance the accumulator / step physics. Call once per frame.
     void tick();
 

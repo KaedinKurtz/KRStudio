@@ -14,6 +14,7 @@
 #include "UtilityHeaders/GLUtils.hpp"
 #include "MaterialLoader.hpp"
 #include "GLUtils.hpp"
+#include "SimulationController.hpp"   // G.0 PhysX-core lifecycle gate
 
 #include "OpaquePass.hpp"
 #include "LightingPass.hpp"
@@ -596,6 +597,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
+    if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
+        const bool ok = SimulationController::runLifecycleSelfTest();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -610,6 +619,7 @@ void RenderingSystem::initializeSharedResources()
             { "Trajectory HIL multi-fidelity verify",        krs::hil::runTrajectoryHilSelfTest() },
             { "OCCT STEP pipeline (round-trip + features)",  krs::cad::runSelfTest() },
             { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
+            { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },
         };
         int fails = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
