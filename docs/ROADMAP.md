@@ -1127,3 +1127,23 @@ sim and validates THAT path against the oracle.
 - Harness `runArticulationLiveGate` (KRS_ARTIC_LIVE_SELFTEST) builds a `SimulationController` +
   Scene, plays (→ live articulation), drives the live path, compares to the oracle; folded into
   `KRS_OVERNIGHT_BENCH` as an 11th group. Adversarial review before H is declared closed.
+
+### O.3 Implementation prerequisite (FOUND during planning — must do FIRST)
+`SimulationController::PxImpl::ensureCore()` (SimulationController.cpp:116) calls
+`PxCreateFoundation` **per instance**, but PhysX allows only **one `PxFoundation` per process**.
+The app creates one at startup, so the GATE-H live harness's second `SimulationController` would
+fail at `PxCreateFoundation` (GATE A dodges this by reusing `PxGetPhysics()`). **Resolution**:
+`ensureCore` must BORROW the process-wide PhysX singleton when one already exists (first
+controller owns + releases foundation/physics; later ones borrow + skip release). This touches
+the running app's core lifecycle → land it as its own commit with `KRS_BENCH`/overnight green
+before any GATE-H code.
+
+### O.4 Resume plan (gated sub-steps, each commit+push, phaseG-pre is the fallback tag)
+- **G.0** `ensureCore` borrows the PhysX singleton (prerequisite above). Gate: overnight 10/10.
+- **G.1** shared recipe header + `SimulationController::buildArticulation` from a POD
+  `RobotArticSpec` (zero-config link poses = chained (Rtree,ptree)) + `runArticulationLiveGate`
+  H1 (live FK vs oracle <1e-4, ≥50 cfg). Commit.
+- **G.2** live parallelogram D6 close + H3 (loop residual <1e-4 under live stepping). Commit.
+- **G.3** CAN effort → `cache.jointForce` + retire `:836 addForce`; H2 (torque→accel <1%) + H4
+  regression (overnight 10/10, HIL green). Commit.
+- **G.4** adversarial review → fix confirmed → declare GATE H closed.
