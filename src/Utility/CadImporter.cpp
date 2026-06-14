@@ -264,8 +264,12 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
         mesh.sourcePath = "occt_step";
         reg.emplace<TransformComponent>(e, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
         reg.emplace<TagComponent>(e, std::string("STEP solid ") + std::to_string(res.solids + 1));
-        reg.emplace<TriPlanarMaterialTag>(e);                  // UV-less B-Rep mesh
+        // A.1b: real per-vertex UVs (baked above) -> drop the world-space triplanar tag and mark for
+        // the UV-texture path. A.3: albedoTiling.x is the TEXELS-PER-METRE control (1 => 1 texture per
+        // 1 m^2, since UVs are world-scale metres); exposed via ObjectPropertiesWidget's tiling widget.
+        reg.emplace<UVTexturedMaterialTag>(e);                 // GL thread assigns a checker albedoMap -> uvShader
         auto& mat = reg.emplace<MaterialComponent>(e);
+        mat.albedoTiling = glm::vec2(1.0f, 1.0f);              // texels per metre (default 1 m^2 / tile)
         mat.volume_m3 = float(volume);
         res.totalVolume += volume;
 
@@ -700,10 +704,58 @@ bool runUvGateU()
                ir.solids, nVerts, nNaN, nZero, u4 ? "PASS" : "FAIL");
         printf("[uv gate]  U3 texel density: range=[%.3f,%.3f] exact-frac[0.9,1.1]=%.3f acc-frac[0.5,2]=%.3f (cones=axis-unwrap)  %s\n",
                dMin, dMax, inFrac, accFrac, u3 ? "PASS" : "FAIL");
-        allPass &= u4 && u3;
+
+        // ---- U5 SCALE PARAM: the importer exposes texels-per-metre as albedoTiling.x (the existing
+        // material parameter); world-scale UV * albedoTiling.x = sample coords. Verify it is SET on
+        // every CAD body, and that a known span tiles proportionally (a 1 m face -> T tiles at scale T). ----
+        long nMat = 0, nTilingSet = 0; double tilingVal = -1;
+        for (auto e : reg.view<MaterialComponent, UVTexturedMaterialTag>()) {
+            const auto& mat = reg.get<MaterialComponent>(e);
+            ++nMat; if (mat.albedoTiling.x > 0.0f) { ++nTilingSet; tilingVal = mat.albedoTiling.x; }
+        }
+        // shader math (gbuffer_textured): sampleUV = TexCoords * u_texture_scale (u_texture_scale=albedoTiling.x).
+        // so a uvSpan-metre face spans uvSpan*T tiles -> proportional + predictable.
+        const double uvSpan = 0.5;                                       // a 0.5 m reference span
+        const double tiles1 = uvSpan * 1.0, tiles4 = uvSpan * 4.0;
+        const bool u5 = nMat > 0 && nTilingSet == nMat && std::abs(tilingVal - 1.0) < 1e-6
+                        && std::abs(tiles4 / tiles1 - 4.0) < 1e-9;
+        printf("[uv gate]  U5 scale param (albedoTiling.x): set on %ld/%ld bodies (=%.2f texels/m); a %.2f m span -> %.2f tiles @1, %.2f @4 (ratio %.2f)  %s\n",
+               nTilingSet, nMat, tilingVal, uvSpan, tiles1, tiles4, tiles4 / tiles1, u5 ? "PASS" : "FAIL");
+
+        // ---- U6 TEXEL RIDES THE BODY (triplanar swimming bug is dead). Apply a rigid motion. The UV
+        // texcoord is a VERTEX ATTRIBUTE -> a material point's texel is motion-INVARIANT (slide 0). The
+        // triplanar texcoord is f(world pos) -> it SLIDES (the swimming bug). Negative control: triplanar. ----
+        const double ang = 40.0 * PI / 180.0, ca = std::cos(ang), sa = std::sin(ang);
+        auto rotY = [&](glm::dvec3 p) { return glm::dvec3(ca * p.x + sa * p.z, p.y, -sa * p.x + ca * p.z); };
+        const glm::dvec3 Tr(0.3, 0.1, 0.0);
+        auto triUV = [&](glm::dvec3 p, glm::dvec3 nrm) {                 // triplanar dominant-axis projection
+            const glm::dvec3 a = glm::abs(nrm);
+            if (a.x >= a.y && a.x >= a.z) return glm::dvec2(p.y, p.z);
+            if (a.y >= a.z)              return glm::dvec2(p.x, p.z);
+            return glm::dvec2(p.x, p.y);
+        };
+        double uvSlide = 0, triSlide = 0; long nV = 0;
+        for (auto e : reg.view<RenderableMeshComponent>()) {
+            const auto& m = reg.get<RenderableMeshComponent>(e);
+            for (const auto& v : m.vertices) {
+                const glm::dvec3 p0(v.position), n0(v.normal);
+                const glm::dvec3 p1 = rotY(p0) + Tr, n1 = rotY(n0);
+                // UV path: a material point's texcoord = its vertex uv, identical rest vs moved
+                const glm::dvec2 uvRest(v.uv.x, v.uv.y), uvMoved(v.uv.x, v.uv.y);
+                uvSlide = std::max(uvSlide, glm::length(uvMoved - uvRest));
+                // triplanar path: texcoord bound to world pos -> slides
+                triSlide = std::max(triSlide, glm::length(triUV(p1, n1) - triUV(p0, n0)));
+                ++nV;
+            }
+        }
+        const bool u6 = nV > 0 && uvSlide < 1e-9 && triSlide > 0.1;       // UV fixed; triplanar swims (neg-ctrl)
+        printf("[uv gate]  U6 texel rides body (rigid 40deg+0.3m): UV-path slide=%.2e (fixed), triplanar slide=%.3f m (neg-ctrl, swims)  %s\n",
+               uvSlide, triSlide, u6 ? "PASS" : "FAIL");
+
+        allPass &= u4 && u3 && u5 && u6;
     }
 
-    printf("[uv gate] %s\n", allPass ? "ALL PASS (U1 world-scale + U2 continuity + U3 density + U4 coverage)" : "FAILURES PRESENT");
+    printf("[uv gate] %s\n", allPass ? "ALL PASS (U1 scale + U2 continuity + U3 density + U4 coverage + U5 param + U6 rides-body)" : "FAILURES PRESENT");
     fflush(stdout);
     return allPass;
 }

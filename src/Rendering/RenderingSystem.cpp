@@ -426,6 +426,25 @@ void RenderingSystem::initializeSharedResources()
     glm::u8vec4 white(255, 255, 255, 255);
     m_defaultAlbedo->generate(1, 1, GL_RGBA8, GL_RGBA, &white[0]);
 
+    // Phase A.1b: world-scale UV checker for imported CAD bodies. UVs are metres, so at
+    // albedoTiling.x = 1 this 1-tile texture spans 1 m: each metre shows one 8x8 checker with
+    // an orange grid (reads continuity across smooth seams) + a red origin cell (orientation).
+    {
+        const int N = 256, cells = 8, cell = N / cells;
+        std::vector<glm::u8vec4> px(size_t(N) * N);
+        for (int y = 0; y < N; ++y) for (int x = 0; x < N; ++x) {
+            const int cx = x / cell, cy = y / cell;
+            glm::u8vec4 c = ((cx + cy) & 1) ? glm::u8vec4(60, 62, 72, 255) : glm::u8vec4(198, 204, 214, 255);
+            if (x % cell < 2 || y % cell < 2) c = glm::u8vec4(255, 138, 0, 255);   // orange grid lines
+            if (cx == 0 && cy == 0)           c = glm::u8vec4(220, 44, 44, 255);   // red origin cell
+            px[size_t(y) * N + x] = c;
+        }
+        m_cadChecker = std::make_shared<Texture2D>();
+        m_cadChecker->generate(N, N, GL_RGBA8, GL_RGBA, px.data());
+        m_cadChecker->setWrap(GL_REPEAT, GL_REPEAT);
+        m_cadChecker->generateMipmaps();
+    }
+
     // Default Normal (Flat)
     m_defaultNormal = std::make_shared<Texture2D>();
     glm::u8vec4 flatNormal(128, 128, 255, 255);
@@ -675,7 +694,7 @@ void RenderingSystem::initializeSharedResources()
             { "HIL bridges (camera loopback + CAN)",         krs::hil::runBridgeSelfTest() },
             { "Trajectory HIL multi-fidelity verify",        krs::hil::runTrajectoryHilSelfTest() },
             { "OCCT STEP pipeline (round-trip + features)",  krs::cad::runSelfTest() },
-            { "GATE U B-Rep UVs (U1 scale/U2 continuity/U3/U4)", krs::cad::runUvGateU() },
+            { "GATE U B-Rep UVs (U1-U6: scale/continuity/density/coverage/param/rides-body)", krs::cad::runUvGateU() },
             { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
             { "GATE V.2 visible FANUC render (features->pixels)", runFanucRenderGateV2() },
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },
@@ -814,6 +833,17 @@ void RenderingSystem::renderAllViewports()
         m_fps = (avgDt > 0) ? (1.0f / avgDt) : 0.0f;
     }
     m_scene->getRegistry().ctx().get<SceneProperties>().deltaTime = dt;
+
+    // Phase A.1b: imported CAD bodies (UVTexturedMaterialTag) get the world-scale UV checker as
+    // their albedoMap once -> OpaquePass then selects the UV-texture (gbuffer_textured) path, so
+    // the texture rides the body in OBJECT space (no triplanar world-space swimming).
+    if (m_cadChecker) {
+        auto& reg = m_scene->getRegistry();
+        for (auto e : reg.view<UVTexturedMaterialTag, MaterialComponent>()) {
+            auto& mat = reg.get<MaterialComponent>(e);
+            if (!mat.albedoMap) mat.albedoMap = m_cadChecker;
+        }
+    }
 
     processMaterialReloads();
     resizeGLResources();

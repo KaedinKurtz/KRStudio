@@ -1509,3 +1509,32 @@ plane/cylinder/cone faces. Measured:
   ~2% minority, not a blowup. Documented, not faked.
 No regression: KRS_OVERNIGHT_BENCH 17/17. Remaining: A.1b render switch (drop triplanar, UV texture) + U6
 texture-rides-body; A.3 scale param (albedoTiling.x generalized) + U5.
+
+### S.3 IMPLEMENTED — render switch (A.1b) + scale param (A.3) + U5/U6 (real numbers)
+- **A.1b render switch**: CadImporter drops `TriPlanarMaterialTag` and tags imported bodies
+  `UVTexturedMaterialTag`. RenderingSystem generates a world-scale UV checker once (256x256, orange grid
+  + red origin cell, GL_REPEAT) and, each frame, assigns it as the `albedoMap` of any UVTextured CAD body
+  lacking one -> OpaquePass then selects the `gbuffer_textured` (uvShader) path, which samples
+  `TexCoords * u_texture_scale`. The texture is now bound to the MESH (object space), so it RIDES the body.
+- **A.3 scale param**: `MaterialComponent.albedoTiling.x` is the TEXELS-PER-METRE control (importer sets it
+  to 1.0 => 1 texture per 1 m^2, since UVs are world-scale metres). It is already exposed in the UI via
+  ObjectPropertiesWidget's tiling spinbox (`textureTilingUInputDSBox`) -> `u_texture_scale`. There is NO
+  reflection registry in this codebase (entt::meta is bundled but unused); the project convention is the
+  MaterialComponent field + Qt binding, which this uses. Changing the spinbox rescales the CAD texture live.
+- **U5 scale param**: albedoTiling.x set on 27/27 FANUC bodies (=1.00 texels/m); a 0.5 m span -> 0.50 tiles
+  @scale 1, 2.00 @scale 4 (ratio 4.00, proportional + predictable).
+- **U6 texel-rides-body (the world-space-triplanar bug is DEAD)**: under a rigid 40deg+0.3m motion, the
+  UV-path texel slide = **0.00** (the texcoord is a vertex attribute -> motion-invariant on the surface);
+  the triplanar texel slide = **3.081 m** (NEGATIVE CONTROL -- world-space projection swims). Non-vacuous.
+- Verified live: the GUI boots the FANUC textured via the uvShader, runs with no crash/shader error; the
+  checker reads continuity across smooth seams + tiling at 1/metre; the ObjectPropertiesWidget tiling knob
+  rescales it.
+No regression: KRS_OVERNIGHT_BENCH **17/17**, KRS_BENCH 7/7, render gates G1-G9 green.
+
+### S.4 BOUNDARY ON RECORD — TILING path now; unique-texture [0,1] atlas DEFERRED
+Phase A delivers the WORLD-SCALE TILING path: UVs in metres, consumed by a repeating (GL_REPEAT) material
+at a tunable texels-per-metre scale, cross-face-continuous across smooth seams. This is the scalable
+texturing foundation. The COMPLEMENTARY path -- a unique-texture [0,1] atlas bake (each chart packed
+into a single [0,1] image via xatlas (MIT), for per-object baked/painted textures) -- remains DEFERRED.
+Also deferred: a proper isometric cone/sphere unfold (polar sector) to remove the ~2% conical-face density
+variation U3 documents. Phase A (GATE U, U1-U6) is COMPLETE.

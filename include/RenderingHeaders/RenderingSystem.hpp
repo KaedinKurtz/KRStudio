@@ -276,6 +276,7 @@ private:
     std::shared_ptr<Texture2D> m_brdfLUT;
 
     std::shared_ptr<Texture2D> m_defaultAlbedo;
+    std::shared_ptr<Texture2D> m_cadChecker;   // Phase A.1b: world-scale UV checker for imported CAD bodies
     std::shared_ptr<Texture2D> m_defaultNormal;
     std::shared_ptr<Texture2D> m_defaultAO;
     std::shared_ptr<Texture2D> m_defaultMetallic;
