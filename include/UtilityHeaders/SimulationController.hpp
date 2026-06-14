@@ -78,6 +78,12 @@ public:
     void setArticulationVizMapping(const std::vector<std::vector<entt::entity>>& movingLinkEntities);
     void writeBackArticulationViz();
 
+    // Phase V (V.4): drive the articulation through a smooth kinematic J1/J2/J3 sweep every
+    // tick (a visible demo). Frame-rate-paced (fixed phase step per tick) so it advances even
+    // in headless/test loops. The articulation must already be built + viz-mapped.
+    void setArticulationDemoDrive(bool on);
+    bool articulationDemoDrive() const { return m_articDemoDrive; }
+
     /// Advance the accumulator / step physics. Call once per frame.
     void tick();
 
@@ -124,6 +130,8 @@ private:
     Scene* m_scene = nullptr;
     krs::dyn::RobotArticSpec m_robotSpec;   // Phase G: optional live FANUC articulation
     bool m_hasRobotSpec = false;
+    bool m_articDemoDrive = false;          // Phase V: kinematic J1/J2/J3 sweep each tick
+    double m_articDemoPhase = 0.0;
     SimulationState m_state = SimulationState::Stopped;
     QElapsedTimer m_clock;
     double m_accumulator = 0.0;

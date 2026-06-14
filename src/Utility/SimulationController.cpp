@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <thread>
 #include <unordered_map>
 
@@ -534,6 +535,21 @@ void SimulationController::tick()
     // clamp above already prevents a death spiral.
 
     if (steps > 0) { writeBackTransforms(); writeBackArticulationViz(); }
+
+    // Phase V: kinematic demo sweep. Runs every tick (not gated on physics steps) so the FANUC
+    // visibly articulates even when little wall-clock has accrued. Fixed phase step keeps it
+    // frame-rate-paced and deterministic in headless loops.
+    if (m_articDemoDrive && articDofCount() == 4) {
+        m_articDemoPhase += 0.018;                          // ~ rad of phase per tick (smooth at ~30 Hz)
+        const double p = m_articDemoPhase;
+        std::vector<float> q = {
+            float(0.60 * std::sin(0.50 * p)),               // J1 yaw
+            float(0.45 + 0.35 * std::sin(0.37 * p)),        // J2 shoulder
+            float(0.70 + 0.50 * std::sin(0.43 * p)),        // J3 elbow
+            0.0f };                                         // J4 frozen
+        setArticJointPositions(q);
+        writeBackArticulationViz();
+    }
 }
 
 // ===========================================================================
@@ -1175,6 +1191,12 @@ void SimulationController::writeBackArticulationViz()
         }
     }
 #endif
+}
+
+void SimulationController::setArticulationDemoDrive(bool on)
+{
+    m_articDemoDrive = on;
+    if (!on) m_articDemoPhase = 0.0;
 }
 
 // ===========================================================================

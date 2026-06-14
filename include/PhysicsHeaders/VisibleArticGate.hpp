@@ -22,4 +22,11 @@ namespace krs::dyn {
 // the negative control is rejected (non-vacuous).
 bool runVisibleArticGateV();
 
+// Phase V GATE V.6: exercises the EXACT boot path the app uses (the shared
+// krs::fanuc helper + the kinematic demo drive + the per-frame tick loop) and
+// confirms the FANUC visibly moves end-to-end, with the assignment fingerprint
+// matching the canonical map. Gated by KRS_FANUC_BOOT_SELFTEST. Vacuous pass
+// without PhysX/OpenCASCADE.
+bool runFanucBootGateV6();
+
 } // namespace krs::dyn

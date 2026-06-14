@@ -606,6 +606,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase V GATE V.6: the boot path (shared helper + demo drive + tick) moves the FANUC.
+    if (qEnvironmentVariableIntValue("KRS_FANUC_BOOT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FANUC_BOOT_SELFTEST =================\n");
+        const bool ok = krs::dyn::runFanucBootGateV6();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -657,6 +665,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
+            { "GATE V.6 FANUC boot path moves (shared helper)",    krs::dyn::runFanucBootGateV6() },
         };
         int fails = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");

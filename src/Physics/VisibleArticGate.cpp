@@ -4,7 +4,7 @@
 // STEP solids with their B-Rep bores (OpenCASCADE). Without either, there is
 // nothing to validate -> vacuous pass.
 #if !defined(KR_WITH_PHYSX) || !defined(KR_WITH_OCCT)
-namespace krs::dyn { bool runVisibleArticGateV() { return true; } }
+namespace krs::dyn { bool runVisibleArticGateV() { return true; } bool runFanucBootGateV6() { return true; } }
 #else
 
 #include "ArticulationSpec.hpp"
@@ -240,6 +240,54 @@ bool runVisibleArticGateV()
 
     const bool pass = coverage && fpMatch && v2 && vCoherent && vMotion && guardBites && !hinges.empty();
     printf("[vassign] %s\n", pass ? "ALL PASS (V-source + V1 + V2 + V-assign + neg-ctrl)" : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
+// GATE V.6 — boot path: the SAME shared helper + demo drive + tick loop the app
+// boots with must make the FANUC visibly move (and the assignment fingerprint
+// must match the canonical map). Proves the boot path and the gate path are one.
+// ===========================================================================
+bool runFanucBootGateV6()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[fanuc boot] GATE V.6 - boot path (shared helper + demo drive + tick) makes the FANUC move\n");
+
+    const std::string path = krs::fanuc::findStepAsset();
+    const entt::entity FORE_IDX = entt::null; (void)FORE_IDX;
+
+    // helper to set up + tick N frames, returning the forearm's net translation + finiteness
+    auto run = [&](bool driveOn, float& moved, bool& finite, std::string& fp) -> bool {
+        Scene scene; SimulationController sim(&scene);
+        krs::fanuc::Setup s = krs::fanuc::setupFanucScene(scene, sim, path);
+        if (!s.ok) { printf("[fanuc boot] FAIL: setupFanucScene: %s\n", s.message.c_str()); sim.stop(); return false; }
+        fp = s.fingerprint;
+        auto& reg = scene.getRegistry();
+        const entt::entity fore = s.solidEntity[1];        // inspect idx 1 = forearm (link 3)
+        const glm::vec3 p0 = reg.get<TransformComponent>(fore).translation;
+        sim.setArticulationDemoDrive(driveOn);
+        for (int i = 0; i < 60; ++i) sim.tick();           // the app's per-frame call
+        const glm::vec3 p1 = reg.get<TransformComponent>(fore).translation;
+        finite = std::isfinite(p1.x) && std::isfinite(p1.y) && std::isfinite(p1.z);
+        moved = glm::length(p1 - p0);
+        sim.stop();
+        return true;
+    };
+
+    float movedOn = 0, movedOff = 0; bool finOn = false, finOff = false; std::string fpOn, fpOff;
+    if (!run(true,  movedOn,  finOn,  fpOn))  return false;
+    if (!run(false, movedOff, finOff, fpOff)) return false;
+
+    const bool fpMatch = (fpOn == krs::fanuc::assignmentFingerprint());
+    const bool moves   = movedOn > 0.05f && finOn;         // forearm translates >5 cm over 60 ticks
+    const bool ctrl    = movedOff < 1e-4f;                 // NEGATIVE CONTROL: no drive -> no motion
+    printf("[fanuc boot]  fingerprint=%s (%s); demoDrive: forearm moved=%.3f m finite=%d; neg-ctrl(no drive) moved=%.3e m\n",
+           fpOn.c_str(), fpMatch ? "canonical" : "MISMATCH", movedOn, int(finOn), movedOff);
+    const bool pass = fpMatch && moves && ctrl;
+    printf("[fanuc boot] %s\n", pass ? "ALL PASS (boot path moves the FANUC; fingerprint canonical; neg-ctrl still)"
+                                     : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }
