@@ -61,6 +61,8 @@ public:
     int  articDofCount() const;
     bool setArticJointPositions(const std::vector<float>& q);   // applyCache(ePOSITION)
     std::vector<std::array<float, 7>> articLinkPoses() const;    // per non-root link: pos.xyz + quat.xyzw
+    void setSceneGravity(float gx, float gy, float gz);          // gate: isolate the loop constraint
+    static bool ensurePhysxExtensions();                        // PxD6Joint needs extensions (once/process)
 
     /// Advance the accumulator / step physics. Call once per frame.
     void tick();

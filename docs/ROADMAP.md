@@ -1151,7 +1151,11 @@ before any GATE-H code.
   `(Rtree,ptree)`; PhysX-free accessors for the harness) + `runArticulationLiveGate`
   (`KRS_ARTIC_LIVE_SELFTEST`). **H1 PASS**: live FANUC FK vs oracle over 60 cfg —
   maxPos **1.323e-06 m**, maxRot **6.054e-07 rad** (bound 1e-4); overnight 11/11 (no regression).
-- **G.2** live parallelogram D6 close + H3 (loop residual <1e-4 under live stepping). Commit.
+- **G.2** ✅ LANDED — live parallelogram `PxD6Joint` close in `buildArticulation` (built before
+  `addArticulation`; lock 3 translations, free rotations) + shared guarded `ensurePhysxExtensions`
+  (one `PxInitExtensions`/process, used by GATE A + the live path) + `setSceneGravity`. **H3 PASS**:
+  live parallelogram loop residual **3.219e-07 m** across a 3-crank sweep under live stepping
+  (bound 1e-4); GATE A unregressed (A3 still 3.944e-07), overnight 11/11.
 - **G.3** CAN effort → `cache.jointForce` + retire `:836 addForce`; H2 (torque→accel <1%) + H4
   regression (overnight 10/10, HIL green). Commit.
 - **G.4** adversarial review → fix confirmed → declare GATE H closed.

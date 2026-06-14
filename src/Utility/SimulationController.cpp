@@ -710,10 +710,53 @@ void SimulationController::buildArticulation()
         jt->setMotion(j.revolute ? PxArticulationAxis::eTWIST : PxArticulationAxis::eX, PxArticulationMotion::eFREE);
         links.push_back(link);
     }
+
+    // Optional closed loop (FANUC parallelogram): pin link `tipLink`'s +tipLocal to a
+    // fixed world anchor — lock the 3 translations, free all rotations (locking the
+    // planar rotation would over-constrain the 4-bar). Created BEFORE addArticulation.
+    const auto& lp = m_robotSpec.loop;
+    if (lp.enabled && lp.tipLink >= 0 && lp.tipLink + 1 < int(links.size())) {
+        ensurePhysxExtensions();   // PxD6Joint needs the extensions library
+        const PxTransform tipLocal(PxVec3(lp.tipLocal[0], lp.tipLocal[1], lp.tipLocal[2]));
+        const PxTransform anchorW(PxVec3(lp.anchorWorld[0], lp.anchorWorld[1], lp.anchorWorld[2]));
+        PxD6Joint* d6 = PxD6JointCreate(*m_px->physics, nullptr, anchorW, links[lp.tipLink + 1], tipLocal);
+        d6->setMotion(PxD6Axis::eX, PxD6Motion::eLOCKED);
+        d6->setMotion(PxD6Axis::eY, PxD6Motion::eLOCKED);
+        d6->setMotion(PxD6Axis::eZ, PxD6Motion::eLOCKED);
+        d6->setMotion(PxD6Axis::eSWING1, PxD6Motion::eFREE);
+        d6->setMotion(PxD6Axis::eSWING2, PxD6Motion::eFREE);
+        d6->setMotion(PxD6Axis::eTWIST,  PxD6Motion::eFREE);
+        m_px->loopD6 = d6;
+    }
+
     m_px->scene->addArticulation(*art);
     m_px->articulation = art;
     m_px->articCache = art->createCache();
-    qInfo() << "[Sim] live articulation built:" << n << "links, dofs=" << art->getDofs();
+    qInfo() << "[Sim] live articulation built:" << n << "links, dofs=" << art->getDofs()
+            << (lp.enabled ? "(+loop D6)" : "");
+#endif
+}
+
+bool SimulationController::ensurePhysxExtensions()
+{
+#if defined(KR_WITH_PHYSX)
+    // PxInitExtensions must run exactly once per process; both GATE A and the live
+    // articulation loop closure need it. Guard on a single static so the borrow model
+    // (multiple controllers, one shared PxPhysics) never double-inits.
+    static bool s_ext = false;
+    if (!s_ext && PxImpl::s_physics) s_ext = PxInitExtensions(*PxImpl::s_physics, nullptr);
+    return s_ext;
+#else
+    return false;
+#endif
+}
+
+void SimulationController::setSceneGravity(float gx, float gy, float gz)
+{
+#if defined(KR_WITH_PHYSX)
+    if (m_px->scene) m_px->scene->setGravity(physx::PxVec3(gx, gy, gz));
+#else
+    (void)gx; (void)gy; (void)gz;
 #endif
 }
 

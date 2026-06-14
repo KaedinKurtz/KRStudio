@@ -116,7 +116,7 @@ bool runArticulationGate() {
     // and build only our own throwaway scene. PxD6Joint needs the extensions, which
     // the app never inits, so init them once here.
     PxPhysics* phys = &PxGetPhysics();
-    static bool s_ext = PxInitExtensions(*phys, nullptr); (void)s_ext;
+    SimulationController::ensurePhysxExtensions();   // single guarded init (shared with the live path)
     PxDefaultCpuDispatcher* disp = PxDefaultCpuDispatcherCreate(2);
     PxSceneDesc sd(phys->getTolerancesScale());
     sd.gravity = PxVec3(0.0f, -9.81f, 0.0f);
@@ -382,10 +382,68 @@ bool runArticulationLiveGate()
     }
     sim.stop();
 
-    const bool pass = maxPos < 1e-4 && maxRot < 1e-4;
+    const bool h1pass = maxPos < 1e-4 && maxRot < 1e-4;
     printf("[artic live] H1 live FK vs oracle (%d cfg, 4-link): maxPos=%.3e m  maxRot=%.3e rad  %s\n",
-           N, maxPos, maxRot, pass ? "PASS" : "FAIL");
-    printf("[artic live] %s\n", pass ? "ALL PASS" : "FAILURES PRESENT");
+           N, maxPos, maxRot, h1pass ? "PASS" : "FAIL");
+
+    // ---- H3: live FANUC parallelogram loop (PxD6 close), residual under motion ----
+    // Real geometry from A3: 1.075 m arm bar, two parallel X-pivots at Z=0.305, cut
+    // joint pinned to the real top pivot. Built + stepped by the LIVE SimulationController.
+    double maxRes = 0; bool h3ran = false;
+    {
+        const double L = 1.075;
+        const Eigen::Vector3d base(0.0, 0.74, 0.305);
+        const Eigen::Vector3d topPivot(0.0, 0.74 + L, 0.305);
+        const Eigen::Vector3d bar(0, L, 0), axisX(1, 0, 0);
+        std::vector<GateSpec> p(3);
+        p[0].parent = -1; p[0].axis = axisX; p[0].ptree = base;
+        p[1].parent =  0; p[1].axis = axisX; p[1].ptree = bar;
+        p[2].parent =  1; p[2].axis = axisX; p[2].ptree = bar;
+        for (auto& g : p) { g.mass = 160.0; g.com = Eigen::Vector3d(0, 0.5*L, 0); g.inertiaDiag = Eigen::Vector3d(60, 2, 60); }
+        krs::dyn::RobotArticSpec ps; ps.fixBase = true;
+        for (const auto& g : p) {
+            krs::dyn::ArticJointSpec j; j.parent = g.parent; j.revolute = true;
+            j.axis = { float(g.axis.x()), float(g.axis.y()), float(g.axis.z()) };
+            for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) j.Rtree[r*3+c] = float(g.Rtree(r,c));
+            j.ptree = { float(g.ptree.x()), float(g.ptree.y()), float(g.ptree.z()) };
+            j.mass = float(g.mass); j.com = { 0.f, float(0.5*L), 0.f }; j.inertiaDiag = { 60.f, 2.f, 60.f };
+            ps.joints.push_back(j);
+        }
+        ps.loop.enabled = true; ps.loop.tipLink = 2;
+        ps.loop.tipLocal    = { float(bar.x()), float(bar.y()), float(bar.z()) };
+        ps.loop.anchorWorld = { float(topPivot.x()), float(topPivot.y()), float(topPivot.z()) };
+
+        Scene scene2;
+        SimulationController sim2(&scene2);
+        sim2.setRobotArticulationSpec(ps);
+        sim2.play();                       // buildArticulation builds chain + D6 loop
+        sim2.setSceneGravity(0, 0, 0);     // isolate the constraint (like A3)
+        if (sim2.articDofCount() == 3) {
+            SerialChain oc2 = makeOracle(p);
+            const double cranks[3] = { 0.4, 0.7, 1.0 };  // sweep the crank "across motion"
+            for (double crank : cranks) {
+                Eigen::VectorXd q = Eigen::VectorXd::Zero(3); q[0] = crank; q[1] = -crank*1.2; q[2] = crank*0.4;
+                LoopConstraint lc; lc.bodyA = 2; lc.pA = bar; lc.bodyB = -1; lc.pB = topPivot;
+                oc2.closeLoops({ lc }, { 1, 2 }, q, 100, 1e-12);
+                std::vector<float> qf(3); for (int i = 0; i < 3; ++i) qf[i] = float(q[i]);
+                sim2.setArticJointPositions(qf);
+                for (int st = 0; st < 240; ++st) sim2.singleStep();   // settle in the LIVE sim
+                const auto poses2 = sim2.articLinkPoses();            // [2] = 3rd bar
+                const Eigen::Vector3d    tp(poses2[2][0], poses2[2][1], poses2[2][2]);
+                const Eigen::Quaterniond tq(poses2[2][6], poses2[2][3], poses2[2][4], poses2[2][5]);
+                const Eigen::Vector3d tipW = tp + tq.toRotationMatrix() * bar;
+                maxRes = std::max(maxRes, (tipW - topPivot).norm());
+            }
+            h3ran = true;
+        }
+        sim2.stop();
+    }
+    const bool h3pass = h3ran && maxRes < 1e-4;
+    printf("[artic live] H3 live parallelogram loop (D6, 3 cranks): residual=%.3e m  %s\n",
+           maxRes, h3pass ? "PASS" : "FAIL");
+
+    const bool pass = h1pass && h3pass;
+    printf("[artic live] %s\n", pass ? "ALL PASS (H1,H3)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }
