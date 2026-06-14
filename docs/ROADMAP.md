@@ -1146,9 +1146,11 @@ before any GATE-H code.
   `KRS_SIM_LIFECYCLE_SELFTEST` PASS — 12 create/destroy cycles balanced, 2 coexisting controllers
   with A torn down first leaving B + core valid and still stepping, refcount returns to base (no
   double-free/leak). baseRefs=1 confirms the borrow path was exercised.
-- **G.1** shared recipe header + `SimulationController::buildArticulation` from a POD
-  `RobotArticSpec` (zero-config link poses = chained (Rtree,ptree)) + `runArticulationLiveGate`
-  H1 (live FK vs oracle <1e-4, ≥50 cfg). Commit.
+- **G.1** ✅ LANDED — POD `ArticulationSpec.hpp` + `SimulationController::buildArticulation`
+  (built in `buildPhysicsWorld` from a `RobotArticSpec`; zero-config link poses = chained
+  `(Rtree,ptree)`; PhysX-free accessors for the harness) + `runArticulationLiveGate`
+  (`KRS_ARTIC_LIVE_SELFTEST`). **H1 PASS**: live FANUC FK vs oracle over 60 cfg —
+  maxPos **1.323e-06 m**, maxRot **6.054e-07 rad** (bound 1e-4); overnight 11/11 (no regression).
 - **G.2** live parallelogram D6 close + H3 (loop residual <1e-4 under live stepping). Commit.
 - **G.3** CAN effort → `cache.jointForce` + retire `:836 addForce`; H2 (torque→accel <1%) + H4
   regression (overnight 10/10, HIL green). Commit.

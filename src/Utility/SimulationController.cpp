@@ -71,6 +71,11 @@ struct SimulationController::PxImpl
     PxScene* scene = nullptr;
     PxMaterial* defaultMaterial = nullptr;
     PxRigidStatic* groundPlane = nullptr;
+    // Phase G: live FANUC articulation (one robot for now).
+    PxArticulationReducedCoordinate* articulation = nullptr;
+    PxArticulationCache* articCache = nullptr;
+    std::vector<PxArticulationLink*> articLinks;   // [0]=fixed root, [b+1]=joint b
+    PxD6Joint* loopD6 = nullptr;                    // parallelogram closure (added in G.2)
 #if PX_SUPPORT_GPU_PHYSX
     PxCudaContextManager* cudaContextManager = nullptr;
 #endif
@@ -629,6 +634,8 @@ void SimulationController::buildPhysicsWorld()
         if (m_px->createStaticSceneryActor(reg, e)) ++staticCount;
     }
 
+    if (m_hasRobotSpec) buildArticulation();   // Phase G: live FANUC articulation
+
     qInfo() << "[Sim] world built:" << dynamicCount << "dynamic," << staticCount << "static bodies (+ground plane)";
 
     if (qEnvironmentVariableIsSet("KRS_BENCH")) {
@@ -641,6 +648,110 @@ void SimulationController::buildPhysicsWorld()
                               << "," << hit.block.normal.z << ")";
     }
 #endif
+}
+
+void SimulationController::setRobotArticulationSpec(const krs::dyn::RobotArticSpec& spec)
+{
+    m_robotSpec = spec;
+    m_hasRobotSpec = !spec.joints.empty();
+}
+
+void SimulationController::buildArticulation()
+{
+#if defined(KR_WITH_PHYSX)
+    if (!m_hasRobotSpec || !m_px->scene || !m_px->physics) return;
+    using namespace physx;
+    const auto& js = m_robotSpec.joints;
+    const int n = int(js.size());
+
+    auto rtreeQuat = [](const std::array<float, 9>& r) {
+        PxMat33 m(PxVec3(r[0], r[3], r[6]), PxVec3(r[1], r[4], r[7]), PxVec3(r[2], r[5], r[8]));
+        return PxQuat(m);
+    };
+    // shortest rotation +X -> axis (matches the oracle's FromTwoVectors(UnitX, axis))
+    auto qXto = [](const std::array<float, 3>& ain) {
+        PxVec3 a(ain[0], ain[1], ain[2]); a.normalize();
+        const float d = PxVec3(1, 0, 0).dot(a);
+        if (d >=  1.0f - 1e-6f) return PxQuat(PxIdentity);
+        if (d <= -1.0f + 1e-6f) return PxQuat(PxPi, PxVec3(0, 0, 1)); // 180° about a perp axis
+        const PxVec3 c = PxVec3(1, 0, 0).cross(a);
+        return PxQuat(c.x, c.y, c.z, 1.0f + d).getNormalized();
+    };
+    auto attach = [&](PxArticulationLink* link, float mass, const std::array<float, 3>& I, const std::array<float, 3>& com) {
+        PxRigidActorExt::createExclusiveShape(*link, PxSphereGeometry(0.02f), *m_px->defaultMaterial);
+        link->setCMassLocalPose(PxTransform(PxVec3(com[0], com[1], com[2])));
+        link->setMass(PxReal(mass));
+        link->setMassSpaceInertiaTensor(PxVec3(I[0], I[1], I[2]));
+    };
+
+    PxArticulationReducedCoordinate* art = m_px->physics->createArticulationReducedCoordinate();
+    art->setArticulationFlag(PxArticulationFlag::eFIX_BASE, m_robotSpec.fixBase);
+    art->setSolverIterationCounts(64, 16);
+    auto& links = m_px->articLinks; links.clear(); links.reserve(n + 1);
+    PxArticulationLink* root = art->createLink(nullptr, PxTransform(PxIdentity));
+    attach(root, 1.0f, { 1, 1, 1 }, { 0, 0, 0 });
+    links.push_back(root);
+
+    // zero-config link world poses: wp0[b] = wp0[parent] * (Rtree, ptree) (joint angle 0 = identity)
+    std::vector<PxTransform> wp0(n);
+    for (int b = 0; b < n; ++b) {
+        const auto& j = js[b];
+        const PxTransform local(PxVec3(j.ptree[0], j.ptree[1], j.ptree[2]), rtreeQuat(j.Rtree));
+        const PxTransform parentW = (j.parent < 0) ? PxTransform(PxIdentity) : wp0[j.parent];
+        wp0[b] = parentW * local;
+        PxArticulationLink* parentLink = (j.parent < 0) ? root : links[j.parent + 1];
+        PxArticulationLink* link = art->createLink(parentLink, wp0[b]);
+        attach(link, j.mass, j.inertiaDiag, j.com);
+        PxArticulationJointReducedCoordinate* jt = link->getInboundJoint();
+        const PxQuat qa = qXto(j.axis);
+        jt->setJointType(j.revolute ? PxArticulationJointType::eREVOLUTE : PxArticulationJointType::ePRISMATIC);
+        jt->setParentPose(PxTransform(PxVec3(j.ptree[0], j.ptree[1], j.ptree[2]), rtreeQuat(j.Rtree) * qa));
+        jt->setChildPose(PxTransform(PxVec3(0, 0, 0), qa));
+        jt->setMotion(j.revolute ? PxArticulationAxis::eTWIST : PxArticulationAxis::eX, PxArticulationMotion::eFREE);
+        links.push_back(link);
+    }
+    m_px->scene->addArticulation(*art);
+    m_px->articulation = art;
+    m_px->articCache = art->createCache();
+    qInfo() << "[Sim] live articulation built:" << n << "links, dofs=" << art->getDofs();
+#endif
+}
+
+int SimulationController::articDofCount() const
+{
+#if defined(KR_WITH_PHYSX)
+    return m_px->articulation ? int(m_px->articulation->getDofs()) : 0;
+#else
+    return 0;
+#endif
+}
+
+bool SimulationController::setArticJointPositions(const std::vector<float>& q)
+{
+#if defined(KR_WITH_PHYSX)
+    if (!m_px->articulation || !m_px->articCache) return false;
+    const physx::PxU32 nDof = m_px->articulation->getDofs();
+    if (q.size() != nDof) return false;
+    for (physx::PxU32 d = 0; d < nDof; ++d) m_px->articCache->jointPosition[d] = physx::PxReal(q[d]);
+    m_px->articulation->applyCache(*m_px->articCache, physx::PxArticulationCacheFlag::ePOSITION);
+    return true;
+#else
+    (void)q; return false;
+#endif
+}
+
+std::vector<std::array<float, 7>> SimulationController::articLinkPoses() const
+{
+    std::vector<std::array<float, 7>> out;
+#if defined(KR_WITH_PHYSX)
+    if (!m_px->articulation) return out;
+    out.reserve(m_px->articLinks.size());
+    for (size_t i = 1; i < m_px->articLinks.size(); ++i) {   // skip the fixed root [0]
+        const physx::PxTransform p = m_px->articLinks[i]->getGlobalPose();
+        out.push_back({ p.p.x, p.p.y, p.p.z, p.q.x, p.q.y, p.q.z, p.q.w });
+    }
+#endif
+    return out;
 }
 
 bool SimulationController::createActorForEntity(entt::entity e)
@@ -794,6 +905,12 @@ void SimulationController::destroyPhysicsWorld()
     if (!m_px->scene) return;
     m_px->actors.clear();
     m_px->lastWritten.clear();
+    // Phase G: tear the articulation down before the scene (cache + loop joint first).
+    if (m_px->articCache)   { m_px->articCache->release();   m_px->articCache = nullptr; }
+    if (m_px->loopD6)       { m_px->loopD6->release();       m_px->loopD6 = nullptr; }
+    if (m_px->articulation) { m_px->scene->removeArticulation(*m_px->articulation);
+                              m_px->articulation->release(); m_px->articulation = nullptr; }
+    m_px->articLinks.clear();
     m_px->scene->release();   // releases contained actors
     m_px->scene = nullptr;
     m_px->groundPlane = nullptr;

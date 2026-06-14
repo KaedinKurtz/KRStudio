@@ -1,7 +1,10 @@
 #include "ArticulationGate.hpp"
 
 #if !defined(KR_WITH_PHYSX)
-namespace krs::dyn { bool runArticulationGate() { return true; } } // vacuous pass
+namespace krs::dyn {
+bool runArticulationGate() { return true; }      // vacuous pass
+bool runArticulationLiveGate() { return true; }  // vacuous pass
+}
 #else
 
 #include "RobotDynamics.hpp"
@@ -12,6 +15,8 @@ namespace krs::dyn { bool runArticulationGate() { return true; } } // vacuous pa
 #include <cmath>
 #include <random>
 #include <algorithm>
+#include "SimulationController.hpp"   // Phase G: drive the LIVE articulation path
+#include "Scene.hpp"
 
 using namespace physx;
 
@@ -311,6 +316,78 @@ bool runArticulationGate() {
     disp->release();
     // phys / foundation / extensions are owned by the app — do not release them.
     return allPass;
+}
+
+// ===========================================================================
+// Phase G — GATE H: validate the LIVE SimulationController articulation path.
+// Distinct from GATE A (which builds a throwaway articulation): here the FANUC
+// tree is assembled by SimulationController::buildArticulation inside the live
+// buildPhysicsWorld, and we validate THAT live tree against the Eigen oracle.
+//   H1  FK of the live assembled tree vs oracle FK  (< 1e-4, >= 50 configs)
+// (H2 torque->accel and H3 live parallelogram loop land in G.2/G.3.)
+// ===========================================================================
+bool runArticulationLiveGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[artic live] GATE H — live SimulationController articulation vs Eigen oracle\n");
+
+    // FANUC 4-link chain: the §M.1a detected-axis spec, identical to GATE A1.
+    std::vector<GateSpec> s(4);
+    s[0].parent = -1; s[0].axis = Eigen::Vector3d(0,1,0); s[0].ptree = Eigen::Vector3d(0,0,0);
+    s[1].parent =  0; s[1].axis = Eigen::Vector3d(1,0,0); s[1].ptree = Eigen::Vector3d(0,0.74,0.305);
+    s[2].parent =  1; s[2].axis = Eigen::Vector3d(1,0,0); s[2].ptree = Eigen::Vector3d(0,1.075,0);
+    s[3].parent =  2; s[3].axis = Eigen::Vector3d(0,0,1); s[3].ptree = Eigen::Vector3d(0,0.25,0);
+
+    // Convert the (Eigen) GateSpec into the POD spec the live build consumes.
+    krs::dyn::RobotArticSpec spec; spec.fixBase = true;
+    for (const auto& g : s) {
+        krs::dyn::ArticJointSpec j;
+        j.parent = g.parent; j.revolute = g.revolute;
+        j.axis = { float(g.axis.x()), float(g.axis.y()), float(g.axis.z()) };
+        for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) j.Rtree[r*3+c] = float(g.Rtree(r,c));
+        j.ptree = { float(g.ptree.x()), float(g.ptree.y()), float(g.ptree.z()) };
+        j.mass = float(g.mass);
+        j.com = { float(g.com.x()), float(g.com.y()), float(g.com.z()) };
+        j.inertiaDiag = { float(g.inertiaDiag.x()), float(g.inertiaDiag.y()), float(g.inertiaDiag.z()) };
+        spec.joints.push_back(j);
+    }
+
+    Scene scene;
+    SimulationController sim(&scene);
+    sim.setRobotArticulationSpec(spec);
+    sim.play();                                  // buildPhysicsWorld -> buildArticulation (live path)
+
+    const int dof = sim.articDofCount();
+    if (dof != 4) { printf("[artic live] FAIL: live articulation dof=%d (expected 4)\n", dof); sim.stop(); return false; }
+
+    SerialChain oc = makeOracle(s);
+    std::mt19937 rng(20260614);
+    std::uniform_real_distribution<double> U(-2.5, 2.5);
+    double maxPos = 0, maxRot = 0;
+    const int N = 60;
+    for (int t = 0; t < N; ++t) {
+        std::vector<float> q(4); Eigen::VectorXd qe(4);
+        for (int i = 0; i < 4; ++i) { const double v = U(rng); q[i] = float(v); qe[i] = v; }
+        sim.setArticJointPositions(q);
+        const auto poses = sim.articLinkPoses();
+        std::vector<Pose> wp; oc.fk(qe, wp);
+        for (int b = 0; b < 4; ++b) {
+            const Eigen::Vector3d    pp(poses[b][0], poses[b][1], poses[b][2]);
+            const Eigen::Quaterniond pq(poses[b][6], poses[b][3], poses[b][4], poses[b][5]); // (w,x,y,z)
+            maxPos = std::max(maxPos, (pp - wp[b].p).norm());
+            const Eigen::AngleAxisd aa(pq.toRotationMatrix().transpose() * wp[b].R);
+            maxRot = std::max(maxRot, std::abs(aa.angle()));
+        }
+    }
+    sim.stop();
+
+    const bool pass = maxPos < 1e-4 && maxRot < 1e-4;
+    printf("[artic live] H1 live FK vs oracle (%d cfg, 4-link): maxPos=%.3e m  maxRot=%.3e rad  %s\n",
+           N, maxPos, maxRot, pass ? "PASS" : "FAIL");
+    printf("[artic live] %s\n", pass ? "ALL PASS" : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
 }
 
 } // namespace krs::dyn

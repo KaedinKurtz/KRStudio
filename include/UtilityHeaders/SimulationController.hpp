@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "HilBridges.hpp"
+#include "ArticulationSpec.hpp"   // Phase G: live FANUC articulation spec (POD)
 
 class Scene;
 
@@ -54,6 +55,13 @@ public:
     static bool physxCoreAlive();      // is the shared PxPhysics valid
     static bool runLifecycleSelfTest();// G0b: create/destroy + coexist with no crash/double-free
 
+    // Phase G — live articulation (built in buildPhysicsWorld from a RobotArticSpec).
+    // PhysX-free accessors so the GATE-H oracle harness can drive + read the live tree.
+    void setRobotArticulationSpec(const krs::dyn::RobotArticSpec& spec);
+    int  articDofCount() const;
+    bool setArticJointPositions(const std::vector<float>& q);   // applyCache(ePOSITION)
+    std::vector<std::array<float, 7>> articLinkPoses() const;    // per non-root link: pos.xyz + quat.xyzw
+
     /// Advance the accumulator / step physics. Call once per frame.
     void tick();
 
@@ -72,6 +80,7 @@ signals:
 
 private:
     void buildPhysicsWorld();
+    void buildArticulation();   // Phase G: build the live PxArticulation from m_robotSpec
     void destroyPhysicsWorld();
     bool createActorForEntity(entt::entity entity);
     void removeActorForEntity(entt::entity entity);
@@ -97,6 +106,8 @@ private:
     };
 
     Scene* m_scene = nullptr;
+    krs::dyn::RobotArticSpec m_robotSpec;   // Phase G: optional live FANUC articulation
+    bool m_hasRobotSpec = false;
     SimulationState m_state = SimulationState::Stopped;
     QElapsedTimer m_clock;
     double m_accumulator = 0.0;

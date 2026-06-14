@@ -605,6 +605,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase G GATE H: live SimulationController articulation vs oracle (H1 in G.1).
+    if (qEnvironmentVariableIntValue("KRS_ARTIC_LIVE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ARTIC_LIVE_SELFTEST =================\n");
+        const bool ok = krs::dyn::runArticulationLiveGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };

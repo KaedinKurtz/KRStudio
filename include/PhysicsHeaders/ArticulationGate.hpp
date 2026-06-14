@@ -22,4 +22,10 @@ namespace krs::dyn {
 // with real measured numbers; returns true iff every sub-gate passes.
 bool runArticulationGate();
 
+// Phase G — GATE H: builds the FANUC articulation through the LIVE
+// SimulationController path (buildPhysicsWorld) and validates that live tree
+// against the oracle. H1 (live FK <1e-4, >=50 cfg) here; H2/H3 added in G.2/G.3.
+// Gated by KRS_ARTIC_LIVE_SELFTEST. Vacuous pass without PhysX.
+bool runArticulationLiveGate();
+
 } // namespace krs::dyn
