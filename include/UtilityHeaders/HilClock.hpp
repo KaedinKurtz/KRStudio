@@ -62,6 +62,7 @@ struct JitterStats {
     double nominalMs = 0.0;   // target tick period
     double meanMs = 0.0;      // mean |interval - nominal|
     double p99Ms = 0.0;       // 99th percentile jitter
+    double p999Ms = 0.0;      // 99.9th percentile jitter (gate metric — outlier-robust)
     double maxMs = 0.0;       // worst-case jitter
 };
 
@@ -72,8 +73,9 @@ struct JitterStats {
 JitterStats runJitterBench(int ticks, double hz,
                            const std::function<void(uint64_t, double)>& step = {});
 
-/// HIL_JITTER verification module: 10,000 ticks @ 1000 Hz. Local pass gate is
-/// 1.5 ms max jitter (stock Windows/MSVC); the true 0.15 ms target requires a
+/// HIL_JITTER verification module: 10,000 ticks @ 1000 Hz. Pass gate is p99.9 < 1.0 ms
+/// (+ a max < 100 ms catastrophic-hang guard) — outlier-robust on a non-RT host, where
+/// a lone scheduler hiccup must not false-fail; the true 0.15 ms target requires a
 /// PREEMPT_RT host (documented in ROADMAP.md). Logs and returns pass/fail.
 bool runJitterSelfTest();
 
