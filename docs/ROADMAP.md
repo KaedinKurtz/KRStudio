@@ -1162,7 +1162,17 @@ before any GATE-H code.
   the cache. **H2 PASS**: CAN torque (cancodec round-trip) → live joint accel vs oracle ABA, maxRel
   **9.271e-07** over 20 cfg (bound 1%, on par with A5's 7.6e-7). **H4 PASS**: overnight **12/12** (GATE H
   folded in as a standing group) + `KRS_BENCH` 7/7 + HIL green — no regression from retiring the fake.
-- **G.4** adversarial review → fix confirmed → declare GATE H closed.
+- **G.4** ✅ LANDED — 8-agent adversarial review (wf_a9bc1195). Gate honesty **verified**: H1/H2/H3
+  genuinely exercise the live `buildArticulation` path (a broken build fails them), the `dof`/`h?ran`
+  guards prevent vacuous passes, and the `:836` fake is genuinely retired. 2 MEDIUMs **refuted**
+  (cache-release order is correct per PhysX docs — `articulation->release()` doesn't touch the cache;
+  H2 feeds oracle + PhysX the SAME quantised torque). 2 HIGH resource leaks **confirmed + fixed**:
+  (1) `buildArticulation` now releases a stale articulation before rebuilding (no leak on a double
+  `buildPhysicsWorld`); (2) `PxCloseExtensions()` now called in `releaseCore` at refs==0 (matches
+  `PxInitExtensions`; pre-existing since GATE A). Re-gated: GATE H green, lifecycle green, overnight
+  12/12, bench 7/7. **GATE H CLOSED.**
+
+**Phase G COMPLETE.** Next in the arc: Phase H — Qt UI completeness (GATE U).
 
 ### GATE H — PASS (live FANUC articulation, real measured numbers)
 - **H1** live FK vs oracle, 60 cfg: maxPos **1.323e-06 m** / maxRot **6.054e-07 rad** (bound 1e-4).

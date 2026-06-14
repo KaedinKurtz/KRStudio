@@ -95,6 +95,7 @@ struct SimulationController::PxImpl
     inline static PxFoundation* s_foundation = nullptr;
     inline static PxPhysics*    s_physics    = nullptr;
     inline static int           s_coreRefs   = 0;
+    inline static bool          s_extInit    = false;   // PxInitExtensions called (closed at refs==0)
     static int coreRefCount() { return s_coreRefs; }
     static bool coreAlive()   { return s_physics != nullptr; }
 
@@ -172,6 +173,7 @@ struct SimulationController::PxImpl
             if (s_coreRefs > 0) --s_coreRefs;
             if (s_coreRefs == 0) {
                 CollisionCookingService::instance().shutdown();   // waits for in-flight cooks
+                if (s_extInit) { PxCloseExtensions(); s_extInit = false; } // match PxInitExtensions (before physics)
                 if (s_physics)    { s_physics->release();    s_physics = nullptr; }
                 if (s_foundation) { s_foundation->release(); s_foundation = nullptr; }
             }
@@ -661,6 +663,15 @@ void SimulationController::buildArticulation()
 #if defined(KR_WITH_PHYSX)
     if (!m_hasRobotSpec || !m_px->scene || !m_px->physics) return;
     using namespace physx;
+    // Defensive: never leak a stale articulation if buildArticulation runs twice
+    // (e.g. a double buildPhysicsWorld) — release the old one + its cache/loop first.
+    if (m_px->articulation) {
+        if (m_px->articCache) { m_px->articCache->release(); m_px->articCache = nullptr; }
+        if (m_px->loopD6)     { m_px->loopD6->release();     m_px->loopD6 = nullptr; }
+        m_px->scene->removeArticulation(*m_px->articulation);
+        m_px->articulation->release(); m_px->articulation = nullptr;
+        m_px->articLinks.clear();
+    }
     const auto& js = m_robotSpec.joints;
     const int n = int(js.size());
 
@@ -743,9 +754,8 @@ bool SimulationController::ensurePhysxExtensions()
     // PxInitExtensions must run exactly once per process; both GATE A and the live
     // articulation loop closure need it. Guard on a single static so the borrow model
     // (multiple controllers, one shared PxPhysics) never double-inits.
-    static bool s_ext = false;
-    if (!s_ext && PxImpl::s_physics) s_ext = PxInitExtensions(*PxImpl::s_physics, nullptr);
-    return s_ext;
+    if (!PxImpl::s_extInit && PxImpl::s_physics) PxImpl::s_extInit = PxInitExtensions(*PxImpl::s_physics, nullptr);
+    return PxImpl::s_extInit;
 #else
     return false;
 #endif
