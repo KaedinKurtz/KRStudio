@@ -1856,13 +1856,12 @@ void MainWindow::showMenu(MenuType type)
         // *** START OF NEW CONNECTION LOGIC ***
         if (type == MenuType::ObjectProperties) {
             if (auto* propertiesPanel = dynamic_cast<ObjectPropertiesWidget*>(entry.menu->widget())) {
-                // When the properties panel is created, connect it to ALL existing viewports.
-                for (auto* dock : m_dockContainers) {
-                    if (auto* viewport = qobject_cast<ViewportWidget*>(dock->widget())) {
-                        // This connection is now valid because the slot and signal match via the onSelectionChanged hub
-                        // We will connect it in the onSelectionChanged function instead.
-                    }
-                }
+                // C3: live-apply rigid-body edits (esp. bodyType) to the running PhysX world, so a
+                // flip-to-Dynamic continues from the live pose+velocity instead of waiting for a
+                // stop()/play() that restores the authored pose. Mirrors the PhysicsPropertiesWidget
+                // wiring above (entityComponentsChanged -> notifyEntityChanged).
+                connect(propertiesPanel, &ObjectPropertiesWidget::entityComponentsChanged, this,
+                        [this](entt::entity e) { if (m_simulation) m_simulation->notifyEntityChanged(e); });
             }
         }
         // *** END OF NEW CONNECTION LOGIC ***

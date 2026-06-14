@@ -58,6 +58,12 @@ public:
     void shutdownAndSave() override;
     QWidget* widget() override { return this; }
 
+signals:
+    // Phase B (C3): a rigid-body edit (esp. bodyType) must be LIVE-applied via
+    // SimulationController::notifyEntityChanged -- otherwise it only materializes on the next
+    // stop()/play(), which restores the authored pose (the "flip resets" symptom). MainWindow
+    // routes this to the sim, mirroring PhysicsPropertiesWidget::entityComponentsChanged.
+    void entityComponentsChanged(entt::entity entity);
 
 public slots:
     /**

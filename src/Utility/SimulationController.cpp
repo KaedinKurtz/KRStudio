@@ -504,8 +504,9 @@ void SimulationController::singleStep()
     else if (m_state == SimulationState::Playing) {
         pause();
     }
+    pushKinematicTargets();                 // C3: a single step advances kinematic bodies to their targets too
     stepOnce(kFixedDt);
-    writeBackTransforms();
+    writeBackTransforms(kFixedDt);
 }
 
 void SimulationController::tick()
@@ -534,7 +535,7 @@ void SimulationController::tick()
     // wall clock — caught by the free-fall benchmark). The 0.25 s frame
     // clamp above already prevents a death spiral.
 
-    if (steps > 0) { writeBackTransforms(); writeBackArticulationViz(); }
+    if (steps > 0) { writeBackTransforms(float(steps) * kFixedDt); writeBackArticulationViz(); }
 
     // Phase V: kinematic demo sweep. Runs every tick (not gated on physics steps) so the FANUC
     // visibly articulates even when little wall-clock has accrued. Fixed phase step keeps it
@@ -1127,16 +1128,99 @@ void SimulationController::syncUserEdits()
 #endif
 }
 
-void SimulationController::writeBackTransforms()
+void SimulationController::setKinematicVelocitySync(bool on) { m_syncKinVel = on; }
+
+// ===========================================================================
+// GATE C3 (Phase B): a flip-to-Dynamic continues from the body's LIVE pose AND
+// velocity (no reset to rest/authored). Drives a kinematic box, flips it dynamic,
+// and asserts the new body keeps the live velocity + pose. NEGATIVE CONTROL: with
+// the kinematic-velocity sync disabled (the old behaviour), the flip starts at rest.
+// Gated by KRS_FLIP_SELFTEST. Vacuous pass without PhysX.
+// ===========================================================================
+bool SimulationController::runFlipContinuityGateC3()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[flip gate] GATE C3 - dynamic-flip continuity (live pose + velocity)\n");
+#if !defined(KR_WITH_PHYSX)
+    printf("[flip gate] vacuous pass (no PhysX)\n"); return true;
+#else
+    const float dt = kFixedDt, vx = 2.0f;     // target horizontal speed (m/s)
+
+    auto run = [&](bool trackVel, float& flipVx, float& poseErr, float& vacateErr) {
+        Scene scene; SimulationController sim(&scene);
+        sim.setKinematicVelocitySync(trackVel);
+        auto& reg = scene.getRegistry();
+        const entt::entity e = reg.create();
+        const glm::vec3 authored(0.f, 2.f, 0.f);
+        reg.emplace<TransformComponent>(e, authored, glm::quat(1, 0, 0, 0), glm::vec3(0.2f));
+        auto& rb = reg.emplace<RigidBodyComponent>(e);
+        rb.bodyType = RigidBodyComponent::BodyType::Kinematic; rb.mass = 1.0f; rb.linearDamping = 0.f; rb.angularDamping = 0.f;
+        auto& col = reg.emplace<BoxCollider>(e); col.halfExtents = glm::vec3(0.5f);
+        sim.play();
+        sim.setSceneGravity(0, 0, 0);          // isolate the velocity carry (no gravity drift)
+        glm::vec3 pos = authored;
+        for (int i = 0; i < 12; ++i) { pos.x += vx * dt; reg.get<TransformComponent>(e).translation = pos; sim.singleStep(); }
+        const glm::vec3 preFlip = reg.get<TransformComponent>(e).translation;   // ~ authored + 0.1 m
+        reg.get<RigidBodyComponent>(e).bodyType = RigidBodyComponent::BodyType::Dynamic;
+        sim.notifyEntityChanged(e);            // FLIP -> rebuild as dynamic from live pose + velocity
+        sim.singleStep();                      // one step; dynamic should continue at vx (gravity 0)
+        const glm::vec3 vDyn = reg.get<RigidBodyComponent>(e).linearVelocity;
+        const glm::vec3 postFlip = reg.get<TransformComponent>(e).translation;
+        flipVx   = vDyn.x;
+        poseErr  = glm::length(postFlip - (preFlip + glm::vec3(vDyn.x * dt, 0, 0)));   // continues from live pose
+        vacateErr = glm::length(postFlip - authored);                                  // distance from the authored/start pose
+        sim.stop();
+    };
+
+    float vFix = 0, poseFix = 0, vacateFix = 0, vBug = 0, poseBug = 0, vacateBug = 0;
+    run(true,  vFix, poseFix, vacateFix);      // FIXED: velocity tracked + carried
+    run(false, vBug, poseBug, vacateBug);      // NEGATIVE CONTROL: sync disabled -> the old bug
+
+    const bool velContinuity = std::abs(vFix - vx) < 0.2f;   // dynamic continues at ~vx
+    const bool poseContinuity = poseFix < 0.05f && vacateFix > 0.08f;  // continues from live pose, NOT authored
+    const bool bugReproduced  = std::abs(vBug) < 0.1f;       // disabled sync -> flip starts at rest
+    const bool pass = velContinuity && poseContinuity && bugReproduced;
+    printf("[flip gate]  C3: FIXED flipVx=%.3f (target %.1f) poseErr=%.2e movedFromAuthored=%.3f m | NEG-CTRL flipVx=%.3f (must be ~0)  %s\n",
+           vFix, vx, poseFix, vacateFix, vBug, pass ? "PASS" : "FAIL");
+    printf("[flip gate] %s\n", pass ? "ALL PASS (C3 velocity + pose continuity; neg-ctrl reproduces the velocity-loss bug)" : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
+#endif
+}
+
+void SimulationController::writeBackTransforms(float dtTick)
 {
 #if defined(KR_WITH_PHYSX)
     auto& reg = m_scene->getRegistry();
     for (auto& [e, actor] : m_px->actors) {
         auto* dyn = actor->is<PxRigidDynamic>();
-        if (!dyn || (dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)) continue;
-        if (!reg.valid(e)) continue;
-
+        if (!dyn || !reg.valid(e)) continue;
         const PxTransform pose = dyn->getGlobalPose();
+
+        if (dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC) {
+            // C3: a kinematic body reports 0 velocity in PhysX, so a later flip-to-Dynamic would
+            // reset to rest. Estimate its velocity from the pose DELTA and store it in the component
+            // -> createActorForEntity seeds the new dynamic body, continuing the live motion. Do NOT
+            // overwrite the ECS pose (it is the kinematic target the program/animation set).
+            if (m_syncKinVel && dtTick > 1e-6f) {
+                if (auto* rb = reg.try_get<RigidBodyComponent>(e)) {
+                    auto it = m_px->lastWritten.find(e);
+                    if (it != m_px->lastWritten.end()) {
+                        const glm::vec3 now(pose.p.x, pose.p.y, pose.p.z);
+                        rb->linearVelocity = (now - it->second.first) / dtTick;   // pair: {translation, rotation}
+                        glm::quat qn(pose.q.w, pose.q.x, pose.q.y, pose.q.z);
+                        glm::quat dq = qn * glm::conjugate(it->second.second);
+                        if (dq.w < 0.f) dq = glm::quat(-dq.w, -dq.x, -dq.y, -dq.z);
+                        rb->angularVelocity = (2.0f / dtTick) * glm::vec3(dq.x, dq.y, dq.z);
+                    }
+                }
+            }
+            m_px->lastWritten[e] = { glm::vec3(pose.p.x, pose.p.y, pose.p.z),
+                                     glm::quat(pose.q.w, pose.q.x, pose.q.y, pose.q.z) };
+            continue;
+        }
+
         auto& xf = reg.get<TransformComponent>(e);
         xf.translation = { pose.p.x, pose.p.y, pose.p.z };
         xf.rotation = glm::quat(pose.q.w, pose.q.x, pose.q.y, pose.q.z);

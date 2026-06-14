@@ -649,6 +649,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase B GATE C3: dynamic-flip continuity (live pose + velocity).
+    if (qEnvironmentVariableIntValue("KRS_FLIP_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FLIP_SELFTEST =================\n");
+        const bool ok = SimulationController::runFlipContinuityGateC3();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -698,6 +706,7 @@ void RenderingSystem::initializeSharedResources()
             { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
             { "GATE V.2 visible FANUC render (features->pixels)", runFanucRenderGateV2() },
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },
+            { "GATE C3 dynamic-flip continuity (pose+velocity)", SimulationController::runFlipContinuityGateC3() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

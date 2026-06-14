@@ -216,6 +216,10 @@ void ObjectPropertiesWidget::onRigidBodyPropertyChanged()
 {
     if (m_isUpdatingUI) return;
     updateRigidBodyComponent();
+    // C3: live-apply the change (esp. bodyType) so it does NOT wait for a stop()/play() that
+    // would restore the authored pose. MainWindow forwards this to notifyEntityChanged.
+    if (m_scene && m_scene->getRegistry().valid(m_currentEntity))
+        emit entityComponentsChanged(m_currentEntity);
 }
 
 void ObjectPropertiesWidget::onSoftBodyToggled(bool checked)

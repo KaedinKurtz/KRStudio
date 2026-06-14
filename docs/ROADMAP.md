@@ -1538,3 +1538,39 @@ texturing foundation. The COMPLEMENTARY path -- a unique-texture [0,1] atlas bak
 into a single [0,1] image via xatlas (MIT), for per-object baked/painted textures) -- remains DEFERRED.
 Also deferred: a proper isometric cone/sphere unfold (polar sector) to remove the ~2% conical-face density
 variation U3 documents. Phase A (GATE U, U1-U6) is COMPLETE.
+
+## T) Phase B — LIVE COLLISION SYNC (one root cause, three symptoms) — DESIGN + C3 (2026-06-14)
+
+Recon (3-agent workflow wf_2b1d8e3b) found the canonical-transform rule is already true for RENDER (the
+ECS TransformComponent is the live post-step bus) but the fluid (a custom GPU PBF solver, FluidSystem.cpp)
+does not fully read it. It also ADVERSARIALLY REFUTED part of the C3 framing.
+
+### T.0 The three REAL causes (not the original symptom framing)
+- **C2 ghost**: `FluidSystem::bakeSdfColliders` bakes mesh-collider SDFs ONCE at play() (gated by
+  m_sdfsBaked) and never refreshes -> the fluid bounces off the start-pose surface. Box/sphere colliders
+  already track live (`uploadColliders`). Fix is FluidSystem-side (per-collider world transform refreshed
+  per frame + transform the SDF sample point in-shader). [GPU work, pending]
+- **C3 dynamic-flip — PARTIALLY REFUTED**: the live flip path (PhysicsPropertiesWidget ->
+  notifyEntityChanged -> createActorForEntity) already reads the LIVE TransformComponent, NOT the start
+  snapshot. The TWO real defects: (a) `writeBackTransforms` SKIPS kinematic bodies, so their velocity is
+  never tracked -> a flip seeds 0; (b) `ObjectPropertiesWidget` changes bodyType WITHOUT calling
+  notifyEntityChanged, so it only materializes on the next stop()/play() -- which DOES restore the
+  authored pose (the actual "flip resets" repro). [FIXED, see T.1]
+- **C1 pushed cube**: box/sphere colliders track live; the gap is SDF (mesh) colliders + the zero
+  fluid->SDF impulse path. [pending, tied to C2]
+
+### T.1 IMPLEMENTED — C3 dynamic-flip continuity (GATE C3, real numbers, KRS_FLIP_SELFTEST)
+- (a) `writeBackTransforms(dtTick)`: for KINEMATIC bodies, estimate linear+angular velocity from the pose
+  delta over the tick's simulated dt and store it in RigidBodyComponent -> `createActorForEntity` (which
+  already seeds velocity from the component) continues the live motion on a flip. Toggleable
+  (`setKinematicVelocitySync`) for the negative control. `singleStep` now also `pushKinematicTargets` +
+  passes kFixedDt; `tick` passes steps*kFixedDt.
+- (b) `ObjectPropertiesWidget` gains an `entityComponentsChanged` signal, emitted on a rigid-body edit;
+  MainWindow connects it (at the ObjectProperties dock-creation hook) to `notifyEntityChanged`, mirroring
+  PhysicsPropertiesWidget -> the bodyType change live-applies (no stop/play authored-pose reset).
+- **GATE C3**: drive a kinematic box, flip to Dynamic. FIXED: flipVx=**2.000** (continues at the live
+  2.0 m/s), poseErr=**0.00**, movedFromAuthored=**0.108 m** (live pose, NOT the authored 0). NEGATIVE
+  CONTROL (sync disabled): flipVx=**0.000** (the velocity-loss bug reproduced). PASS.
+No regression: KRS_OVERNIGHT_BENCH **18/18** (GATE C3 added), KRS_BENCH 7/7, GUI boots clean.
+Remaining: C2/C1 -- the GPU SDF live-tracking + fluid->SDF impulse (FluidSystem.cpp + the fluid compute
+shader); these need the fluid running for visual verification of the ghost being gone.

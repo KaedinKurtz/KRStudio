@@ -55,6 +55,13 @@ public:
     static bool physxCoreAlive();      // is the shared PxPhysics valid
     static bool runLifecycleSelfTest();// G0b: create/destroy + coexist with no crash/double-free
 
+    // Phase B (C3): a flip-to-Dynamic must continue from the body's LIVE motion. Kinematic bodies
+    // report 0 velocity in PhysX, so writeBackTransforms estimates their velocity from the pose
+    // delta -> createActorForEntity seeds the new dynamic body with it (no reset to rest). Toggle
+    // for the GATE-C3 negative control (disabled => the old bug: flip starts at rest).
+    void setKinematicVelocitySync(bool on);
+    static bool runFlipContinuityGateC3();   // GATE C3: dynamic-flip continuity (pose + velocity)
+
     // Phase G — live articulation (built in buildPhysicsWorld from a RobotArticSpec).
     // PhysX-free accessors so the GATE-H oracle harness can drive + read the live tree.
     void setRobotArticulationSpec(const krs::dyn::RobotArticSpec& spec);
@@ -109,7 +116,7 @@ private:
     void stepOnce(float dt);
     void pushKinematicTargets();
     void syncUserEdits();
-    void writeBackTransforms();
+    void writeBackTransforms(float dtTick = kFixedDt);
     void takeSnapshot();
     void restoreSnapshot();
     void setState(SimulationState s);
@@ -132,6 +139,7 @@ private:
     bool m_hasRobotSpec = false;
     bool m_articDemoDrive = false;          // Phase V: kinematic J1/J2/J3 sweep each tick
     double m_articDemoPhase = 0.0;
+    bool m_syncKinVel = true;               // Phase B (C3): track kinematic-body velocity for flips
     SimulationState m_state = SimulationState::Stopped;
     QElapsedTimer m_clock;
     double m_accumulator = 0.0;
