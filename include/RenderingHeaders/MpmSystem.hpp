@@ -56,6 +56,7 @@ public:
     struct Appearance {
         VizMode mode = VizMode::Default;
         bool autoRange = true;                 // recalibrate range on mode change
+        bool freezeRange = false;              // F2: pin the range (deterministic / gates)
         glm::vec2 thermal{ 0.0f, 100.0f };     // °C
         glm::vec2 vonMises{ 0.0f, 1.0e5f };    // Pa (StVK von Mises proxy)
         glm::vec2 strain{ 0.0f, 0.25f };       // || Green-Lagrange strain ||
@@ -63,6 +64,14 @@ public:
     Appearance& appearance() { return m_appearance; }
     void setVizMode(VizMode m) { m_appearance.mode = m; m_calibratePending = m_appearance.autoRange; }
     glm::vec2 vizRange() const;                // active mode's [min, max]
+    // F2 / render gates: pin a known range and freeze auto-recalibration so the
+    // viz is bit-deterministic (decode-exact) frame to frame.
+    void setVizRange(VizMode m, glm::vec2 r) {
+        glm::vec2& d = (m == VizMode::Thermal) ? m_appearance.thermal
+                     : (m == VizMode::Strain)  ? m_appearance.strain : m_appearance.vonMises;
+        d = r;
+    }
+    void setVizRangeFrozen(bool f) { m_appearance.freezeRange = f; if (f) m_calibratePending = false; }
     // Expand a mode's range to include r, so MPM particles and FEM bodies share one
     // dynamic range (FemSystem unions its field range here after MPM calibration).
     void unionVizRange(VizMode m, glm::vec2 r) {
@@ -96,7 +105,7 @@ private:
     void allocate(QOpenGLFunctions_4_3_Core* gl);
     void seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
     void computeDomain(entt::registry& registry);
-    void autoCalibrate(QOpenGLFunctions_4_3_Core* gl); // one-shot CPU min/max for the active viz mode
+    void autoCalibrate(QOpenGLFunctions_4_3_Core* gl, bool smooth = false); // CPU min/max for the active viz mode (smooth=EMA)
     void collectHeatSources(entt::registry& registry);  // HeatSourceComponent -> uniforms + emissive tint
     // One MLS-MPM substep (clear grid -> P2G -> grid -> G2P) on the bound
     // particle/grid buffers. Shared by update() and the self-test.

@@ -253,14 +253,15 @@ void MpmSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl,
         m_seeded = true;
     }
     // Paused mode-switch: recalibrate the colour range against the static state.
-    if (m_calibratePending && !m_playing && m_particleCount > 0) { autoCalibrate(gl); m_calibratePending = false; }
+    if (m_calibratePending && !m_playing && m_particleCount > 0) { autoCalibrate(gl, false); m_calibratePending = false; }
     if (!m_playing) return;
     if (m_particleCount <= 0) return;
     // Dynamic normalization: recalibrate the active viz range on mode change and
     // periodically (~0.75 s) so the gradient tracks the live, evolving field.
     if (m_appearance.mode != VizMode::Default && m_appearance.autoRange
         && (m_calibratePending || (m_vizFrame % 45 == 0))) {
-        autoCalibrate(gl); m_calibratePending = false;
+        autoCalibrate(gl, /*smooth=*/!m_calibratePending);   // mode-switch snaps; periodic EMA-smooths
+        m_calibratePending = false;
     }
     ++m_vizFrame;
 
@@ -735,8 +736,9 @@ glm::vec2 MpmSystem::vizRange() const
 
 // One-shot CPU min/max of the active viz scalar over all live particles, so the
 // colour ramp spans the data. Same StVK strain/stress proxy the shader uses.
-void MpmSystem::autoCalibrate(QOpenGLFunctions_4_3_Core* gl)
+void MpmSystem::autoCalibrate(QOpenGLFunctions_4_3_Core* gl, bool smooth)
 {
+    if (m_appearance.freezeRange) return;            // F2: pinned range (gates / deterministic)
     if (m_particleCount <= 0 || m_appearance.mode == VizMode::Default) return;
     std::vector<float> buf(size_t(m_particleCount) * kStride);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
@@ -771,10 +773,14 @@ void MpmSystem::autoCalibrate(QOpenGLFunctions_4_3_Core* gl)
     if (hi < lo) return;                                     // no live particles
     glm::vec2 r = (m_appearance.mode == VizMode::Thermal) ? glm::vec2(lo, std::max(hi, lo + 1.0f))
                                                           : glm::vec2(0.0f, std::max(hi, 1.0e-4f));
-    if (m_appearance.mode == VizMode::Thermal)  m_appearance.thermal = r;
-    else if (m_appearance.mode == VizMode::Strain) m_appearance.strain = r;
-    else m_appearance.vonMises = r;
-    qInfo() << "[MPM viz] calibrated mode" << int(m_appearance.mode) << "range" << r.x << r.y;
+    glm::vec2& cur = (m_appearance.mode == VizMode::Thermal) ? m_appearance.thermal
+                   : (m_appearance.mode == VizMode::Strain)  ? m_appearance.strain : m_appearance.vonMises;
+    // F2: smooth (play-mode periodic) recalibration EMA-blends toward the target so
+    // the colour scale no longer pops every 45 frames; the paused / mode-switch path
+    // (smooth=false) snaps to the exact range so a static scene reads correctly at once.
+    cur = smooth ? glm::mix(cur, r, 0.2f) : r;
+    qInfo() << "[MPM viz] calibrated mode" << int(m_appearance.mode) << "range" << cur.x << cur.y
+            << (smooth ? "(smoothed)" : "(exact)");
 }
 
 MpmSystem::Diag MpmSystem::sample(QOpenGLFunctions_4_3_Core* gl)

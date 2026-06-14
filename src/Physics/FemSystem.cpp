@@ -164,10 +164,16 @@ void FemSystem::update(entt::registry& reg, QOpenGLFunctions_4_3_Core* gl, MpmSy
                 const std::vector<double> vm = er.ok ? er.vonMises : std::vector<double>{};
                 const std::vector<double> sn = er.ok ? er.strainNorm : std::vector<double>{};
                 const std::vector<double> tp = tr.ok ? tr.temperature : std::vector<double>{};
+                // F1: only modes the solver actually produced are real. Absent
+                // fields are left at 0 and marked unavailable (FemVizPass skips
+                // them) — NO fabricated 20 °C / zero placeholder is shown as data.
+                res.hasMode[1] = !tp.empty();
+                res.hasMode[2] = !vm.empty();
+                res.hasMode[3] = !sn.empty();
                 glm::vec2 rng[4]; for (int i = 0; i < 4; ++i) rng[i] = glm::vec2(1e30f, -1e30f);
                 for (size_t v = 0; v < nv; ++v) {
                     const glm::dvec3& p = s.worldVerts[v];
-                    const float t = tp.empty() ? 20.0f : sampleField(s.model, tp, p);
+                    const float t = tp.empty() ? 0.0f : sampleField(s.model, tp, p);
                     const float m2 = vm.empty() ? 0.0f : sampleField(s.model, vm, p);
                     const float st = sn.empty() ? 0.0f : sampleField(s.model, sn, p);
                     res.vertScalar[1][v] = t; res.vertScalar[2][v] = m2; res.vertScalar[3][v] = st;

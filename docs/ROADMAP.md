@@ -937,3 +937,44 @@ were all test-coverage / honesty gaps, now CLOSED:
 exit code (= #failed groups). Current: **9/9 gate groups PASS** (Phase A oracle, Phase A
 articulation gate, FEM, MPM, adjoint, HIL jitter, HIL bridges, trajectory verify, OCCT) +
 rigid `KRS_BENCH` 7/7 separately.
+
+## N) Phase F — Graphics correctness + strict render gates (2026-06-14)
+
+### N.0 Reconnaissance (6-agent parallel recon, wf_b92a02fe)
+- **Offscreen context already exists**: `RenderingSystem::m_engineContext` (+ `m_engineSurface`
+  QOffscreenSurface) — all rendering runs headless on it; widgets only blit. The final image
+  is `target.finalFBO` → `finalColorTexture` (**RGBA16F**) + `finalDepthTexture`.
+  `publishHilCameraFrame` (RenderingSystem.cpp:825) is the `glReadPixels(...,GL_RGBA,GL_FLOAT,...)`
+  template. Pipeline: geometry → lighting → postProcessing → overlay(skybox, MpmPass, FemVizPass,
+  Fluid, Glass, Smoke, **TonemapPass**, Gizmo).
+- **CRITICAL for decode**: `MpmPass`/`FemVizPass` run BEFORE `TonemapPass`, so the final PNG is
+  `ACES_tonemap(ramp)` — the colormap is distorted. **Field-decode gates must capture the HDR
+  buffer pre-tonemap (flat viz).**
+- **Colormap** `ramp(t)` (mpm_render_vert.glsl:30-44 ≡ fem_viz_frag.glsl:8-22): 6 stops, 5 linear
+  segments of 0.2. Channels are NOT individually monotonic → inverse decode = nearest-t search
+  over sampled ramp. `t = clamp((scalar−rangeMin)/max(rangeMax−rangeMin,1e-6),0,1)`.
+- **F1 (real data)**: the recon CONFIRMS MPM (Thermal=plastic.y temperature, Strain=‖E‖,
+  VonMises=StVK invariant of E=½(FᵀF−I)) and FEM (nodal vonMises/temp/strain) viz fields are
+  **REAL solver state, not synthetic**. Only fabrication: `FemSystem.cpp:170` constant-20 °C
+  ambient fallback when thermal is absent (→ fix: don't fabricate; mark unavailable).
+- **F2 (jitter)**: SOLE source is `MpmSystem::autoCalibrate()` range-cycling every 45 frames
+  (MpmSystem.cpp:262) during PLAY — hue pops as the range snaps. Splat order is deterministic
+  (SSBO order, fixed-seed jitter at seed only), blending OFF (opaque depth-write). PAUSED already
+  does not recalibrate (only on mode-switch) ⇒ paused is already frame-stable.
+- **F3 (z-fight)**: `FemVizPass` redraws the SAME triangles as `OpaquePass` at IDENTICAL depth
+  (GL_LEQUAL, **no polygon offset**) → coincident-depth fighting.
+
+### N.1 DECISIONS
+- **F0 harness** (`KRS_RENDER_SELFTEST`): a `RenderingSystem` method renders a fixed scene + fixed
+  camera to a dedicated FBO on the engine context; captures the **pre-tonemap HDR buffer** for
+  field decode (flat-viz uniform → pure `ramp(t)`, no diffuse/tonemap) and the final image for
+  determinism/projection; PNG via stb_image_write; inverse-colormap decode = nearest-t over 1024
+  ramp samples. G1–G9 measured headlessly; folded into `KRS_OVERNIGHT_BENCH`.
+- **F2**: add `Appearance::freezeRange` (gates/deterministic playback freeze the range to known
+  bounds) + EMA-blend the periodic play-mode recalibration toward the target (α≈0.2) so hue no
+  longer pops every 45 frames; paused calibration stays exact (single shot). Add `setVizRange`/
+  `setVizRangeFrozen` so the harness pins an exact known range for decode.
+- **F3**: `glPolygonOffset(-1,-1)` (+ `GL_POLYGON_OFFSET_FILL`) on the FemVizPass overlay so the
+  field layer reliably wins the depth test against the coincident base mesh — no fighting.
+- **F1**: replace the FemSystem 20 °C thermal fallback with an unavailable-marker (don't recolor
+  what wasn't solved) so a missing thermal solve reads as "no data", not a fabricated cold field.

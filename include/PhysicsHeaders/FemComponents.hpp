@@ -16,6 +16,10 @@ struct FemResultComponent {
     // 2=VonMises Pa, 3=Strain -). [0] unused (Default mode = normal PBR).
     std::array<std::vector<float>, 4> vertScalar;
     std::array<glm::vec2, 4> range{};   // min/max per mode (for the shared ramp range)
+    // F1: which modes were ACTUALLY solved for this body (no fabricated fallback).
+    // [1]=Thermal [2]=VonMises [3]=Strain. A false mode is NOT recoloured (the body
+    // keeps its real PBR shading) rather than showing a placeholder field.
+    std::array<bool, 4> hasMode{ false, false, false, false };
 
     // GL buffers (engine context): local positions (loc 0) + scalar (loc 1) + EBO.
     std::uint32_t vao = 0, vboPos = 0, vboScalar = 0, ebo = 0;
