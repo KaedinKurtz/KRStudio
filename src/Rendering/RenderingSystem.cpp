@@ -55,6 +55,7 @@
 #include "MqttBridge.hpp"         // Phase 4 GATE M (krs::mqtt broker + joint round-trip)
 #include "BridgeNodes.hpp"        // Phase 5 GATE ND (krs::nodes graph->backend bridge)
 #include "MqttNodes.hpp"          // Phase 2 GATE NODE-MQTT (krs::nodes auto-MQTT nodes)
+#include "ControllerGates.hpp"    // Phase 4 controller gates (krs::ctrl C-track/C-knob/C-glass)
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -807,6 +808,30 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 4 GATE C-track: computed-torque tracking vs the soft-PD lag under a moving setpoint.
+    if (qEnvironmentVariableIntValue("KRS_CTRACK_SELFTEST") != 0) {
+        std::printf("\n================= KRS_CTRACK_SELFTEST =================\n");
+        const bool ok = krs::ctrl::runControllerTrackGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Phase 4 GATE C-knob: a goal-knob node's dial drives the live joint (FK-verified).
+    if (qEnvironmentVariableIntValue("KRS_CKNOB_SELFTEST") != 0) {
+        std::printf("\n================= KRS_CKNOB_SELFTEST =================\n");
+        const bool ok = krs::ctrl::runControllerKnobGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Phase 4 GATE C-glass: the glass robot tracks the planned config (not the live one).
+    if (qEnvironmentVariableIntValue("KRS_CGLASS_SELFTEST") != 0) {
+        std::printf("\n================= KRS_CGLASS_SELFTEST =================\n");
+        const bool ok = krs::ctrl::runControllerGlassGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
         std::printf("\n================= KRS_DISAMBIG_SELFTEST =================\n");
@@ -911,6 +936,9 @@ void RenderingSystem::initializeSharedResources()
             { "GATE NODE-UI (in-node widget param drives output + bounded footprint)", krs::nodes::runNodeUiGate() },
             { "GATE NODE-LIB (math/signal/time/logic nodes vs closed-form, <tol)", krs::nodes::runNodeLibraryGate() },
             { "GATE NODE-MQTT (publish-node drives live robot over the bus, FK <1e-4)", krs::nodes::runMqttNodeGate() },
+            { "GATE C-track (computed torque tracks moving setpoint; soft PD lags)", krs::ctrl::runControllerTrackGate() },
+            { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
+            { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

@@ -1933,3 +1933,28 @@ mosquitto broker; a robot handler applies it to the LIVE PhysX articulation (`se
 editor. NEG-CTRL (severed node): with the publish-node not publishing, the new command (0.9) never reaches
 the bus -> the subscribe-node never sees it. **NM2 coverage**: a runtime 3-joint robot auto-generates exactly
 **6 nodes** (3 cmd + 3 state), each `createNode`-able. KRS_OVERNIGHT_BENCH **40/40**.
+
+## §AF NODE-SYSTEM SPRINT -- Phase 4: controller knobs + tracking-lag fix + glass robot -- LANDED (2026-06-15)
+- **The fix** (`include/PhysicsHeaders/ComputedTorque.hpp`): `krs::ctrl::computedTorque` -- inverse-dynamics
+  feedback linearization `tau = M(q)[qdd_des + Kd*edot + Kp*e] + biasForces(q,qd,g)` using the CRBA mass
+  matrix + RNEA bias. The soft PD only reacts to instantaneous error so it trails a fast command; computed
+  torque feeds the desired accel/velocity forward and cancels the arm dynamics, so the closed-loop error
+  obeys e''+Kd*e'+Kp*e=0 and tracks tightly. SSOT, reusable by any live tracker.
+- **Knob nodes** (`src/Nodes/ControllerNodes.cpp`): `ctrl_goal_knob` (a goal joint-angle digital
+  potentiometer, dial -> commanded angle) + `ctrl_vel_knob` (velocity setpoint), built on the dial framework.
+### AF.1 GATE C-track (`KRS_CTRACK_SELFTEST`) -- the must-not-relax dynamic-tracking gate
+Under a brisk cycling setpoint (80-step smoothstep ramps qA<->qB), peak DYNAMIC tracking error (commanded vs
+achieved DURING motion): **soft PD (before) = 0.6077 rad** vs **computed torque (after) = 0.0174 rad** (bound
+0.05) -- a 35x improvement. NEG-CTRL: the soft PD is the negative control and FAILS the bound (0.61 >= 0.05).
+[The deferred GATE-D number was 0.23 on its specific move; this brisker move lags the soft PD 0.61 -- same
+dynamic-lag class, clearly failing; computed torque fixes it.] PROVEN (live PhysX articulation, torque-driven).
+### AF.2 GATE C-knob (`KRS_CKNOB_SELFTEST`)
+A `ctrl_goal_knob` node's dial (0.5 rad) -> the node emits 0.5000 -> drives the LIVE joint, whose link reaches
+the commanded angle: **FK err 4.89e-07 (<1e-4)**. NEG-CTRL: a disconnected knob (default 0) emits 0 -> no
+command. PROVEN.
+### AF.3 GATE C-glass (`KRS_CGLASS_SELFTEST`)
+The glass robot's link transforms are driven by FK of the PLANNED joint config: glass vs planned-FK err
+**0.0 (<1e-5)**, and planned differs from live by **1.003 m** (it is genuinely showing the PLAN, not the
+current pose). NEG-CTRL: fed the LIVE values instead, the glass collapses to the current pose (plan==current,
+err 0.0) -- proving it reads the plan. PROVEN for the transform DATA; the GlassComponent/GlassPass pixel
+render is visual-confirm. KRS_OVERNIGHT_BENCH **43/43**.
