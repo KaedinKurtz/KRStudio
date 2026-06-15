@@ -1684,3 +1684,28 @@ workflow (wf_b4919ade) mapped the exact headless hooks first (documented below).
 GATE 0: all three PASS with real numbers + neg-controls. KRS_OVERNIGHT_BENCH **23/23** (3 added), exe
 verified newer than all sources. Canonical-transform rule upheld: the fluid samples a LIVE view of the ECS
 TransformComponent each step (no bake-once snapshot) -- now GPU-gated, not just code-reviewed.
+Phase-0 adversarial review (6-agent workflow wf_307e835e): all three SHIP; closed two "one-line break still
+passes" coverage gaps it found -- GATE 0a now gates `after.energy()<0.5*before.energy()` (a real inelastic
+contact, not free-flight), GATE 0b now exercises the tol boundary (within-tol PASS + just-over-tol FAIL) and
+asserts allPass()==false on severed chains. GATE 0c: zero issues along six attack lines.
+
+## W) INTEGRATION SPRINT — PHASE 1: subsystem-pair integration (GATE 1) — IN PROGRESS (2026-06-15)
+Each real coupling proven with a conservation law / cross-system invariant + a non-vacuous neg-control.
+Coupling recon (same workflow) first established WHICH pairs actually couple, to avoid vacuous gates:
+- **1.1 MPM <-> FLUID: COUPLING ABSENT.** MpmSystem and the PBF FluidSystem are independent GPU solvers
+  stepped back-to-back (RenderingSystem.cpp) with ZERO shared state -- no force/mass/particle exchange.
+  There is nothing to conserve across a boundary that does not exist; gating a "MPM<->fluid conservation"
+  would be vacuous. DECISION: gate each solver's INTRINSIC conservation instead (MPM momentum==gravity
+  impulse via Diag::sample; fluid mass invariance + containment via GATE 0c). [deferred sub-gate]
+- **1.2 FLUID <-> RIGID: LANDED.** A genuine two-way coupling (the fluid_deltap impulse SSBO ->
+  setImpulseSink -> applyFluidImpulse). GATE 1.2 (RenderingSystem::runFluidRigidImpulseGate,
+  FluidRigidGate.cpp; KRS_FLUIDRIGID_SELFTEST): the GPU fluid falls onto a DYNAMIC box, scene gravity OFF
+  so the box's only momentum source is the fluid. Newton's 3rd law: rigid momentum GAINED == impulse the
+  fluid DELIVERED -- |p|=**310.585** == |J|=**310.585**, |p-J|=**0.0001 (0.00%)**, with the 2 m/s dv-clamp
+  verified inactive (ratio 0.131) and the box kept clear of the y=0 floor (bottom y=1.256). NEG-CTRL: a sink
+  that DROPS the impulse -> box stays inert (|p|=**0.0000**) while the fluid still delivers J=351 -> proves
+  the coupling (not gravity/anything else) moved it. GOTCHA found+fixed: singleStep() pauses the sim, but
+  applyFluidImpulse only acts while Playing -- re-assert sim.play() each frame before update().
+- **1.3 ARTICULATION <-> COLLISION, 1.4 MPM <-> THERMAL, 1.5 FEM static equilibrium: EXIST, gateable**
+  (recipes in recon) -- pending sub-gates.
+GATE 1 (in progress): KRS_OVERNIGHT_BENCH **24/24** (GATE 1.2 added); exe verified newer than all sources.
