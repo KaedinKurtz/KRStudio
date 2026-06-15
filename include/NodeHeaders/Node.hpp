@@ -13,6 +13,7 @@
 
 // Forward declaration
 class Node;
+class Scene;   // Phase 5: the live ECS scene a node may read/write (injected, not owned)
 
 /**
  * @brief A rich descriptor for a port's data type, including physical units.
@@ -178,6 +179,12 @@ public:
     virtual void configureForType(const std::type_info& typeInfo) {}
     virtual QWidget* createEmbeddedWidget() { return nullptr; }
 
+    // --- Phase 5 live-backend bridge: the graph runner injects the active Scene so a node's
+    //     compute() can read/write the real ECS registry (e.g. a SceneContext source node emits
+    //     the registry pointer the Physics nodes consume). Injected, never owned. ---
+    void setScene(Scene* s) { m_scene = s; }
+    Scene* scene() const { return m_scene; }
+
 protected:
     Node() {
         m_ports.push_back({ "Trigger", {"bool", "unitless"}, Port::Direction::Input, this });
@@ -185,6 +192,7 @@ protected:
     virtual void compute() = 0;
 
     std::string m_id;
+    Scene* m_scene = nullptr;   // live backend, injected by the graph runner (Phase 5)
     std::vector<Port> m_ports;
     UpdatePolicy m_updatePolicy = UpdatePolicy::Asynchronous;
     TriggerEdge m_triggerEdge = TriggerEdge::Rising;

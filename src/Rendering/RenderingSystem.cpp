@@ -53,6 +53,7 @@
 #include "IntegrationHarness.hpp" // Phase 0 GATE 0a/0b (krs::integ conservation + causal harnesses)
 #include "RayPick.hpp"            // Phase 3 GATE 3.1 (krs::pick raycast)
 #include "MqttBridge.hpp"         // Phase 4 GATE M (krs::mqtt broker + joint round-trip)
+#include "BridgeNodes.hpp"        // Phase 5 GATE ND (krs::nodes graph->backend bridge)
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -773,6 +774,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 5 GATE ND: visual node graph wired to the live ECS backend (headless).
+    if (qEnvironmentVariableIntValue("KRS_NODE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_NODE_SELFTEST =================\n");
+        const bool ok = krs::nodes::runNodeGraphGateND();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -837,6 +846,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE F B-Rep selector (ray-pick -> analytic axis/radius <1e-9 + mesh-fit neg-ctrl)", krs::cad::runBRepSelectorGateF() },
             { "GATE J joint tooling (derive revolute frame <1e-6 vs oracle -> RobotArticSpec + reject neg-ctrl)", krs::cad::runJointGateJ() },
             { "GATE M MQTT (real broker; joint cmd->FK->state round-trip <1e-4; broadcast duality)", krs::mqtt::runMqttGateM() },
+            { "GATE ND node graph (scene->node->ECS effect + graph->robot + disconnected/type neg-ctrls)", krs::nodes::runNodeGraphGateND() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

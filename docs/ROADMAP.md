@@ -1809,3 +1809,26 @@ Real broker, real libmosquitto clients over loopback TCP, synchronous `mosquitto
 - **M4 broadcast->receive duality**: one publish to `.../broadcast` reaches BOTH subscribers (a=1, b=1) while
   a subscriber on a different topic stays silent (isolated=0) -- fan-out + isolation in one shot.
 KRS_OVERNIGHT_BENCH **32/32**; mosquitto.dll auto-deployed next to the exe; exe verified newer than all sources.
+
+## §AA PHASE 5 -- VISUAL NODE GRAPH WIRED TO THE LIVE BACKEND (GATE ND) -- LANDED (2026-06-15)
+Recon finding: the Physics nodes ALREADY mutate the ECS correctly (`setLinearVelocity` writes the component,
+`applyForce` accumulates) -- but nothing SOURCED their `entt::registry*` input, so in the live app the graph
+silently did nothing. The fix is the missing bridge ROOT, not a rewrite of every node:
+- `Node` base gains a `Scene* m_scene` + `setScene()/scene()` (forward-declared, injected, never owned).
+- New `SceneContextNode` (`world_scene_context`) is the source node: it emits the injected Scene's live
+  `entt::registry*` so downstream Physics nodes operate on the real world.
+- New `SetJointAngleNode` (`physics_set_joint_angle`) writes a canonical `JointComponent.currentPosition`,
+  i.e. a node-graph edit that drives the robot.
+### AA.1 GATE ND (`krs::nodes::runNodeGraphGateND`, KRS_NODE_SELFTEST) -- headless, no GL
+- **ND1 factory audit (M-of-M)**: all **106/106** registered node types instantiate via NodeFactory (105 carry
+  data ports; the Comment node legitimately has none). NEG-CTRL: an unregistered id returns `nullptr` -- the
+  factory does not fabricate blank nodes.
+- **ND2 per-node backend effect**: a real graph `SceneContext -> SetLinearVelocity` mutates the live ECS
+  (`RigidBodyComponent.linearVelocity` becomes (1,2,3)). NEG-CTRL (disconnected-node): the same node with its
+  Registry input UNWIRED leaves the backend untouched (velocity stays 0).
+- **ND3 graph -> robot round-trip**: a `SetJointAngle` node writes the canonical joint angle (0.700 rad); FK on
+  that angle moves the link marker **0.343 m** (>0.1). NEG-CTRL: a disconnected command never reaches the
+  robot -> the joint stays at rest (0.000).
+- **ND4 type safety**: feeding the Velocity port a `float` instead of a `glm::vec3` is rejected by
+  `getInput<T>` (bad_any_cast -> nullopt) -- no mutation, no crash.
+KRS_OVERNIGHT_BENCH **33/33**; exe verified newer than all sources. **Phases 0-5 COMPLETE; all gates green.**
