@@ -426,6 +426,21 @@ else()
   message(STATUS "OpenCASCADE not found; STEP import compiled out (CadImporter stub).")
 endif()
 
+# --- Mosquitto / MQTT (Phase 4: broker on startup + joint cmd/state topic tree) ---
+# libmosquitto is the C client (vcpkg port builds WITH_BROKER=OFF). The broker itself
+# is the system mosquitto.exe, spawned via QProcess on startup. KR_WITH_MQTT gates the
+# MqttBridge + GATE M; absent it, MqttBridge degrades to a no-op stub. The vcpkg port
+# ships a module wrapper (MOSQUITTO_LIBRARIES / MOSQUITTO_INCLUDE_DIRS), not a CONFIG target.
+find_package(mosquitto QUIET)
+if(MOSQUITTO_LIBRARIES OR MOSQUITTO_LIBRARY)
+  target_include_directories(RoboticsSoftware PRIVATE ${MOSQUITTO_INCLUDE_DIRS})
+  target_link_libraries(RoboticsSoftware PRIVATE ${MOSQUITTO_LIBRARIES})
+  target_compile_definitions(RoboticsSoftware PRIVATE KR_WITH_MQTT)
+  message(STATUS "libmosquitto found; MQTT bridge enabled (KR_WITH_MQTT). libs=${MOSQUITTO_LIBRARIES}")
+else()
+  message(STATUS "libmosquitto not found; MQTT bridge compiled out (MqttBridge stub).")
+endif()
+
 # --- ONNX Runtime (Phase 5: learned-surrogate inference; build-OPTIONAL) ---
 # Not in vcpkg.json by default (heavy). When a surrogate trained on the FEM oracle
 # exists, add `onnxruntime` to vcpkg.json; this enables the OnnxSurrogate path.

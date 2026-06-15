@@ -25,6 +25,7 @@
     "libigl",
     "urdfdom",
     "urdfdom-headers",
-    "opencascade"
+    "opencascade",
+    "mosquitto"
   ]
 }

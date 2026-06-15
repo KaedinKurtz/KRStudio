@@ -52,6 +52,7 @@
 #include "SdfColliderQuery.hpp" // Phase B GATE C (krs::fluid::runCollisionSyncGateC)
 #include "IntegrationHarness.hpp" // Phase 0 GATE 0a/0b (krs::integ conservation + causal harnesses)
 #include "RayPick.hpp"            // Phase 3 GATE 3.1 (krs::pick raycast)
+#include "MqttBridge.hpp"         // Phase 4 GATE M (krs::mqtt broker + joint round-trip)
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -764,6 +765,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 4 GATE M: Mosquitto broker on startup + canonical joint cmd/state round-trip.
+    if (qEnvironmentVariableIntValue("KRS_MQTT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_MQTT_SELFTEST =================\n");
+        const bool ok = krs::mqtt::runMqttGateM();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -827,6 +836,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 3.1 raycast ray-triangle pick >=99% (AABB-only neg-ctrl)", krs::pick::runRaycastGate3_1() },
             { "GATE F B-Rep selector (ray-pick -> analytic axis/radius <1e-9 + mesh-fit neg-ctrl)", krs::cad::runBRepSelectorGateF() },
             { "GATE J joint tooling (derive revolute frame <1e-6 vs oracle -> RobotArticSpec + reject neg-ctrl)", krs::cad::runJointGateJ() },
+            { "GATE M MQTT (real broker; joint cmd->FK->state round-trip <1e-4; broadcast duality)", krs::mqtt::runMqttGateM() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

@@ -1786,3 +1786,26 @@ the stored joint axis still matches the oracle to **1.19e-07**. NEG-CTRL (non-va
 bore (perp **0.0048 m**) and a TILTED bore (ang-residual **0.018**) are BOTH **REJECTED** -- no valid revolute,
 so the gate cannot pass by blindly accepting any two faces. KRS_OVERNIGHT_BENCH **31/31**; exe verified newer
 than all sources. **Phase 3 (raycast >=99%, GATE F <1e-9, GATE J <1e-6) COMPLETE.**
+
+## §Z PHASE 4 -- MQTT MESSAGING ON THE CANONICAL GRAPH (GATE M) -- LANDED (2026-06-15)
+Greenfield: added `mosquitto` to vcpkg.json (libmosquitto C client; the port builds WITH_BROKER=OFF) and
+wired `find_package(mosquitto)` -> `KR_WITH_MQTT` in CMakeLists. The BROKER is the system mosquitto.exe
+(2.0.22), spawned on startup via QProcess against a temp `listener <port> 127.0.0.1 / allow_anonymous true`
+config. New `include/UtilityHeaders/MqttBridge.hpp` carries the SSOT `buildTopicTree(robotName, jointCount)`
+that maps the canonical articulation to a nested topic tree -- `robot/<name>/joint/<n>/{cmd,state}`,
+`robot/<name>/broadcast`, and the `.../joint/+/cmd` wildcard -- so the tree the gate checks is the tree the
+app publishes. `src/Utility/MqttBridge.cpp` holds the broker spawn, the libmosquitto clients, and GATE M.
+### Z.1 GATE M (`krs::mqtt::runMqttGateM`, KRS_MQTT_SELFTEST)
+Real broker, real libmosquitto clients over loopback TCP, synchronous `mosquitto_loop` pumping (no threads):
+- **M1 pub/sub round-trip**: a subscriber receives the exact payload a publisher sent through the broker
+  (`echo=RECEIVED`); NEG-CTRL: a message on an UNSUBSCRIBED topic does **not** arrive (`wrong-topic isolated`).
+- **M2 nested topic tree**: built from the canonical `RobotArticSpec` joint count -> `robot/FANUC/joint/0/cmd`,
+  `.../state`, wildcard `.../joint/+/cmd`.
+- **M3 REAL joint round-trip (the causal one)**: the controller publishes an angle on `.../joint/0/cmd`; the
+  robot client (subscribed to the cmd wildcard) runs FK and publishes the moved link marker on `.../state`;
+  the controller receives it. The received pose matches direct FK to **1.885e-07 m** (bound **<1e-4**) AND
+  differs from the rest pose by **0.343 m** -- so the MQTT message genuinely CAUSED the link to move
+  (frozen-robot template: no message -> no motion; the 0.343 m move is the non-vacuous proof).
+- **M4 broadcast->receive duality**: one publish to `.../broadcast` reaches BOTH subscribers (a=1, b=1) while
+  a subscriber on a different topic stays silent (isolated=0) -- fan-out + isolation in one shot.
+KRS_OVERNIGHT_BENCH **32/32**; mosquitto.dll auto-deployed next to the exe; exe verified newer than all sources.
