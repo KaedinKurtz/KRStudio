@@ -2058,3 +2058,26 @@ Operator root cause: node bodies never render input widgets; nodes look like mas
   add 0.3488 -> live link **0.3488** (max err **2.27e-07**). NEG-CTRL (severed-wire): cut time->sine
   breaks at stage 2, cut sine->add at stage 3, cut add->robot at stage 4 (localizes exactly). The end-to-end
   proof the editor is wireable AND inputs are settable through the body. KRS_OVERNIGHT_BENCH **48/48**.
+
+## §AL NODE-EDITOR ADVERSARIAL HARDENING -- real QtNodes paths + bool/Trigger fix (2026-06-15)
+A 4-agent adversarial review (pass-while-broken, hunting widget-never-mounted + node-wont-connect) confirmed
+the MOUNT FIX is SOUND ("a non-null container with tagged children genuinely becomes the proxied widget on
+screen; no hidden reject branch -- cannot pass while the widget is absent-on-screen") but found:
+- **REAL BUG (bool->Trigger)**: `dataType` mapped bool->"number", and every node has a base-class bool
+  `Trigger` input -- so a number output could be wired into any Trigger (a float-into-bool confusion).
+  FIX: bool gets its own id "bool"; number->Trigger now BLOCKS, bool->Trigger (a logic signal triggering)
+  still connects.
+- **gates re-implemented connectionPossible instead of calling it**: TYPE/TIME/CONNECT faked connections
+  with raw packet copies and a hand-rolled id== check. FIX: all three now drive a REAL
+  `QtNodes::DataFlowGraphModel` (same registry MainWindow uses) -- `connectionPossible` (id + vacancy +
+  policy) and `addConnection` -> `setInData` propagation through the actual editor code path.
+### Hardened gates
+- **GATE TYPE**: **8/8** via the real `DataFlowGraphModel::connectionPossible` -- number->number connect;
+  number->vec3, number->handle, number->Trigger(bool) BLOCK; bool->Trigger connect.
+- **GATE TIME**: a REAL edge time_source->gen_sine; ticking the time source (the 30Hz path) propagates the
+  live time through the model into the connected sine (s 0.0003 -> 0.8096, tracks sin(2pi*t)); a
+  DISCONNECTED sine stays constant.
+- **GATE CONNECT-AND-CONTROL**: the chain is built with REAL `addConnection` edges (time->sine->add),
+  `connectionPossible` asserted; add.B set THROUGH the mounted spinbox; ticking propagates through the edges
+  to drive the live robot (link 0.3475, err 6.75e-07); omitting an edge localizes the break (2,3,4).
+KRS_OVERNIGHT_BENCH **48/48**. The mount itself remains OPERATOR VISUAL-CONFIRM.

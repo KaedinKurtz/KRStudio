@@ -11,6 +11,8 @@
 #include "NodeEditorGate.hpp"
 
 #include <QtNodes/Definitions>
+#include <QtNodes/DataFlowGraphModel>
+#include <QtNodes/NodeDelegateModelRegistry>
 #include <QWidget>
 #include <QApplication>
 #include <QDoubleSpinBox>
@@ -178,47 +180,62 @@ bool runInputBindGate()
     return pass;
 }
 
+// build a REAL QtNodes DataFlowGraphModel backed by the node registry (as MainWindow does) so the gates
+// exercise the editor's actual addNode/connectionPossible/addConnection paths, not a re-implementation.
+std::shared_ptr<QtNodes::DataFlowGraphModel> makeNodeGraphModel() {
+    auto reg = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
+    for (auto const& kv : NodeFactory::instance().getRegisteredNodeTypes()) {
+        const std::string id = kv.first;
+        reg->registerModel<NodeDelegate>([id]() { return std::make_unique<NodeDelegate>(id); },
+                                         QString::fromStdString(kv.second.category));
+    }
+    return std::make_shared<QtNodes::DataFlowGraphModel>(reg);
+}
+// the QtNodes directional port index of a named port (same ordering NodeDelegate uses).
+int portIndexByName(Node* n, Port::Direction dir, const char* name) {
+    if (!n) return -1; int idx = 0;
+    for (const auto& p : n->getPorts()) if (p.direction == dir) { if (p.name == name) return idx; ++idx; }
+    return -1;
+}
+
 bool runTypeGate()
 {
     using std::printf;
     setvbuf(stdout, nullptr, _IONBF, 0);
-    printf("[type] GATE TYPE -- compatible ports connect (id match), incompatible cannot\n");
+    printf("[type] GATE TYPE -- REAL DataFlowGraphModel::connectionPossible (compatible connect, incompatible blocked)\n");
     if (!QApplication::instance()) { printf("[type] FAIL: needs QApplication\n"); return false; }
+    auto model = makeNodeGraphModel();
 
-    // helper: the connection id QtNodes compares (NodeDelegate::dataType().id) for a node's port.
-    auto portId = [](const std::string& typeId, QtNodes::PortType pt, int idx) -> QString {
-        NodeDelegate d(typeId); d.backendNode();
-        return d.dataType(pt, idx).id;
-    };
-    // QtNodes connectionPossible: out.id == in.id.
-    auto canConnect = [&](const std::string& outNode, int outIdx, const std::string& inNode, int inIdx) {
-        return portId(outNode, QtNodes::PortType::Out, outIdx) == portId(inNode, QtNodes::PortType::In, inIdx);
-    };
-
-    // truth table over REAL registered nodes: {outNode,outIdx, inNode,inIdx, expectCompatible}
-    // (port indices count only that direction: math_add In = A@1,B@2; Out = Result@0; signal_dot_product
-    // In = A@1(vec3),B@2(vec3), Out = Result@0(number); physics_apply_force In = Registry@1(handle)...)
-    struct Case { const char* on; int oi; const char* in; int ii; bool ok; const char* what; };
+    struct Case { const char* on; const char* op; const char* in; const char* ip; bool ok; const char* what; };
     const Case cases[] = {
-        { "gen_sine",            0, "math_affine",         1, true,  "Out(number)->In(number)" },
-        { "math_add",            0, "math_subtract",       1, true,  "Result(number)->A(number)" },
-        { "gen_sine",            0, "math_add",            1, true,  "number->A(number)" },
-        { "signal_dot_product",  0, "math_affine",         1, true,  "Dot(number)->In(number)" },
-        { "gen_sine",            0, "signal_dot_product",  1, false, "number->A(vec3) incompat" },
-        { "gen_sine",            0, "physics_apply_force", 1, false, "number->Registry(handle) incompat" },
+        { "gen_sine",           "Out",    "math_affine",         "In",       true,  "number->number" },
+        { "math_add",           "Result", "math_subtract",       "A",        true,  "number->number" },
+        { "gen_sine",           "Out",    "math_add",            "A",        true,  "number->number" },
+        { "signal_dot_product", "Result", "math_affine",         "In",       true,  "Dot(number)->number" },
+        { "gen_sine",           "Out",    "signal_dot_product",  "A",        false, "number->vec3 (incompat)" },
+        { "gen_sine",           "Out",    "physics_apply_force", "Registry", false, "number->handle (incompat)" },
+        { "gen_sine",           "Out",    "math_add",            "Trigger",  false, "number->Trigger/bool (must BLOCK)" },
+        { "math_greater_than",  "Result", "math_add",            "Trigger",  true,  "bool->Trigger/bool (logic can trigger)" },
     };
     int total = 0, correct = 0;
     for (const auto& c : cases) {
         ++total;
-        const bool got = canConnect(c.on, c.oi, c.in, c.ii);
-        const bool ok = (got == c.ok);
-        if (ok) ++correct;
-        printf("[type]   %-26s expect %s, got %s  %s\n", c.what, c.ok ? "connect" : "BLOCK",
+        const QtNodes::NodeId on = model->addNode(c.on);
+        const QtNodes::NodeId in = model->addNode(c.in);
+        Node* onB = model->delegateModel<NodeDelegate>(on) ? model->delegateModel<NodeDelegate>(on)->backendNode() : nullptr;
+        Node* inB = model->delegateModel<NodeDelegate>(in) ? model->delegateModel<NodeDelegate>(in)->backendNode() : nullptr;
+        const int oi = portIndexByName(onB, Port::Direction::Output, c.op);
+        const int ii = portIndexByName(inB, Port::Direction::Input, c.ip);
+        if (oi < 0 || ii < 0) { printf("[type]   %-34s PORT NOT FOUND  FAIL\n", c.what); continue; }
+        const QtNodes::ConnectionId conn{ on, QtNodes::PortIndex(oi), in, QtNodes::PortIndex(ii) };
+        const bool got = model->connectionPossible(conn);          // the REAL editor path (id + vacancy + policy)
+        const bool ok = (got == c.ok); if (ok) ++correct;
+        printf("[type]   %-34s expect %s, got %s  %s\n", c.what, c.ok ? "connect" : "BLOCK",
                got ? "connect" : "BLOCK", ok ? "ok" : "FAIL");
     }
-    const bool pass = correct == total && total > 4;
-    printf("[type] %d/%d port-pair compatibility checks correct  %s\n", correct, total,
-           pass ? "ALL PASS (compatible connect, incompatible blocked)" : "FAILURES PRESENT");
+    const bool pass = correct == total && total > 6;
+    printf("[type] %d/%d real connectionPossible checks correct  %s\n", correct, total,
+           pass ? "ALL PASS (compatible connect, incompatible/Trigger blocked, via the real model)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }

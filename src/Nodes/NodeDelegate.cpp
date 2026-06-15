@@ -151,12 +151,14 @@ QtNodes::NodeDataType NodeDelegate::dataType(QtNodes::PortType portType, QtNodes
     const Port* p = getBackendPort(portType, portIndex);
     if (!p) return { "", "" };
 
-    // QtNodes connects an out->in pair only when their NodeDataType.id MATCHES. Map the library's numeric
-    // types to ONE id "number" (double/float/int/bool all carry numbers) so signal/math/logic nodes
-    // interconnect; vectors -> "vec3"; everything else keeps its own id. (.name is the display label.)
+    // QtNodes connects an out->in pair only when their NodeDataType.id MATCHES. Map the library's scalar
+    // numeric types to ONE id "number" (double/float/int interchange) so signal/math nodes interconnect;
+    // bool stays "bool" (so a number can NOT be wired into a Trigger/bool input -- a type confusion);
+    // vectors -> "vec3"; everything else keeps its own id. (.name is the display label.)
     const std::string& tn = p->type.name;
     QString id = QString::fromStdString(tn);
-    if (tn == "double" || tn == "float" || tn == "int" || tn == "bool") id = "number";
+    if (tn == "double" || tn == "float" || tn == "int") id = "number";
+    else if (tn == "bool") id = "bool";
     else if (tn == "glm::vec3") id = "vec3";
     return { id, QString::fromStdString(tn) };
 }
