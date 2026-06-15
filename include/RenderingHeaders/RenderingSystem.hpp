@@ -169,6 +169,13 @@ public:
     static bool runApplyTagGateAC3();
     bool runAppliedTextureGate();
 
+    // Phase 0 harness C: GATE 0c -- the headless GPU-fluid+SDF gate that closes the gap GATE C left
+    // open (GATE C is CPU-only). Drives the REAL FluidSystem::update() against an SDF mesh collider:
+    // a fluid slab, an SDF cube moved INTO it; sync-ON pushes particles out of the LIVE pose (no
+    // penetration); NEG-CTRL sync-OFF freezes the field at the bake pose -> ghost penetration.
+    // Gated by KRS_GPUFLUIDSDF_SELFTEST + KRS_OVERNIGHT_BENCH. Implemented in GpuFluidSdfGate.cpp.
+    bool runGpuFluidSdfGate();
+
     void setSimulationPlaying(bool playing);
     void resetFluidSimulation();
 

@@ -1656,3 +1656,31 @@ decision and the exe was never verified newer than the source. A-CLOSE makes it 
 
 Process rule reinforced (NO EYEBALL GATES): a fix is not done until a NUMBER from a freshly-relinked
 binary proves it -- and the exe timestamp must post-date every edited source.
+
+## V) INTEGRATION SPRINT — PHASE 0: the integration substrate (GATE 0) — LANDED (2026-06-15)
+The subsystems work in isolation; this sprint makes them work TOGETHER, with every "works together" claim
+a NUMBER (a conservation law / cross-subsystem invariant / end-to-end causal chain) plus a non-vacuous
+negative control. Phase 0 builds the three instruments every later gate measures against. A 6-agent recon
+workflow (wf_b4919ade) mapped the exact headless hooks first (documented below).
+- **0.1 CONSERVATION instrument** (`krs::integ`, IntegrationHarness.hpp + ConservationHarness.cpp):
+  `Conserved{mass, momentum, kinetic, potential}` + `measureRigidBodies(reg, gMag)` sums mass*v / KE / PE
+  from the ECS (RigidBodyComponent.mass + .linearVelocity, populated by writeBackTransforms). GATE 0a
+  (KRS_CONSERVATION_SELFTEST): a CLOSED 2-body collision (m=1 into m=2, zero gravity) conserves total
+  linear momentum **|dp|=0.00000 (tol<0.05)**; energy drops 2.0->0.667 (inelastic, reported not gated).
+  NEG-CTRL: zeroing one body's velocity (a momentum leak) -> **|dp|=0.667** FAILS the same check (caught).
+- **0.2 CAUSAL-CHAIN instrument**: `CausalChain` records a residual per pipeline stage and `firstBreak()`
+  localizes the earliest failure. GATE 0b (KRS_CAUSALCHAIN_SELFTEST): a 4-stage pipeline-shaped chain
+  (cmd->FK->collisionXform->fluidResponse->objectMotion) -- intact all PASS, firstBreak=-1; NEG-CTRL
+  sever@1 -> firstBreak=**1**, sever@2 -> firstBreak=**2** (localized exactly, not a downstream cascade).
+  The real subsystem values plug into these stages in Phase 1.3 / Phase 2.
+- **0.3 HEADLESS GPU-FLUID+SDF harness** (RenderingSystem::runGpuFluidSdfGate, GpuFluidSdfGate.cpp): closes
+  the gap GATE C explicitly left open (GATE C was CPU-only). Drives the REAL FluidSystem::update() on the
+  engine offscreen context: seeds a fluid slab (64000 particles), bakes an SDF cube AWAY from it, then
+  moves the cube INTO the slab. GATE 0c (KRS_GPUFLUIDSDF_SELFTEST): with transform-sync ON the field rides
+  to the live pose and the fluid is pushed out -- **0.0% penetration**; NEG-CTRL sync-OFF freezes the field
+  at the bake pose -> **10.7% of particles penetrate the cube's live location (the ghost)**, caught. (Floor
+  note: the fluid domain floor is y=0, so the slab is centred at y=0.6 to avoid clamping; the GPU PBF
+  backend must stay active -- do NOT set KRS_FLUID_BACKEND=dfsph.)
+GATE 0: all three PASS with real numbers + neg-controls. KRS_OVERNIGHT_BENCH **23/23** (3 added), exe
+verified newer than all sources. Canonical-transform rule upheld: the fluid samples a LIVE view of the ECS
+TransformComponent each step (no bake-once snapshot) -- now GPU-gated, not just code-reviewed.
