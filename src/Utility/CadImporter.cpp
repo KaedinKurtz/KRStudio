@@ -58,6 +58,7 @@
 #include <vector>
 #include <queue>
 #include <cmath>
+#include <random>     // GATE J4 fuzz
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -789,6 +790,176 @@ bool runJointGateJ()
 }
 
 // ===========================================================================
+// GATE F3 (Phase 3): HARD-FEATURE DISAMBIGUATION. A box (200mm) with a SMALL bore (r=3mm, ~0.07% of a
+// face area) -> the ray-pick must resolve the tiny bore cylinder face when aimed at it (not lose it to
+// the dominating planar face), keep adjacent faces separated at their shared edge, and survive rays
+// aimed exactly at edges/corners (valid face or clean miss, never a crash / out-of-range id).
+// Gated by KRS_DISAMBIG_SELFTEST.
+// ===========================================================================
+bool runBRepDisambiguationGateF3()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[disambig] GATE F3 -- small bore vs large face / shared-edge / edge-vs-face disambiguation\n");
+
+    const float s = 0.001f;                          // mm -> m
+    const double Hmm = 200.0, rmm = 3.0;
+    TopoDS_Shape box  = BRepPrimAPI_MakeBox(gp_Pnt(-100, -100, -100), Hmm, Hmm, Hmm).Shape();
+    TopoDS_Shape bore = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, -110), gp_Dir(0, 0, 1)), rmm, 220.0).Shape();
+    TopoDS_Shape solid = BRepAlgoAPI_Cut(box, bore).Shape();
+
+    std::error_code ec;
+    const std::string path = (std::filesystem::temp_directory_path(ec) / "krs_f3.step").string();
+    { STEPControl_Writer w;
+      if (w.Transfer(solid, STEPControl_AsIs) != IFSelect_RetDone || w.Write(path.c_str()) != IFSelect_RetDone) {
+          printf("[disambig] FAIL: STEP write\n"); return false; } }
+    Scene scene; const ImportResult ir = importStep(scene, path, s);
+    std::filesystem::remove(path, ec);
+    if (ir.solids < 1) { printf("[disambig] FAIL: import (%s)\n", ir.message.c_str()); return false; }
+    auto& reg = scene.getRegistry();
+    entt::entity body = entt::null;
+    for (auto e : reg.view<RenderableMeshComponent, BRepFaceComponent>()) { body = e; break; }
+    if (body == entt::null) { printf("[disambig] FAIL: no BRepFaceComponent\n"); return false; }
+    const auto& mesh = reg.get<RenderableMeshComponent>(body);
+    const auto& brep = reg.get<BRepFaceComponent>(body);
+
+    auto pickFace = [&](const krs::pick::Ray& ray) -> int {
+        const auto hit = krs::pick::pickMesh(reg, ray);
+        if (!hit || hit->tri < 0 || hit->tri >= int(mesh.triFace.size())) return -2;   // clean miss
+        const int fid = mesh.triFace[hit->tri];
+        if (fid < 0 || fid >= int(brep.faces.size())) return -3;                        // CORRUPT id
+        return fid;
+    };
+    const float rM = float(rmm) * s;                 // 0.003 m
+
+    // ---- F3a: small bore vs large face ----
+    int boreTot = 0, boreOk = 0, planeTot = 0, planeOk = 0;
+    for (int a = 0; a < 32; ++a) {
+        const float th = 6.2831853f * a / 32.0f;
+        krs::pick::Ray ray; ray.origin = glm::vec3(0, 0, 0.02f);
+        ray.dir = glm::normalize(glm::vec3(std::cos(th), std::sin(th), 0));   // radially out -> bore wall
+        ++boreTot; const int f = pickFace(ray);
+        if (f >= 0 && brep.faces[f].type == 1 && std::abs(brep.faces[f].radius - rM) < 1e-4f) ++boreOk;
+    }
+    for (int gx = -4; gx <= 4; ++gx)
+        for (int gy = -4; gy <= 4; ++gy) {
+            const float x = gx * 0.02f, y = gy * 0.02f;
+            if (std::sqrt(x * x + y * y) < 0.012f) continue;                  // skip the bore region
+            krs::pick::Ray ray; ray.origin = glm::vec3(x, y, 0.5f); ray.dir = glm::vec3(0, 0, -1);
+            ++planeTot; const int f = pickFace(ray);
+            if (f >= 0 && brep.faces[f].type == 0) ++planeOk;                 // big top plane, not the bore
+        }
+    const bool f3a = boreOk == boreTot && planeOk == planeTot && boreTot > 0 && planeTot > 0;
+
+    // ---- F3b: adjacent faces stay separated up to their shared edge ----
+    // top +Z (rays down) must give a +Z-normal face; side +X (rays in -X) a +X-normal face, even near the edge.
+    int adjTot = 0, adjOk = 0;
+    for (int k = -9; k <= 9; ++k) {
+        const float t = k * 0.01f;                                           // -0.09..0.09, up to 90% to the edge
+        krs::pick::Ray rz; rz.origin = glm::vec3(0.05f, t, 0.5f); rz.dir = glm::vec3(0, 0, -1);
+        ++adjTot; { const int f = pickFace(rz); if (f >= 0 && brep.faces[f].type == 0 &&
+                    std::abs(brep.faces[f].normal.z) > 0.9f) ++adjOk; }
+        krs::pick::Ray rx; rx.origin = glm::vec3(0.5f, t, 0.05f); rx.dir = glm::vec3(-1, 0, 0);
+        ++adjTot; { const int f = pickFace(rx); if (f >= 0 && brep.faces[f].type == 0 &&
+                    std::abs(brep.faces[f].normal.x) > 0.9f) ++adjOk; }
+    }
+    const bool f3b = adjTot > 0 && adjOk == adjTot;
+
+    // ---- F3c: rays aimed exactly at edges/corners -> valid face or clean miss, never a corrupt id / crash ----
+    int edgeTot = 0, edgeBad = 0;
+    const glm::vec3 corners[8] = {
+        {0.1f,0.1f,0.1f},{-0.1f,0.1f,0.1f},{0.1f,-0.1f,0.1f},{0.1f,0.1f,-0.1f},
+        {-0.1f,-0.1f,0.1f},{-0.1f,0.1f,-0.1f},{0.1f,-0.1f,-0.1f},{-0.1f,-0.1f,-0.1f} };
+    for (const auto& c : corners) {
+        krs::pick::Ray ray; ray.origin = c * 5.0f; ray.dir = glm::normalize(c - ray.origin);  // straight at the corner
+        ++edgeTot; const int f = pickFace(ray);
+        if (f == -3) ++edgeBad;                                              // -3 = out-of-range/corrupt face id
+    }
+    // edge midpoints (between adjacent corners)
+    const glm::vec3 edges[4] = { {0.1f,0.1f,0.0f},{0.1f,0.0f,0.1f},{0.0f,0.1f,0.1f},{-0.1f,0.0f,0.1f} };
+    for (const auto& m2 : edges) {
+        krs::pick::Ray ray; ray.origin = m2 * 5.0f; ray.dir = glm::normalize(m2 - ray.origin);
+        ++edgeTot; const int f = pickFace(ray); if (f == -3) ++edgeBad;
+    }
+    const bool f3c = edgeBad == 0;
+
+    const bool pass = f3a && f3b && f3c;
+    printf("[disambig]   F3a small-bore vs large-face: bore->cyl %d/%d, plane->plane %d/%d  %s\n",
+           boreOk, boreTot, planeOk, planeTot, f3a ? "PASS" : "FAIL");
+    printf("[disambig]   F3b adjacent faces to shared edge: %d/%d resolve to the correct face  %s\n",
+           adjOk, adjTot, f3b ? "PASS" : "FAIL");
+    printf("[disambig]   F3c edge/corner rays: %d/%d valid (0 corrupt face ids, no crash)  %s\n",
+           edgeTot - edgeBad, edgeTot, f3c ? "PASS" : "FAIL");
+    printf("[disambig] %s\n", pass ? "ALL PASS (tiny bore disambiguated; adjacent faces separated; edges robust)"
+                                    : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
+// GATE J4 (Phase 3): VALIDATION FUZZ. 20k random feature x type x extreme-value combinations through
+// deriveRevoluteFromBores + the canonical write -> ZERO corrupt graphs (non-finite / non-unit axis,
+// out-of-range), ZERO bogus accepts (a non-cylinder or degenerate pair accepted). Seeded for
+// reproducibility. Gated by KRS_JOINTFUZZ_SELFTEST.
+// ===========================================================================
+bool runJointFuzzGateJ4()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[jointfuzz] GATE J4 -- fuzz deriveRevoluteFromBores over random feature x type x extremes\n");
+
+    std::mt19937 rng(0xC0FFEEu);                     // fixed seed -> reproducible
+    std::uniform_real_distribution<float> U(-1.0f, 1.0f);
+    std::uniform_int_distribution<int> Ttype(0, 4);
+    auto randFace = [&](int forceType) -> BRepFace {
+        BRepFace f;
+        f.type = forceType >= 0 ? forceType : Ttype(rng);
+        f.axisDir = glm::vec3(U(rng), U(rng), U(rng));
+        const int e = int(rng() % 8);                // inject extremes/degeneracies
+        if (e == 0) f.axisDir = glm::vec3(0.0f);                          // zero axis (normalize -> NaN)
+        else if (e == 1) f.axisDir *= 1e12f;                             // huge
+        else if (e == 2) f.axisDir *= 1e-12f;                            // tiny
+        f.axisPos = glm::vec3(U(rng), U(rng), U(rng)) * (e == 3 ? 1e9f : 1.0f);
+        f.radius  = std::abs(U(rng)) * (e == 4 ? 1e9f : 1.0f);
+        if (e == 5) f.radius = 0.0f;
+        return f;
+    };
+
+    const int N = 20000;
+    int accepted = 0, rejected = 0, corrupt = 0, bogus = 0;
+    for (int i = 0; i < N; ++i) {
+        BRepFace a = randFace(i % 3 == 0 ? 1 : -1);
+        BRepFace b;
+        if (i % 2 == 0) b = randFace(-1);            // fully random pair (mostly rejects)
+        else {                                       // near-coaxial cylinders (exercise the accept path)
+            a.type = 1; b = a; b.axisPos = a.axisPos + a.axisDir * U(rng);
+        }
+        krs::joint::JointFrame fr; double ae = 0, oe = 0;
+        const bool ok = krs::joint::deriveRevoluteFromBores(a, b, fr, 1e-4, &ae, &oe);
+        if (!ok) { ++rejected; continue; }
+        ++accepted;
+        const bool finite = std::isfinite(fr.axisDir.x) && std::isfinite(fr.axisDir.y) && std::isfinite(fr.axisDir.z)
+                         && std::isfinite(fr.axisPos.x) && std::isfinite(fr.axisPos.y) && std::isfinite(fr.axisPos.z);
+        const float len = glm::length(fr.axisDir);
+        const bool unit = std::isfinite(len) && std::abs(len - 1.0f) < 1e-3f;
+        if (!finite || !unit) ++corrupt;
+        if (a.type != 1 || b.type != 1) ++bogus;     // a non-cylinder pair must never be accepted
+        // canonical write must also be finite
+        krs::dyn::ArticJointSpec js; js.axis = { fr.axisDir.x, fr.axisDir.y, fr.axisDir.z };
+        js.ptree = { fr.axisPos.x, fr.axisPos.y, fr.axisPos.z };
+        for (float v : js.axis)  if (!std::isfinite(v) && finite) { ++corrupt; break; }
+    }
+
+    const bool pass = corrupt == 0 && bogus == 0 && accepted > 0 && rejected > 0;
+    printf("[jointfuzz]   %d cases: %d accepted, %d rejected, CORRUPT graphs=%d, bogus accepts=%d\n",
+           N, accepted, rejected, corrupt, bogus);
+    printf("[jointfuzz] %s\n", pass ? "ALL PASS (0 corrupt graphs, 0 bogus accepts, both accept+reject paths exercised)"
+                                     : "FAILURES PRESENT (degenerate input produced a corrupt joint)");
+    fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
 // GATE U (Phase A): world-scale + coverage of the B-Rep UV generation. U1 on a
 // controlled box (planar faces) + cylinder (known circumference); U4 coverage on
 // the real FANUC (every vertex a finite UV). Gated by KRS_UV_SELFTEST.
@@ -1040,5 +1211,7 @@ bool runSelfTest() { return true; } // no OCCT -> vacuous pass, keeps harnesses 
 bool runUvGateU() { return true; }  // no OCCT -> vacuous pass
 bool runBRepSelectorGateF() { return true; } // no OCCT -> vacuous pass
 bool runJointGateJ() { return true; }        // no OCCT -> vacuous pass
+bool runBRepDisambiguationGateF3() { return true; } // no OCCT -> vacuous pass
+bool runJointFuzzGateJ4() { return true; }   // no OCCT -> vacuous pass
 } // namespace krs::cad
 #endif

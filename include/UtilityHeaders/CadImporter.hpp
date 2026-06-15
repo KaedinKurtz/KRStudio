@@ -63,4 +63,13 @@ bool runBRepSelectorGateF();
 /// Returns true on PASS (vacuous in the no-OCCT stub).
 bool runJointGateJ();
 
+/// Phase 3 GATE F3 (gated by KRS_DISAMBIG_SELFTEST): hard-feature disambiguation -- a small bore (r=3mm)
+/// on a large part (200mm), shared-edge adjacency, and edge/corner robustness for the ray-pick selector.
+bool runBRepDisambiguationGateF3();
+
+/// Phase 3 GATE J4 (gated by KRS_JOINTFUZZ_SELFTEST): validation fuzz -- 20k random feature x type x
+/// extreme-value combinations through the joint derivation + canonical write -> 0 corrupt graphs, 0 bogus
+/// accepts.
+bool runJointFuzzGateJ4();
+
 } // namespace krs::cad

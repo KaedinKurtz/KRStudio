@@ -48,4 +48,9 @@ bool available();
 // not). Returns true on PASS (vacuous true in the no-MQTT stub). Requires no GL context.
 bool runMqttGateM();
 
+// Phase 4 GATE M5 (gated by KRS_MQTTROBUST_SELFTEST): robustness surface -- broker killed mid-run ->
+// survive + reconnect; N>=128 topics -> bounded service cost; malformed cmd payloads rejected with no
+// non-finite pose and no crash. Returns true on PASS (vacuous true in the no-MQTT stub).
+bool runMqttRobustnessGateM5();
+
 } // namespace krs::mqtt

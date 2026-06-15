@@ -23,6 +23,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
+#include <chrono>
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -49,14 +52,23 @@ void onMsgCollect(struct mosquitto*, void* ud, const struct mosquitto_message* m
 struct RobotCtx {
     glm::vec3 origin, axis, tip0;
     std::string stateTopic;
-    int cmds = 0;
+    int cmds = 0;        // commands the handler acted on
+    int rejected = 0;    // malformed / non-finite commands rejected
+    int badTips = 0;     // non-finite poses the handler produced (must stay 0 -- robustness)
 };
 void onRobotCmd(struct mosquitto* mosq, void* ud, const struct mosquitto_message* m)
 {
     RobotCtx* rc = static_cast<RobotCtx*>(ud);
     const std::string payload(static_cast<const char*>(m->payload), m->payloadlen);
-    const float q = float(std::atof(payload.c_str()));
+    // parse defensively: require a fully-consumed finite number, else REJECT (a malformed cmd must not
+    // move the robot). atof would turn "1e999"->inf and "12xyz"->12, both unsafe.
+    char* end = nullptr;
+    const double parsed = std::strtod(payload.c_str(), &end);
+    const bool clean = end != nullptr && end != payload.c_str() && *end == '\0' && std::isfinite(parsed);
+    if (!clean) { ++rc->rejected; return; }
+    const float q = float(parsed);
     const glm::vec3 tip = krs::kin::revoluteApply(rc->origin, rc->axis, rc->tip0, q);
+    if (!(std::isfinite(tip.x) && std::isfinite(tip.y) && std::isfinite(tip.z))) { ++rc->badTips; return; }
     char buf[160];
     const int n = std::snprintf(buf, sizeof(buf), "%.6f,%.6f,%.6f", tip.x, tip.y, tip.z);
     mosquitto_publish(mosq, nullptr, rc->stateTopic.c_str(), n, buf, 1, false);   // QoS 1: no silent drop
@@ -253,6 +265,163 @@ bool runMqttGateM()
     return pass;
 }
 
+// ===========================================================================
+// GATE M5 (Phase 4): MQTT robustness surface. M5a broker KILLED mid-run -> the engine survives (no
+// crash) and RECONNECTS, round-trip works again. M5b under N>=128 topics the per-service MQTT cost
+// stays bounded (a physics tick servicing MQTT isn't starved). M5c MALFORMED payloads on a cmd topic
+// are REJECTED -- the handler never produces a non-finite pose, never crashes. Gated by KRS_MQTTROBUST_SELFTEST.
+// ===========================================================================
+bool runMqttRobustnessGateM5()
+{
+    using std::printf;
+    using clk = std::chrono::high_resolution_clock;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[mqtt-r] GATE M5 -- broker-kill/reconnect + N>=128-topic tick budget + malformed-payload rejection\n");
+
+    const int port = []{ const int p = qEnvironmentVariableIntValue("KRS_MQTT_PORT"); return p > 0 ? p + 1 : 11884; }();
+    const char* host = "127.0.0.1";
+    std::string exe = "C:/Program Files/mosquitto/mosquitto.exe";
+    if (const char* ov = std::getenv("KRS_MOSQUITTO_EXE")) exe = ov;
+    if (!std::filesystem::exists(exe)) { printf("[mqtt-r] FAIL: broker exe not found at '%s'\n", exe.c_str());
+        fflush(stdout); return false; }
+    std::error_code ec;
+    const std::string conf = (std::filesystem::temp_directory_path(ec) / "krs_m5_mosq.conf").string();
+    { std::ofstream f(conf); f << "listener " << port << " 127.0.0.1\n" << "allow_anonymous true\n"; }
+
+    mosquitto_lib_init();
+    auto connect = [&](const char* id, void* ud) -> struct mosquitto* {
+        struct mosquitto* c = mosquitto_new(id, true, ud);
+        if (!c) return nullptr;
+        for (int a = 0; a < 40; ++a) { if (mosquitto_connect(c, host, port, 30) == MOSQ_ERR_SUCCESS) return c;
+                                       QThread::msleep(100); }
+        mosquitto_destroy(c); return nullptr;
+    };
+    auto pumpc = [&](std::initializer_list<struct mosquitto*> cs, int iters, int tmo) {
+        for (int i = 0; i < iters; ++i) for (auto c : cs) if (c) mosquitto_loop(c, tmo, 1);
+    };
+
+    BrokerProc broker;
+    broker.proc.start(QString::fromStdString(exe), QStringList{ "-c", QString::fromStdString(conf) });
+    if (!broker.proc.waitForStarted(4000)) { printf("[mqtt-r] FAIL: broker did not start\n");
+        fflush(stdout); mosquitto_lib_cleanup(); return false; }
+    QThread::msleep(500);
+
+    // ---------------- M5a: kill the broker mid-run -> survive + reconnect ----------------
+    bool survivedKill = false, reconnected = false;
+    {
+        RxBox rx;
+        struct mosquitto* c = connect("krs-m5a", &rx);
+        if (c) {
+            mosquitto_message_callback_set(c, onMsgCollect);
+            mosquitto_subscribe(c, nullptr, "krs/m5/pre", 1);
+            pumpc({ c }, 4, 50);
+            const char* p0 = "before";
+            mosquitto_publish(c, nullptr, "krs/m5/pre", 6, p0, 1, false);
+            pumpc({ c }, 8, 50);
+            // KILL the broker
+            broker.proc.kill(); broker.proc.waitForFinished(2000);
+            // operate against the dead broker -> must NOT crash (loop returns an error, publish queues/errs)
+            for (int i = 0; i < 5; ++i) { mosquitto_loop(c, 50, 1); mosquitto_publish(c, nullptr, "krs/m5/pre", 4, "void", 1, false); }
+            survivedKill = true;                                   // reached here without crashing
+            // restart the broker + reconnect the SAME client
+            broker.proc.start(QString::fromStdString(exe), QStringList{ "-c", QString::fromStdString(conf) });
+            broker.proc.waitForStarted(4000); QThread::msleep(500);
+            int rr = MOSQ_ERR_UNKNOWN;
+            for (int a = 0; a < 40 && rr != MOSQ_ERR_SUCCESS; ++a) { rr = mosquitto_reconnect(c); if (rr != MOSQ_ERR_SUCCESS) QThread::msleep(100); }
+            if (rr == MOSQ_ERR_SUCCESS) {
+                mosquitto_subscribe(c, nullptr, "krs/m5/post", 1);  // clean-session: re-subscribe after reconnect
+                pumpc({ c }, 4, 50);
+                struct mosquitto* pub = connect("krs-m5a-pub", nullptr);
+                if (pub) {
+                    const char* p1 = "after";
+                    mosquitto_publish(pub, nullptr, "krs/m5/post", 5, p1, 1, false);
+                    pumpc({ pub, c }, 16, 50);
+                    for (auto& kv : rx.msgs) if (kv.first == "krs/m5/post" && kv.second == "after") reconnected = true;
+                    mosquitto_disconnect(pub); mosquitto_destroy(pub);
+                }
+            }
+            mosquitto_destroy(c);
+        }
+    }
+
+    // ---------------- M5b: N>=128 topics -> bounded per-service cost (tick budget) ----------------
+    // A telemetry consumer subscribes ONCE to the joint-state WILDCARD and must service 128 DISTINCT
+    // topics' traffic; we measure the cost of draining that burst (the budget a physics tick would pay).
+    bool m5bok = false; double serviceMs = 9e9; const int topicsN = 128; int distinctTopics = 0;
+    {
+        RxBox rx;
+        struct mosquitto* sub = connect("krs-m5b-sub", &rx);
+        struct mosquitto* pub = connect("krs-m5b-pub", nullptr);
+        if (sub && pub) {
+            mosquitto_message_callback_set(sub, onMsgCollect);
+            pumpc({ sub, pub }, 6, 50);                             // settle CONNACK
+            mosquitto_subscribe(sub, nullptr, "robot/FANUC/joint/+/state", 0);  // ONE wildcard sub for all N
+            pumpc({ sub }, 6, 50);                                  // flush SUBACK
+            for (int i = 0; i < topicsN; ++i) { std::string t = "robot/FANUC/joint/" + std::to_string(i) + "/state";
+                std::string v = std::to_string(i); mosquitto_publish(pub, nullptr, t.c_str(), int(v.size()), v.c_str(), 0, false); }
+            // service until all distinct topics drain (or a generous cap) -> measures the real burst cost
+            const auto t0 = clk::now();
+            for (int round = 0; round < 400 && distinctTopics < topicsN; ++round) {
+                pumpc({ pub, sub }, 1, 10);
+                std::vector<std::string> seen;
+                for (auto& kv : rx.msgs) if (std::find(seen.begin(), seen.end(), kv.first) == seen.end()) seen.push_back(kv.first);
+                distinctTopics = int(seen.size());
+            }
+            const auto t1 = clk::now();
+            serviceMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            m5bok = (distinctTopics >= topicsN) && (serviceMs < 1500.0);
+        }
+        for (auto* c : { sub, pub }) if (c) { mosquitto_disconnect(c); mosquitto_destroy(c); }
+    }
+
+    // ---------------- M5c: malformed payloads on a cmd topic -> rejected, no crash, no bad pose ----------------
+    bool m5cok = false; int malformedSent = 0; int handlerCmds = 0, handlerRej = 0, handlerBad = 0;
+    {
+        RobotCtx rc; rc.origin = glm::vec3(0.3f, 0, 0); rc.axis = glm::vec3(0, 0, 1);
+        rc.tip0 = rc.origin + glm::vec3(0.5f, 0, 0); rc.stateTopic = "robot/FANUC/joint/0/state";
+        RxBox ctlRx;
+        struct mosquitto* robot = connect("krs-m5c-robot", &rc);
+        struct mosquitto* ctl   = connect("krs-m5c-ctl", &ctlRx);
+        if (robot && ctl) {
+            mosquitto_message_callback_set(robot, onRobotCmd);
+            mosquitto_subscribe(robot, nullptr, "robot/FANUC/joint/+/cmd", 1);
+            mosquitto_message_callback_set(ctl, onMsgCollect);
+            mosquitto_subscribe(ctl, nullptr, rc.stateTopic.c_str(), 1);
+            pumpc({ robot, ctl }, 6, 50);
+            const char* bad[] = { "", "not_a_number", "NaN", "1e999", "0.5xyz", "  ", "-", "inf", "\x01\x02\x03\x04" };
+            const int badLen[] = { 0, 12, 3, 5, 6, 2, 1, 3, 4 };
+            for (int i = 0; i < 9; ++i) { mosquitto_publish(ctl, nullptr, "robot/FANUC/joint/0/cmd", badLen[i], bad[i], 1, false); ++malformedSent; }
+            // then ONE valid command to confirm the handler still works after the garbage
+            const char* good = "0.7"; mosquitto_publish(ctl, nullptr, "robot/FANUC/joint/0/cmd", 3, good, 1, false);
+            pumpc({ robot, ctl }, 40, 50);
+            handlerCmds = rc.cmds; handlerRej = rc.rejected; handlerBad = rc.badTips;
+            bool recoveredFinite = false;
+            for (auto& kv : ctlRx.msgs) if (kv.first == rc.stateTopic) {
+                const glm::vec3 p = parseVec3(kv.second);
+                if (std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z)) recoveredFinite = true;
+            }
+            // pass: every malformed cmd rejected, the handler NEVER produced a bad pose, exactly the one good cmd acted, recovery finite
+            m5cok = (handlerBad == 0) && (handlerRej == malformedSent) && (handlerCmds == 1) && recoveredFinite;
+        }
+        for (auto* c : { robot, ctl }) if (c) { mosquitto_disconnect(c); mosquitto_destroy(c); }
+    }
+
+    mosquitto_lib_cleanup();
+    std::filesystem::remove(conf, ec);
+
+    const bool pass = survivedKill && reconnected && m5bok && m5cok;
+    printf("[mqtt-r]   M5a broker kill mid-run: survived=%s, reconnected+round-trip=%s\n",
+           survivedKill ? "yes" : "NO!", reconnected ? "yes" : "NO!");
+    printf("[mqtt-r]   M5b %d-topic service cost: %.2f ms total, %d/%d distinct topics delivered (bounded tick budget)  %s\n",
+           topicsN, serviceMs, distinctTopics, topicsN, m5bok ? "PASS" : "FAIL");
+    printf("[mqtt-r]   M5c malformed payloads: %d sent -> %d rejected, %d bad poses (want 0), %d good acted  %s\n",
+           malformedSent, handlerRej, handlerBad, handlerCmds, m5cok ? "PASS" : "FAIL");
+    printf("[mqtt-r] %s\n", pass ? "ALL PASS (survives broker kill + reconnects; N>=128 bounded; malformed rejected, no bad pose)"
+                                 : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
+}
+
 } // namespace krs::mqtt
 
 #else
@@ -260,5 +429,6 @@ bool runMqttGateM()
 namespace krs::mqtt {
 bool available() { return false; }
 bool runMqttGateM() { return true; } // no MQTT -> vacuous pass, keeps the bench green
+bool runMqttRobustnessGateM5() { return true; }
 } // namespace krs::mqtt
 #endif

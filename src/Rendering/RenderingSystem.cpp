@@ -782,6 +782,38 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
+    if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
+        std::printf("\n================= KRS_DISAMBIG_SELFTEST =================\n");
+        const bool ok = krs::cad::runBRepDisambiguationGateF3();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Phase 3 GATE F5: dense-scene pick stress (>=20 bodies / >=100k tris + latency).
+    if (qEnvironmentVariableIntValue("KRS_DENSE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_DENSE_SELFTEST =================\n");
+        const bool ok = krs::pick::runDenseSceneGateF5();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Phase 3 GATE J4: joint validation fuzz (random feature x type x extremes -> 0 corrupt).
+    if (qEnvironmentVariableIntValue("KRS_JOINTFUZZ_SELFTEST") != 0) {
+        std::printf("\n================= KRS_JOINTFUZZ_SELFTEST =================\n");
+        const bool ok = krs::cad::runJointFuzzGateJ4();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Phase 4 GATE M5: MQTT robustness (broker kill/reconnect + N>=128 + malformed payloads).
+    if (qEnvironmentVariableIntValue("KRS_MQTTROBUST_SELFTEST") != 0) {
+        std::printf("\n================= KRS_MQTTROBUST_SELFTEST =================\n");
+        const bool ok = krs::mqtt::runMqttRobustnessGateM5();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -847,6 +879,10 @@ void RenderingSystem::initializeSharedResources()
             { "GATE J joint tooling (derive revolute frame <1e-6 vs oracle -> RobotArticSpec + reject neg-ctrl)", krs::cad::runJointGateJ() },
             { "GATE M MQTT (real broker; joint cmd->FK->state round-trip <1e-4; broadcast duality)", krs::mqtt::runMqttGateM() },
             { "GATE ND node graph (scene->node->ECS effect + graph->robot + disconnected/type neg-ctrls)", krs::nodes::runNodeGraphGateND() },
+            { "GATE F3 disambiguation (small bore vs large face / shared edge / edge-vs-face)", krs::cad::runBRepDisambiguationGateF3() },
+            { "GATE F5 dense-scene pick (>=20 bodies/>=100k tris, >=99% at scale + latency)", krs::pick::runDenseSceneGateF5() },
+            { "GATE J4 joint fuzz (20k feature x type x extremes -> 0 corrupt graphs)", krs::cad::runJointFuzzGateJ4() },
+            { "GATE M5 MQTT robustness (broker kill/reconnect + N>=128 + malformed rejected)", krs::mqtt::runMqttRobustnessGateM5() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

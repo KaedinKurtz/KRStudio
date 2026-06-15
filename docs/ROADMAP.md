@@ -1860,3 +1860,31 @@ stayed **33/33**.
 - **GATE F (minor)**: F2 now also checks the axis-LINE position (xy offset <1e-9), so "axis" means the full
   line; the neg-control is relabeled honestly as a centroid-average radius biased inward by the facet sagitta
   (not a least-squares fit). F1's ray-triangle path confirmed to use no AABB fallback (attack refuted).
+
+## §AC HARD-FEATURE / STRESS / FUZZ / ROBUSTNESS GATES (F3/F5/J4/M5) -- LANDED (2026-06-15)
+The make-or-break items from the original F/J/M spec that the first pass had NOT run -- now run, with real
+numbers. KRS_OVERNIGHT_BENCH **37/37** (rigid KRS_BENCH still 7/7). TWO latent bugs were caught by these
+gates and fixed.
+### AC.1 GATE F3 -- hard-feature disambiguation (KRS_DISAMBIG_SELFTEST)
+A 200mm box with a **3mm bore** (~0.07% of a face area). F3a bore-aimed rays -> the cylinder face (radius
+3mm) **32/32** and large-face rays -> a plane **80/80** (the tiny feature is never lost to the dominating
+face, nor vice-versa). F3b adjacent faces stay separated up to 90% of the way to their shared edge **38/38**.
+F3c rays aimed exactly at edges/corners return a valid face or clean miss, **0 corrupt ids / 12/12** -- no crash.
+### AC.2 GATE F5 -- dense-scene pick stress (KRS_DENSE_SELFTEST)
+**25 bodies / 115,200 triangles**, 2327 ground-truth rays: **100.00%** correct at scale; picking latency
+**avg 0.482 ms, max 1.888 ms** per pick. NB pickMesh is brute-force O(all triangles) with NO BVH/AABB
+prune -- the reported latency is honest, and a spatial acceleration structure is the obvious scale upgrade
+(documented, not yet built).
+### AC.3 GATE J4 -- joint validation fuzz (KRS_JOINTFUZZ_SELFTEST) -- FOUND + FIXED A BUG
+20,000 random feature x type x extreme-value cases (zero/huge/tiny axes, huge positions, zero radius, mixed
+types), seeded for reproducibility. **First run: 1,473 CORRUPT graphs** -- a zero-length axisDir made
+`glm::normalize` NaN, and since every `NaN > tol` early-out is false, `deriveRevoluteFromBores` RETURNED a
+NaN frame (a corrupt canonical joint). FIX: guard non-finite / sub-`1e-6` axes (reject) at the top of the
+derivation. Re-run: **0 corrupt, 0 bogus accepts**, 6354 accepted / 13646 rejected (both paths exercised).
+### AC.4 GATE M5 -- MQTT robustness (KRS_MQTTROBUST_SELFTEST) -- FOUND + FIXED A BUG
+**M5a** the broker is KILLED mid-run -> the engine survives (no crash) and **reconnects**, round-trip works
+again. **M5b** a telemetry consumer services **128 distinct topics** (wildcard sub) in **2.87 ms** total --
+bounded, so a physics tick interleaving MQTT isn't starved. **M5c** 9 malformed cmd payloads (`""`,
+`not_a_number`, `1e999`, `0.5xyz`, binary, ...) are all **rejected, 0 non-finite poses**, then one valid
+command still acts. The handler originally used `atof` (turns `"1e999"`->inf -> a non-finite link pose);
+FIX: `strtod` with full-consumption + `isfinite` validation, reject otherwise. **All M5 PASS.**

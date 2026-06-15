@@ -8,6 +8,7 @@
 // the canonical krs::dyn::RobotArticSpec (rule 6: one articulation graph), never a parallel rep.
 
 #include <glm/glm.hpp>
+#include <cmath>
 #include "components.hpp"   // BRepFace
 
 namespace krs::joint {
@@ -26,6 +27,16 @@ inline bool deriveRevoluteFromBores(const BRepFace& a, const BRepFace& b, JointF
                                     double* coaxOffset = nullptr)
 {
     if (a.type != 1 || b.type != 1) return false;        // both must be cylinders
+    // GUARD degenerate / non-finite features: a zero-length axis makes glm::normalize NaN, and since
+    // NaN fails every (NaN > tol) early-out, the function would otherwise RETURN a NaN frame (corrupt
+    // graph -- caught by GATE J4). Reject any feature whose axis/position is non-finite or whose axis
+    // is too short to normalise reliably.
+    auto finite3 = [](const glm::vec3& v) {
+        return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+    };
+    if (!finite3(a.axisDir) || !finite3(b.axisDir) || !finite3(a.axisPos) || !finite3(b.axisPos)) return false;
+    const float lenA = glm::length(a.axisDir), lenB = glm::length(b.axisDir);
+    if (!(lenA > 1e-6f) || !(lenB > 1e-6f) || !std::isfinite(lenA) || !std::isfinite(lenB)) return false;
     glm::vec3 da = glm::normalize(a.axisDir);
     glm::vec3 db = glm::normalize(b.axisDir);
     if (glm::dot(da, db) < 0.0f) db = -db;               // align sense

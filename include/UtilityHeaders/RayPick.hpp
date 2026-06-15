@@ -105,4 +105,8 @@ inline std::optional<PickHit> pickMesh(entt::registry& reg, const Ray& ray)
 // broken always-hit pick fails the miss cases. Gated by KRS_RAYCAST_SELFTEST + KRS_OVERNIGHT_BENCH.
 bool runRaycastGate3_1();
 
+// GATE F5 (KRS_DENSE_SELFTEST) -- dense-scene pick stress: >=20 bodies / >=100k triangles, batch of
+// ground-truth rays, asserts >=99% correctness at scale and REPORTS picking latency (avg/max per pick).
+bool runDenseSceneGateF5();
+
 } // namespace krs::pick
