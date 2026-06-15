@@ -723,6 +723,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 1 GATE 1.5: FEM static equilibrium (net reaction == applied load + unbalanced neg-ctrl).
+    if (qEnvironmentVariableIntValue("KRS_FEMEQUIL_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FEMEQUIL_SELFTEST =================\n");
+        const bool ok = krs::fem::FemSolver::runEquilibriumGate1_5();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -781,6 +789,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 1.2 fluid<->rigid Newton 3rd (impulse==momentum + inert-box neg-ctrl)", runFluidRigidImpulseGate() },
             { "GATE 1.3 artic<->collision (collision xform tracks live FK + stale neg-ctrl)", krs::dyn::runArticCollisionGate1_3() },
             { "GATE 1.4 MPM<->thermal energy conservation (Fourier + energy-leak neg-ctrl)", m_mpm ? m_mpm->runThermalGate1_4(*this, m_gl) : true },
+            { "GATE 1.5 FEM static equilibrium (net reaction == applied load + neg-ctrls)", krs::fem::FemSolver::runEquilibriumGate1_5() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

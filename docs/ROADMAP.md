@@ -1722,5 +1722,13 @@ Coupling recon (same workflow) first established WHICH pairs actually couple, to
   step -> spread unchanged **55->55**. CORRECTION to the recon: a conduction-scale=0 control is VACUOUS
   here -- the P2G/G2P scatter+gather round-trip is itself a smoother, so the spread shrinks even with zero
   Fourier flux; the valid severed control is running no thermal step at all.
-- **1.5 FEM static equilibrium: EXIST, gateable** (recipe in recon) -- pending sub-gate.
-GATE 1 (in progress): KRS_OVERNIGHT_BENCH **26/26** (GATE 1.2/1.3/1.4 added); exe verified newer than all sources.
+- **1.5 FEM static equilibrium: LANDED.** GATE 1.5 (krs::fem::FemSolver::runEquilibriumGate1_5,
+  KRS_FEMEQUIL_SELFTEST): a clamped bar under an axial force + gravity is solved; the net constraint
+  REACTION (new ElasticResult::netReaction = sum of penalty forces P*u at the fixed nodes) must balance
+  the applied LOAD (nodal forces + mass*gravity), Newton's 1st law. **|netReaction|=100002 N ==
+  |appliedLoad|=100002 N, residual 0.000%**. NEG-CTRL A: a loaded body with NO fixed nodes has no static
+  equilibrium -> solveElastic bails (ok=false) -> caught. NEG-CTRL B: a corrupted load (x0.5) -> 50%
+  balance residual -> caught.
+GATE 1 COMPLETE: 1.2 (fluid<->rigid), 1.3 (artic<->collision), 1.4 (MPM<->thermal), 1.5 (FEM equilibrium)
+all green; 1.1 (MPM<->fluid) documented ABSENT (no coupling -> intrinsic conservation gated instead).
+KRS_OVERNIGHT_BENCH **27/27** (GATE 1.2-1.5 added); exe verified newer than all sources.

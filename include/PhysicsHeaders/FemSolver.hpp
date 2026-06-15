@@ -53,6 +53,9 @@ struct ElasticResult {
     std::vector<double> vonMises;          // per node (Pa), element-averaged
     std::vector<double> strainNorm;        // per node, ||Green strain|| (-)
     double maxVonMises = 0.0, maxDisp = 0.0, maxStrain = 0.0;
+    // Net constraint reaction = sum over fixed DOFs of the penalty force P*u (Newton). At static
+    // equilibrium this balances the applied load: netReaction == -(nodalForces + mass*gravity).
+    glm::dvec3 netReaction{ 0.0 };
     bool ok = false;
 };
 
@@ -94,6 +97,12 @@ public:
     // KRS_FEM_SELFTEST: axial bar (exact), cantilever vs Euler-Bernoulli,
     // 1D-bar steady conduction vs linear gradient, plate-with-hole concentration.
     static bool runSelfTests();
+
+    // Phase 1 GATE 1.5 -- FEM static equilibrium: the net constraint reaction (ElasticResult::
+    // netReaction) balances the applied load (nodal forces + mass*gravity). NEG-CTRL A: a loaded
+    // body with no fixed nodes is rejected (ok=false). NEG-CTRL B: a corrupted load fails the
+    // balance. Gated by KRS_FEMEQUIL_SELFTEST + KRS_OVERNIGHT_BENCH. CPU/Eigen, no GL.
+    static bool runEquilibriumGate1_5();
 };
 
 } // namespace krs::fem

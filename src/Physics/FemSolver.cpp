@@ -216,6 +216,12 @@ ElasticResult FemSolver::solveElastic(const VoxelFemModel& m, const FemMaterial&
     const Vec u = solver.solve(f);
     if (solver.info() != Eigen::Success) return r;
 
+    // Net constraint reaction = sum over fixed DOFs of the penalty spring force P*u. At static
+    // equilibrium this balances the applied load (nodalForces + mass*gravity), per Newton.
+    glm::dvec3 react(0.0);
+    for (int n : bc.fixedNodes) for (int c = 0; c < 3; ++c) react[c] += P * u[3 * n + c];
+    r.netReaction = react;
+
     r.displacement.resize(m.numNodes);
     for (int n = 0; n < m.numNodes; ++n) r.displacement[n] = glm::dvec3(u[3 * n], u[3 * n + 1], u[3 * n + 2]);
     // Per-element CENTROID stress -> averaged onto nodes. For trilinear hexes this
@@ -399,6 +405,76 @@ bool FemSolver::runSelfTests() {
     printf("[FEM selftest] overall: %s\n", all ? "ALL PASS" : "FAILURES PRESENT");
     std::fflush(stdout);
     return all;
+}
+
+// Phase 1 GATE 1.5 -- FEM static equilibrium: the net constraint REACTION balances the applied LOAD
+// (Newton's 1st law for the whole body). A clamped bar under an axial force + gravity is solved; the
+// reaction (sum of penalty forces at the fixed nodes, ElasticResult::netReaction) must equal the
+// applied load (nodal forces + mass*gravity) in magnitude and line of action. NEG-CTRL A: an
+// UNBALANCED system (load but no fixed nodes) has no static equilibrium and must be REJECTED
+// (ok=false). NEG-CTRL B: a corrupted applied-load (x0.5) must violate the balance (non-vacuous).
+bool FemSolver::runEquilibriumGate1_5()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[fem-equil] GATE 1.5 -- FEM static equilibrium: net reaction balances applied load + 2 neg-ctrls\n");
+
+    auto faceNodes = [](const VoxelFemModel& m, int axis, bool maxSide) {
+        std::vector<int> out;
+        const double target = maxSide ? (m.origin[axis] + (axis == 0 ? m.nx : axis == 1 ? m.ny : m.nz) * m.h)
+                                      : m.origin[axis];
+        for (int n = 0; n < m.numNodes; ++n)
+            if (std::abs(m.nodePos[n][axis] - target) < 1e-6) out.push_back(n);
+        return out;
+    };
+
+    const FemMaterial steel{ 68.9e9, 0.33, 2700.0, 167.0, 896.0 };
+    const double L = 0.6, a = 0.2, h = 0.05;
+    const VoxelFemModel mdl = voxelizeBox(glm::dvec3(L / 2, 0, 0), glm::dvec3(L / 2, a / 2, a / 2), h);
+    const double totalMass = double(mdl.elements.size()) * steel.rho * (h * h * h);
+    const glm::dvec3 gravity(0.0, -9.81, 0.0);
+    const double F = 1.0e5;                        // axial force at the +x face
+    const auto tip = faceNodes(mdl, 0, true);
+
+    ElasticBC bc;
+    bc.fixedNodes = faceNodes(mdl, 0, false);      // clamp the -x face
+    bc.gravity = gravity;
+    for (int n : tip) bc.nodalForces.push_back({ n, glm::dvec3(F / double(tip.size()), 0, 0) });
+    const glm::dvec3 appliedLoad = glm::dvec3(F, 0, 0) + totalMass * gravity;  // nodal force + weight
+
+    const ElasticResult r = solveElastic(mdl, steel, bc);
+    // sign-convention robust: reaction balances load -> netReaction == -applied (or +applied per the
+    // penalty sign); either way one of |netReaction +/- applied| is ~0.
+    const double balErr = std::min(glm::length(r.netReaction + appliedLoad),
+                                   glm::length(r.netReaction - appliedLoad));
+    const double appMag = std::max(1e-9, glm::length(appliedLoad));
+    const double relErr = balErr / appMag;
+    const bool equilibrium = r.ok && relErr < 0.01;
+
+    // NEG-CTRL A: load but NO fixed nodes -> unrestrained -> solveElastic must bail (ok=false).
+    ElasticBC bcUn; bcUn.gravity = gravity;
+    for (int n : tip) bcUn.nodalForces.push_back({ n, glm::dvec3(F / double(tip.size()), 0, 0) });
+    const ElasticResult rUn = solveElastic(mdl, steel, bcUn);
+    const bool unbalancedRejected = !rUn.ok;
+
+    // NEG-CTRL B: a corrupted applied load (half) must FAIL the balance (proves it isn't vacuous).
+    const glm::dvec3 corrupt = 0.5 * appliedLoad;
+    const double corruptErr = std::min(glm::length(r.netReaction + corrupt),
+                                       glm::length(r.netReaction - corrupt));
+    const double corruptRel = corruptErr / appMag;
+    const bool corruptCaught = corruptRel > 0.1;
+
+    const bool pass = equilibrium && unbalancedRejected && corruptCaught;
+    printf("[fem-equil]   |netReaction|=%.1f N ; |appliedLoad|=%.1f N ; balance residual=%.3f (rel %.3f%%, bound<1%%)  %s\n",
+           glm::length(r.netReaction), glm::length(appliedLoad), balErr, relErr * 100.0,
+           equilibrium ? "BALANCED" : "VIOLATED");
+    printf("[fem-equil]   NEG-CTRL A (load, no fixed nodes): solveElastic ok=%d (must be 0 = unrestrained rejected)  %s\n",
+           int(rUn.ok), unbalancedRejected ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[fem-equil]   NEG-CTRL B (corrupted load x0.5): balance residual rel=%.1f%% (>>1%% -> caught)  %s\n",
+           corruptRel * 100.0, corruptCaught ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[fem-equil] %s\n", pass ? "ALL PASS (reaction balances load; unbalanced + corrupt caught)" : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
 }
 
 } // namespace krs::fem
