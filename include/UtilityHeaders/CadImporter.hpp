@@ -56,4 +56,11 @@ bool runUvGateU();
 /// B-Rep, not a mesh fit) to <1e-9 vs OCCT. Returns true on PASS (vacuous in the no-OCCT stub).
 bool runBRepSelectorGateF();
 
+/// Phase 3 GATE J (gated by KRS_JOINT_SELFTEST): joint/mate tooling. Derives a revolute joint frame
+/// from two selected cylindrical bore features (krs::joint::deriveRevoluteFromBores), checks the
+/// frame matches the analytic oracle axis/origin to <1e-6, writes it into the canonical
+/// krs::dyn::RobotArticSpec, and verifies two NON-coaxial bores are rejected (no valid revolute).
+/// Returns true on PASS (vacuous in the no-OCCT stub).
+bool runJointGateJ();
+
 } // namespace krs::cad

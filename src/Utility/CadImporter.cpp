@@ -41,6 +41,8 @@
 #include <gp_Sphere.hxx>
 #include <gp_Pln.hxx>
 #include "RayPick.hpp"       // GATE F: ray-triangle pick (krs::pick) for the selector test
+#include "JointTooling.hpp"  // GATE J: derive a revolute frame from two bore features (krs::joint)
+#include "ArticulationSpec.hpp" // GATE J: write the derived joint into the canonical RobotArticSpec
 #include <GeomAbs_SurfaceType.hxx>
 #include <gp_Vec.hxx>
 #include <gp_Pnt2d.hxx>
@@ -659,6 +661,106 @@ bool runBRepSelectorGateF()
 }
 
 // ===========================================================================
+// GATE J (Phase 3.3): joint/mate tooling. Select two cylindrical BORE features
+// (GATE F gives their EXACT analytic axes) and DERIVE a revolute joint frame
+// (krs::joint::deriveRevoluteFromBores, the SSOT the UI tool will call). J1: the
+// derived axis/origin match the analytic oracle (the axis the bores were built on)
+// to <1e-6. J2: the frame is written straight into the canonical RobotArticSpec
+// (rule 6 -- one articulation graph). NEG-CTRL: two NON-coaxial bores (parallel-
+// offset, then tilted) must be REJECTED -- no valid revolute -- which is the mate
+// validation the tooling relies on. Gated by KRS_JOINT_SELFTEST.
+// ===========================================================================
+bool runJointGateJ()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[joint] GATE J -- derive revolute frame from two bore features -> canonical RobotArticSpec\n");
+    const float  s   = 0.001f;            // mm -> m
+    const double Rmm = 8.0, Hmm = 40.0;
+
+    // Oracle: a TILTED axis (not grid-aligned) through a known point; two coaxial bores along it.
+    const gp_Dir  gd(2.0, 3.0, 6.0);      // |.|=7
+    const gp_Pnt  pA(10.0, 20.0, 30.0);   // mm, bore A reference
+    const glm::vec3 oracleDir = glm::normalize(glm::vec3(2.0f, 3.0f, 6.0f));
+    const glm::vec3 oracleP(float(pA.X()) * s, float(pA.Y()) * s, float(pA.Z()) * s);
+    const double d = 60.0;                // mm along the axis to bore B's base (still coaxial)
+    const gp_Pnt  pB(pA.X() + gd.X() / 7.0 * d, pA.Y() + gd.Y() / 7.0 * d, pA.Z() + gd.Z() / 7.0 * d);
+
+    auto buildCyl = [&](const gp_Pnt& base, const gp_Dir& dir) {
+        return BRepPrimAPI_MakeCylinder(gp_Ax2(base, dir), Rmm, Hmm).Shape();
+    };
+    // Write a shape to a temp STEP, import it, return its cylindrical (type==1) B-Rep face.
+    auto importCyl = [&](const TopoDS_Shape& shp, const char* tag, BRepFace& outFace) -> bool {
+        std::error_code ec;
+        const std::string path = (std::filesystem::temp_directory_path(ec)
+                                  / (std::string("krs_gatej_") + tag + ".step")).string();
+        { STEPControl_Writer w;
+          if (w.Transfer(shp, STEPControl_AsIs) != IFSelect_RetDone || w.Write(path.c_str()) != IFSelect_RetDone)
+              return false; }
+        Scene scene; const ImportResult ir = importStep(scene, path, s);
+        std::filesystem::remove(path, ec);
+        if (ir.solids < 1) return false;
+        auto& reg = scene.getRegistry();
+        for (auto e : reg.view<BRepFaceComponent>()) {
+            const auto& brep = reg.get<BRepFaceComponent>(e);
+            for (const auto& f : brep.faces) if (f.type == 1) { outFace = f; return true; }
+        }
+        return false;
+    };
+
+    BRepFace fA, fB;
+    if (!importCyl(buildCyl(pA, gd), "a", fA) || !importCyl(buildCyl(pB, gd), "b", fB)) {
+        printf("[joint] FAIL: build/import bores\n"); fflush(stdout); return false; }
+
+    // J1: derive the revolute frame from the two coaxial bores; compare to the analytic oracle.
+    krs::joint::JointFrame frame; double angRes = 0, offRes = 0;
+    const bool derived = krs::joint::deriveRevoluteFromBores(fA, fB, frame, 1e-4, &angRes, &offRes);
+    double axisErr = 1e9, posErr = 1e9;
+    if (derived) {
+        axisErr = 1.0 - std::abs(double(glm::dot(frame.axisDir, oracleDir)));
+        const glm::vec3 w = frame.axisPos - oracleP;
+        const glm::vec3 perp = w - glm::dot(w, oracleDir) * oracleDir;  // perp dist to the oracle LINE
+        posErr = double(glm::length(perp));
+    }
+    const bool j1ok = derived && axisErr < 1e-6 && posErr < 1e-6;
+
+    // J2 CANONICAL WRITE: the derived frame goes straight into RobotArticSpec (rule 6 -- one graph).
+    krs::dyn::RobotArticSpec spec;
+    { krs::dyn::ArticJointSpec js; js.revolute = true;
+      js.axis  = { frame.axisDir.x, frame.axisDir.y, frame.axisDir.z };
+      js.ptree = { frame.axisPos.x, frame.axisPos.y, frame.axisPos.z };
+      spec.joints.push_back(js); }
+    const glm::vec3 specAxis(spec.joints[0].axis[0], spec.joints[0].axis[1], spec.joints[0].axis[2]);
+    const double specAxisErr = 1.0 - std::abs(double(glm::dot(specAxis, oracleDir)));
+    const bool j2ok = spec.joints.size() == 1 && specAxisErr < 1e-6;
+
+    // NEG-CTRL a: parallel-but-OFFSET bore (5mm in X -> ~4.8mm perpendicular to the axis) -> REJECT.
+    const gp_Pnt pOff(pA.X() + 5.0, pA.Y(), pA.Z());
+    BRepFace fOff; krs::joint::JointFrame jf2; double ang2 = 0, off2 = 0; bool rejOffset = true;
+    if (importCyl(buildCyl(pOff, gd), "off", fOff))
+        rejOffset = !krs::joint::deriveRevoluteFromBores(fA, fOff, jf2, 1e-4, &ang2, &off2);
+    // NEG-CTRL b: TILTED bore (axis (2,3,4) vs (2,3,6)) -> not parallel -> REJECT.
+    const gp_Dir gtilt(2.0, 3.0, 4.0);
+    BRepFace fTilt; krs::joint::JointFrame jf3; double ang3 = 0, off3 = 0; bool rejTilt = true;
+    if (importCyl(buildCyl(pA, gtilt), "tilt", fTilt))
+        rejTilt = !krs::joint::deriveRevoluteFromBores(fA, fTilt, jf3, 1e-4, &ang3, &off3);
+    const bool negok = rejOffset && rejTilt;
+
+    const bool pass = j1ok && j2ok && negok;
+    printf("[joint]   J1 derived axis err=%.3e, origin-offset=%.3e (bound<1e-6); coax residuals ang=%.2e off=%.2e  %s\n",
+           axisErr, posErr, angRes, offRes, j1ok ? "PASS" : "FAIL");
+    printf("[joint]   J2 canonical write: %zu joint in RobotArticSpec, spec-axis err=%.3e  %s\n",
+           spec.joints.size(), specAxisErr, j2ok ? "PASS" : "FAIL");
+    printf("[joint]   NEG-CTRL offset bore (perp=%.4f m) %s ; tilted bore (ang-res=%.3f) %s  %s\n",
+           off2, rejOffset ? "REJECTED" : "ACCEPTED!", ang3, rejTilt ? "REJECTED" : "ACCEPTED!",
+           negok ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[joint] %s\n", pass ? "ALL PASS (frame <1e-6 vs oracle; in canonical graph; degenerate mates rejected)"
+                                 : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
 // GATE U (Phase A): world-scale + coverage of the B-Rep UV generation. U1 on a
 // controlled box (planar faces) + cylinder (known circumference); U4 coverage on
 // the real FANUC (every vertex a finite UV). Gated by KRS_UV_SELFTEST.
@@ -909,5 +1011,6 @@ void inspectStep(const std::string&) {} // no OCCT -> no-op
 bool runSelfTest() { return true; } // no OCCT -> vacuous pass, keeps harnesses green
 bool runUvGateU() { return true; }  // no OCCT -> vacuous pass
 bool runBRepSelectorGateF() { return true; } // no OCCT -> vacuous pass
+bool runJointGateJ() { return true; }        // no OCCT -> vacuous pass
 } // namespace krs::cad
 #endif

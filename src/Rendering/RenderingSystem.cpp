@@ -756,6 +756,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 3 GATE J: joint/mate tooling (derive revolute frame from two bores <1e-6 vs oracle).
+    if (qEnvironmentVariableIntValue("KRS_JOINT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_JOINT_SELFTEST =================\n");
+        const bool ok = krs::cad::runJointGateJ();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -818,6 +826,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 2 canonical chain cmd->FK->push->cube->fluid (severed-stage localization)", runCanonicalChainGate2() },
             { "GATE 3.1 raycast ray-triangle pick >=99% (AABB-only neg-ctrl)", krs::pick::runRaycastGate3_1() },
             { "GATE F B-Rep selector (ray-pick -> analytic axis/radius <1e-9 + mesh-fit neg-ctrl)", krs::cad::runBRepSelectorGateF() },
+            { "GATE J joint tooling (derive revolute frame <1e-6 vs oracle -> RobotArticSpec + reject neg-ctrl)", krs::cad::runJointGateJ() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

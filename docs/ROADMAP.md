@@ -1771,3 +1771,18 @@ mesh-fit radius from the triangle CENTROIDS (which lie inside the curved surface
 reads **0.019870 m vs 0.020000** = **1.296e-04** error -- orders of magnitude worse, proving the selector
 reads the B-Rep not a fit. (The mesh VERTICES sit exactly on the cylinder, so a vertex fit is vacuously
 exact; the centroid fit is the honest neg-ctrl.) KRS_OVERNIGHT_BENCH **30/30**; exe verified newer than all sources.
+### Y.3 JOINT / MATE TOOLING (GATE J) -- LANDED (2026-06-15) -- Phase 3 COMPLETE
+The selector (GATE F) hands a tool the EXACT analytic axis of a picked feature; GATE J closes the loop by
+deriving a JOINT from two such features and writing it into the one articulation graph.
+`krs::joint::deriveRevoluteFromBores` (new SSOT header `include/PhysicsHeaders/JointTooling.hpp`) takes two
+cylindrical bore faces and returns the revolute frame: axis = the bores' common direction, origin = the
+mated point on that line. It REJECTS a pair that is non-cylindrical, non-parallel, or parallel-but-offset
+(the mate validation). GATE J (`krs::cad::runJointGateJ`, KRS_JOINT_SELFTEST) builds two coaxial bores on a
+deliberately TILTED axis (2,3,6)/7, round-trips each through STEP+importStep, and derives the joint:
+**J1** derived axis err **1.19e-07**, origin-offset **8.71e-10** -- both well under the **1e-6** oracle bound
+(the oracle = the analytic axis the bores were constructed on); coaxiality residuals ang/off = 0.00.
+**J2** the frame is written straight into a canonical `krs::dyn::RobotArticSpec` (rule 6 -- one graph) and
+the stored joint axis still matches the oracle to **1.19e-07**. NEG-CTRL (non-vacuous): a parallel-but-OFFSET
+bore (perp **0.0048 m**) and a TILTED bore (ang-residual **0.018**) are BOTH **REJECTED** -- no valid revolute,
+so the gate cannot pass by blindly accepting any two faces. KRS_OVERNIGHT_BENCH **31/31**; exe verified newer
+than all sources. **Phase 3 (raycast >=99%, GATE F <1e-9, GATE J <1e-6) COMPLETE.**
