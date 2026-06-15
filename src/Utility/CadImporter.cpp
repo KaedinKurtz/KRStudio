@@ -603,8 +603,11 @@ bool runBRepSelectorGateF()
     const glm::vec3 axisTrue(0, 0, 1);
 
     // F1: cast rays radially inward at the cylinder SIDE (z away from the caps) -> should pick a cylinder face.
+    // F2 checks ALL THREE analytic channels vs the construction oracle: radius, axis DIRECTION, and the
+    // axis-LINE POSITION (the picked axis must lie on the z-axis the cylinder was built on, i.e. its xy
+    // offset ~ 0) -- so "axis" means the full line, not just its direction.
     int total = 0, hitCyl = 0;
-    double maxRadErr = 0.0, maxAxisErr = 0.0; bool gotAnalytic = false;
+    double maxRadErr = 0.0, maxAxisErr = 0.0, maxAxisPosErr = 0.0; bool gotAnalytic = false;
     const int Naz = 24, Nz = 8;
     for (int iz = 0; iz < Nz; ++iz)
         for (int ia = 0; ia < Naz; ++ia) {
@@ -623,13 +626,19 @@ bool runBRepSelectorGateF()
             ++hitCyl;
             maxRadErr = std::max(maxRadErr, double(std::abs(bf.radius - Rm)));
             maxAxisErr = std::max(maxAxisErr, double(std::abs(1.0f - std::abs(glm::dot(bf.axisDir, axisTrue)))));
+            // perpendicular distance from the picked axis point to the true axis line (z-axis through 0):
+            // for a z-aligned axis through the origin this is just the xy radius of bf.axisPos.
+            maxAxisPosErr = std::max(maxAxisPosErr,
+                std::sqrt(double(bf.axisPos.x) * bf.axisPos.x + double(bf.axisPos.y) * bf.axisPos.y));
             gotAnalytic = true;
         }
 
-    // NEG-CTRL: a MESH-FIT radius from the triangle CENTROIDS, which lie INSIDE the curved surface by
-    // the tessellation sagitta (the mesh VERTICES sit exactly on the cylinder, only the facet chords
-    // are inside -- so a centroid fit, like any mesh estimate, carries the tessellation error, orders
-    // of magnitude worse than the analytic read from the B-Rep).
+    // NEG-CTRL: a CENTROID-AVERAGE radius -- the mean xy-radius of the triangle CENTROIDS. Centroids lie
+    // INSIDE the curved surface by the facet sagitta (the mesh VERTICES sit exactly on the cylinder, only
+    // the chord midpoints are inward), so this mesh-derived estimate is biased low by ~1e-4 at 1mm
+    // deflection. It is NOT a least-squares fit (a fit over the on-surface vertices would recover the
+    // radius almost exactly); the point is only that a representative MESH estimate carries tessellation
+    // error orders of magnitude above the analytic B-Rep read, which is exact.
     double fitSum = 0.0; long fitN = 0;
     for (size_t t = 0; t < mesh.triFace.size(); ++t) {
         if (mesh.triFace[t] < 0 || brep.faces[mesh.triFace[t]].type != 1) continue;
@@ -644,17 +653,19 @@ bool runBRepSelectorGateF()
 
     const double f1 = total ? double(hitCyl) / total : 0.0;
     const bool f1ok = f1 >= 0.99 && total > 100;
-    const bool f2ok = gotAnalytic && maxRadErr < 1e-9 && maxAxisErr < 1e-9;
+    // bounds are at float32 precision (params truncated to float in BRepFace) -- 1e-9 m at 0.02 m is
+    // comfortably inside float epsilon because OCCT reports the cylinder analytically (no mesh error).
+    const bool f2ok = gotAnalytic && maxRadErr < 1e-9 && maxAxisErr < 1e-9 && maxAxisPosErr < 1e-9;
     const bool negok = fitErr > 1e-6;
     const bool pass = f1ok && f2ok && negok;
 
     printf("[brep-sel]   F1 face-pick: %d/%d side rays -> cylinder face = %.2f%% (>=99%%)  %s\n",
            hitCyl, total, f1 * 100.0, f1ok ? "PASS" : "FAIL");
-    printf("[brep-sel]   F2 analytic fidelity vs OCCT: radius err=%.3e m, axis err=%.3e (bound<1e-9)  %s\n",
-           maxRadErr, maxAxisErr, f2ok ? "EXACT" : "FAIL");
-    printf("[brep-sel]   NEG-CTRL mesh-fit radius=%.6f m vs analytic %.6f -> err=%.3e (>>1e-9 = not a fit)  %s\n",
+    printf("[brep-sel]   F2 analytic fidelity vs OCCT: radius err=%.3e m, axis-dir err=%.3e, axis-pos err=%.3e (bound<1e-9)  %s\n",
+           maxRadErr, maxAxisErr, maxAxisPosErr, f2ok ? "EXACT" : "FAIL");
+    printf("[brep-sel]   NEG-CTRL centroid-avg radius=%.6f m vs analytic %.6f -> err=%.3e (inward sagitta bias, >>1e-9)  %s\n",
            fitRadius, double(Rm), fitErr, negok ? "REJECTS(non-vacuous)" : "VACUOUS!");
-    printf("[brep-sel] %s\n", pass ? "ALL PASS (>=99% face pick; analytic axis/radius <1e-9; mesh-fit neg-ctrl)"
+    printf("[brep-sel] %s\n", pass ? "ALL PASS (>=99% face pick; analytic axis-line+radius <1e-9; centroid neg-ctrl biased)"
                                    : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
@@ -722,39 +733,56 @@ bool runJointGateJ()
         const glm::vec3 perp = w - glm::dot(w, oracleDir) * oracleDir;  // perp dist to the oracle LINE
         posErr = double(glm::length(perp));
     }
-    const bool j1ok = derived && axisErr < 1e-6 && posErr < 1e-6;
+    // axisErr uses std::abs so |dot| rounding slightly above 1.0 (a tiny NEGATIVE 1-|dot|) can't slip
+    // through a one-sided bound. NB the axis-direction recovery is near-exact BY CONSTRUCTION (both
+    // bores share gd), so the load-bearing J1 number is posErr -- the origin the derivation computes
+    // by projecting the bores' midpoint onto the common line -- not the (near-tautological) axis match.
+    const bool j1ok = derived && std::abs(axisErr) < 1e-6 && posErr < 1e-6;
 
     // J2 CANONICAL WRITE: the derived frame goes straight into RobotArticSpec (rule 6 -- one graph).
+    // Read BACK the spec's ptree (the POSITION channel, independent of J1's shared axis) and check it
+    // lands on the oracle line -- a struct copy of the axis alone could never fail, so this validates
+    // that the canonical write preserved the origin too.
     krs::dyn::RobotArticSpec spec;
     { krs::dyn::ArticJointSpec js; js.revolute = true;
       js.axis  = { frame.axisDir.x, frame.axisDir.y, frame.axisDir.z };
       js.ptree = { frame.axisPos.x, frame.axisPos.y, frame.axisPos.z };
       spec.joints.push_back(js); }
     const glm::vec3 specAxis(spec.joints[0].axis[0], spec.joints[0].axis[1], spec.joints[0].axis[2]);
+    const glm::vec3 specPtree(spec.joints[0].ptree[0], spec.joints[0].ptree[1], spec.joints[0].ptree[2]);
     const double specAxisErr = 1.0 - std::abs(double(glm::dot(specAxis, oracleDir)));
-    const bool j2ok = spec.joints.size() == 1 && specAxisErr < 1e-6;
+    const glm::vec3 specPerp = (specPtree - oracleP) - glm::dot(specPtree - oracleP, oracleDir) * oracleDir;
+    const double specPosErr = double(glm::length(specPerp));
+    const bool j2ok = spec.joints.size() == 1 && std::abs(specAxisErr) < 1e-6 && specPosErr < 1e-6;
 
     // NEG-CTRL a: parallel-but-OFFSET bore (5mm in X -> ~4.8mm perpendicular to the axis) -> REJECT.
+    // The reject flags init FALSE and require the import to SUCCEED and the derive to REJECT, so a
+    // silent import failure can NOT masquerade as a rejection (which would let the neg-ctrl pass
+    // vacuously). importsOk gates the whole control.
     const gp_Pnt pOff(pA.X() + 5.0, pA.Y(), pA.Z());
-    BRepFace fOff; krs::joint::JointFrame jf2; double ang2 = 0, off2 = 0; bool rejOffset = true;
-    if (importCyl(buildCyl(pOff, gd), "off", fOff))
-        rejOffset = !krs::joint::deriveRevoluteFromBores(fA, fOff, jf2, 1e-4, &ang2, &off2);
+    BRepFace fOff; krs::joint::JointFrame jf2; double ang2 = 0, off2 = 0;
+    const bool impOff = importCyl(buildCyl(pOff, gd), "off", fOff);
+    const bool rejOffset = impOff && !krs::joint::deriveRevoluteFromBores(fA, fOff, jf2, 1e-4, &ang2, &off2);
     // NEG-CTRL b: TILTED bore (axis (2,3,4) vs (2,3,6)) -> not parallel -> REJECT.
     const gp_Dir gtilt(2.0, 3.0, 4.0);
-    BRepFace fTilt; krs::joint::JointFrame jf3; double ang3 = 0, off3 = 0; bool rejTilt = true;
-    if (importCyl(buildCyl(pA, gtilt), "tilt", fTilt))
-        rejTilt = !krs::joint::deriveRevoluteFromBores(fA, fTilt, jf3, 1e-4, &ang3, &off3);
-    const bool negok = rejOffset && rejTilt;
+    BRepFace fTilt; krs::joint::JointFrame jf3; double ang3 = 0, off3 = 0;
+    const bool impTilt = importCyl(buildCyl(pA, gtilt), "tilt", fTilt);
+    const bool rejTilt = impTilt && !krs::joint::deriveRevoluteFromBores(fA, fTilt, jf3, 1e-4, &ang3, &off3);
+    const bool importsOk = impOff && impTilt;             // both degenerate bores actually imported
+    // the rejection must be for the RIGHT reason: offset bore fails collinearity (off>tol), tilted
+    // bore fails parallelism (ang>tol). Confirm the residuals exceed the 1e-4 tol, not just "returned false".
+    const bool rejReasons = (off2 > 1e-4) && (ang3 > 1e-4);
+    const bool negok = importsOk && rejOffset && rejTilt && rejReasons;
 
     const bool pass = j1ok && j2ok && negok;
-    printf("[joint]   J1 derived axis err=%.3e, origin-offset=%.3e (bound<1e-6); coax residuals ang=%.2e off=%.2e  %s\n",
+    printf("[joint]   J1 derived axis err=%.3e, origin-offset=%.3e (bound<1e-6; origin is the load-bearing one); coax residuals ang=%.2e off=%.2e  %s\n",
            axisErr, posErr, angRes, offRes, j1ok ? "PASS" : "FAIL");
-    printf("[joint]   J2 canonical write: %zu joint in RobotArticSpec, spec-axis err=%.3e  %s\n",
-           spec.joints.size(), specAxisErr, j2ok ? "PASS" : "FAIL");
-    printf("[joint]   NEG-CTRL offset bore (perp=%.4f m) %s ; tilted bore (ang-res=%.3f) %s  %s\n",
-           off2, rejOffset ? "REJECTED" : "ACCEPTED!", ang3, rejTilt ? "REJECTED" : "ACCEPTED!",
-           negok ? "REJECTS(non-vacuous)" : "VACUOUS!");
-    printf("[joint] %s\n", pass ? "ALL PASS (frame <1e-6 vs oracle; in canonical graph; degenerate mates rejected)"
+    printf("[joint]   J2 canonical write: %zu joint in RobotArticSpec, spec-axis err=%.3e, spec-ptree-offset=%.3e  %s\n",
+           spec.joints.size(), specAxisErr, specPosErr, j2ok ? "PASS" : "FAIL");
+    printf("[joint]   NEG-CTRL imports=%s; offset bore (perp=%.4f m>tol) %s ; tilted bore (ang-res=%.3f>tol) %s  %s\n",
+           importsOk ? "ok" : "FAILED", off2, rejOffset ? "REJECTED" : "ACCEPTED!", ang3,
+           rejTilt ? "REJECTED" : "ACCEPTED!", negok ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[joint] %s\n", pass ? "ALL PASS (origin+canonical-position <1e-6 vs oracle; degenerate mates rejected for the right reason)"
                                  : "FAILURES PRESENT");
     fflush(stdout);
     return pass;

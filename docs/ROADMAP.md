@@ -1832,3 +1832,31 @@ silently did nothing. The fix is the missing bridge ROOT, not a rewrite of every
 - **ND4 type safety**: feeding the Velocity port a `float` instead of a `glm::vec3` is rejected by
   `getInput<T>` (bad_any_cast -> nullopt) -- no mutation, no crash.
 KRS_OVERNIGHT_BENCH **33/33**; exe verified newer than all sources. **Phases 0-5 COMPLETE; all gates green.**
+
+## §AB ADVERSARIAL HARDENING OF GATES F/J/M/ND -- LANDED (2026-06-15)
+A 4-agent adversarial review (one hostile skeptic per new gate, each tasked to make the gate PASS while the
+feature is BROKEN) found two MAJOR could-pass-while-broken holes and several honesty gaps. All fixed; bench
+stayed **33/33**.
+- **GATE J -- vacuous neg-control path (MAJOR, fixed)**: the reject flags `rejOffset/rejTilt` were init TRUE
+  and only flipped inside an import guard, so a SILENT import failure of the degenerate bore would pass the
+  neg-control without ever calling the derivation -- and printed a fabricated `perp=0.0000 REJECTED` line.
+  Fixed: flags init FALSE, require import success (`imports=ok` printed) AND derive-rejects AND the residual
+  exceeds tol (`off=0.0048>tol`, `ang=0.018>tol`) -- rejection must be for the RIGHT reason. Also: J1 axis
+  match is near-tautological by construction (both bores share the axis), so the load-bearing number is the
+  ORIGIN (posErr 8.7e-10); J2 now independently checks the canonical `ptree` position channel (not just the
+  axis it shares with J1); both bounds use `std::abs`.
+- **GATE ND -- ND3 robot-motion was tautological (MAJOR, fixed)**: the old "FK moved 0.343 m" was a formula
+  in the test file fed by the scalar the node just wrote; nothing in the engine consumed the joint angle.
+  Fixed: a real engine node `RevoluteLinkFkNode` (registered, in the graph) now CONSUMES
+  `JointComponent.currentPosition` and writes the moving link's `TransformComponent` via the shared FK; the
+  gate reads `moved` straight off the link's ECS transform (0.343 m), so the graph genuinely moves a robot
+  link in the ECS. ND4 type-safety now isolates the cause (same wiring writes with a vec3, only the float is
+  rejected); ND2/ND3 disconnected controls assert the Registry input is explicitly unset.
+- **Shared FK SSOT**: the revolute FK is now one engine definition `krs::kin::revoluteApply`
+  (include/PhysicsHeaders/RevoluteFK.hpp), consumed by the MQTT bridge, the FK node, and the gates -- not a
+  per-test formula.
+- **GATE M (minor)**: M3's displayed `moved` is now derived from the RECEIVED telemetry (`tipRx - rest`), not
+  a local constant, so the motion number is causally load-bearing; cmd/state use QoS 1 (no silent drop).
+- **GATE F (minor)**: F2 now also checks the axis-LINE position (xy offset <1e-9), so "axis" means the full
+  line; the neg-control is relabeled honestly as a centroid-average radius biased inward by the facet sagitta
+  (not a least-squares fit). F1's ray-triangle path confirmed to use no AABB fallback (attack refuted).

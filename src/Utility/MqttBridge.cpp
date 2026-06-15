@@ -8,6 +8,7 @@
 // not decorative.
 // ===========================================================================
 #include "ArticulationSpec.hpp"
+#include "RevoluteFK.hpp"   // shared krs::kin::revoluteApply (one FK definition, reused by GATE ND too)
 
 #include <mosquitto.h>
 #include <QtGlobal>
@@ -33,16 +34,7 @@ bool available() { return true; }
 
 namespace {
 
-// ---- forward kinematics for ONE revolute joint: a marker at world rest pos `tip0`
-//      rotates about `axis` through `origin` by angle q. This is the canonical motion
-//      the joint command must produce. ----
-glm::vec3 fkTip(const glm::vec3& origin, const glm::vec3& axis, const glm::vec3& tip0, float q)
-{
-    const glm::mat4 R = glm::rotate(glm::mat4(1.0f), q, glm::normalize(axis));
-    const glm::vec3 rel = tip0 - origin;
-    const glm::vec3 rot = glm::vec3(R * glm::vec4(rel, 0.0f));
-    return origin + rot;
-}
+// FK is the shared engine definition krs::kin::revoluteApply (RevoluteFK.hpp) -- not a local formula.
 
 // ---- received-message sink for a passive client ----
 struct RxBox { std::vector<std::pair<std::string, std::string>> msgs; };
@@ -64,10 +56,10 @@ void onRobotCmd(struct mosquitto* mosq, void* ud, const struct mosquitto_message
     RobotCtx* rc = static_cast<RobotCtx*>(ud);
     const std::string payload(static_cast<const char*>(m->payload), m->payloadlen);
     const float q = float(std::atof(payload.c_str()));
-    const glm::vec3 tip = fkTip(rc->origin, rc->axis, rc->tip0, q);
+    const glm::vec3 tip = krs::kin::revoluteApply(rc->origin, rc->axis, rc->tip0, q);
     char buf[160];
     const int n = std::snprintf(buf, sizeof(buf), "%.6f,%.6f,%.6f", tip.x, tip.y, tip.z);
-    mosquitto_publish(mosq, nullptr, rc->stateTopic.c_str(), n, buf, 0, false);
+    mosquitto_publish(mosq, nullptr, rc->stateTopic.c_str(), n, buf, 1, false);   // QoS 1: no silent drop
     ++rc->cmds;
 }
 
@@ -189,23 +181,25 @@ bool runMqttGateM()
         struct mosquitto* ctl   = makeClient("krs-controller", &ctlRx);
         if (robot && ctl) {
             mosquitto_message_callback_set(robot, onRobotCmd);
-            mosquitto_subscribe(robot, nullptr, tt.jointCmdWildcard.c_str(), 0);   // robot listens for commands
+            mosquitto_subscribe(robot, nullptr, tt.jointCmdWildcard.c_str(), 1);   // robot listens for commands (QoS 1)
             mosquitto_message_callback_set(ctl, onMsgCollect);
-            mosquitto_subscribe(ctl, nullptr, tt.jointState[0].c_str(), 0);        // controller listens for telemetry
+            mosquitto_subscribe(ctl, nullptr, tt.jointState[0].c_str(), 1);        // controller listens for telemetry
             pump({ robot, ctl }, 6, 50);
 
             const float qCmd = 0.7f;                                              // commanded angle (rad)
             char qbuf[32]; const int qn = std::snprintf(qbuf, sizeof(qbuf), "%.6f", qCmd);
-            mosquitto_publish(ctl, nullptr, tt.jointCmd[0].c_str(), qn, qbuf, 0, false);
+            mosquitto_publish(ctl, nullptr, tt.jointCmd[0].c_str(), qn, qbuf, 1, false);  // QoS 1: no silent drop
             pump({ robot, ctl }, 40, 50);                                         // let it travel both ways
 
             // find the last state message the controller received
             glm::vec3 tipRx(0.0f); bool got = false;
             for (auto& kv : ctlRx.msgs) if (kv.first == tt.jointState[0]) { tipRx = parseVec3(kv.second); got = true; }
-            const glm::vec3 tipFk   = fkTip(origin, axis, tip0, qCmd);            // oracle (direct FK)
-            const glm::vec3 tipRest = fkTip(origin, axis, tip0, 0.0f);            // rest pose
-            m3err   = got ? double(glm::length(tipRx - tipFk))   : 9e9;           // round-trip vs FK
-            m3moved = double(glm::length(tipFk - tipRest));                       // NEG-CTRL: must be a real move
+            const glm::vec3 tipFk   = krs::kin::revoluteApply(origin, axis, tip0, qCmd); // oracle (direct FK)
+            const glm::vec3 tipRest = krs::kin::revoluteApply(origin, axis, tip0, 0.0f); // rest pose
+            m3err   = got ? double(glm::length(tipRx - tipFk))   : 9e9;           // RECEIVED pose vs FK oracle
+            // displacement measured from the RECEIVED telemetry (not a constant): it is non-zero only
+            // because the angle actually crossed the broker and drove the handler.
+            m3moved = got ? double(glm::length(tipRx - tipRest)) : 0.0;
             m3ok = got && rc.cmds == 1 && m3err < 1e-4 && m3moved > 0.1;
         }
         if (robot) { mosquitto_disconnect(robot); mosquitto_destroy(robot); }
@@ -249,7 +243,7 @@ bool runMqttGateM()
            jointCount, tt.jointCmd.empty() ? "" : tt.jointCmd[0].c_str(),
            tt.jointState.empty() ? "" : tt.jointState[0].c_str(), tt.jointCmdWildcard.c_str(),
            m2ok ? "PASS" : "FAIL");
-    printf("[mqtt]   M3 joint round-trip: cmd->FK->state err=%.3e m (bound<1e-4), moved=%.3f m (>0.1)  %s\n",
+    printf("[mqtt]   M3 joint round-trip: RECEIVED pose vs FK err=%.3e m (<1e-4), received moved=%.3f m vs rest (>0.1)  %s\n",
            m3err, m3moved, m3ok ? "PASS" : "FAIL");
     printf("[mqtt]   M4 broadcast duality: sub-a=%d sub-b=%d (want 1,1), isolated-other=%d (want 0)  %s\n",
            m4a, m4b, m4other, m4ok ? "PASS" : "FAIL");

@@ -28,6 +28,15 @@ public:
     void compute() override;
 };
 
+// Kinematics node: the ENGINE consumer of JointComponent.currentPosition. Reads the joint angle from
+// the Joint Entity and writes the moving Link Entity's TransformComponent.translation via the shared
+// revolute FK -- so a graph that drives the joint produces a real link-transform change in the ECS.
+class RevoluteLinkFkNode : public Node {
+public:
+    RevoluteLinkFkNode();
+    void compute() override;
+};
+
 } // namespace NodeLibrary
 
 namespace krs::nodes {

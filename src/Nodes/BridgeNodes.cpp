@@ -1,7 +1,9 @@
 #include "BridgeNodes.hpp"
 #include "Scene.hpp"
 #include "components.hpp"
+#include "RevoluteFK.hpp"   // shared krs::kin::revoluteApply (one FK definition)
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
 #include <memory>
 
 namespace NodeLibrary {
@@ -60,6 +62,46 @@ namespace {
         }
     };
     static SetJointAngleRegistrar g_setJointAngleRegistrar;
+}
+
+// ---- RevoluteLinkFkNode: engine FK -- joint angle (ECS) -> link transform (ECS) ----
+RevoluteLinkFkNode::RevoluteLinkFkNode() {
+    m_id = "kinematics_revolute_link_fk";
+    m_ports.push_back({ "Registry",     {"entt::registry*", "handle"}, Port::Direction::Input, this });
+    m_ports.push_back({ "Joint Entity", {"entt::entity", "handle"},    Port::Direction::Input, this });
+    m_ports.push_back({ "Link Entity",  {"entt::entity", "handle"},    Port::Direction::Input, this });
+    m_ports.push_back({ "Origin",       {"glm::vec3", "m"},            Port::Direction::Input, this });
+    m_ports.push_back({ "Axis",         {"glm::vec3", "unitless"},     Port::Direction::Input, this });
+    m_ports.push_back({ "Rest Point",   {"glm::vec3", "m"},            Port::Direction::Input, this });
+}
+
+void RevoluteLinkFkNode::compute() {
+    auto registry = getInput<entt::registry*>("Registry");
+    auto jointE   = getInput<entt::entity>("Joint Entity");
+    auto linkE    = getInput<entt::entity>("Link Entity");
+    auto origin   = getInput<glm::vec3>("Origin");
+    auto axis     = getInput<glm::vec3>("Axis");
+    auto rest     = getInput<glm::vec3>("Rest Point");
+    if (registry && jointE && linkE && origin && axis && rest) {
+        entt::registry& reg = **registry;
+        if (reg.valid(*jointE) && reg.all_of<JointComponent>(*jointE) &&
+            reg.valid(*linkE)  && reg.all_of<TransformComponent>(*linkE)) {
+            const float q = float(reg.get<JointComponent>(*jointE).currentPosition);
+            reg.get<TransformComponent>(*linkE).translation = krs::kin::revoluteApply(*origin, *axis, *rest, q);
+        }
+    }
+}
+
+namespace {
+    struct RevoluteLinkFkRegistrar {
+        RevoluteLinkFkRegistrar() {
+            NodeDescriptor desc = { "Revolute Link FK", "Physics/Kinematics",
+                "Forward kinematics: drives a link's transform from a revolute joint's angle." };
+            NodeFactory::instance().registerNodeType("kinematics_revolute_link_fk", desc,
+                []() { return std::make_unique<RevoluteLinkFkNode>(); });
+        }
+    };
+    static RevoluteLinkFkRegistrar g_revoluteLinkFkRegistrar;
 }
 
 } // namespace NodeLibrary
