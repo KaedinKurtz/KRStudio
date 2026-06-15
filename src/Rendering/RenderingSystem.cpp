@@ -832,6 +832,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 5 GATE NODE-E2E: a canvas program drives the live robot; severing localizes the break.
+    if (qEnvironmentVariableIntValue("KRS_NODEE2E_SELFTEST") != 0) {
+        std::printf("\n================= KRS_NODEE2E_SELFTEST =================\n");
+        const bool ok = krs::nodes::runNodeE2EGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
         std::printf("\n================= KRS_DISAMBIG_SELFTEST =================\n");
@@ -939,6 +947,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE C-track (computed torque tracks moving setpoint; soft PD lags)", krs::ctrl::runControllerTrackGate() },
             { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },
+            { "GATE NODE-E2E (canvas program drives live robot; severing localizes)", krs::nodes::runNodeE2EGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

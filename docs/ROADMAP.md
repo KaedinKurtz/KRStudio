@@ -1958,3 +1958,14 @@ The glass robot's link transforms are driven by FK of the PLANNED joint config: 
 current pose). NEG-CTRL: fed the LIVE values instead, the glass collapses to the current pose (plan==current,
 err 0.0) -- proving it reads the plan. PROVEN for the transform DATA; the GlassComponent/GlassPass pixel
 render is visual-confirm. KRS_OVERNIGHT_BENCH **43/43**.
+
+## §AG NODE-SYSTEM SPRINT -- Phase 5: end-to-end canvas control program (GATE NODE-E2E) -- LANDED (2026-06-15)
+A real canvas program built from the new node types drives the live robot:
+`t -> gen_sine -> math_affine (potentiometer offset) -> joint command -> live PhysX link`. Every stage's
+value is asserted (the causal-chain discipline): sine=0.3804 (= amp*sin(2pi*f*t+phase)), affine=0.5804
+(= sine*gain+offset), live link=0.5804 (the robot reached the commanded angle), glass=0.5804 (the planned
+config) -- **max err 6.68e-07**. NEG-CTRL (severed-chain): cutting any node breaks the chain at EXACTLY that
+stage -- cut the sine input -> firstBreak=1, cut the sine->affine wire -> firstBreak=2, cut the affine->robot
+command -> firstBreak=3. A new `math_affine` node (out = in*gain+offset, double, in-node sliders) is the
+all-double adapter that lets the generator chain wire cleanly. KRS_OVERNIGHT_BENCH **44/44**.
+**Node-system sprint Phases 1-5 COMPLETE.**

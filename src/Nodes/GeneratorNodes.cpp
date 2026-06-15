@@ -51,6 +51,27 @@ private:
     Wave m_wave;
 };
 
+// affine map out = in*gain + offset (double; in-node sliders). Used as the "potentiometer offset" stage
+// of an all-double canvas chain (gen -> affine -> joint command).
+class AffineNode : public Node {
+public:
+    AffineNode() {
+        m_id = "math_affine";
+        m_ports.push_back({ "In",  {"double","unitless"}, Port::Direction::Input,  this });
+        m_ports.push_back({ "Out", {"double","unitless"}, Port::Direction::Output, this });
+        setParam<double>("gain", 1.0); setParam<double>("offset", 0.0);
+    }
+    QWidget* createCustomWidget() override {
+        using krs::nodeui::ControlSpec;
+        return krs::nodeui::buildControlWidget(this, {
+            { ControlSpec::Slider, "Gain",   "gain",   -5.0, 5.0, 0.01, 1.0 },
+            { ControlSpec::Slider, "Offset", "offset", -5.0, 5.0, 0.01, 0.0 } });
+    }
+    void compute() override {
+        setOutput<double>("Out", getInputD("In", 0.0) * getParam<double>("gain", 1.0) + getParam<double>("offset", 0.0));
+    }
+};
+
 namespace {
 void regGen(const char* id, const char* name, ParamSignalGenNode::Wave w) {
     NodeFactory::instance().registerNodeType(id,
@@ -63,6 +84,9 @@ struct GeneratorRegistrar {
         regGen("gen_square",   "Square Gen",   ParamSignalGenNode::Square);
         regGen("gen_triangle", "Triangle Gen", ParamSignalGenNode::Triangle);
         regGen("gen_saw",      "Sawtooth Gen", ParamSignalGenNode::Saw);
+        NodeFactory::instance().registerNodeType("math_affine",
+            NodeDescriptor{ "Affine (gain+offset)", "Math/Primitive", "out = in*gain + offset (sliders)" },
+            []() { return std::make_unique<AffineNode>(); });
     }
 };
 static GeneratorRegistrar g_generatorRegistrar;

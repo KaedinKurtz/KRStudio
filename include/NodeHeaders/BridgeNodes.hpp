@@ -54,4 +54,9 @@ bool runNodeUiGate();
 // asserted against a closed-form reference over sampled inputs (<tol). Closes the "instantiates but does
 // nothing" class.
 bool runNodeLibraryGate();
+
+// Phase 5 GATE NODE-E2E (KRS_NODEE2E_SELFTEST): a canvas program (t->sine->affine->joint->robot) built
+// from the new node types drives the live robot, every stage asserted; severing any node localizes the
+// break at exactly that stage.
+bool runNodeE2EGate();
 }
