@@ -73,7 +73,11 @@ bool runConservationGate0()
     const double tol = 0.05;  // |dp| over the collision (PhysX contact is momentum-conserving)
     const bool conserved = dP < tol;
     const bool leakCaught = dPleak > 5.0 * tol;  // the leaked state clearly violates the check
-    const bool pass = conserved && leakCaught && before.count == 2;
+    // The momentum check alone is also satisfied by FREE FLIGHT (a broken contact feature). Gate that
+    // a real inelastic CONTACT happened: kinetic energy must drop (gMag=0 here so energy==KE). This
+    // closes the "a one-line break that kills sphere-sphere contact still passes" hole.
+    const bool collided = after.energy() < 0.5 * before.energy();
+    const bool pass = conserved && leakCaught && collided && before.count == 2;
 
     printf("[conserve]   p_before=(%.4f,%.4f,%.4f) |p|=%.4f  E_before=%.4f\n",
            before.momentum.x, before.momentum.y, before.momentum.z, glm::length(before.momentum), before.energy());
@@ -82,7 +86,9 @@ bool runConservationGate0()
            conserved ? "CONSERVED" : "VIOLATED");
     printf("[conserve]   NEG-CTRL injected leak: |dp_leak|=%.4f (>>tol -> check catches non-conservation)  %s\n",
            dPleak, leakCaught ? "REJECTS(non-vacuous)" : "VACUOUS!");
-    printf("[conserve] %s\n", pass ? "ALL PASS (momentum conserved + leak caught)" : "FAILURES PRESENT");
+    printf("[conserve]   contact check: KE %.3f->%.3f (must drop <0.5x for a real inelastic collision)  %s\n",
+           before.energy(), after.energy(), collided ? "COLLIDED" : "FREE-FLIGHT(no contact!)");
+    printf("[conserve] %s\n", pass ? "ALL PASS (momentum conserved + leak caught + real contact)" : "FAILURES PRESENT");
     sim.stop();
     std::fflush(stdout);
     return pass;

@@ -55,17 +55,31 @@ bool runCausalChainGate0()
     printf("[causal]  SEVERED@1 chain (FK->collisionXform dropped):\n");
     sev1.print("causal");
 
+    // Tolerance-boundary sub-test: ok() is `|measured-expected| <= tol`. The pipeline residuals above
+    // are bit-exactly 0, so they never exercise the tol path -- a production break to the `<= tol`
+    // handling would pass unnoticed. This sub-test drives a residual JUST INSIDE tol (must PASS) and
+    // one JUST OUTSIDE (must be the break), so both branches of the comparison are asserted.
+    CausalChain tolc;
+    tolc.stage("within-tol(0.4e-9)", 1.0 + 0.4e-9, 1.0, 1e-9);  // residual < tol -> PASS
+    tolc.stage("over-tol(5e-9)",     1.0 + 5.0e-9, 1.0, 1e-9);  // residual > tol -> FAIL (firstBreak=1)
+    const bool tolBoundary = tolc.stages()[0].ok() && !tolc.stages()[1].ok() && tolc.firstBreak() == 1;
+
     const bool intactOk = intact.allPass() && intact.firstBreak() == -1;
     // Localization: a break at stage k must make firstBreak()==k (the EARLIEST), not a later stage.
     const bool localized1 = sev1.firstBreak() == 1;
     const bool localized2 = sev2.firstBreak() == 2;
-    const bool pass = intactOk && localized1 && localized2;
+    // allPass() must independently reject a severed chain (not just agree with firstBreak on intact).
+    const bool allPassRejects = !sev1.allPass() && !sev2.allPass();
+    const bool pass = intactOk && localized1 && localized2 && tolBoundary && allPassRejects;
 
     printf("[causal]  intact allPass=%d firstBreak=%d (want -1)  %s\n",
            int(intact.allPass()), intact.firstBreak(), intactOk ? "PASS" : "FAIL");
-    printf("[causal]  NEG-CTRL severed@1 -> firstBreak=%d (want 1); severed@2 -> firstBreak=%d (want 2)  %s\n",
-           sev1.firstBreak(), sev2.firstBreak(), (localized1 && localized2) ? "REJECTS(localized)" : "VACUOUS!");
-    printf("[causal] %s\n", pass ? "ALL PASS (intact passes; severed stages localized exactly)" : "FAILURES PRESENT");
+    printf("[causal]  NEG-CTRL severed@1 -> firstBreak=%d (want 1); severed@2 -> firstBreak=%d (want 2); allPass(sev)=%d,%d (want 0,0)  %s\n",
+           sev1.firstBreak(), sev2.firstBreak(), int(sev1.allPass()), int(sev2.allPass()),
+           (localized1 && localized2 && allPassRejects) ? "REJECTS(localized)" : "VACUOUS!");
+    printf("[causal]  tol boundary: within-tol PASS=%d, over-tol FAIL=%d, firstBreak=%d (want 1)  %s\n",
+           int(tolc.stages()[0].ok()), int(!tolc.stages()[1].ok()), tolc.firstBreak(), tolBoundary ? "PASS" : "FAIL");
+    printf("[causal] %s\n", pass ? "ALL PASS (localized + tol-boundary + allPass rejects severed)" : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;
 }
