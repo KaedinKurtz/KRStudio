@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <any>
+#include <type_traits>
 #include <map>
 #include <optional>
 #include <chrono>
@@ -144,9 +145,15 @@ public:
             if (port.direction == Port::Direction::Input && port.name == portName) {
                 // a live CONNECTION (packet) wins; otherwise fall back to the in-node widget's literal.
                 const std::optional<PortDataPacket>& src = port.packet.has_value() ? port.packet : port.literalValue;
-                if (src.has_value()) {
-                    try { return std::any_cast<T>(src->data); }
-                    catch (const std::bad_any_cast&) { return std::nullopt; }
+                if (!src.has_value()) return std::nullopt;
+                try { return std::any_cast<T>(src->data); } catch (const std::bad_any_cast&) {}
+                // NUMERIC COERCION: a "number" port carries double/float/int/bool interchangeably (the
+                // unified type id). So a float-reading node accepts a double-carrying wire, etc.
+                if constexpr (std::is_arithmetic_v<T>) {
+                    try { return T(std::any_cast<double>(src->data)); } catch (...) {}
+                    try { return T(std::any_cast<float>(src->data)); } catch (...) {}
+                    try { return T(std::any_cast<int>(src->data)); } catch (...) {}
+                    try { return T(std::any_cast<bool>(src->data) ? 1 : 0); } catch (...) {}
                 }
                 return std::nullopt;
             }
@@ -163,6 +170,12 @@ public:
                 PortDataPacket pk; pk.data = value; pk.type = port.type; port.literalValue = pk; return;
             }
         }
+    }
+
+    // Clear an input port's CONNECTION packet (used to model a severed wire). The literal (if any) remains.
+    void clearInputPacket(const std::string& portName) {
+        for (auto& port : m_ports)
+            if (port.direction == Port::Direction::Input && port.name == portName) { port.packet.reset(); port.isFresh = false; return; }
     }
 
     // Numeric convenience: read a port as a double, accepting double/float/bool/int (the library nodes

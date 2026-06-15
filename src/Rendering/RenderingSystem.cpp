@@ -56,7 +56,8 @@
 #include "BridgeNodes.hpp"        // Phase 5 GATE ND (krs::nodes graph->backend bridge)
 #include "MqttNodes.hpp"          // Phase 2 GATE NODE-MQTT (krs::nodes auto-MQTT nodes)
 #include "ControllerGates.hpp"    // Phase 4 controller gates (krs::ctrl C-track/C-knob/C-glass)
-#include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE)
+#include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE / TIME)
+#include "ConnectControlGate.hpp" // node-editor GATE CONNECT-AND-CONTROL
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -862,6 +863,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Node-editor GATE CONNECT-AND-CONTROL: wired program (live time, widget-set value) drives the robot.
+    if (qEnvironmentVariableIntValue("KRS_CONNECTCTRL_SELFTEST") != 0) {
+        std::printf("\n================= KRS_CONNECTCTRL_SELFTEST =================\n");
+        const bool ok = krs::nodes::runConnectControlGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
 
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
@@ -974,6 +982,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE INPUT-BIND (mounted per-input widget drives node output, N-of-M)", krs::nodes::runInputBindGate() },
             { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
+            { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

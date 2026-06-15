@@ -2046,3 +2046,15 @@ Operator root cause: node bodies never render input widgets; nodes look like mas
   blocked.
 - **GATE TIME** (`KRS_TIME_SELFTEST`): live time advanced 0->0.150s; sine 0->0.81 tracks sin(2pi*t); NEG-CTRL
   disconnected -> constant. KRS_OVERNIGHT_BENCH **47/47**.
+
+## §AK NODE-EDITOR -- GATE CONNECT-AND-CONTROL + numeric coercion (2026-06-15)
+- **Numeric coercion**: `getInput<T>` for arithmetic T now coerces a "number" port's payload (double/float/
+  int/bool interchange) -- so a float-reading node (math_add) accepts a double-carrying wire (gen_sine.Out).
+  Without this the unified type id let nodes CONNECT but the any_cast failed and no data flowed. `Node::
+  clearInputPacket` models a severed wire.
+- **GATE CONNECT-AND-CONTROL** (`KRS_CONNECTCTRL_SELFTEST`): a robot-control program built by WIRING nodes
+  -- `time_source -> gen_sine -> math_add(.A wired, .B = 0.20 set THROUGH the mounted spinbox) -> joint
+  command -> live PhysX link`. Driven by the LIVE time source. Result: time 0.121 -> sine 0.1488 ->
+  add 0.3488 -> live link **0.3488** (max err **2.27e-07**). NEG-CTRL (severed-wire): cut time->sine
+  breaks at stage 2, cut sine->add at stage 3, cut add->robot at stage 4 (localizes exactly). The end-to-end
+  proof the editor is wireable AND inputs are settable through the body. KRS_OVERNIGHT_BENCH **48/48**.
