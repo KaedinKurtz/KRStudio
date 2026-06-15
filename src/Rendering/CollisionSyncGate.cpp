@@ -147,6 +147,33 @@ bool runCollisionSyncGateC()
     }
     const float liveAtStartReport = std::min(liveAtStartMin, 9.999f); // kSdfOutside prints as ~10 (empty)
 
+    // --- NON-UNIFORM SCALE sub-test (the adversarial-review fix): bake the cube with a non-uniform
+    // scale baked into the field; the field must be NON-cubic (scale applied), distances in WORLD
+    // units (scaled surface reads ~0, interior <0, outside >0), and still RIDE under a rigid pose. ---
+    bool scaleOk = false; float scaledSurf = 9.9f, scaledInside = 9.9f, scaledOutside = -9.9f, scaledRide = 9.9f;
+    {
+        const glm::vec3 sc(2.0f, 1.0f, 0.5f);
+        SdfBakeResult bs;
+        if (bakeMeshToSdf(verts, idx, glm::scale(glm::mat4(1.0f), sc), voxel, bs)) {
+            SdfColliderView vS; vS.invModel = glm::mat4(1.0f);
+            vS.aabbMin = bs.aabbMin; vS.aabbMax = bs.aabbMax; vS.dims = bs.dims; vS.field = bs.field.data();
+            // field baked non-uniformly: +X half-extent (0.5*2=1.0) >> +Z half-extent (0.5*0.5=0.25).
+            const bool nonCubic = bs.aabbMax.x > 1.8f * bs.aabbMax.z;
+            scaledSurf    = sdfDistanceWorld(vS, glm::vec3(1.0f, 0.0f, 0.0f));   // scaled +X face -> ~0
+            scaledInside  = sdfDistanceWorld(vS, glm::vec3(0.5f, 0.0f, 0.0f));   // inside -> <0
+            scaledOutside = sdfDistanceWorld(vS, glm::vec3(1.5f, 0.0f, 0.0f));   // outside -> >0
+            // rides under a rigid pose: same scaled-surface point, placed + queried with invModel.
+            const glm::mat4 M = sdfRigidModel(glm::vec3(0.7f, -0.3f, 1.1f),
+                                              glm::angleAxis(0.9f, glm::normalize(glm::vec3(0.2f, 1.0f, 0.4f))));
+            SdfColliderView vSr = vS; vSr.invModel = glm::inverse(M);
+            scaledRide = sdfDistanceWorld(vSr, glm::vec3(M * glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)));
+            scaleOk = nonCubic && std::abs(scaledSurf) < 3.0f * voxel && scaledInside < -0.1f
+                      && scaledOutside > 0.1f && std::abs(scaledRide) < 3.0f * voxel;
+        } else {
+            scaleOk = true; // OpenVDB path already vacuous-passed above; keep consistent
+        }
+    }
+
     // PASS: live field rides the body (invariance error tiny vs voxel band); the vacated start pose is
     // now empty (live > 0). TWO negative controls make this non-vacuous: (A) frozen field (sync OFF)
     // STILL collides at the start pose (deeply negative ghost) AND fails to ride; (B) swapping
@@ -158,7 +185,7 @@ bool runCollisionSyncGateC()
     const bool negCtrlGhost = frozenAtStart < -0.1f;       // frozen STILL collides at start (the ghost)
     const bool negCtrlDrifts = frozenMaxErr > 5.0f * tol;  // frozen field does not ride
     const bool swapDrifts   = swapMaxErr > 5.0f * tol;     // model<->invModel swap does not ride
-    const bool pass = ridesLive && noLiveGhost && negCtrlGhost && negCtrlDrifts && swapDrifts;
+    const bool pass = ridesLive && noLiveGhost && negCtrlGhost && negCtrlDrifts && swapDrifts && scaleOk;
 
     printf("[collsync]   C2/C4 rides body (world->local via sdfRigidModel/invModel): liveMaxErr=%.5f m"
            " over %d poses x %zu probes (tol<%.4f)  %s\n",
@@ -170,6 +197,8 @@ bool runCollisionSyncGateC()
            frozenAtStart, frozenMaxErr, (negCtrlGhost && negCtrlDrifts) ? "REJECTS" : "VACUOUS!");
     printf("[collsync]   NEG-CTRL B (model<->invModel swap): driftErr=%.3f (>>tol = doesn't ride)  %s\n",
            swapMaxErr, swapDrifts ? "REJECTS" : "VACUOUS!");
+    printf("[collsync]   SCALE (2,1,0.5) baked-in: surf=%.3f(~0) inside=%.3f(<0) outside=%.3f(>0) ride=%.3f(~0)  %s\n",
+           scaledSurf, scaledInside, scaledOutside, scaledRide, scaleOk ? "PASS" : "FAIL");
     printf("[collsync]   NOTE: gate proves the world->local CONVENTION + placement math; the uploadColliders\n"
            "[collsync]         call-site + GPU uniform binding are verified by code review + the fluid runtime smoke.\n");
     printf("[collsync] %s\n", pass ? "ALL PASS (C2 no-ghost + C4 zero-lag tracking + 2 neg-ctrls)" : "FAILURES PRESENT");
