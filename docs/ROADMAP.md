@@ -1995,3 +1995,54 @@ gates. All fixed; bench stayed 44/44.
 - **NODE-E2E (major: tautological glass stage)**: stage 4 round-tripped a quaternion. FIX: it now reads
   the glass link angle from the product `plannedLinkPoses` (real FK), independent of the live robot.
 KRS_OVERNIGHT_BENCH **44/44**; rigid 7/7. The "instantiates/renders but does nothing" class does not survive.
+
+## §AI NODE-EDITOR FRONT-END WIRING SPRINT -- recon (2026-06-15)
+Operator root cause: node bodies never render input widgets; nodes look like massive empty blocks. RECON
+(QtNodes 3.0.11 under build/release/_deps/qtnodes-src; NodeDelegate bridges):
+- **THE MOUNT BUG (ordering)**: QtNodes builds NodeGraphicsObject and calls `embedQWidget()` SYNCHRONOUSLY
+  at construction (NodeGraphicsObject.cpp:55), which queries `NodeRole::Widget` -> `NodeDelegate::
+  embeddedWidget()`. But the backend node + its widget are attached LATER, in MainWindow's `nodeCreated`
+  handler (MainWindow.cpp:922-928 `createNode`+`setBackendNode`). So embeddedWidget() returns nullptr at
+  mount time -> NO `QGraphicsProxyWidget` is created. MainWindow then emits `nodeUpdated`, but
+  `BasicGraphicsScene::onNodeUpdated` (line 275) only `recomputeSize()` + `update()` -- it NEVER re-runs
+  embedQWidget. recomputeSize now reads the (existing) widget's size and GROWS the node, but the widget is
+  never mounted -> a big EMPTY box. Exactly the operator's report. FIX: the delegate must create its
+  backend node + widget LAZILY on first access (nPorts/dataType/embeddedWidget), so the widget exists when
+  embedQWidget runs at graphics construction (scene's onNodeCreated fires before MainWindow's handler).
+- **No per-input-port widgets**: QtNodes has only ONE `embeddedWidget()` per node (PortRole has no widget
+  role). Per-input editing = one container with a field per input port, hidden when the port is connected
+  (`AbstractGraphModel::connections(nodeId, In, idx)` -> empty set = unconnected).
+- **Unconnected-input data gap**: `getInput<T>` reads only `port.packet` (set by a connection). An
+  unconnected port has no literal value a widget can write. NEED: a per-port literal value that getInput
+  falls back to (the widget writes it).
+- **Type compat**: `DataFlowGraphModel::connectionPossible` requires `dataType().id_out == id_in`, where id
+  = `Port.type.name`. New nodes use "double", old use "float" -> they CANNOT connect. NEED a consistent
+  numeric type tag.
+- **No graph tick**: evaluation is push-only (setInData->process). No timer re-evaluates time nodes. NEED a
+  live time-source node + a tick.
+
+## §AJ NODE-EDITOR WIRING -- mount fix + per-input widgets + type/time (2026-06-15)
+- **THE MOUNT FIX**: `NodeDelegate` now creates its backend node + embedded widget LAZILY on first access
+  (`ensureBackend()` called from nPorts/dataType/embeddedWidget), so the widget exists when QtNodes runs
+  `embedQWidget()` at NodeGraphicsObject construction -> the `QGraphicsProxyWidget` is actually created and
+  the widget MOUNTS. MainWindow's handler no longer re-creates the node (it would have replaced the mounted
+  one); it just injects the Scene. This is why nodes previously rendered as big empty boxes (size grew to
+  the never-mounted widget). [OPERATOR VISUAL-CONFIRM]
+- **PER-INPUT WIDGETS + literal model**: `Port` gained a `literalValue`; `Node::setPortLiteral<T>` writes it;
+  `getInput<T>` falls back to it when the port is unconnected. `populateEmbeddedWidget` now mounts a typed,
+  labelled control per editable input port (double/float->spinbox, int->spinbox, bool->checkbox, vec3->3
+  fields), tagged `krs_input_port`, bound to the literal. An Int/float node now HAS a field. [VISUAL-CONFIRM]
+- **TYPE unification**: `NodeDelegate::dataType` maps double/float/int/bool -> id "number", glm::vec3 ->
+  "vec3", so signal/math/logic nodes interconnect (QtNodes connects on id match).
+- **LIVE TIME**: `time_source` node emits std::chrono wall-clock; a 30Hz QTimer in MainWindow re-evaluates
+  time-source nodes each frame so downstream time-parametric nodes move. [VISUAL-CONFIRM the animation]
+### Gates
+- **GATE INPUT-BIND** (`KRS_INPUTBIND_SELFTEST`): **62/62** input-bearing node types MOUNT all their input
+  widgets (built via the delegate's body path); **30/30** fully-editable nodes with outputs: driving the
+  mounted widget changes the output; curated formula proofs (add/mul/sub) **3/3**. NEG-CTRL: an unbound bare
+  widget changes nothing. `util_script` reported as a no-op-stub (compute() is empty by design). PROVEN at
+  the binding layer; the on-screen MOUNT is OPERATOR VISUAL-CONFIRM.
+- **GATE TYPE** (`KRS_TYPE_SELFTEST`): **6/6** -- number->number connects, number->vec3 and number->handle
+  blocked.
+- **GATE TIME** (`KRS_TIME_SELFTEST`): live time advanced 0->0.150s; sine 0->0.81 tracks sin(2pi*t); NEG-CTRL
+  disconnected -> constant. KRS_OVERNIGHT_BENCH **47/47**.

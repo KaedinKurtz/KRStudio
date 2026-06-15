@@ -56,6 +56,7 @@
 #include "BridgeNodes.hpp"        // Phase 5 GATE ND (krs::nodes graph->backend bridge)
 #include "MqttNodes.hpp"          // Phase 2 GATE NODE-MQTT (krs::nodes auto-MQTT nodes)
 #include "ControllerGates.hpp"    // Phase 4 controller gates (krs::ctrl C-track/C-knob/C-glass)
+#include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE)
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -840,6 +841,28 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Node-editor GATE INPUT-BIND: per-input widget mounted in the body drives the output.
+    if (qEnvironmentVariableIntValue("KRS_INPUTBIND_SELFTEST") != 0) {
+        std::printf("\n================= KRS_INPUTBIND_SELFTEST =================\n");
+        const bool ok = krs::nodes::runInputBindGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // Node-editor GATE TYPE: port type compatibility.
+    if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
+        const bool ok = krs::nodes::runTypeGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // Node-editor GATE TIME: live time source drives a sine over wall-clock.
+    if (qEnvironmentVariableIntValue("KRS_TIME_SELFTEST") != 0) {
+        std::printf("\n================= KRS_TIME_SELFTEST =================\n");
+        const bool ok = krs::nodes::runTimeGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
         std::printf("\n================= KRS_DISAMBIG_SELFTEST =================\n");
@@ -948,6 +971,9 @@ void RenderingSystem::initializeSharedResources()
             { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },
             { "GATE NODE-E2E (canvas program drives live robot; severing localizes)", krs::nodes::runNodeE2EGate() },
+            { "GATE INPUT-BIND (mounted per-input widget drives node output, N-of-M)", krs::nodes::runInputBindGate() },
+            { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
+            { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

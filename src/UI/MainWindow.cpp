@@ -923,11 +923,24 @@ MainWindow::MainWindow(QWidget* parent)
         this, [this, graphModel](QtNodes::NodeId nodeId) {
             auto* delegate = graphModel->delegateModel<NodeDelegate>(nodeId);
             if (!delegate) return;
-            auto backendNodePtr = NodeFactory::instance().createNode(delegate->name().toStdString());
-            if (!backendNodePtr) return;
-            delegate->setBackendNode(std::move(backendNodePtr));
+            // The delegate self-creates its backend node + widget lazily (the MOUNT FIX) during
+            // NodeGraphicsObject construction, so the widget is already embedded. Here we just inject the
+            // live Scene (Phase 5 backend bridge) and ask QtNodes to recompute the node's geometry.
+            if (Node* n = delegate->backendNode()) n->setScene(m_scene.get());
             Q_EMIT graphModel->nodeUpdated(nodeId);
         });
+
+    // LIVE GRAPH TICK: re-evaluate time-source nodes every frame so downstream time-parametric nodes
+    // (sine/ramp/oscillator) actually move over wall-clock instead of emitting a constant.
+    auto* nodeTickTimer = new QTimer(this);
+    connect(nodeTickTimer, &QTimer::timeout, this, [graphModel]() {
+        for (QtNodes::NodeId id : graphModel->allNodeIds()) {
+            auto* d = graphModel->delegateModel<NodeDelegate>(id);
+            if (d && d->backendNode() && d->backendNode()->getId() == "time_source")
+                d->recomputeAndPropagate();
+        }
+    });
+    nodeTickTimer->start(33);   // ~30 Hz
 
     connect(m_dockManager, &ads::CDockManager::dockWidgetRemoved, this, &MainWindow::syncViewportManagerPopup);
 

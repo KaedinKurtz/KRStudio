@@ -27,7 +27,15 @@ public:
     QWidget* embeddedWidget() override;
 
     void setBackendNode(std::unique_ptr<Node> backendNode);
-    void populateEmbeddedWidget();
+    void populateEmbeddedWidget() const;
+
+    // Create the backend node + its embedded widget on first access (the MOUNT FIX): QtNodes calls
+    // nPorts()/dataType()/embeddedWidget() while constructing the NodeGraphicsObject, BEFORE MainWindow's
+    // nodeCreated handler runs -- so the widget must already exist then, or it is never embedded.
+    void ensureBackend() const;
+    Node* backendNode() const { ensureBackend(); return m_backendNode.get(); }
+    // re-run the backend node + notify QtNodes downstream (called when an in-node input widget is edited).
+    void recomputeAndPropagate();
 
 
 Q_SIGNALS:
@@ -36,7 +44,7 @@ Q_SIGNALS:
 private:
     const Port* getBackendPort(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const;
 
-    std::unique_ptr<Node> m_backendNode;
+    mutable std::unique_ptr<Node> m_backendNode;   // mutable: lazily created from m_typeId on first access
     std::string m_typeId;
-    QWidget* m_embeddedWidget = nullptr;
+    mutable QWidget* m_embeddedWidget = nullptr;
 };

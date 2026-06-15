@@ -48,7 +48,8 @@ struct Port {
     Direction direction;
     Node* parentNode = nullptr;
     bool isFresh = false;
-    std::optional<PortDataPacket> packet;
+    std::optional<PortDataPacket> packet;        // value delivered by an upstream CONNECTION
+    std::optional<PortDataPacket> literalValue;  // value typed into the in-node input widget (used when unconnected)
 };
 
 class Node {
@@ -140,14 +141,28 @@ public:
     template<typename T>
     std::optional<T> getInput(const std::string& portName) {
         for (const auto& port : m_ports) {
-            if (port.direction == Port::Direction::Input && port.name == portName && port.packet.has_value()) {
-                try {
-                    return std::any_cast<T>(port.packet->data);
+            if (port.direction == Port::Direction::Input && port.name == portName) {
+                // a live CONNECTION (packet) wins; otherwise fall back to the in-node widget's literal.
+                const std::optional<PortDataPacket>& src = port.packet.has_value() ? port.packet : port.literalValue;
+                if (src.has_value()) {
+                    try { return std::any_cast<T>(src->data); }
+                    catch (const std::bad_any_cast&) { return std::nullopt; }
                 }
-                catch (const std::bad_any_cast&) { return std::nullopt; }
+                return std::nullopt;
             }
         }
         return std::nullopt;
+    }
+
+    // Set the literal value of an INPUT port (what the in-node input widget writes). Read by getInput
+    // when the port has no live connection.
+    template<typename T>
+    void setPortLiteral(const std::string& portName, const T& value) {
+        for (auto& port : m_ports) {
+            if (port.direction == Port::Direction::Input && port.name == portName) {
+                PortDataPacket pk; pk.data = value; pk.type = port.type; port.literalValue = pk; return;
+            }
+        }
     }
 
     // Numeric convenience: read a port as a double, accepting double/float/bool/int (the library nodes
