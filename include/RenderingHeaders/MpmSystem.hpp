@@ -101,6 +101,12 @@ public:
     // context; restores empty state afterwards so the live scene re-seeds.
     bool runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl);
 
+    // Phase 1 GATE 1.4 -- MPM <-> THERMAL energy conservation: a temperature-gradient block conducts
+    // heat (Fourier); mass-weighted total thermal energy (tempMean) is conserved while the spread
+    // shrinks. NEG-CTRL A: ambient exchange injects energy -> tempMean drifts (caught). NEG-CTRL B:
+    // conduction scale 0 -> spread does not shrink. Gated by KRS_MPMTHERMAL_SELFTEST + overnight bench.
+    bool runThermalGate1_4(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl);
+
 private:
     void allocate(QOpenGLFunctions_4_3_Core* gl);
     void seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);

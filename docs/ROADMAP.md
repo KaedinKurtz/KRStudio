@@ -1714,5 +1714,13 @@ Coupling recon (same workflow) first established WHICH pairs actually couple, to
   ANALYTIC FK `R_z(q)*offset` to **maxErr=5.0e-07 m** (bound<1e-4). Non-tautological: PhysX getGlobalPose +
   the writeback chain vs an analytic oracle, so a bug in either is caught. NEG-CTRL: skip
   writeBackArticulationViz -> the collider freezes at the rest pose -> drift **1.396 m** (a mis-synced link).
-- **1.4 MPM <-> THERMAL, 1.5 FEM static equilibrium: EXIST, gateable** (recipes in recon) -- pending sub-gates.
-GATE 1 (in progress): KRS_OVERNIGHT_BENCH **25/25** (GATE 1.2 + 1.3 added); exe verified newer than all sources.
+- **1.4 MPM <-> THERMAL energy conservation: LANDED.** GATE 1.4 (MpmSystem::runThermalGate1_4,
+  KRS_MPMTHERMAL_SELFTEST): a fluid block with a 20->80C gradient conducts heat; the mass-weighted total
+  thermal energy (tempMean, with c_p + mass constant) is CONSERVED to **energyErr=0.022 C** while the
+  spread shrinks **55->1.91 C**. NEG-CTRL A (injected non-conservation): ambient exchange drifts tempMean
+  **149.995 C** -> the energy check is violated and caught. NEG-CTRL B (severed coupling): run NO thermal
+  step -> spread unchanged **55->55**. CORRECTION to the recon: a conduction-scale=0 control is VACUOUS
+  here -- the P2G/G2P scatter+gather round-trip is itself a smoother, so the spread shrinks even with zero
+  Fourier flux; the valid severed control is running no thermal step at all.
+- **1.5 FEM static equilibrium: EXIST, gateable** (recipe in recon) -- pending sub-gate.
+GATE 1 (in progress): KRS_OVERNIGHT_BENCH **26/26** (GATE 1.2/1.3/1.4 added); exe verified newer than all sources.

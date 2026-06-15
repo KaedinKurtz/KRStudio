@@ -724,6 +724,95 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     return allPass;
 }
 
+// Phase 1 GATE 1.4 -- MPM <-> THERMAL energy conservation. A fluid block with a 20->80C gradient
+// conducts heat (Fourier): the mass-weighted total thermal energy (totalMass*c_p*tempMean, and c_p
+// + mass are constant so tempMean IS the energy proxy) is CONSERVED while the spread shrinks toward
+// the mean. NEG-CTRL A (injected non-conservation): turn on ambient exchange -> tempMean drifts ->
+// the SAME conservation check is violated and caught. NEG-CTRL B (severed coupling): conduction
+// scale = 0 -> no Fourier flux -> the spread does NOT shrink.
+bool MpmSystem::runThermalGate1_4(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl)
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[mpm-thermal] GATE 1.4 -- MPM thermal ENERGY conservation (Fourier conduction) + 2 neg-ctrls\n");
+    if (!renderer.getShader("mpm_heat_diffuse") || !renderer.getShader("mpm_heat_gather")) {
+        printf("[mpm-thermal] vacuous pass (heat shaders unavailable)\n");
+        std::fflush(stdout); return true;
+    }
+
+    const int   savedN = m_N, savedCount = m_particleCount;
+    const glm::vec3 savedOrigin = m_origin, savedSize = m_size;
+    const float savedAmb = m_ambientT, savedHx = m_heatExchange, savedS = m_conductionScale;
+    const float savedWave = m_maxWaveSpeed;
+    m_N = std::min(m_N, 64); m_origin = glm::vec3(-1.5f); m_size = glm::vec3(3.0f);
+
+    // seed a fluid block (material 0) with a T0..T0+span gradient along x (no motion: thermal only).
+    auto seedGradient = [&]() {
+        m_seedScratch.clear(); m_particleCount = 0;
+        const float spacing = 0.05f, half = 0.3f, density = 1000.0f, T0 = 20.0f, span = 60.0f, k = 60.0f;
+        const glm::vec3 center(0.0f, -0.3f, 0.0f);
+        const float vol = spacing * spacing * spacing, mass = density * vol;
+        const int n = std::max(1, int(std::round(2.0f * half / spacing)));
+        int count = 0;
+        for (int ix = 0; ix < n; ++ix) for (int iy = 0; iy < n; ++iy) for (int iz = 0; iz < n; ++iz) {
+            const glm::vec3 pp = center - glm::vec3(half) + (glm::vec3(ix, iy, iz) + 0.5f) * spacing;
+            const float nx = (pp.x - (center.x - half)) / (2.0f * half);
+            float v[kStride] = { 0 };
+            v[0] = pp.x; v[1] = pp.y; v[2] = pp.z; v[3] = mass;
+            v[7] = vol; v[20] = 1.0f; v[25] = 1.0f; v[30] = 1.0f; v[32] = 1.0f;
+            v[33] = T0 + span * nx; v[34] = 900.0f; v[35] = 1.0e9f;     // T, c_p, meltT
+            v[36] = 5.0e4f; v[37] = 7.0f; v[38] = 0.0f;                 // fluid K, gamma
+            v[39] = 0.0f; v[40] = 0.6f; v[41] = 0.7f; v[42] = 0.9f; v[43] = 1.0f; v[44] = k;
+            m_seedScratch.insert(m_seedScratch.end(), v, v + kStride); ++count;
+        }
+        m_particleCount += count;
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
+        gl->glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
+                            GLsizeiptr(sizeof(float)) * m_seedScratch.size(), m_seedScratch.data());
+        gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    };
+    auto runHeat = [&](int frames) { for (int f = 0; f < frames; ++f) runThermalStep(renderer, gl, 1.0f / 60.0f); };
+
+    // PRIMARY: closed conduction (no ambient sink) -> energy conserved + spread shrinks.
+    m_ambientT = 50.0f; m_heatExchange = 0.0f; m_conductionScale = 18.0f;
+    seedGradient(); const Diag c0 = sample(gl); runHeat(200); const Diag c1 = sample(gl);
+    const double energyErrOn = std::abs(c1.tempMean - c0.tempMean);
+    const float  spreadOn0 = c0.tempMax - c0.tempMin, spreadOn1 = c1.tempMax - c1.tempMin;
+
+    // NEG-CTRL A: ambient exchange injects energy -> tempMean drifts (non-conservation), caught.
+    m_ambientT = 200.0f; m_heatExchange = 5.0f; m_conductionScale = 18.0f;
+    seedGradient(); const Diag a0 = sample(gl); runHeat(200); const Diag a1 = sample(gl);
+    const double energyErrLeak = std::abs(a1.tempMean - a0.tempMean);
+
+    // NEG-CTRL B: SEVERED thermal coupling -- run NO thermal step -> no heat moves -> spread unchanged.
+    // (A conduction-scale=0 control is NOT used: the P2G/G2P scatter+gather round-trip is itself a
+    // smoother, so the spread shrinks even with zero Fourier flux -- that control would be vacuous.)
+    m_ambientT = 50.0f; m_heatExchange = 0.0f; m_conductionScale = 18.0f;
+    seedGradient(); const Diag b0 = sample(gl); /* deliberately no runHeat */ const Diag b1 = sample(gl);
+    const float spreadOff0 = b0.tempMax - b0.tempMin, spreadOff1 = b1.tempMax - b1.tempMin;
+
+    m_N = savedN; m_origin = savedOrigin; m_size = savedSize; m_particleCount = savedCount;
+    m_ambientT = savedAmb; m_heatExchange = savedHx; m_conductionScale = savedS; m_maxWaveSpeed = savedWave;
+    m_seedScratch.clear(); m_seeded = false;
+
+    const double tol = 6.0;  // tempMean drift bound (matches Test 5/8)
+    const bool energyConserved = energyErrOn < tol;
+    const bool diffuses = spreadOn1 < 0.8f * spreadOn0;
+    const bool leakCaught = energyErrLeak > 3.0 * tol;                 // ambient exchange clearly non-conserving
+    const bool severedNoShrink = spreadOff1 > 0.95f * spreadOff0;      // no thermal step -> no redistribution
+    const bool pass = energyConserved && diffuses && leakCaught && severedNoShrink;
+
+    printf("[mpm-thermal]   closed conduction: energyErr(tempMean)=%.3f C (tol<%.1f); spread %.2f->%.2f (shrinks)  %s\n",
+           energyErrOn, tol, spreadOn0, spreadOn1, (energyConserved && diffuses) ? "CONSERVED+DIFFUSES" : "FAIL");
+    printf("[mpm-thermal]   NEG-CTRL A (ambient exchange = energy leak): tempMean drift=%.3f C (>>tol -> caught)  %s\n",
+           energyErrLeak, leakCaught ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[mpm-thermal]   NEG-CTRL B (severed: no thermal step): spread %.2f->%.2f (must stay = no heat moves)  %s\n",
+           spreadOff0, spreadOff1, severedNoShrink ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[mpm-thermal] %s\n", pass ? "ALL PASS (energy conserved + diffuses; energy-leak + severed-step caught)" : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
 glm::vec2 MpmSystem::vizRange() const
 {
     switch (m_appearance.mode) {
