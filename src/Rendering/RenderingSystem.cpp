@@ -782,6 +782,22 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 1 GATE NODE-UI: in-node widget param drives output + bounded footprint.
+    if (qEnvironmentVariableIntValue("KRS_NODEUI_SELFTEST") != 0) {
+        std::printf("\n================= KRS_NODEUI_SELFTEST =================\n");
+        const bool ok = krs::nodes::runNodeUiGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Phase 3 GATE NODE-LIB: library nodes vs closed-form references.
+    if (qEnvironmentVariableIntValue("KRS_NODELIB_SELFTEST") != 0) {
+        std::printf("\n================= KRS_NODELIB_SELFTEST =================\n");
+        const bool ok = krs::nodes::runNodeLibraryGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
         std::printf("\n================= KRS_DISAMBIG_SELFTEST =================\n");
@@ -883,6 +899,8 @@ void RenderingSystem::initializeSharedResources()
             { "GATE F5 dense-scene pick (>=20 bodies/>=100k tris, >=99% at scale + latency)", krs::pick::runDenseSceneGateF5() },
             { "GATE J4 joint fuzz (20k feature x type x extremes -> 0 corrupt graphs)", krs::cad::runJointFuzzGateJ4() },
             { "GATE M5 MQTT robustness (broker kill/reconnect + N>=128 + malformed rejected)", krs::mqtt::runMqttRobustnessGateM5() },
+            { "GATE NODE-UI (in-node widget param drives output + bounded footprint)", krs::nodes::runNodeUiGate() },
+            { "GATE NODE-LIB (math/signal/time/logic nodes vs closed-form, <tol)", krs::nodes::runNodeLibraryGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

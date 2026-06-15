@@ -150,6 +150,16 @@ public:
         return std::nullopt;
     }
 
+    // Numeric convenience: read a port as a double, accepting double/float/bool/int (the library nodes
+    // pass numbers around as doubles; bool ports carry 1.0/0.0). Returns def if unset / non-numeric.
+    double getInputD(const std::string& portName, double def = 0.0) {
+        if (auto d = getInput<double>(portName)) return *d;
+        if (auto f = getInput<float>(portName))  return double(*f);
+        if (auto b = getInput<bool>(portName))   return *b ? 1.0 : 0.0;
+        if (auto i = getInput<int>(portName))    return double(*i);
+        return def;
+    }
+
     template<typename T>
     void setOutput(const std::string& portName, const T& value) {
         for (auto& port : m_ports) {
@@ -185,6 +195,20 @@ public:
     void setScene(Scene* s) { m_scene = s; }
     Scene* scene() const { return m_scene; }
 
+    // --- Phase 1 node PARAMETERS: tunable internal state that is NOT a wired input port. An in-node
+    //     widget (slider/dial/spinbox) binds to a param by name and writes it via setParam(); compute()
+    //     reads it via getParam(). This is the behaviorally-meaningful, headless-gateable layer of the
+    //     in-node UI -- the gate drives a param and asserts the OUTPUT changes (the widget is a thin
+    //     binding over this). Params survive across process() calls (unlike port packets). ---
+    template<typename T> void setParam(const std::string& name, const T& v) { m_params[name] = v; }
+    template<typename T> T getParam(const std::string& name, const T& def) const {
+        auto it = m_params.find(name);
+        if (it == m_params.end()) return def;
+        try { return std::any_cast<T>(it->second); } catch (const std::bad_any_cast&) { return def; }
+    }
+    bool hasParam(const std::string& name) const { return m_params.find(name) != m_params.end(); }
+    const std::map<std::string, std::any>& params() const { return m_params; }
+
 protected:
     Node() {
         m_ports.push_back({ "Trigger", {"bool", "unitless"}, Port::Direction::Input, this });
@@ -194,6 +218,7 @@ protected:
     std::string m_id;
     Scene* m_scene = nullptr;   // live backend, injected by the graph runner (Phase 5)
     std::vector<Port> m_ports;
+    std::map<std::string, std::any> m_params;   // tunable internal state driven by in-node widgets (Phase 1)
     UpdatePolicy m_updatePolicy = UpdatePolicy::Asynchronous;
     TriggerEdge m_triggerEdge = TriggerEdge::Rising;
     bool m_lastTriggerState = false;

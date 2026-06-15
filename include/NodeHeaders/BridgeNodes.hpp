@@ -44,4 +44,14 @@ namespace krs::nodes {
 // compute(), and asserts the live ECS / canonical robot changed -- with disconnected-node and
 // wrong-type negative controls. Returns true on PASS. Requires no GL context.
 bool runNodeGraphGateND();
+
+// Phase 1 GATE NODE-UI (KRS_NODEUI_SELFTEST): an in-node widget's param drives the node OUTPUT
+// (set -> process -> output changes) with a disconnected-widget neg-ctrl; the real Qt widget's bounds
+// stay within the gated, capped estimateFootprint.
+bool runNodeUiGate();
+
+// Phase 3 GATE NODE-LIB (KRS_NODELIB_SELFTEST): every math/signal/time/logic library node's output is
+// asserted against a closed-form reference over sampled inputs (<tol). Closes the "instantiates but does
+// nothing" class.
+bool runNodeLibraryGate();
 }

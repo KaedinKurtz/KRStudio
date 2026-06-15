@@ -1888,3 +1888,31 @@ bounded, so a physics tick interleaving MQTT isn't starved. **M5c** 9 malformed 
 `not_a_number`, `1e999`, `0.5xyz`, binary, ...) are all **rejected, 0 non-finite poses**, then one valid
 command still acts. The handler originally used `atof` (turns `"1e999"`->inf -> a non-finite link pose);
 FIX: `strtod` with full-consumption + `isfinite` validation, reject otherwise. **All M5 PASS.**
+
+## §AD NODE-SYSTEM SPRINT -- Phase 1 (in-node UI) + Phase 3 (library behavioral gates) -- LANDED (2026-06-15)
+The existing node library has ~90 registered types but the only gate was "107 types instantiate" -- the loose
+gate this sprint tightens (completeness is BEHAVIORAL: a node is done when its OUTPUT matches a reference).
+- **Node params**: `Node` gained a `std::map<string,any> m_params` + `setParam/getParam/hasParam` + a numeric
+  `getInputD()` -- tunable internal state an in-node widget writes and compute() reads (the headless-gateable
+  layer of the in-node UI).
+- **In-node UI framework** (`include/NodeHeaders/NodeWidgets.hpp` + `src/Nodes/NodeWidgets.cpp`):
+  `buildControlWidget(node, controls)` turns a list of ControlSpec (dial/slider/spinbox/readout, each bound
+  to a param) into a compact, FIXED-SIZE widget; every control writes `node->setParam(param,v); node->process()`.
+  Sized to `estimateFootprint()` -- the SSOT the sizing gate asserts is bounded, so the gated number IS the
+  rendered widget's bounds (fixes the "nodes expand massively" via setFixedSize + a hard cap).
+- **Param-driven signal generators** (`src/Nodes/GeneratorNodes.cpp`): `gen_sine/square/triangle/saw` with
+  freq/amp/phase/offset PARAMS + in-node dials (fills the Phase 3.2 gap -- the pre-existing signal_waveform
+  has an internal type and no phase/offset/triangle).
+### AD.1 GATE NODE-UI (`krs::nodes::runNodeUiGate`, KRS_NODEUI_SELFTEST)
+NU1: a gen_sine's dial PARAM drives the output -- over 180 (freq,amp,phase,t) samples the output matches
+amp*sin(2pi*f*t+phase) to **9.81e-07**. NEG-CTRL: a fresh gen on DEFAULT params, and changing another gen's
+dial, leave this one's output unchanged (disconnected-widget inert). NU2: footprint bounded -- the real Qt
+gen widget is **169x240 <= cap 220x300**; NEG-CTRL the uncapped (pre-fix) footprint for a 12-control node is
+**h=414 > cap** (the cap is load-bearing). [render pixels = visual-confirm; the widget SIZE is gated on the
+real widget.]
+### AD.2 GATE NODE-LIB (`krs::nodes::runNodeLibraryGate`, KRS_NODELIB_SELFTEST)
+Every EXISTING math/signal/logic node's output asserted vs closed-form over sampled inputs: **25 checks, 0
+FAIL, worst err 1.69e-06** -- math_add/sub/mul/div/mod/pow/min/max/atan2/abs/sqrt/log/sin/cos/clamp/lerp/
+greater_than/less_than/equals, the 4 new generators, and signal_waveform. NEG-CTRL (wrong-typed-input): a
+math_add fed a STRING for A produces NO output (the node guards getInput<float>). Calculus nodes
+(math_derivative/integral) take timestamped ProfiledData -- NOT gated here (flagged). KRS_OVERNIGHT_BENCH 39/39.
