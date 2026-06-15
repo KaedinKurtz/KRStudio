@@ -96,9 +96,9 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     gl->glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
     // Two-way coupling impulse accumulator: one fixed-point ivec4 per
-    // collider slot (32 boxes then 32 spheres).
+    // collider slot (32 boxes, then 32 spheres, then kMaxSdfColliders SDF mesh slots).
     {
-        std::vector<int> zeros(size_t(kMaxBoxes + kMaxSpheres) * 4, 0);
+        std::vector<int> zeros(size_t(kMaxBoxes + kMaxSpheres + kMaxSdfColliders) * 4, 0);
         gl->glGenBuffers(1, &m_impulseSSBO);
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_impulseSSBO);
         gl->glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(zeros.size() * sizeof(int)),
@@ -203,8 +203,11 @@ void FluidSystem::bakeSdfColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry
         const auto& mesh = registry.get<RenderableMeshComponent>(e);
         const auto& xf = registry.get<TransformComponent>(e);
 
+        // C2: bake in the body's LOCAL frame (identity transform) -> a rigid-body-invariant field +
+        // local AABB. The per-frame transform (model/invModel) places it in the world, so the field
+        // RIDES the body instead of being frozen at the play-time world pose.
         SdfBakeResult baked;
-        if (!bakeMeshToSdf(mesh.vertices, mesh.indices, xf.getTransform(), sdfc.voxelSize, baked))
+        if (!bakeMeshToSdf(mesh.vertices, mesh.indices, glm::mat4(1.0f), sdfc.voxelSize, baked))
             continue;
 
         SdfCollider out;
@@ -212,6 +215,9 @@ void FluidSystem::bakeSdfColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry
         out.aabbMax = baked.aabbMax;
         out.dims = baked.dims;
         out.cpuField = std::move(baked.field);
+        out.entity = e;
+        out.model = xf.getTransform();
+        out.invModel = glm::inverse(out.model);
 
         gl->glGenTextures(1, &out.texture);
         gl->glBindTexture(GL_TEXTURE_3D, out.texture);
@@ -336,6 +342,19 @@ void FluidSystem::uploadColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry&
     gl->glBindBuffer(GL_UNIFORM_BUFFER, m_colliderUBO);
     gl->glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(ColliderBlock), &block);
     gl->glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+    // C2: refresh each SDF mesh collider's world transform from its LIVE TransformComponent, so the
+    // baked local field tracks the body this step (box/sphere already upload live, above). When the
+    // sync toggle is OFF (negative control) the transform stays frozen at the bake pose -> ghost.
+    if (m_syncSdfTransforms) {
+        for (auto& s : m_sdfColliders) {
+            if (s.entity != entt::null && registry.valid(s.entity)
+                && registry.all_of<TransformComponent>(s.entity)) {
+                s.model = registry.get<TransformComponent>(s.entity).getTransform();
+                s.invModel = glm::inverse(s.model);
+            }
+        }
+    }
 }
 
 const char* fluidBackendName(FluidBackend backend)
@@ -617,8 +636,11 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
             gl->glActiveTexture(GL_TEXTURE8 + i);
             gl->glBindTexture(GL_TEXTURE_3D, m_sdfColliders[i].texture);
             s->setInt(gl, ("u_sdf[" + std::to_string(i) + "]").c_str(), 8 + i);
+            // aabb is now the LOCAL-frame field box; invModel/model ride the body (C2).
             s->setVec3(gl, ("u_sdfMin[" + std::to_string(i) + "]").c_str(), m_sdfColliders[i].aabbMin);
             s->setVec3(gl, ("u_sdfMax[" + std::to_string(i) + "]").c_str(), m_sdfColliders[i].aabbMax);
+            s->setMat4(gl, ("u_sdfInvModel[" + std::to_string(i) + "]").c_str(), m_sdfColliders[i].invModel);
+            s->setMat4(gl, ("u_sdfModel[" + std::to_string(i) + "]").c_str(), m_sdfColliders[i].model);
         }
         gl->glActiveTexture(GL_TEXTURE0);
     };
@@ -753,7 +775,7 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
     // 6) Fluid -> rigid coupling: read the per-collider impulse accumulator
     //    and hand net impulses to the rigid solver (same thread).
     if (m_impulseSink) {
-        std::array<glm::ivec4, kMaxBoxes + kMaxSpheres> raw{};
+        std::array<glm::ivec4, kMaxBoxes + kMaxSpheres + kMaxSdfColliders> raw{};
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_impulseSSBO);
         gl->glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(raw), raw.data());
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
@@ -767,6 +789,9 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
         for (size_t i = 0; i < m_boxEntities.size(); ++i) sendImpulse(int(i), m_boxEntities[i]);
         for (size_t i = 0; i < m_sphereEntities.size(); ++i)
             sendImpulse(kMaxBoxes + int(i), m_sphereEntities[i]);
+        // C1: fluid -> SDF (mesh) rigid reaction. Slots follow the box+sphere slots.
+        for (size_t i = 0; i < m_sdfColliders.size() && int(i) < kMaxSdfColliders; ++i)
+            sendImpulse(kMaxBoxes + kMaxSpheres + int(i), m_sdfColliders[i].entity);
     }
 
     // Bake recording: one cache frame per rendered frame while playing.
@@ -844,9 +869,11 @@ void FluidSystem::update(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* g
             auto sdfDistance = [this](const glm::vec3& p) {
                 float best = 1e9f;
                 for (const auto& s : m_sdfColliders) {
-                    if (glm::any(glm::lessThan(p, s.aabbMin)) ||
-                        glm::any(glm::greaterThan(p, s.aabbMax))) continue;
-                    const glm::vec3 uvw = (p - s.aabbMin) / (s.aabbMax - s.aabbMin);
+                    // field is LOCAL-frame (C2): map the world point through invModel first.
+                    const glm::vec3 lp = glm::vec3(s.invModel * glm::vec4(p, 1.0f));
+                    if (glm::any(glm::lessThan(lp, s.aabbMin)) ||
+                        glm::any(glm::greaterThan(lp, s.aabbMax))) continue;
+                    const glm::vec3 uvw = (lp - s.aabbMin) / (s.aabbMax - s.aabbMin);
                     const glm::ivec3 c = glm::clamp(glm::ivec3(uvw * glm::vec3(s.dims - glm::ivec3(1)) + 0.5f),
                                                     glm::ivec3(0), s.dims - glm::ivec3(1));
                     best = std::min(best, s.cpuField[(size_t(c.z) * s.dims.y + c.y) * s.dims.x + c.x]);

@@ -49,6 +49,7 @@
 #include "MeshMaterialSource.hpp"
 #include "DfsphBackend.hpp"
 #include "FluidSystem.hpp"
+#include "SdfColliderQuery.hpp" // Phase B GATE C (krs::fluid::runCollisionSyncGateC)
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -665,6 +666,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase B GATE C (C1/C2/C4): SDF mesh collider rides the live body (no ghost) + neg-ctrl.
+    if (qEnvironmentVariableIntValue("KRS_COLLISIONSYNC_SELFTEST") != 0) {
+        std::printf("\n================= KRS_COLLISIONSYNC_SELFTEST =================\n");
+        const bool ok = krs::fluid::runCollisionSyncGateC();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -716,6 +725,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE V.2 visible FANUC render (features->pixels)", runFanucRenderGateV2() },
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },
             { "GATE C3 dynamic-flip continuity (pose+velocity)", SimulationController::runFlipContinuityGateC3() },
+            { "GATE C SDF collider rides body (C2 no-ghost/C4 lag + neg-ctrl)", krs::fluid::runCollisionSyncGateC() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

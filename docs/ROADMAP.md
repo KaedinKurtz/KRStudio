@@ -1572,8 +1572,36 @@ does not fully read it. It also ADVERSARIALLY REFUTED part of the C3 framing.
   2.0 m/s), poseErr=**0.00**, movedFromAuthored=**0.108 m** (live pose, NOT the authored 0). NEGATIVE
   CONTROL (sync disabled): flipVx=**0.000** (the velocity-loss bug reproduced). PASS.
 No regression: KRS_OVERNIGHT_BENCH **18/18** (GATE C3 added), KRS_BENCH 7/7, GUI boots clean.
-Remaining: C2/C1 -- the GPU SDF live-tracking + fluid->SDF impulse (FluidSystem.cpp + the fluid compute
-shader); these need the fluid running for visual verification of the ghost being gone.
+
+### T.2 IMPLEMENTED — C2/C1 SDF mesh collider rides the live body (GATE C, real numbers, KRS_COLLISIONSYNC_SELFTEST)
+Root cause: `bakeSdfColliders` baked the mesh SDF in WORLD space at play and gated it with `m_sdfsBaked`
+(once, never refreshed); box/sphere colliders already upload live every step, only mesh SDFs ghosted at
+the start pose.
+Fix (canonical-transform rule -- the collision world the fluid samples is a LIVE VIEW of the ECS each step):
+- Bake the field ONCE in the body's LOCAL frame (identity transform) -> rigid-body-invariant field + LOCAL
+  AABB. `SdfCollider` now carries `entity`, `model` (local->world), `invModel` (world->local).
+- `uploadColliders` (runs every step, before the solver binds) refreshes each SDF collider's model/invModel
+  from the LIVE `TransformComponent` -> zero-step lag (C4). Negative-control toggle `setSdfTransformSync`.
+- `fluid_deltap_comp.glsl`: the sample point is mapped world->local (`u_sdfInvModel[k]`), the field sampled
+  in LOCAL space, the normal rotated back to world (`u_sdfModel[k]`). The convention is the SINGLE SOURCE OF
+  TRUTH `krs::fluid::sdfDistanceWorld` (SdfColliderQuery.hpp), shared with GATE C.
+- C1 fluid->SDF reaction: the SDF branch now calls `accumulateImpulse(64+k, push)` (slots after the 32 box +
+  32 sphere slots; impulse SSBO + readback extended by `kMaxSdfColliders`), so a mesh collider feels the
+  fluid (was a no-op).
+- **GATE C** (CollisionSyncGate.cpp; CPU/OpenVDB, neg-ctrl REQUIRED): bake a unit cube's LOCAL field, sweep
+  50 poses x 125 body-frame probes. C2/C4 RIDES: liveMaxErr=**0.00000 m** (field invariant under body motion,
+  tol<0.09). C2 NO-GHOST: live sdf at the vacated start pose = **empty** (>0, not colliding). NEGATIVE CONTROL
+  (sync OFF/frozen): start-pose sdf=**-0.120 m** (still colliding = the ghost reproduced) + field driftErr
+  **1.120** (frozen field does not ride). PASS, non-vacuous.
+- Runtime smoke (KRS_FLUID_DEMO + KRS_AUTOPLAY, headless): the edited `fluid_deltap` compiles at init and
+  DISPATCHES cleanly -- 95922 particles simulate with no GL error / NaN / shader failure.
+No regression: KRS_OVERNIGHT_BENCH **20/20** (GATE C added), KRS_BENCH 7/7.
+BOUNDARY (honest, per NO-EYEBALL rule): GATE C proves the world->local transform-sync CONVENTION (the C2 root
+cause) and the neg-control ghost; the GPU shader is a faithful port of that exact convention and is confirmed
+to compile+dispatch. The full end-to-end GPU behaviour -- particles colliding at a MOVING mesh's live pose and
+the fluid->SDF impulse pushing that mesh -- is NOT yet headlessly gated (no headless GPU-fluid+SDF scene
+harness); it is verified by the convention gate + code review and still wants a visual confirmation with a
+moving SDF collider in fluid. Also assumes the SDF body is unscaled (rigid model; documented).
 
 ### S.5 FIX — applied textures stay on the body-frame UV path + per-body tiling (user-reported)
 Symptom: the world-scale UV checker rode the body correctly, but APPLYING a material from the texture

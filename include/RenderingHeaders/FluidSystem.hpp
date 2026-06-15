@@ -82,6 +82,11 @@ public:
 
     static constexpr int kMaxSdfColliders = 4;
 
+    // Phase B (C2) negative control: when OFF, SDF mesh colliders freeze at their bake pose
+    // (reproducing the old world-space ghost). ON (default) tracks the live body each step.
+    void setSdfTransformSync(bool on) { m_syncSdfTransforms = on; }
+    bool sdfTransformSync() const { return m_syncSdfTransforms; }
+
     void setPlaying(bool playing)
     {
         if (playing && !m_playing) m_sdfsBaked = false; // re-bake on each play
@@ -151,12 +156,17 @@ public:
 
 private:
     struct SdfCollider {
-        GLuint texture = 0;       // R32F 3D texture of signed distances (world units)
-        glm::vec3 aabbMin{ 0 };
+        GLuint texture = 0;       // R32F 3D texture of signed distances (LOCAL frame, baked once)
+        glm::vec3 aabbMin{ 0 };   // LOCAL-frame field AABB (body frame, invariant)
         glm::vec3 aabbMax{ 0 };
         // CPU copy kept for telemetry/penetration checks under test hooks
         std::vector<float> cpuField;
         glm::ivec3 dims{ 0 };
+        // Phase B (C2): the field is baked in the body's LOCAL frame; these are refreshed from the
+        // entity's LIVE TransformComponent every step so the SDF RIDES the body (no start-pose ghost).
+        entt::entity entity{ entt::null };
+        glm::mat4 model{ 1.0f };     // local -> world (live)
+        glm::mat4 invModel{ 1.0f };  // world -> local (sample-point transform, matches the shader)
     };
 
     void bakeSdfColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);
@@ -202,6 +212,7 @@ private:
 
     // --- SDF colliders (baked from meshes at Play via OpenVDB) ---
     bool m_sdfsBaked = false;
+    bool m_syncSdfTransforms = true; // C2: refresh per-collider transform from the live body each step
     std::vector<SdfCollider> m_sdfColliders;
 
     // --- GPU resources (engine context) ---

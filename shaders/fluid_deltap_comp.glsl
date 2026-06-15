@@ -36,11 +36,16 @@ uniform int u_gridNx;
 uniform int u_gridNy;
 uniform int u_gridNz;
 
-// Signed distance field colliders (baked from meshes via OpenVDB)
+// Signed distance field colliders (baked from meshes via OpenVDB).
+// C2: the field is baked in the body's LOCAL frame; u_sdfInvModel/u_sdfModel ride the body each
+// step (refreshed from the live TransformComponent), so collision tracks the body -- no start-pose
+// ghost. u_sdfMin/Max are the LOCAL-frame field AABB. Convention matches SdfColliderQuery.hpp.
 uniform int u_sdfCount;
 uniform sampler3D u_sdf[4];
 uniform vec3 u_sdfMin[4];
 uniform vec3 u_sdfMax[4];
+uniform mat4 u_sdfInvModel[4]; // world -> local (sample-point transform)
+uniform mat4 u_sdfModel[4];    // local -> world (rotates the SDF normal back to world)
 
 const float IMP_SCALE = 1.0e7;
 void accumulateImpulse(int slot, vec3 push)
@@ -129,20 +134,26 @@ vec3 collide(vec3 pos, vec3 prevPos)
         }
     }
 
-    // SDF colliders: exact mesh shapes. Distance sampled in world units;
-    // surface normal from central differences.
+    // SDF colliders: exact mesh shapes. The sample point is mapped into the collider's LOCAL frame
+    // (C2: rides the body), distance sampled in local==world units; surface normal from central
+    // differences in local space, rotated back to world by the rigid model rotation.
     for (int k = 0; k < u_sdfCount; ++k) {
+        vec3 lpos = (u_sdfInvModel[k] * vec4(pos, 1.0)).xyz;
         vec3 ext = u_sdfMax[k] - u_sdfMin[k];
-        vec3 uvw = (pos - u_sdfMin[k]) / ext;
+        vec3 uvw = (lpos - u_sdfMin[k]) / ext;
         if (any(lessThan(uvw, vec3(0.0))) || any(greaterThan(uvw, vec3(1.0)))) continue;
         float d = texture(u_sdf[k], uvw).r;
         if (d < r) {
             vec3 eps = vec3(1.0) / vec3(textureSize(u_sdf[k], 0));
-            vec3 n = normalize(vec3(
+            vec3 nLocal = normalize(vec3(
                 texture(u_sdf[k], uvw + vec3(eps.x, 0, 0)).r - texture(u_sdf[k], uvw - vec3(eps.x, 0, 0)).r,
                 texture(u_sdf[k], uvw + vec3(0, eps.y, 0)).r - texture(u_sdf[k], uvw - vec3(0, eps.y, 0)).r,
                 texture(u_sdf[k], uvw + vec3(0, 0, eps.z)).r - texture(u_sdf[k], uvw - vec3(0, 0, eps.z)).r) + vec3(1e-9));
-            pos += n * (r - d);
+            vec3 n = normalize(mat3(u_sdfModel[k]) * nLocal);
+            vec3 push = n * (r - d);
+            pos += push;
+            // C1: fluid -> SDF (mesh) rigid reaction. SDF slots follow the 32 box + 32 sphere slots.
+            accumulateImpulse(64 + k, push);
         }
     }
     return pos;
