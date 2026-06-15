@@ -625,6 +625,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase A-CLOSE GATE U (AC1/AC2/AC3): applied texture rides the UV body + tiling scales.
+    if (qEnvironmentVariableIntValue("KRS_APPLYTEX_SELFTEST") != 0) {
+        std::printf("\n================= KRS_APPLYTEX_SELFTEST =================\n");
+        const bool ok = runAppliedTextureGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase V GATE V.6: the boot path (shared helper + demo drive + tick) moves the FANUC.
     if (qEnvironmentVariableIntValue("KRS_FANUC_BOOT_SELFTEST") != 0) {
         std::printf("\n================= KRS_FANUC_BOOT_SELFTEST =================\n");
@@ -703,6 +711,7 @@ void RenderingSystem::initializeSharedResources()
             { "Trajectory HIL multi-fidelity verify",        krs::hil::runTrajectoryHilSelfTest() },
             { "OCCT STEP pipeline (round-trip + features)",  krs::cad::runSelfTest() },
             { "GATE U B-Rep UVs (U1-U6: scale/continuity/density/coverage/param/rides-body)", krs::cad::runUvGateU() },
+            { "GATE U applied-tex (AC1 rides/AC2 tiling/AC3 tag-select + neg-ctrls)", runAppliedTextureGate() },
             { "Render gates G1-G9 (colormap/determinism/proj)", runRenderGates() },
             { "GATE V.2 visible FANUC render (features->pixels)", runFanucRenderGateV2() },
             { "SimController lifecycle (PhysX core borrow)", SimulationController::runLifecycleSelfTest() },

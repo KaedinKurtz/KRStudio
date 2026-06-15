@@ -1,6 +1,7 @@
 #include "TextureBrowserWidget.hpp"
 #include "Scene.hpp"
 #include "components.hpp"
+#include "MaterialApply.hpp" // krs::material::applyPackTags (shared with the AC3 gate)
 #include "GizmoSystem.hpp" // GizmoHandleComponent (never retexture gizmo handles)
 
 #include <QVBoxLayout>
@@ -217,17 +218,10 @@ void TextureBrowserWidget::applyToSelection()
         auto& req = reg.emplace_or_replace<MaterialReloadRequest>(e);
         req.heightScaleOverride = parallax ? float(m_heightScale->value()) : -1.0f;
         req.tilingOverride = float(m_tiling->value());
-        if (parallax) {
-            reg.emplace_or_replace<ParallaxMaterialTag>(e);
-            // The parallax/POM shader is triplanar (world-space). Bodies with REAL UVs (imported CAD)
-            // must STAY on their UV mapping, so only switch primitives (no UVs) to triplanar; UV bodies
-            // keep UVTexturedMaterialTag and render the pack through their UVs (no parallax displacement).
-            if (!reg.all_of<UVTexturedMaterialTag>(e)) {
-                reg.emplace_or_replace<TriPlanarMaterialTag>(e);
-            }
-        } else {
-            reg.remove<ParallaxMaterialTag>(e);
-        }
+        // Tag mutation is the SINGLE SOURCE OF TRUTH krs::material::applyPackTags
+        // (MaterialApply.hpp), shared with the applied-texture gate (AC3): real-UV bodies keep
+        // their object-space UV mapping; only no-UV primitives switch to world-space triplanar.
+        krs::material::applyPackTags(reg, e, parallax);
         ++applied;
     }
     m_packInfo->setText(applied > 0

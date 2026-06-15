@@ -6,6 +6,7 @@
 #include "RenderUtils.hpp"
 #include "Texture2D.hpp"
 #include "GizmoSystem.hpp"
+#include "GBufferShaderSelect.hpp"
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <QDebug>
@@ -181,31 +182,26 @@ void OpaquePass::execute(const RenderFrameContext& context)
         // ===================================================================
         // ## STEP 1: SHADER SELECTION
         // ===================================================================
-        // A body with REAL per-vertex UVs (UVTexturedMaterialTag, e.g. imported CAD) must sample its
-        // material in OBJECT space through those UVs -- never world-space triplanar/parallax. So UV wins:
-        // even if a material apply added TriPlanar/Parallax (e.g. a height-map pack), the UV path is used.
+        // Shader selection is the SINGLE SOURCE OF TRUTH krs::render::selectGBufferShaderKind
+        // (GBufferShaderSelect.hpp), shared with the applied-texture gate (AC1/AC3). A body with
+        // REAL per-vertex UVs (UVTexturedMaterialTag, e.g. imported CAD) ALWAYS samples in OBJECT
+        // space through those UVs -- UV wins, even if a material apply added TriPlanar/Parallax.
         const bool isUVTextured = context.registry.all_of<UVTexturedMaterialTag>(ent);
         const bool isTessellated = context.registry.all_of<TessellatedMaterialTag>(ent);
-        const bool isTriPlanar = !isUVTextured && context.registry.all_of<TriPlanarMaterialTag>(ent);
         const bool hasTexture = mat && mat->albedoMap;
-        const bool isParallax = !isUVTextured && context.registry.all_of<ParallaxMaterialTag>(ent);
-        if (isParallax && isTriPlanar && hasTexture) {
-            activeShader = pomShader;
-        }
-        else if (isTessellated && isTriPlanar && hasTexture) {
-            activeShader = tessTriplanarShader;
-        }
-        else if (isTessellated && hasTexture) {
-            activeShader = tessShader;
-        }
-        else if (isTriPlanar && hasTexture) {
-            activeShader = triplanarShader;
-        }
-        else if (hasTexture) {
-            activeShader = uvShader;
-        }
-        else {
-            activeShader = untexturedShader;
+        using krs::render::GBufferShaderKind;
+        const GBufferShaderKind kind = krs::render::selectGBufferShaderKind(
+            isUVTextured, isTessellated,
+            context.registry.all_of<TriPlanarMaterialTag>(ent),
+            context.registry.all_of<ParallaxMaterialTag>(ent),
+            hasTexture);
+        switch (kind) {
+            case GBufferShaderKind::ParallaxPOM:          activeShader = pomShader;          break;
+            case GBufferShaderKind::TessellatedTriplanar: activeShader = tessTriplanarShader; break;
+            case GBufferShaderKind::Tessellated:          activeShader = tessShader;          break;
+            case GBufferShaderKind::Triplanar:            activeShader = triplanarShader;     break;
+            case GBufferShaderKind::UVTextured:           activeShader = uvShader;            break;
+            case GBufferShaderKind::Untextured:           activeShader = untexturedShader;    break;
         }
 
         if (!activeShader) {

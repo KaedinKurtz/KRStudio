@@ -1589,3 +1589,36 @@ through their UVs, no parallax displacement). With the body back on the uvShader
 `albedoTiling.x` (ObjectPropertiesWidget tiling spinbox) again drives `u_texture_scale`. No regression:
 KRS_OVERNIGHT_BENCH 18/18, app boots clean. (Visual: apply any pack -> it now wraps in body-frame UV;
 the tiling bar rescales it per body.)
+
+### S.6 A-CLOSE — the S.5 fix made PROVABLE; the real bug was a STALE BINARY + an un-gated decision (2026-06-14)
+The operator re-reported the bug AFTER S.5: applied textures still swam in world space. Root cause was
+NOT the source (S.5 was correct) but the BUILD: the "passed" build linked stale objects --
+`OpaquePass.cpp.obj` 18:45 and `TextureBrowserWidget.cpp.obj` 12:29 vs their source edited 19:12; the
+exe was 19:00 < source. The running binary PREDATED the fix, so the world-space path was still live. The
+S.5 claim ("18/18, boots clean") never proved the FIX because no gate exercised the apply->shader
+decision and the exe was never verified newer than the source. A-CLOSE makes it provable:
+
+1. SINGLE SOURCE OF TRUTH for the two decisions the bug lived in (so the gate is non-vacuous -- it runs
+   the exact production code, like the krs::fanuc solid->link helper):
+   - `krs::render::selectGBufferShaderKind` (include/RenderingHeaders/GBufferShaderSelect.hpp) -- the
+     tag->shader policy ("UV wins"). `OpaquePass::execute` consumes it (replaced its inline ladder).
+   - `krs::material::applyPackTags` (include/UtilityHeaders/MaterialApply.hpp) -- the apply tag mutation.
+     `TextureBrowserWidget::applyToSelection` consumes it.
+
+2. GATE U extended (`src/Rendering/AppliedTextureGate.cpp`; KRS_APPLYTEX_SELFTEST + overnight bench),
+   REAL numbers from a freshly-linked binary:
+   - AC3 (CPU): apply height/plain pack to a UV body -> stays `UVTextured(object-space)`; NEG-CTRL no-UV
+     primitive + height pack -> `ParallaxPOM(world-space)`. Proves an applied texture stays body-frame.
+   - AC1 (GL, UV-encoding albedo so the rendered albedo DECODES the sampled texcoord): over 60 random
+     rigid poses the decoded texcoord == the body-frame vertex UV -- mean 0.0039, p99 0.0126, max 0.0155
+     (bound mean<0.015, p99<0.03). NEG-CTRL (35deg yaw): triplanar slides 0.2970 vs UV 0.0051 (58x).
+   - AC2 (GL): texels/m (median) scales EXACTLY with `albedoTiling.x` -- 0.9969 (0.31% err), x2.008,
+     x4.007. The tiling bar rescales per body.
+   Measurement notes (honest, not bound-fudging): the UV-encoding texture is NEAREST (LINEAR blends the
+   REPEAT seam -> false 0.5 readings); a flat-normal gNormal readback rejects edge pixels that sample the
+   perpendicular ADJACENT face (a different UV chart, the source of the early 0.707 outliers); AC2 uses
+   the median (robust to the few wrong-surface pairs). KRS_OVERNIGHT_BENCH now 19/19; exe verified newer
+   than all sources before claiming PASS.
+
+Process rule reinforced (NO EYEBALL GATES): a fix is not done until a NUMBER from a freshly-relinked
+binary proves it -- and the exe timestamp must post-date every edited source.

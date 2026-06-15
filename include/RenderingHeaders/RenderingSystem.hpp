@@ -156,6 +156,19 @@ public:
     // FanucRenderGate.cpp; gated by KRS_FANUC_RENDER_SELFTEST + KRS_OVERNIGHT_BENCH.
     bool runFanucRenderGateV2();
 
+    // Phase A-CLOSE GATE U (AC1/AC2/AC3): proves an APPLIED texture rides a UV body in OBJECT
+    // space (not world-space triplanar) and that per-body tiling scales texel density.
+    //  - runApplyTagGateAC3 (CPU, no GL): runs the real apply (krs::material::applyPackTags) +
+    //    real shader selection (krs::render::selectGBufferShaderKind) and asserts a UV body stays
+    //    on the UV path after applying any pack; NEG control: a no-UV primitive goes world-space.
+    //  - runAppliedTextureGate (GL): renders a textured body through the real gbuffer_textured
+    //    path with a UV-encoding albedo; over >=50 random rigid poses asserts the sampled UV is
+    //    motion-INVARIANT (rides body), with the triplanar path as a sliding NEG control; and
+    //    measures texels/metre at several tiling scales (AC2). Calls runApplyTagGateAC3 first.
+    // Gated by KRS_APPLYTEX_SELFTEST + KRS_OVERNIGHT_BENCH. Implemented in AppliedTextureGate.cpp.
+    static bool runApplyTagGateAC3();
+    bool runAppliedTextureGate();
+
     void setSimulationPlaying(bool playing);
     void resetFluidSimulation();
 
