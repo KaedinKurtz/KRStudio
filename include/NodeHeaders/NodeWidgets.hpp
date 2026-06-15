@@ -37,6 +37,15 @@ inline int controlNatW(const ControlSpec& c) {
 // Hard caps -- a node body never renders wider/taller than this no matter how many controls it declares.
 constexpr int kMaxW = 220, kMaxH = 300;
 
+// Continuous value <-> integer slider/dial tick (1000 steps). Exposed so a test can drive the REAL dial
+// binding (setValue(toTick(...)) fires the connected lambda through fromTick()).
+inline int toTick(double min, double max, double v) {
+    const double t = (max > min) ? (v - min) / (max - min) : 0.0;
+    const double c = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);
+    return int(c * 1000.0 + 0.5);
+}
+inline double fromTick(double min, double max, int tick) { return min + (double(tick) / 1000.0) * (max - min); }
+
 // The footprint the widget builder sizes itself to AND the gate asserts is bounded. Capped.
 inline Footprint estimateFootprint(const std::vector<ControlSpec>& controls) {
     int w = 60, h = 6;

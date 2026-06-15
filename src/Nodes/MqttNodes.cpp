@@ -206,9 +206,12 @@ bool runMqttNodeGate()
     auto pub = std::make_unique<NodeLibrary::MqttPublishNode>(tt.jointCmd[0]);
     auto sub = std::make_unique<NodeLibrary::MqttSubscribeNode>(tt.jointState[0]);
 
-    double lastLiveAng = 0.0;  // diagnostics: the live link angle the robot reported last round
-    // one full round-trip driven by the publish-node's INPUT value.
+    double liveAngThisRound = 0.0;  // the LIVE link angle the robot actually reached this round (0 if not driven)
+    // one full round-trip driven by the publish-node's INPUT value. Each round STARTS from rest, so a
+    // severed round leaves the live robot at 0 -- the discriminating measurement.
     auto roundTrip = [&](double qCmd, bool drivePublishNode) -> double {
+        sim.setArticJointPositions(q0); sim.singleStep();   // reset the live robot to rest each round
+        liveAngThisRound = 0.0;
         sub->process();                                     // SUBSCRIBE FIRST (lazy connect) before any publish
         rs.hasCmd = false;
         if (drivePublishNode) {
@@ -219,9 +222,8 @@ bool runMqttNodeGate()
         if (rs.hasCmd) {                                    // the live robot acts on the bus value
             std::vector<float> q(spec.joints.size(), 0.0f); q[0] = float(rs.cmd);
             sim.setArticJointPositions(q); sim.singleStep();
-            const auto poses = sim.articLinkPoses();
-            lastLiveAng = linkAngleFromRest(poses[0], restQ);          // live link rotation (FK)
-            char buf[48]; const int n = std::snprintf(buf, sizeof(buf), "%.6f", lastLiveAng);
+            liveAngThisRound = linkAngleFromRest(sim.articLinkPoses()[0], restQ);   // live link rotation (FK)
+            char buf[48]; const int n = std::snprintf(buf, sizeof(buf), "%.6f", liveAngThisRound);
             if (rconn) { mosquitto_publish(robot, nullptr, tt.jointState[0].c_str(), n, buf, 1, false); for (int i = 0; i < 3; ++i) mosquitto_loop(robot, 10, 1); }
         }
         double v = std::nan("");
@@ -234,16 +236,17 @@ bool runMqttNodeGate()
 
     const double qCmd = 0.6;
     const double got = roundTrip(qCmd, true);               // publish-node DRIVES
-    printf("[node-mqtt]   (diag) robot got cmd, live link angle=%.4f rad\n", lastLiveAng);
+    const double drivenLive = liveAngThisRound;             // the live robot's actual rotation (measured)
     const double err = std::abs(got - qCmd);
     const bool fidelity = std::isfinite(got) && err < 1e-4;
-    const bool moved = qCmd > 0.1;
+    const bool moved = drivenLive > 0.1;                    // the REAL live link actually rotated (not a constant)
 
-    // NEG-CTRL (severed node): the publish-node does NOT publish -> the live robot gets no command this
-    // round -> the subscribe-node never receives the new value (stays at the prior/rest reading).
-    sim.setArticJointPositions(q0); sim.singleStep();       // reset the robot to rest
-    const double sever = roundTrip(0.9, false);             // would-be command 0.9, but node severed
-    const bool severed = !(std::isfinite(sever) && std::abs(sever - 0.9) < 1e-4);
+    // NEG-CTRL (severed node): drive the SAME value but with the publish-node severed -> the command never
+    // crosses the bus -> the LIVE robot stays at rest. Measured: the live link did NOT move.
+    const double sever = roundTrip(qCmd, false);            // same 0.6, but the node is severed
+    const double severedLive = liveAngThisRound;            // robot was reset + never commanded -> ~0
+    const bool severed = severedLive < 0.01 && drivenLive > 0.1;   // severing genuinely stops the motion
+    (void)sever;
 
     if (robot) { mosquitto_disconnect(robot); mosquitto_destroy(robot); }
     sim.stop();
@@ -259,10 +262,10 @@ bool runMqttNodeGate()
     const bool pass = fidelity && moved && severed && coverage;
     printf("[node-mqtt]   NM2 auto-population: 3-joint robot -> %d nodes registered (want 6), sub+pub creatable %s  %s\n",
            registered, (subMade && pubMade) ? "yes" : "NO", coverage ? "PASS" : "FAIL");
-    printf("[node-mqtt]   publish-NODE cmd=%.3f rad -> live link rotated, returned via subscribe-NODE=%.4f, err=%.2e (<1e-4)  %s\n",
-           qCmd, got, err, fidelity ? "PASS" : "FAIL");
-    printf("[node-mqtt]   moved=%.2f rad (>0.1) %s ; NEG-CTRL severed publish-node -> sub got %.4f (!=0.9) %s\n",
-           qCmd, moved ? "yes" : "NO", sever, severed ? "REJECTS" : "VACUOUS!");
+    printf("[node-mqtt]   publish-NODE cmd=%.3f rad -> LIVE link rotated %.4f, returned via subscribe-NODE=%.4f, err=%.2e (<1e-4)  %s\n",
+           qCmd, drivenLive, got, err, fidelity ? "PASS" : "FAIL");
+    printf("[node-mqtt]   live robot moved %.3f rad (>0.1) %s ; NEG-CTRL severed -> live robot stayed at %.4f rad (~0) %s\n",
+           drivenLive, moved ? "yes" : "NO", severedLive, severed ? "REJECTS" : "VACUOUS!");
     printf("[node-mqtt] %s\n", pass ? "ALL PASS (canvas node drives the live robot through the bus, FK-verified <1e-4)"
                                      : "FAILURES PRESENT");
     fflush(stdout);

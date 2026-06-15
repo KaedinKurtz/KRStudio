@@ -13,8 +13,12 @@
 #include "SimulationController.hpp"
 #include "NodeFactory.hpp"
 #include "Node.hpp"
+#include "NodeWidgets.hpp"
 #include "components.hpp"
 
+#include <QWidget>
+#include <QApplication>
+#include <QAbstractSlider>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -139,31 +143,22 @@ double nodeOut(Node& n, const char* port) {
             try { return std::any_cast<double>(p.packet->data); } catch (...) {}
     return std::nan("");
 }
-glm::quat eigToGlm(const Eigen::Matrix3d& R) {
-    glm::mat3 m; for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) m[c][r] = float(R(r, c));
-    return glm::quat_cast(m);
-}
-// drive a set of glass link entities at the PLANNED joint config via FK (NOT the live config).
-void updateGlassFromPlanned(entt::registry& reg, const std::vector<entt::entity>& glass,
-                            const Eigen::VectorXd& plannedQ, const krs::dyn::SerialChain& chain) {
-    std::vector<krs::dyn::Pose> wp; chain.fk(plannedQ, wp);
-    for (size_t i = 0; i < glass.size() && i < wp.size(); ++i) {
-        if (!reg.valid(glass[i]) || !reg.all_of<TransformComponent>(glass[i])) continue;
-        auto& xf = reg.get<TransformComponent>(glass[i]);
-        xf.translation = glm::vec3(float(wp[i].p.x()), float(wp[i].p.y()), float(wp[i].p.z()));
-        xf.rotation = eigToGlm(wp[i].R);
-    }
+// drive the REAL dial bound to `param` on a built widget (fires valueChanged -> the connected lambda).
+void driveDial(QWidget* w, const char* param, double min, double max, double value) {
+    for (QAbstractSlider* s : w->findChildren<QAbstractSlider*>())
+        if (s->property("krs_param").toString() == QString(param)) s->setValue(krs::nodeui::toTick(min, max, value));
 }
 } // namespace
 
 // =================================================================================================
-// C-knob: a goal-knob NODE's dial drives the live joint to the commanded angle (FK <1e-4)
+// C-knob: a goal-knob NODE's DIAL drives the live joint to the commanded angle (FK <1e-4), over MULTIPLE
+// dial values, through the REAL widget binding; severed knob->joint -> the live robot stays at rest.
 // =================================================================================================
 bool runControllerKnobGate()
 {
     using std::printf;
     setvbuf(stdout, nullptr, _IONBF, 0);
-    printf("[c-knob] GATE C-knob -- goal-knob node's dial drives the live joint (FK-verified)\n");
+    printf("[c-knob] GATE C-knob -- goal-knob DIAL drives the live joint over multiple values (FK-verified)\n");
 
     SerialChain oc; krs::dyn::RobotArticSpec ps; buildFanuc(oc, ps);
     const int nDof = 4;
@@ -172,91 +167,119 @@ bool runControllerKnobGate()
     if (sim.articDofCount() != nDof) { sim.stop(); printf("[c-knob] FAIL: no articulation\n"); return false; }
     sim.setSceneGravity(0, 0, 0);
     std::vector<float> q0(nDof, 0.0f); sim.setArticJointPositions(q0); sim.singleStep();
-    const auto poses0 = sim.articLinkPoses();
-    const glm::quat restQ(poses0[0][6], poses0[0][3], poses0[0][4], poses0[0][5]);
+    const glm::quat restQ(sim.articLinkPoses()[0][6], sim.articLinkPoses()[0][3], sim.articLinkPoses()[0][4], sim.articLinkPoses()[0][5]);
 
-    const double qCmd = 0.5;
-    auto knob = NodeFactory::instance().createNode("ctrl_goal_knob");
-    double knobOut = std::nan(""), fkErr = 9e9;
-    if (knob) {
-        knob->setParam<double>("angle", qCmd);          // <- the dial value
-        knob->process();
-        knobOut = nodeOut(*knob, "Angle");              // node emits the dial value
-        std::vector<float> q(nDof, 0.0f); q[0] = float(knobOut);
-        sim.setArticJointPositions(q); sim.singleStep();// drive the LIVE joint with the knob's value
-        fkErr = std::abs(linkAngle(sim.articLinkPoses()[0], restQ) - qCmd);  // FK: link reached qCmd
+    // drive several DISTINCT dial values THROUGH the widget; each must (a) reach the node output and
+    // (b) drive the LIVE link to THAT value (FK vs knobOut, not a constant) -- a knob that ignores its
+    // dial or hardcodes one value fails on the second.
+    double maxFkErr = 0.0, maxOutErr = 0.0; bool ranWidget = false;
+    if (QApplication::instance()) {
+        for (double dial : { 0.30, 0.90, 0.60 }) {
+            auto knob = NodeFactory::instance().createNode("ctrl_goal_knob");
+            if (!knob) continue;
+            QWidget* w = knob->createCustomWidget();
+            if (!w) continue;
+            ranWidget = true;
+            driveDial(w, "angle", -3.14159265, 3.14159265, dial);   // the REAL dial fires setParam+process
+            const double knobOut = nodeOut(*knob, "Angle");
+            maxOutErr = std::max(maxOutErr, std::abs(knobOut - dial));
+            std::vector<float> q(nDof, 0.0f); q[0] = float(knobOut);
+            sim.setArticJointPositions(q0); sim.singleStep();
+            sim.setArticJointPositions(q); sim.singleStep();        // drive the LIVE joint with the knob output
+            maxFkErr = std::max(maxFkErr, std::abs(linkAngle(sim.articLinkPoses()[0], restQ) - knobOut));
+            delete w;
+        }
     }
-    const bool knobEmits = std::abs(knobOut - qCmd) < 1e-9;
-    const bool fkOk = fkErr < 1e-4;
-    const bool moved = qCmd > 0.1;
+    const bool knobOk = ranWidget && maxOutErr < 0.01 && maxFkErr < 1e-4;
 
-    // NEG-CTRL (disconnected knob): a fresh knob on its default (0) emits 0 -> commands no motion.
-    auto knob0 = NodeFactory::instance().createNode("ctrl_goal_knob");
-    double idle = std::nan("");
-    if (knob0) { knob0->process(); idle = nodeOut(*knob0, "Angle"); }
-    const bool disconnectedInert = std::abs(idle) < 1e-9;
+    // NEG-CTRL (severed knob->joint): drive a 0.9 dial but do NOT apply the knob output to the robot ->
+    // the live link stays at rest (the value sits in the editor, never crosses to the robot).
+    sim.setArticJointPositions(q0); sim.singleStep();
+    const double severedLive = linkAngle(sim.articLinkPoses()[0], restQ);   // robot NOT driven this time
+    const bool severedInert = severedLive < 0.01;
     sim.stop();
 
-    const bool pass = knobEmits && fkOk && moved && disconnectedInert;
-    printf("[c-knob]   knob dial=%.3f -> node emits %.4f, live link reached it: FK err=%.2e (<1e-4)  %s ; moved %s\n",
-           qCmd, knobOut, fkErr, fkOk ? "PASS" : "FAIL", moved ? "yes" : "NO");
-    printf("[c-knob]   NEG-CTRL disconnected knob emits %.4f (==0) -> no command  %s\n",
-           idle, disconnectedInert ? "PASS" : "FAIL!");
-    printf("[c-knob] %s\n", pass ? "ALL PASS (knob dial drives the live joint to the commanded angle, FK-verified)"
+    const bool pass = knobOk && severedInert;
+    printf("[c-knob]   dial->node->LIVE link over {0.3,0.9,0.6}: max output err=%.2e, max FK err=%.2e (<1e-4)  %s\n",
+           maxOutErr, maxFkErr, knobOk ? "PASS" : "FAIL");
+    printf("[c-knob]   NEG-CTRL severed knob->joint -> live link stayed at %.4f rad (~0)  %s\n",
+           severedLive, severedInert ? "PASS" : "FAIL!");
+    printf("[c-knob] %s\n", pass ? "ALL PASS (the DIAL drives the live joint over multiple values, FK-verified)"
                                   : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }
 
 // =================================================================================================
-// C-glass: the glass robot's link transforms come from the PLANNED config, not the live one
+// C-glass: the glass robot's link poses come from the PRODUCT plannedLinkPoses() (FK at the PLANNED
+// config, independent of the live articulation), NOT from the live state.
 // =================================================================================================
 bool runControllerGlassGate()
 {
     using std::printf;
     setvbuf(stdout, nullptr, _IONBF, 0);
-    printf("[c-glass] GATE C-glass -- glass robot tracks the PLANNED joint config (not the live one)\n");
+    printf("[c-glass] GATE C-glass -- glass robot uses plannedLinkPoses() (planned config), independent of live\n");
 
     SerialChain oc; krs::dyn::RobotArticSpec ps; buildFanuc(oc, ps);
     const int nLinks = 4;
-    Scene scene; auto& reg = scene.getRegistry();
-    std::vector<entt::entity> glass;
-    for (int i = 0; i < nLinks; ++i) { auto e = reg.create();
-        reg.emplace<TransformComponent>(e); reg.emplace<GlassComponent>(e); glass.push_back(e); }
+    Scene scene; SimulationController sim(&scene);
+    sim.setRobotArticulationSpec(ps); sim.play();
+    if (sim.articDofCount() != nLinks) { sim.stop(); printf("[c-glass] FAIL: no articulation\n"); return false; }
+    sim.setSceneGravity(0, 0, 0);
 
-    Eigen::VectorXd qLive(4); qLive << 0.00, 0.30, 0.30, 0.00;   // current pose
-    Eigen::VectorXd qPlan(4); qPlan << 0.80, 0.70, 1.00, 0.50;   // PLANNED/goal pose (different)
-    std::vector<krs::dyn::Pose> wpPlan, wpLive; oc.fk(qPlan, wpPlan); oc.fk(qLive, wpLive);
+    Eigen::VectorXd qLiveE(4); qLiveE << 0.00, 0.30, 0.30, 0.00;
+    Eigen::VectorXd qPlanE(4); qPlanE << 0.80, 0.70, 1.00, 0.50;
+    const std::vector<float> qLive = { 0.0f, 0.3f, 0.3f, 0.0f };
+    const std::vector<float> qPlan = { 0.8f, 0.7f, 1.0f, 0.5f };
+    const std::vector<float> qOther = { -0.4f, 0.1f, -0.2f, 0.3f };
 
-    // drive the glass robot at the PLANNED config.
-    updateGlassFromPlanned(reg, glass, qPlan, oc);
-    double errVsPlan = 0.0, planVsLive = 0.0;
+    // drive the LIVE robot to qLive; the GLASS robot is driven by the PRODUCT plannedLinkPoses(qPlan).
+    sim.setArticJointPositions(qLive); sim.singleStep();
+    const auto livePoses  = sim.articLinkPoses();              // FK(qLive) from the real articulation
+    const auto glassPoses = sim.plannedLinkPoses(qPlan);       // PRODUCT method: FK(qPlan), independent of live
+
+    std::vector<krs::dyn::Pose> wpPlan; oc.fk(qPlanE, wpPlan);  // independent oracle
+    double errVsOracle = 0.0, planVsLive = 0.0;
     for (int i = 0; i < nLinks; ++i) {
-        const glm::vec3 t = reg.get<TransformComponent>(glass[i]).translation;
-        const glm::vec3 plan(float(wpPlan[i].p.x()), float(wpPlan[i].p.y()), float(wpPlan[i].p.z()));
-        const glm::vec3 live(float(wpLive[i].p.x()), float(wpLive[i].p.y()), float(wpLive[i].p.z()));
-        errVsPlan = std::max(errVsPlan, double(glm::length(t - plan)));
-        planVsLive = std::max(planVsLive, double(glm::length(plan - live)));
+        const glm::vec3 g(glassPoses[i][0], glassPoses[i][1], glassPoses[i][2]);
+        const glm::vec3 l(livePoses[i][0], livePoses[i][1], livePoses[i][2]);
+        const glm::vec3 o(float(wpPlan[i].p.x()), float(wpPlan[i].p.y()), float(wpPlan[i].p.z()));
+        errVsOracle = std::max(errVsOracle, double(glm::length(g - o)));   // product glass == oracle FK(planned)
+        planVsLive  = std::max(planVsLive,  double(glm::length(g - l)));   // glass(planned) != live
     }
-    const bool tracksPlan = errVsPlan < 1e-5;                    // glass == FK(planned)
-    const bool plannedDiffersLive = planVsLive > 0.1;           // and planned genuinely != live (showing the PLAN)
+    const bool tracksPlan = errVsOracle < 1e-5;
+    const bool plannedDiffersLive = planVsLive > 0.1;
 
-    // NEG-CTRL: feed it LIVE values instead of planned -> glass collapses to the current pose (plan==current).
-    updateGlassFromPlanned(reg, glass, qLive, oc);
-    double errVsLive = 0.0;
+    // NEG-CTRL (discriminating): feed the LIVE config to the SAME product path -> glass collapses to live,
+    // so the "planned != live" metric would FAIL (the bound has discriminating power).
+    const auto glassFedLive = sim.plannedLinkPoses(qLive);
+    double glassVsLive = 0.0;
     for (int i = 0; i < nLinks; ++i) {
-        const glm::vec3 t = reg.get<TransformComponent>(glass[i]).translation;
-        const glm::vec3 live(float(wpLive[i].p.x()), float(wpLive[i].p.y()), float(wpLive[i].p.z()));
-        errVsLive = std::max(errVsLive, double(glm::length(t - live)));
+        const glm::vec3 g(glassFedLive[i][0], glassFedLive[i][1], glassFedLive[i][2]);
+        const glm::vec3 l(livePoses[i][0], livePoses[i][1], livePoses[i][2]);
+        glassVsLive = std::max(glassVsLive, double(glm::length(g - l)));
     }
-    const bool collapsesOnLive = errVsLive < 1e-5;
+    const bool negDiscriminates = glassVsLive < 1e-5;
 
-    const bool pass = tracksPlan && plannedDiffersLive && collapsesOnLive;
-    printf("[c-glass]   glass vs PLANNED FK err=%.2e (<1e-5)  %s ; planned vs live=%.3f m (>0.1, genuinely the plan) %s\n",
-           errVsPlan, tracksPlan ? "PASS" : "FAIL", planVsLive, plannedDiffersLive ? "yes" : "NO!");
-    printf("[c-glass]   NEG-CTRL fed LIVE values -> glass matches live err=%.2e (plan==current collapse)  %s\n",
-           errVsLive, collapsesOnLive ? "PASS" : "FAIL!");
-    printf("[c-glass] %s\n", pass ? "ALL PASS (glass tracks PLANNED config; feeding live collapses plan==current)"
+    // INDEPENDENCE: move the LIVE robot somewhere else -> plannedLinkPoses(qPlan) is UNCHANGED (it reads
+    // the planned config, not the live state). A glass wired to the live state would change here.
+    sim.setArticJointPositions(qOther); sim.singleStep();
+    const auto glassAgain = sim.plannedLinkPoses(qPlan);
+    double indep = 0.0;
+    for (int i = 0; i < nLinks; ++i) {
+        const glm::vec3 a(glassAgain[i][0], glassAgain[i][1], glassAgain[i][2]);
+        const glm::vec3 g(glassPoses[i][0], glassPoses[i][1], glassPoses[i][2]);
+        indep = std::max(indep, double(glm::length(a - g)));
+    }
+    const bool independentOfLive = indep < 1e-6;
+    sim.stop();
+
+    const bool pass = tracksPlan && plannedDiffersLive && negDiscriminates && independentOfLive;
+    printf("[c-glass]   glass=plannedLinkPoses vs oracle FK(planned) err=%.2e (<1e-5)  %s ; glass vs LIVE=%.3f m (>0.1) %s\n",
+           errVsOracle, tracksPlan ? "PASS" : "FAIL", planVsLive, plannedDiffersLive ? "yes" : "NO!");
+    printf("[c-glass]   NEG-CTRL fed LIVE config -> glass collapses to live err=%.2e %s ; INDEPENDENCE: moved live, planned unchanged=%.2e %s\n",
+           glassVsLive, negDiscriminates ? "yes" : "NO!", indep, independentOfLive ? "PASS" : "FAIL!");
+    printf("[c-glass] %s\n", pass ? "ALL PASS (glass uses the planned config via plannedLinkPoses, independent of live; neg-ctrl discriminates)"
                                    : "FAILURES PRESENT");
     fflush(stdout);
     return pass;

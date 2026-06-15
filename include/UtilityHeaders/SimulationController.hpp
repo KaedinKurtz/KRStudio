@@ -68,6 +68,8 @@ public:
     int  articDofCount() const;
     bool setArticJointPositions(const std::vector<float>& q);   // applyCache(ePOSITION)
     std::vector<std::array<float, 7>> articLinkPoses() const;    // per non-root link: pos.xyz + quat.xyzw
+    // FK at a PLANNED/goal config, INDEPENDENT of the live state -- the glass/ghost robot renders the plan.
+    std::vector<std::array<float, 7>> plannedLinkPoses(const std::vector<float>& plannedQ) const;
     void setSceneGravity(float gx, float gy, float gz);          // gate: isolate the loop constraint
     static bool ensurePhysxExtensions();                        // PxD6Joint needs extensions (once/process)
     bool setArticJointVelocities(const std::vector<float>& qd);  // applyCache(eVELOCITY)

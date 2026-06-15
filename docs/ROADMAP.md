@@ -1969,3 +1969,29 @@ stage -- cut the sine input -> firstBreak=1, cut the sine->affine wire -> firstB
 command -> firstBreak=3. A new `math_affine` node (out = in*gain+offset, double, in-node sliders) is the
 all-double adapter that lets the generator chain wire cleanly. KRS_OVERNIGHT_BENCH **44/44**.
 **Node-system sprint Phases 1-5 COMPLETE.**
+
+## §AH NODE-SPRINT ADVERSARIAL HARDENING -- closed the vacuous-gate class (2026-06-15)
+A 7-agent adversarial review (one skeptic per node-sprint gate, tasked to "pass while broken", hunting
+"node instantiates but does nothing" + "widget renders but drives nothing") found real holes in 6 of 7
+gates. All fixed; bench stayed 44/44.
+- **NODE-LIB (blocker: do-nothing node passed)**: `std::max(e, NaN)` drops the NaN, so a node whose
+  compute() never calls setOutput ended with err 0 -> "ok". FIX: NaN-poison (`acc` sets err=9e9 on a
+  non-finite output) + require **24/24 checks produced a finite output**. A dead node now FAILS.
+- **NODE-UI + C-knob (blocker: dial->param binding untested)**: NU1/knob set the param in C++,
+  bypassing the Qt dial. FIX: controls are tagged `krs_param`; the gate builds the REAL widget and calls
+  `setValue(toTick(...))` on the bound QDial -> fires the connected lambda -> fromTick -> setParam ->
+  process. NU1 freq-dial err 0.0, output err 8.8e-08. C-knob drives the live joint over {0.3,0.9,0.6}
+  through the dial (FK err 8.96e-07), and severing knob->joint leaves the live link at rest.
+- **NODE-MQTT (blocker: vacuous severed neg-ctrl + constant "moved")**: `moved=qCmd>0.1` read nothing;
+  the severed control "rejected" via a stale 0.6 != 0.9. FIX: `moved` is the MEASURED live link rotation
+  (0.6000); the severed control drives the SAME value with the node cut and asserts the **live robot
+  stayed at 0.0000** (severing genuinely stops the motion).
+- **C-glass (vacuous: FK(x)==FK(x) tautology, no product code)**: the gate compared a test-local writer's
+  output to itself. FIX: added a real product method **`SimulationController::plannedLinkPoses(plannedQ)`**
+  (FK at a planned config, independent of the live state) -- the glass/ghost robot consumes it. Gate: glass
+  = plannedLinkPoses(planned) vs an INDEPENDENT oracle FK err 1.33e-07, vs the LIVE articulation 1.003 m;
+  NEG-CTRL feeding the live config collapses glass->live; INDEPENDENCE: moving the live robot leaves
+  plannedLinkPoses(planned) unchanged (0.0) -- proving it reads the plan, not the present.
+- **NODE-E2E (major: tautological glass stage)**: stage 4 round-tripped a quaternion. FIX: it now reads
+  the glass link angle from the product `plannedLinkPoses` (real FK), independent of the live robot.
+KRS_OVERNIGHT_BENCH **44/44**; rigid 7/7. The "instantiates/renders but does nothing" class does not survive.

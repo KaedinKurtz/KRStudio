@@ -60,10 +60,9 @@ bool runNodeE2EGate()
     sim.setSceneGravity(0, 0, 0);
     std::vector<float> q0(nDof, 0.0f); sim.setArticJointPositions(q0); sim.singleStep();
     const glm::quat restQ(sim.articLinkPoses()[0][6], sim.articLinkPoses()[0][3], sim.articLinkPoses()[0][4], sim.articLinkPoses()[0][5]);
-
-    // a glass robot marker entity (driven at the PLANNED commanded angle).
-    auto& reg = scene.getRegistry();
-    const entt::entity glass = reg.create(); reg.emplace<TransformComponent>(glass); reg.emplace<GlassComponent>(glass);
+    // rest reference for the glass robot's PLANNED link pose (via the product plannedLinkPoses path).
+    const auto glassRest = sim.plannedLinkPoses(q0);
+    const glm::quat restPlanQ(glassRest[0][6], glassRest[0][3], glassRest[0][4], glassRest[0][5]);
 
     // chain params
     const double t = 0.30, freq = 1.0, amp = 0.40, phase = 0.0, gain = 1.0, offset = 0.20;
@@ -88,11 +87,11 @@ bool runNodeE2EGate()
         double cmd = (sever == 3) ? 0.0 : out[1];               // severing 3 = command never reaches the robot
         std::vector<float> q(nDof, 0.0f); q[0] = float(cmd);
         sim.setArticJointPositions(q); sim.singleStep();
-        out[2] = linkAngle(sim.articLinkPoses()[0], restQ);     // live link angle
-        // stage 4: glass shows the PLANNED commanded angle (R_y about joint 0)
-        reg.get<TransformComponent>(glass).rotation = glm::angleAxis(float(out[1]), glm::vec3(0, 1, 0));
-        const glm::quat gq = reg.get<TransformComponent>(glass).rotation;
-        out[3] = 2.0 * std::acos(std::min(1.0, std::max(-1.0, double(std::abs(gq.w)))));
+        out[2] = linkAngle(sim.articLinkPoses()[0], restQ);     // live link angle (real PhysX FK)
+        // stage 4: the GLASS robot shows the PLANNED config (commanded angle out[1]) via the PRODUCT
+        // plannedLinkPoses path -- a real FK independent of the live robot, NOT a round-trip of out[1].
+        std::vector<float> qPlan(nDof, 0.0f); qPlan[0] = float(out[1]);
+        out[3] = linkAngle(sim.plannedLinkPoses(qPlan)[0], restPlanQ);
     };
 
     double v[4]; runChain(0, v);

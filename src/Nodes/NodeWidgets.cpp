@@ -13,15 +13,6 @@
 
 namespace krs::nodeui {
 
-// Map a control's [min,max] continuous value <-> an integer slider/dial position (1000 steps).
-static int toTick(const ControlSpec& c, double v) {
-    const double t = (c.max > c.min) ? (v - c.min) / (c.max - c.min) : 0.0;
-    return int(std::lround(std::clamp(t, 0.0, 1.0) * 1000.0));
-}
-static double fromTick(const ControlSpec& c, int tick) {
-    return c.min + (double(tick) / 1000.0) * (c.max - c.min);
-}
-
 QWidget* buildControlWidget(Node* node, const std::vector<ControlSpec>& controls)
 {
     auto* box = new QWidget();
@@ -45,24 +36,28 @@ QWidget* buildControlWidget(Node* node, const std::vector<ControlSpec>& controls
         const ControlSpec spec = c;
         Node* n = node;
 
+        const QString paramProp = QString::fromStdString(c.param);   // tag controls so a test can find them
         if (c.kind == ControlSpec::SpinBox || c.kind == ControlSpec::Readout) {
             auto* sb = new QDoubleSpinBox(row);
             sb->setRange(c.min, c.max); sb->setSingleStep(c.step); sb->setValue(c.def);
             sb->setReadOnly(c.kind == ControlSpec::Readout);
+            sb->setProperty("krs_param", paramProp);
             QObject::connect(sb, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
                              [n, param](double v) { n->setParam<double>(param, v); n->process(); });
             rl->addWidget(sb);
         } else if (c.kind == ControlSpec::Dial) {
             auto* d = new QDial(row);
-            d->setRange(0, 1000); d->setValue(toTick(c, c.def)); d->setNotchesVisible(true);
+            d->setRange(0, 1000); d->setValue(toTick(c.min, c.max, c.def)); d->setNotchesVisible(true);
+            d->setProperty("krs_param", paramProp);
             QObject::connect(d, &QDial::valueChanged,
-                             [n, param, spec](int tick) { n->setParam<double>(param, fromTick(spec, tick)); n->process(); });
+                             [n, param, spec](int tick) { n->setParam<double>(param, fromTick(spec.min, spec.max, tick)); n->process(); });
             rl->addWidget(d);
         } else { // Slider
             auto* s = new QSlider(Qt::Horizontal, row);
-            s->setRange(0, 1000); s->setValue(toTick(c, c.def));
+            s->setRange(0, 1000); s->setValue(toTick(c.min, c.max, c.def));
+            s->setProperty("krs_param", paramProp);
             QObject::connect(s, &QSlider::valueChanged,
-                             [n, param, spec](int tick) { n->setParam<double>(param, fromTick(spec, tick)); n->process(); });
+                             [n, param, spec](int tick) { n->setParam<double>(param, fromTick(spec.min, spec.max, tick)); n->process(); });
             rl->addWidget(s);
         }
         outer->addWidget(row);

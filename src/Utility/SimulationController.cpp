@@ -3,6 +3,7 @@
 #include "components.hpp"
 #include "CollisionCookingService.hpp"
 #include "HardwareCaps.hpp"
+#include "RobotDynamics.hpp"   // planned-config FK for the glass/ghost robot (independent of live state)
 
 #include <QDebug>
 #include <algorithm>
@@ -895,6 +896,34 @@ std::vector<std::array<float, 7>> SimulationController::articLinkPoses() const
         out.push_back({ p.p.x, p.p.y, p.p.z, p.q.x, p.q.y, p.q.z, p.q.w });
     }
 #endif
+    return out;
+}
+
+std::vector<std::array<float, 7>> SimulationController::plannedLinkPoses(const std::vector<float>& plannedQ) const
+{
+    // FK of the canonical articulation at a PLANNED/goal config -- computed from the spec only, so it is
+    // INDEPENDENT of the live articulation state (the glass/ghost robot renders the plan, not the present).
+    std::vector<std::array<float, 7>> out;
+    krs::dyn::SerialChain chain;
+    for (const auto& j : m_robotSpec.joints) {
+        krs::dyn::DynJoint dj;
+        dj.type = j.revolute ? krs::dyn::JType::Revolute : krs::dyn::JType::Prismatic;
+        dj.parent = j.parent;
+        dj.axis = Eigen::Vector3d(j.axis[0], j.axis[1], j.axis[2]);
+        Eigen::Matrix3d R; for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) R(r, c) = j.Rtree[r * 3 + c];
+        dj.Rtree = R; dj.ptree = Eigen::Vector3d(j.ptree[0], j.ptree[1], j.ptree[2]);
+        krs::dyn::DynBody db; db.mass = j.mass; db.com = Eigen::Vector3d(j.com[0], j.com[1], j.com[2]);
+        db.inertiaCom = Eigen::Vector3d(j.inertiaDiag[0], j.inertiaDiag[1], j.inertiaDiag[2]).asDiagonal();
+        chain.addBody(dj, db);
+    }
+    Eigen::VectorXd q(int(plannedQ.size()));
+    for (size_t i = 0; i < plannedQ.size(); ++i) q[int(i)] = plannedQ[i];
+    std::vector<krs::dyn::Pose> wp; chain.fk(q, wp);
+    for (const auto& p : wp) {
+        const Eigen::Quaterniond quat(p.R);
+        out.push_back({ float(p.p.x()), float(p.p.y()), float(p.p.z()),
+                        float(quat.x()), float(quat.y()), float(quat.z()), float(quat.w()) });
+    }
     return out;
 }
 
