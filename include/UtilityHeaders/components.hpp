@@ -463,6 +463,10 @@ struct RenderableMeshComponent {
     std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;
 
+    // Phase 3 GATE F: B-Rep face id per TRIANGLE (size == indices.size()/3), or empty for non-CAD
+    // meshes. Maps a ray-picked triangle back to its exact OCCT TopoDS_Face -> BRepFaceComponent.
+    std::vector<int> triFace;
+
     // --- Metadata ---
     // The original file path this mesh was loaded from. Useful for debugging and hot-reloading.
     std::string sourcePath;
@@ -477,6 +481,18 @@ struct RenderableMeshComponent {
     glm::vec3 aabbMin = glm::vec3(0.0f);
     glm::vec3 aabbMax = glm::vec3(0.0f);
 };
+
+// Phase 3 GATE F: per-face ANALYTIC B-Rep parameters (indexed by RenderableMeshComponent::triFace),
+// so a ray-picked triangle yields the EXACT surface parameters straight from the B-Rep -- NO mesh fit
+// / RANSAC. The cylinder axis/radius here match OCCT's Geom_CylindricalSurface to machine precision.
+struct BRepFace {
+    int type = 0;                          // 0 plane, 1 cylinder, 2 cone, 3 sphere, 4 other
+    glm::vec3 axisPos{ 0.0f };             // a point on the axis (cyl/cone) or the centre (sphere)
+    glm::vec3 axisDir{ 0.0f, 0.0f, 1.0f }; // axis direction (cyl/cone)
+    glm::vec3 normal{ 0.0f, 0.0f, 1.0f };  // surface normal (plane)
+    float radius = 0.0f;                   // cyl/cone/sphere radius (metres)
+};
+struct BRepFaceComponent { std::vector<BRepFace> faces; };  // indexed: faces[triFace[triangle]]
 
 struct RenderResourceComponent
 {

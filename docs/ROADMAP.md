@@ -1759,3 +1759,15 @@ an occluder, 2181 ground-truth rays (analytic ray-sphere truth, silhouette band 
 **100.00%** correct, gaps return no pick **100.00%**. NEG-CTRL: the old AABB-only pick is **87.16%** (it
 over-selects ~21% of bounding-box area at the corners) -- materially worse, so the ray-triangle refinement
 is what earns the >=99%. KRS_OVERNIGHT_BENCH **29/29** (GATE 3.1 added); exe verified newer than all sources.
+### Y.2 B-REP FEATURE SELECTOR (GATE F) -- LANDED (2026-06-15)
+CadImporter now PERSISTS the triangle->face map: `RenderableMeshComponent::triFace` (B-Rep face id per
+triangle) + a new `BRepFaceComponent` (per-face ANALYTIC parameters read straight from the OCCT surface --
+plane normal, cylinder/cone axis+radius, sphere centre+radius -- NO mesh fit / RANSAC). So a ray-picked
+triangle (GATE 3.1) resolves to its exact OCCT face and that face's analytic parameters. GATE F
+(krs::cad::runBRepSelectorGateF, KRS_BREPSEL_SELFTEST) builds a known cylinder (r=20mm), round-trips it
+through STEP+importStep, and ray-picks the side: **F1** 192/192 side rays -> a cylinder face (**100.00%**);
+**F2** the picked analytic axis/radius match OCCT to **0.000e+00 (<1e-9)** -- can't-be-faked. NEG-CTRL: a
+mesh-fit radius from the triangle CENTROIDS (which lie inside the curved surface by the tessellation sagitta)
+reads **0.019870 m vs 0.020000** = **1.296e-04** error -- orders of magnitude worse, proving the selector
+reads the B-Rep not a fit. (The mesh VERTICES sit exactly on the cylinder, so a vertex fit is vacuously
+exact; the centroid fit is the honest neg-ctrl.) KRS_OVERNIGHT_BENCH **30/30**; exe verified newer than all sources.

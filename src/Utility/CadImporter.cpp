@@ -36,6 +36,11 @@
 #include <gp_Trsf.hxx>
 #include <gp_Cylinder.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <gp_Cylinder.hxx>   // GATE F: analytic surface parameters
+#include <gp_Cone.hxx>
+#include <gp_Sphere.hxx>
+#include <gp_Pln.hxx>
+#include "RayPick.hpp"       // GATE F: ray-triangle pick (krs::pick) for the selector test
 #include <GeomAbs_SurfaceType.hxx>
 #include <gp_Vec.hxx>
 #include <gp_Pnt2d.hxx>
@@ -216,6 +221,8 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
         std::vector<unsigned int> idx;
         std::vector<glm::dvec3> nAccum;                        // smooth-normal accumulation
         std::vector<FaceSpan> faceSpans;                       // for cross-face UV stitching (A.2)
+        std::vector<int> triFace;                              // GATE F: B-Rep face id per triangle
+        std::vector<BRepFace> brepFaces;                       // GATE F: per-face analytic params
 
         for (TopExp_Explorer faceEx(solid, TopAbs_FACE); faceEx.More(); faceEx.Next()) {
             const TopoDS_Face face = TopoDS::Face(faceEx.Current());
@@ -228,6 +235,35 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
             std::vector<gp_Pnt2d> faceUV;                       // world-scale (metres) UV per node
             const bool hasUV = faceWorldUVs(face, tri, s, faceUV);
             faceSpans.push_back({ face, base, tri->NbNodes(), hasUV });
+            // GATE F: read this face's ANALYTIC parameters straight from the B-Rep surface (no mesh
+            // fit / RANSAC) and remember its id, so a ray-picked triangle resolves to exact params.
+            BRepFace bf;
+            {
+                BRepAdaptor_Surface ad(face, Standard_True);
+                switch (ad.GetType()) {
+                    case GeomAbs_Plane: { bf.type = 0; const gp_Pln pl = ad.Plane();
+                        const gp_Dir n = pl.Axis().Direction(); const gp_Pnt o = pl.Location();
+                        bf.normal = { float(n.X()), float(n.Y()), float(n.Z()) };
+                        bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) }; break; }
+                    case GeomAbs_Cylinder: { bf.type = 1; const gp_Cylinder cy = ad.Cylinder();
+                        const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
+                        bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
+                        bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
+                        bf.radius = float(cy.Radius() * s); break; }
+                    case GeomAbs_Cone: { bf.type = 2; const gp_Cone co = ad.Cone();
+                        const gp_Pnt o = co.Axis().Location(); const gp_Dir d = co.Axis().Direction();
+                        bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
+                        bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
+                        bf.radius = float(co.RefRadius() * s); break; }
+                    case GeomAbs_Sphere: { bf.type = 3; const gp_Sphere sp = ad.Sphere();
+                        const gp_Pnt o = sp.Location();
+                        bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
+                        bf.radius = float(sp.Radius() * s); break; }
+                    default: bf.type = 4; break;
+                }
+            }
+            const int thisFaceId = int(brepFaces.size());
+            brepFaces.push_back(bf);
             for (int i = 1; i <= tri->NbNodes(); ++i) {
                 gp_Pnt p = tri->Node(i); p.Transform(trsf);    // -> assembly coords
                 Vertex v; v.position = { float(p.X() * s), float(p.Y() * s), float(p.Z() * s) };
@@ -240,6 +276,7 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
                 unsigned i0 = base + (a - 1), i1 = base + (b - 1), i2 = base + (c - 1);
                 if (rev) std::swap(i1, i2);                    // keep CCW winding outward
                 idx.push_back(i0); idx.push_back(i1); idx.push_back(i2);
+                triFace.push_back(thisFaceId);                 // GATE F: this triangle's B-Rep face id
                 const glm::dvec3 p0 = verts[i0].position, p1 = verts[i1].position, p2 = verts[i2].position;
                 const glm::dvec3 fn = glm::cross(p1 - p0, p2 - p0); // area-weighted face normal
                 nAccum[i0] += fn; nAccum[i1] += fn; nAccum[i2] += fn;
@@ -261,7 +298,9 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
         auto& mesh = reg.emplace<RenderableMeshComponent>(e);
         mesh.vertices = std::move(verts);
         mesh.indices = std::move(idx);
+        mesh.triFace = std::move(triFace);                     // GATE F: triangle -> B-Rep face id
         mesh.sourcePath = "occt_step";
+        if (!brepFaces.empty()) reg.emplace<BRepFaceComponent>(e, std::move(brepFaces)); // GATE F
         reg.emplace<TransformComponent>(e, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
         reg.emplace<TagComponent>(e, std::string("STEP solid ") + std::to_string(res.solids + 1));
         // A.1b: real per-vertex UVs (baked above) -> drop the world-space triplanar tag and mark for
@@ -526,6 +565,100 @@ bool runSelfTest()
 }
 
 // ===========================================================================
+// Phase 3 GATE F -- B-Rep feature selector. A ray-picked TRIANGLE resolves to its exact OCCT
+// TopoDS_Face (via RenderableMeshComponent::triFace) and that face's ANALYTIC parameters
+// (BRepFaceComponent), straight from the B-Rep -- NO mesh fit / RANSAC. We build a known cylinder,
+// round-trip it through STEP + importStep, ray-pick its side, and assert the analytic axis/radius
+// match OCCT to <1e-9. NEG-CTRL (can't be faked): a mesh-fit radius carries the tessellation error.
+// ===========================================================================
+bool runBRepSelectorGateF()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[brep-sel] GATE F -- ray-pick -> exact analytic face params (axis/radius <1e-9) + mesh-fit neg-ctrl\n");
+
+    const double Rmm = 20.0, Hmm = 50.0; const float sUnit = 0.001f;
+    TopoDS_Shape cyl = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), Rmm, Hmm).Shape();
+    std::error_code ec;
+    const std::string path = (std::filesystem::temp_directory_path(ec) / "krs_brep_gatef.step").string();
+    { STEPControl_Writer w;
+      if (w.Transfer(cyl, STEPControl_AsIs) != IFSelect_RetDone || w.Write(path.c_str()) != IFSelect_RetDone) {
+          printf("[brep-sel] FAIL: STEP write\n"); return false; } }
+
+    Scene scene;
+    const ImportResult ir = importStep(scene, path, sUnit);
+    std::filesystem::remove(path, ec);
+    if (ir.solids < 1) { printf("[brep-sel] FAIL: import (%s)\n", ir.message.c_str()); return false; }
+    auto& reg = scene.getRegistry();
+
+    entt::entity body = entt::null;
+    for (auto e : reg.view<RenderableMeshComponent, BRepFaceComponent>()) { body = e; break; }
+    if (body == entt::null) { printf("[brep-sel] FAIL: no BRepFaceComponent (triFace not persisted)\n"); return false; }
+    const auto& mesh = reg.get<RenderableMeshComponent>(body);
+    const auto& brep = reg.get<BRepFaceComponent>(body);
+
+    const float Rm = float(Rmm) * sUnit;          // 0.02 m
+    const glm::vec3 axisTrue(0, 0, 1);
+
+    // F1: cast rays radially inward at the cylinder SIDE (z away from the caps) -> should pick a cylinder face.
+    int total = 0, hitCyl = 0;
+    double maxRadErr = 0.0, maxAxisErr = 0.0; bool gotAnalytic = false;
+    const int Naz = 24, Nz = 8;
+    for (int iz = 0; iz < Nz; ++iz)
+        for (int ia = 0; ia < Naz; ++ia) {
+            const float z = 0.01f + (0.04f - 0.01f) * float(iz) / float(Nz - 1);
+            const float th = 6.2831853f * float(ia) / float(Naz);
+            krs::pick::Ray ray;
+            ray.origin = glm::vec3(0.2f * std::cos(th), 0.2f * std::sin(th), z);
+            ray.dir = glm::normalize(glm::vec3(0, 0, z) - ray.origin);   // inward toward the axis
+            ++total;
+            const auto hit = krs::pick::pickMesh(reg, ray);
+            if (!hit || hit->tri < 0 || hit->tri >= int(mesh.triFace.size())) continue;
+            const int fid = mesh.triFace[hit->tri];
+            if (fid < 0 || fid >= int(brep.faces.size())) continue;
+            const BRepFace& bf = brep.faces[fid];
+            if (bf.type != 1) continue;                          // not a cylinder face
+            ++hitCyl;
+            maxRadErr = std::max(maxRadErr, double(std::abs(bf.radius - Rm)));
+            maxAxisErr = std::max(maxAxisErr, double(std::abs(1.0f - std::abs(glm::dot(bf.axisDir, axisTrue)))));
+            gotAnalytic = true;
+        }
+
+    // NEG-CTRL: a MESH-FIT radius from the triangle CENTROIDS, which lie INSIDE the curved surface by
+    // the tessellation sagitta (the mesh VERTICES sit exactly on the cylinder, only the facet chords
+    // are inside -- so a centroid fit, like any mesh estimate, carries the tessellation error, orders
+    // of magnitude worse than the analytic read from the B-Rep).
+    double fitSum = 0.0; long fitN = 0;
+    for (size_t t = 0; t < mesh.triFace.size(); ++t) {
+        if (mesh.triFace[t] < 0 || brep.faces[mesh.triFace[t]].type != 1) continue;
+        const glm::vec3 p0 = mesh.vertices[mesh.indices[t * 3 + 0]].position;
+        const glm::vec3 p1 = mesh.vertices[mesh.indices[t * 3 + 1]].position;
+        const glm::vec3 p2 = mesh.vertices[mesh.indices[t * 3 + 2]].position;
+        const glm::vec3 c = (p0 + p1 + p2) / 3.0f;       // centroid (inside the curved surface)
+        fitSum += std::sqrt(double(c.x) * c.x + double(c.y) * c.y); ++fitN;
+    }
+    const double fitRadius = fitN ? fitSum / fitN : 0.0;
+    const double fitErr = std::abs(fitRadius - double(Rm));
+
+    const double f1 = total ? double(hitCyl) / total : 0.0;
+    const bool f1ok = f1 >= 0.99 && total > 100;
+    const bool f2ok = gotAnalytic && maxRadErr < 1e-9 && maxAxisErr < 1e-9;
+    const bool negok = fitErr > 1e-6;
+    const bool pass = f1ok && f2ok && negok;
+
+    printf("[brep-sel]   F1 face-pick: %d/%d side rays -> cylinder face = %.2f%% (>=99%%)  %s\n",
+           hitCyl, total, f1 * 100.0, f1ok ? "PASS" : "FAIL");
+    printf("[brep-sel]   F2 analytic fidelity vs OCCT: radius err=%.3e m, axis err=%.3e (bound<1e-9)  %s\n",
+           maxRadErr, maxAxisErr, f2ok ? "EXACT" : "FAIL");
+    printf("[brep-sel]   NEG-CTRL mesh-fit radius=%.6f m vs analytic %.6f -> err=%.3e (>>1e-9 = not a fit)  %s\n",
+           fitRadius, double(Rm), fitErr, negok ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[brep-sel] %s\n", pass ? "ALL PASS (>=99% face pick; analytic axis/radius <1e-9; mesh-fit neg-ctrl)"
+                                   : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
 // GATE U (Phase A): world-scale + coverage of the B-Rep UV generation. U1 on a
 // controlled box (planar faces) + cylinder (known circumference); U4 coverage on
 // the real FANUC (every vertex a finite UV). Gated by KRS_UV_SELFTEST.
@@ -775,5 +908,6 @@ ImportResult importStep(Scene&, const std::string&, float)
 void inspectStep(const std::string&) {} // no OCCT -> no-op
 bool runSelfTest() { return true; } // no OCCT -> vacuous pass, keeps harnesses green
 bool runUvGateU() { return true; }  // no OCCT -> vacuous pass
+bool runBRepSelectorGateF() { return true; } // no OCCT -> vacuous pass
 } // namespace krs::cad
 #endif

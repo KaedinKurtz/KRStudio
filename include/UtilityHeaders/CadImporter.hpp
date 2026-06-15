@@ -51,4 +51,9 @@ bool runSelfTest();
 /// finite UV). Returns true on PASS (vacuous pass in the no-OCCT stub). No GL needed.
 bool runUvGateU();
 
+/// Phase 3 GATE F (gated by KRS_BREPSEL_SELFTEST): B-Rep feature selector. A ray-picked triangle
+/// resolves to its exact OCCT face's ANALYTIC parameters (cylinder axis/radius straight from the
+/// B-Rep, not a mesh fit) to <1e-9 vs OCCT. Returns true on PASS (vacuous in the no-OCCT stub).
+bool runBRepSelectorGateF();
+
 } // namespace krs::cad
