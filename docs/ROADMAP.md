@@ -1732,3 +1732,18 @@ Coupling recon (same workflow) first established WHICH pairs actually couple, to
 GATE 1 COMPLETE: 1.2 (fluid<->rigid), 1.3 (artic<->collision), 1.4 (MPM<->thermal), 1.5 (FEM equilibrium)
 all green; 1.1 (MPM<->fluid) documented ABSENT (no coupling -> intrinsic conservation gated instead).
 KRS_OVERNIGHT_BENCH **27/27** (GATE 1.2-1.5 added); exe verified newer than all sources.
+
+## X) INTEGRATION SPRINT — PHASE 2: the full canonical causal chain (GATE 2) — LANDED (2026-06-15)
+The capstone: every link of `cmd angle -> FK -> collision transform -> robot pushes cube -> cube's live
+pose -> fluid reacts at the cube's LIVE pose (no ghost)` is a NUMBER, driven by the Phase-0 CausalChain
+harness so a severed stage is LOCALIZED. GATE 2 (RenderingSystem::runCanonicalChainGate2,
+CanonicalChainGate.cpp; KRS_CANONICALCHAIN_SELFTEST): a kinematic pusher driven by a 1-DOF FK(q) pushes a
+dynamic cube into a GPU-fluid slab. The 4 stages -- cmd->FK (pusher reaches FK(q)), pusher->push (cube
+displaced), cube->live pose (the TransformComponent the collision reads == live PhysX pose), fluid reacts
+(penetration at the cube's live pose ~0) -- all PASS intact (cube pushed 1.098 m to x=0.498 inside the slab;
+fluid penetration **0/23040**). NON-VACUOUS LOCALIZATION (the directive's requirement): sever S1 (offset the
+pusher so it MISSES the cube) -> cubeMoved=0 -> **firstBreak == 1**; sever S3 (freeze the fluid once the cube
+enters) -> the frozen fluid penetrates the cube's live pose **2189/23040 (9.5%)** -> **firstBreak == 3**.
+Tuning note: the cube must REST inside the slab (a high linear damping keeps it in contact with the pusher
+at pusher_final+0.4); a coasting cube overshoots the slab and makes the intact fluid stage vacuously pass.
+KRS_OVERNIGHT_BENCH **28/28** (GATE 2 added); exe verified newer than all sources.

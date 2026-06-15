@@ -183,6 +183,13 @@ public:
     // rest. Gated by KRS_FLUIDRIGID_SELFTEST + KRS_OVERNIGHT_BENCH. Implemented in FluidRigidGate.cpp.
     bool runFluidRigidImpulseGate();
 
+    // Phase 2 GATE 2: the full CANONICAL CAUSAL CHAIN end-to-end -- cmd angle -> FK -> a kinematic
+    // pusher's pose -> it pushes a dynamic cube -> the cube's live pose -> the GPU fluid reacts at the
+    // cube's LIVE pose (no ghost at the start pose). Each arrow is a measured residual fed into the 0b
+    // CausalChain; severing any stage (fluid sync off, or the pusher moved away) localizes the break.
+    // Gated by KRS_CANONICALCHAIN_SELFTEST + KRS_OVERNIGHT_BENCH. Implemented in CanonicalChainGate.cpp.
+    bool runCanonicalChainGate2();
+
     void setSimulationPlaying(bool playing);
     void resetFluidSimulation();
 
