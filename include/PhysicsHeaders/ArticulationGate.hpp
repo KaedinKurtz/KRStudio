@@ -36,4 +36,11 @@ bool runArticulationLiveGate();
 // no resource growth (D3), determinism (D4). Gated by KRS_DEMO_SELFTEST. Vacuous w/o PhysX.
 bool runDemoGateD();
 
+// Phase 1 GATE 1.3 — ARTICULATION <-> COLLISION: the TransformComponent the collision sink
+// (FluidSystem::uploadColliders) reads tracks the live FK pose. A 1-DOF revolute is driven; a
+// collider marker's world centre (via uploadColliders' formula on the writeBackArticulationViz
+// transform) must match the analytic FK to <1e-4. NEG-CTRL: skip the writeback -> stale collider
+// drifts. Gated by KRS_ARTICCOLLISION_SELFTEST + KRS_OVERNIGHT_BENCH. Vacuous pass without PhysX.
+bool runArticCollisionGate1_3();
+
 } // namespace krs::dyn

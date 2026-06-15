@@ -1706,6 +1706,13 @@ Coupling recon (same workflow) first established WHICH pairs actually couple, to
   that DROPS the impulse -> box stays inert (|p|=**0.0000**) while the fluid still delivers J=351 -> proves
   the coupling (not gravity/anything else) moved it. GOTCHA found+fixed: singleStep() pauses the sim, but
   applyFluidImpulse only acts while Playing -- re-assert sim.play() each frame before update().
-- **1.3 ARTICULATION <-> COLLISION, 1.4 MPM <-> THERMAL, 1.5 FEM static equilibrium: EXIST, gateable**
-  (recipes in recon) -- pending sub-gates.
-GATE 1 (in progress): KRS_OVERNIGHT_BENCH **24/24** (GATE 1.2 added); exe verified newer than all sources.
+- **1.3 ARTICULATION <-> COLLISION: LANDED.** The collision sink (FluidSystem::uploadColliders) reads each
+  body's TransformComponent, which the articulation writes via writeBackArticulationViz. GATE 1.3
+  (krs::dyn::runArticCollisionGate1_3, ArticulationGate.cpp; KRS_ARTICCOLLISION_SELFTEST): a self-contained
+  1-DOF revolute(Z@origin) is driven; the collider marker's world centre -- computed by uploadColliders'
+  EXACT formula `center = xf.translation + xf.rotation*offset` on the written transform -- must match the
+  ANALYTIC FK `R_z(q)*offset` to **maxErr=5.0e-07 m** (bound<1e-4). Non-tautological: PhysX getGlobalPose +
+  the writeback chain vs an analytic oracle, so a bug in either is caught. NEG-CTRL: skip
+  writeBackArticulationViz -> the collider freezes at the rest pose -> drift **1.396 m** (a mis-synced link).
+- **1.4 MPM <-> THERMAL, 1.5 FEM static equilibrium: EXIST, gateable** (recipes in recon) -- pending sub-gates.
+GATE 1 (in progress): KRS_OVERNIGHT_BENCH **25/25** (GATE 1.2 + 1.3 added); exe verified newer than all sources.

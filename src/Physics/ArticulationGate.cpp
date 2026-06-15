@@ -5,6 +5,7 @@ namespace krs::dyn {
 bool runArticulationGate() { return true; }      // vacuous pass
 bool runArticulationLiveGate() { return true; }  // vacuous pass
 bool runDemoGateD() { return true; }             // vacuous pass
+bool runArticCollisionGate1_3() { return true; } // vacuous pass
 }
 #else
 
@@ -18,7 +19,9 @@ bool runDemoGateD() { return true; }             // vacuous pass
 #include <algorithm>
 #include "SimulationController.hpp"   // Phase G: drive the LIVE articulation path
 #include "Scene.hpp"
+#include "components.hpp"             // Phase 1 GATE 1.3: TransformComponent
 #include "SysMem.hpp"                 // Phase A GATE D: D3 resource-growth probe
+#include <glm/gtc/quaternion.hpp>     // Phase 1 GATE 1.3: analytic FK (angleAxis, quat*vec3)
 
 using namespace physx;
 
@@ -591,6 +594,88 @@ bool runDemoGateD()
     const bool pass = d1 && d2 && d3 && d4;
     printf("[demo gate] %s\n", pass ? "ALL PASS (D1-D4 serial)" : "FAILURES PRESENT");
     fflush(stdout);
+    return pass;
+}
+
+// =====================================================================================
+// Phase 1 GATE 1.3 -- ARTICULATION <-> COLLISION: the transform the collision system reads
+// tracks the live FK pose, every step. The collision sink (FluidSystem::uploadColliders) reads
+// each body's TransformComponent, which the articulation writes via writeBackArticulationViz.
+// A self-contained 1-DOF revolute(Z@origin) is driven; a collider marker at rest world (offset)
+// must end up at the ANALYTIC FK R_z(q)*offset. The compared transform comes from PhysX
+// (getGlobalPose) THROUGH the writeback + uploadColliders' exact center formula, so a bug in the
+// articulation OR the writeback chain is caught (non-tautological: analytic oracle vs PhysX path).
+// NEG-CTRL: skip writeBackArticulationViz -> the collider is frozen at the rest pose -> it drifts
+// from the live FK by the joint-sweep magnitude (a mis-synced link, caught).
+// =====================================================================================
+bool runArticCollisionGate1_3()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[artic-coll] GATE 1.3 -- collision transform tracks the live FK (artic->collision) + neg-ctrl\n");
+
+    krs::dyn::RobotArticSpec spec; spec.fixBase = true;
+    {
+        krs::dyn::ArticJointSpec j;
+        j.parent = -1; j.revolute = true;
+        j.axis = { 0.0f, 0.0f, 1.0f };
+        j.Rtree = { 1,0,0, 0,1,0, 0,0,1 };
+        j.ptree = { 0.0f, 0.0f, 0.0f };
+        j.mass = 1.0f; j.com = { 0.0f, 0.0f, 0.0f }; j.inertiaDiag = { 0.1f, 0.1f, 0.1f };
+        spec.joints.push_back(j);
+    }
+
+    Scene scene;
+    SimulationController sim(&scene);
+    auto& reg = scene.getRegistry();
+    const entt::entity solid = reg.create();   // collider host (world-baked at rest -> identity xf)
+    reg.emplace<TransformComponent>(solid, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+
+    sim.setRobotArticulationSpec(spec);
+    sim.play();
+    if (sim.articDofCount() != 1) {
+        printf("[artic-coll] FAIL: live articulation dof=%d (expected 1)\n", sim.articDofCount());
+        sim.stop(); return false;
+    }
+    sim.setArticulationVizMapping({ { solid } });   // moving link 0 -> solid; captures rest
+
+    const glm::vec3 offset(0.7f, 0.0f, 0.0f);       // collider local offset == rest world position
+
+    std::mt19937 rng(20260615u);
+    std::uniform_real_distribution<float> U(-3.0f, 3.0f);
+    double maxErr = 0.0, maxDrift = 0.0;
+    const int Ncfg = 60;
+    for (int t = 0; t < Ncfg; ++t) {
+        const float q = U(rng);
+        sim.setArticJointPositions({ q });
+        const glm::vec3 analytic = glm::angleAxis(q, glm::vec3(0, 0, 1)) * offset;  // FK truth
+
+        // FIXED: write the live link delta into the TransformComponent the collision reads, then
+        // compute the collider centre exactly as FluidSystem::uploadColliders does.
+        sim.writeBackArticulationViz();
+        {
+            const auto& xf = reg.get<TransformComponent>(solid);
+            const glm::vec3 center = xf.translation + glm::vec3(xf.rotation * offset);
+            maxErr = std::max(maxErr, double(glm::length(center - analytic)));
+        }
+        // NEG-CTRL: a mis-synced link -- reset the transform to rest and DON'T write back, so the
+        // collision reads a stale pose. The collider stays at `offset` while FK moved -> drift.
+        auto& xfn = reg.get<TransformComponent>(solid);
+        xfn.translation = glm::vec3(0.0f); xfn.rotation = glm::quat(1, 0, 0, 0);
+        const glm::vec3 staleCenter = xfn.translation + glm::vec3(xfn.rotation * offset); // == offset
+        maxDrift = std::max(maxDrift, double(glm::length(staleCenter - analytic)));
+    }
+    sim.stop();
+
+    const bool tracks = maxErr < 1e-4;       // collision transform follows the live FK
+    const bool negDrifts = maxDrift > 0.1;   // a stale (un-synced) collider drifts from FK
+    const bool pass = tracks && negDrifts;
+    printf("[artic-coll]   collision transform vs analytic FK (60 cfg, 1-DOF): maxErr=%.3e m (bound<1e-4)  %s\n",
+           maxErr, tracks ? "TRACKS" : "FAIL");
+    printf("[artic-coll]   NEG-CTRL (skip writeBackArticulationViz): stale collider drift=%.3f m (>0.1 = doesn't track)  %s\n",
+           maxDrift, negDrifts ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[artic-coll] %s\n", pass ? "ALL PASS (collision reads the live FK transform; stale collider caught)" : "FAILURES PRESENT");
+    std::fflush(stdout);
     return pass;
 }
 

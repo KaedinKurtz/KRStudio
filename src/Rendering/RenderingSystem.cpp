@@ -707,6 +707,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 1 GATE 1.3: ARTICULATION<->COLLISION (collision transform tracks live FK + stale neg-ctrl).
+    if (qEnvironmentVariableIntValue("KRS_ARTICCOLLISION_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ARTICCOLLISION_SELFTEST =================\n");
+        const bool ok = krs::dyn::runArticCollisionGate1_3();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -763,6 +771,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 0b causal-chain instrument (severed-stage localization)", krs::integ::runCausalChainGate0() },
             { "GATE 0c GPU fluid vs moving SDF (no-penetration + ghost neg-ctrl)", runGpuFluidSdfGate() },
             { "GATE 1.2 fluid<->rigid Newton 3rd (impulse==momentum + inert-box neg-ctrl)", runFluidRigidImpulseGate() },
+            { "GATE 1.3 artic<->collision (collision xform tracks live FK + stale neg-ctrl)", krs::dyn::runArticCollisionGate1_3() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
