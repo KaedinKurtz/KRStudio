@@ -51,6 +51,7 @@
 #include "FluidSystem.hpp"
 #include "SdfColliderQuery.hpp" // Phase B GATE C (krs::fluid::runCollisionSyncGateC)
 #include "IntegrationHarness.hpp" // Phase 0 GATE 0a/0b (krs::integ conservation + causal harnesses)
+#include "RayPick.hpp"            // Phase 3 GATE 3.1 (krs::pick raycast)
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -739,6 +740,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 3 GATE 3.1: raycast accuracy (ray-triangle pick >=99% vs the coarse AABB pick).
+    if (qEnvironmentVariableIntValue("KRS_RAYCAST_SELFTEST") != 0) {
+        std::printf("\n================= KRS_RAYCAST_SELFTEST =================\n");
+        const bool ok = krs::pick::runRaycastGate3_1();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase G G.0: standalone PhysX-core lifecycle gate (borrow/release safety).
     if (qEnvironmentVariableIntValue("KRS_SIM_LIFECYCLE_SELFTEST") != 0) {
         std::printf("\n================= KRS_SIM_LIFECYCLE_SELFTEST =================\n");
@@ -799,6 +808,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 1.4 MPM<->thermal energy conservation (Fourier + energy-leak neg-ctrl)", m_mpm ? m_mpm->runThermalGate1_4(*this, m_gl) : true },
             { "GATE 1.5 FEM static equilibrium (net reaction == applied load + neg-ctrls)", krs::fem::FemSolver::runEquilibriumGate1_5() },
             { "GATE 2 canonical chain cmd->FK->push->cube->fluid (severed-stage localization)", runCanonicalChainGate2() },
+            { "GATE 3.1 raycast ray-triangle pick >=99% (AABB-only neg-ctrl)", krs::pick::runRaycastGate3_1() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

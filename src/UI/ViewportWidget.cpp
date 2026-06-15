@@ -25,6 +25,7 @@
 #include "RenderingSystem.hpp"
 #include "Scene.hpp"
 #include "Camera.hpp"
+#include "RayPick.hpp"   // GATE 3.1: hardened ray-triangle pick (krs::pick)
 #include "Shader.hpp"
 #include "components.hpp"
 #include "IntersectionSystem.hpp"
@@ -137,42 +138,21 @@ struct CpuPickHit {
 static std::optional<CpuPickHit>
 cpuPickAABB(Scene& scene, const Camera& cam, int px, int py, int vpW, int vpH)
 {
-    CpuRay ray = makeRayFromScreen(px, py, vpW, vpH, cam);
+    // Hardened pick (GATE 3.1): exact ray-TRIANGLE over each mesh via the krs::pick SSOT, instead of
+    // the coarse ray-AABB that over-selects whenever the ray merely clips a bounding box (and CAD
+    // AABBs are frequently degenerate/zero). Returns the nearest TRUE surface hit along the ray.
+    const glm::mat4 P = cam.getProjectionMatrix(float(vpW) / float(vpH));
+    const glm::mat4 V = cam.getViewMatrix();
+    const krs::pick::Ray ray = krs::pick::makeRayFromScreen(P, V, px, py, vpW, vpH);
     if (!std::isfinite(ray.dir.x) || !std::isfinite(ray.dir.y) || !std::isfinite(ray.dir.z)) {
         qWarning() << "[Pick] bad ray dir!";
         return std::nullopt;
     }
-    auto& reg = scene.getRegistry();
-    auto view = reg.view<TransformComponent, RenderableMeshComponent>();
-    qDebug() << "[Pick] entities in view:" << int(view.size_hint())
-        << " px,py=" << px << py << " vp=" << vpW << vpH;
-
+    const auto hit = krs::pick::pickMesh(scene.getRegistry(), ray);
+    if (!hit) return std::nullopt;
     CpuPickHit best;
-
-    for (auto [e, xform, mesh] : view.each()) {
-        glm::mat4 M = xform.getTransform();
-        glm::mat4 invM = glm::inverse(M);
-
-        glm::vec3 roL = glm::vec3(invM * glm::vec4(ray.origin, 1.0f));
-        glm::vec3 rdL = glm::normalize(glm::vec3(invM * glm::vec4(ray.dir, 0.0f)));
-
-        float t0, t1;
-        if (!intersectRayAABB(roL, rdL, mesh.aabbMin, mesh.aabbMax, t0, t1)) continue;
-        if (t0 < 0.0f) t0 = t1;
-
-        glm::vec3 localHit = roL + rdL * t0;
-        glm::vec3 worldHit = glm::vec3(M * glm::vec4(localHit, 1.0f));
-        float dist = glm::length(worldHit - ray.origin);
-
-        if (dist < best.worldT) {
-            best.entity = e;
-            best.worldPos = worldHit;
-            best.worldT = dist;
-        }
-    }
-
-    if (best.entity != entt::null) return best;
-    return std::nullopt;
+    best.entity = hit->entity; best.worldPos = hit->worldPos; best.worldT = hit->t;
+    return best;
 }
 
 void ViewportWidget::propagateTransforms(entt::registry& r)

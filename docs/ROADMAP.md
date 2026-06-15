@@ -1747,3 +1747,15 @@ enters) -> the frozen fluid penetrates the cube's live pose **2189/23040 (9.5%)*
 Tuning note: the cube must REST inside the slab (a high linear damping keeps it in contact with the pusher
 at pusher_final+0.4); a coasting cube overshoots the slab and makes the intact fluid stage vacuously pass.
 KRS_OVERNIGHT_BENCH **28/28** (GATE 2 added); exe verified newer than all sources.
+
+## Y) INTEGRATION SPRINT — PHASE 3: raycast / B-Rep selector / joint tooling (the high-bar work)
+### Y.1 RAYCAST HARDENING (GATE 3.1) -- LANDED (2026-06-15)
+The viewport pick was ray-vs-AABB only: it selects a body whenever the ray merely CLIPS its bounding box
+(and CAD AABBs are frequently degenerate/zero). New SSOT `krs::pick` (include/UtilityHeaders/RayPick.hpp):
+ray-AABB cull + exact ray-TRIANGLE (Moller-Trumbore) over the mesh, nearest TRUE surface hit along the ray.
+`ViewportWidget::cpuPickAABB` now calls `krs::pick::pickMesh` (the real fix), and GATE 3.1
+(krs::pick::runRaycastGate3_1, KRS_RAYCAST_SELFTEST) exercises the SAME function. Over a 3x3 sphere wall +
+an occluder, 2181 ground-truth rays (analytic ray-sphere truth, silhouette band excluded): ray-triangle
+**100.00%** correct, gaps return no pick **100.00%**. NEG-CTRL: the old AABB-only pick is **87.16%** (it
+over-selects ~21% of bounding-box area at the corners) -- materially worse, so the ray-triangle refinement
+is what earns the >=99%. KRS_OVERNIGHT_BENCH **29/29** (GATE 3.1 added); exe verified newer than all sources.
