@@ -1916,3 +1916,20 @@ FAIL, worst err 1.69e-06** -- math_add/sub/mul/div/mod/pow/min/max/atan2/abs/sqr
 greater_than/less_than/equals, the 4 new generators, and signal_waveform. NEG-CTRL (wrong-typed-input): a
 math_add fed a STRING for A produces NO output (the node guards getInput<float>). Calculus nodes
 (math_derivative/integral) take timestamped ProfiledData -- NOT gated here (flagged). KRS_OVERNIGHT_BENCH 39/39.
+
+## §AE NODE-SYSTEM SPRINT -- Phase 2: auto-populating MQTT topic nodes (GATE NODE-MQTT) -- LANDED (2026-06-15)
+`src/Nodes/MqttNodes.cpp`: `MqttSubscribeNode` (owns a libmosquitto client, pumps it in compute(), emits the
+latest numeric value of its topic) + `MqttPublishNode` (publishes its input value to its topic). They are
+AUTO-GENERATED from the canonical topic tree -- `autoRegisterMqttTopicNodes(robot, jointCount)` registers one
+sub-node per `tt.jointState[i]` + one pub-node per `tt.jointCmd[i]` (rule 6: the same `buildTopicTree` the bus
+uses), so new joints -> new nodes with no code. A startup registrar auto-populates the palette from the
+canonical FANUC spec.
+### AE.1 GATE NODE-MQTT (`krs::nodes::runMqttNodeGate`, KRS_NODEMQTT_SELFTEST) -- the keystone
+A publish-NODE's INPUT value (0.6 rad) is published to `robot/FANUC/joint/0/cmd` over a REAL spawned
+mosquitto broker; a robot handler applies it to the LIVE PhysX articulation (`setArticJointPositions` +
+`singleStep`); the moved link's ACTUAL rotation from rest (read from `articLinkPoses`) is published on
+`.../joint/0/state`; a subscribe-NODE receives it and emits **0.6000**, matching the commanded angle to
+**err 1.0e-06 (<1e-4)**. This is the robot MOVING (live link angle 0.6000 rad), not a value sitting in the
+editor. NEG-CTRL (severed node): with the publish-node not publishing, the new command (0.9) never reaches
+the bus -> the subscribe-node never sees it. **NM2 coverage**: a runtime 3-joint robot auto-generates exactly
+**6 nodes** (3 cmd + 3 state), each `createNode`-able. KRS_OVERNIGHT_BENCH **40/40**.

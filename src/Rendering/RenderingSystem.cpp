@@ -54,6 +54,7 @@
 #include "RayPick.hpp"            // Phase 3 GATE 3.1 (krs::pick raycast)
 #include "MqttBridge.hpp"         // Phase 4 GATE M (krs::mqtt broker + joint round-trip)
 #include "BridgeNodes.hpp"        // Phase 5 GATE ND (krs::nodes graph->backend bridge)
+#include "MqttNodes.hpp"          // Phase 2 GATE NODE-MQTT (krs::nodes auto-MQTT nodes)
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -798,6 +799,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 2 GATE NODE-MQTT: a publish-node drives the live robot through the bus (FK-verified).
+    if (qEnvironmentVariableIntValue("KRS_NODEMQTT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_NODEMQTT_SELFTEST =================\n");
+        const bool ok = krs::nodes::runMqttNodeGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
         std::printf("\n================= KRS_DISAMBIG_SELFTEST =================\n");
@@ -901,6 +910,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE M5 MQTT robustness (broker kill/reconnect + N>=128 + malformed rejected)", krs::mqtt::runMqttRobustnessGateM5() },
             { "GATE NODE-UI (in-node widget param drives output + bounded footprint)", krs::nodes::runNodeUiGate() },
             { "GATE NODE-LIB (math/signal/time/logic nodes vs closed-form, <tol)", krs::nodes::runNodeLibraryGate() },
+            { "GATE NODE-MQTT (publish-node drives live robot over the bus, FK <1e-4)", krs::nodes::runMqttNodeGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
