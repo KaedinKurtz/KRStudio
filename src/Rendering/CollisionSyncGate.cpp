@@ -108,13 +108,13 @@ bool runCollisionSyncGateC()
     std::vector<float> ref(probes.size());
     for (size_t i = 0; i < probes.size(); ++i) ref[i] = sdfDistanceWorld(vId, probes[i]);
 
-    // sweep poses; for each, build the LIVE view (invModel from that pose) and a FROZEN view
-    // (invModel stuck at identity = the bake pose, i.e. sync disabled).
+    // sweep poses; placement uses the PRODUCTION SSOT krs::fluid::sdfRigidModel (same call the
+    // bake + per-step refresh use), so the gate exercises the real placement math.
     auto poseAt = [](int k) {
         const float a = 0.13f * k;
         const glm::quat q = glm::angleAxis(0.21f * k, glm::normalize(glm::vec3(0.3f, 1.0f, 0.2f + 0.01f * k)));
         const glm::vec3 t(1.5f * std::sin(a), 0.4f * k * 0.05f, -1.2f * std::cos(a));
-        return glm::translate(glm::mat4(1.0f), t) * glm::mat4_cast(q);
+        return sdfRigidModel(t, q);
     };
 
     // The vacated start pose: a deep-interior body point. At the bake/start pose it is the world
@@ -125,42 +125,54 @@ bool runCollisionSyncGateC()
 
     const int POSES = 50;
     float liveMaxErr = 0.0f;      // field invariance under motion (rides the body)
-    float frozenMaxErr = 0.0f;    // neg-ctrl: frozen field does NOT ride
+    float frozenMaxErr = 0.0f;    // neg-ctrl A: frozen field (sync OFF) does NOT ride
+    float swapMaxErr = 0.0f;      // neg-ctrl B: using `model` where `invModel` is expected does NOT ride
     float liveAtStartMin = kSdfOutside; // live distance at the vacated start pose (want > 0 = empty)
     for (int k = 1; k <= POSES; ++k) {
         const glm::mat4 M = poseAt(k);
         const SdfColliderView vLive = viewFor(M);
+        SdfColliderView vSwap = vLive; vSwap.invModel = M; // model<->invModel swap (the wrong matrix)
         for (size_t i = 0; i < probes.size(); ++i) {
             const glm::vec3 world = glm::vec3(M * glm::vec4(probes[i], 1.0f)); // body-frame point, moved
             const float dLive = sdfDistanceWorld(vLive, world);
             liveMaxErr = std::max(liveMaxErr, std::abs(dLive - ref[i]));
             const float dFrozen = sdfDistanceWorld(vId, world); // frozen field, body-point moved away
-            const float fe = (dFrozen >= kSdfOutside * 0.5f) ? std::abs(ref[i]) + 1.0f
-                                                             : std::abs(dFrozen - ref[i]);
-            frozenMaxErr = std::max(frozenMaxErr, fe);
+            frozenMaxErr = std::max(frozenMaxErr, (dFrozen >= kSdfOutside * 0.5f)
+                                                      ? std::abs(ref[i]) + 1.0f : std::abs(dFrozen - ref[i]));
+            const float dSwap = sdfDistanceWorld(vSwap, world);
+            swapMaxErr = std::max(swapMaxErr, (dSwap >= kSdfOutside * 0.5f)
+                                                  ? std::abs(ref[i]) + 1.0f : std::abs(dSwap - ref[i]));
         }
         liveAtStartMin = std::min(liveAtStartMin, sdfDistanceWorld(vLive, vacated));
     }
     const float liveAtStartReport = std::min(liveAtStartMin, 9.999f); // kSdfOutside prints as ~10 (empty)
 
     // PASS: live field rides the body (invariance error tiny vs voxel band); the vacated start pose is
-    // now empty (live > 0). NEG-CTRL is non-vacuous: frozen field STILL collides at the start pose
-    // (deeply negative ghost) AND fails to ride (large drift) -- exactly the bug, reproduced.
+    // now empty (live > 0). TWO negative controls make this non-vacuous: (A) frozen field (sync OFF)
+    // STILL collides at the start pose (deeply negative ghost) AND fails to ride; (B) swapping
+    // model<->invModel (the ordering bug the reviewer flagged) FAILS to ride. So the gate is sensitive
+    // to both "didn't refresh" and "wrong/ swapped transform".
     const float tol = 3.0f * voxel; // trilinear + rotation interpolation over one voxel band
-    const bool ridesLive   = liveMaxErr < tol;
-    const bool noLiveGhost = liveAtStartMin > 0.0f;       // live leaves the start pose empty
-    const bool negCtrlGhost = frozenAtStart < -0.1f;      // frozen STILL collides at start (the ghost)
-    const bool negCtrlDrifts = frozenMaxErr > 5.0f * tol; // frozen field does not ride
-    const bool pass = ridesLive && noLiveGhost && negCtrlGhost && negCtrlDrifts;
+    const bool ridesLive    = liveMaxErr < tol;
+    const bool noLiveGhost  = liveAtStartMin > 0.0f;       // live leaves the start pose empty
+    const bool negCtrlGhost = frozenAtStart < -0.1f;       // frozen STILL collides at start (the ghost)
+    const bool negCtrlDrifts = frozenMaxErr > 5.0f * tol;  // frozen field does not ride
+    const bool swapDrifts   = swapMaxErr > 5.0f * tol;     // model<->invModel swap does not ride
+    const bool pass = ridesLive && noLiveGhost && negCtrlGhost && negCtrlDrifts && swapDrifts;
 
-    printf("[collsync]   C2/C4 rides body: liveMaxErr=%.5f m over %d poses x %zu probes (tol<%.4f)  %s\n",
+    printf("[collsync]   C2/C4 rides body (world->local via sdfRigidModel/invModel): liveMaxErr=%.5f m"
+           " over %d poses x %zu probes (tol<%.4f)  %s\n",
            liveMaxErr, POSES, probes.size(), tol, ridesLive ? "PASS" : "FAIL");
     printf("[collsync]   C2 no-ghost: live sdf at vacated start pose = %.3f m (>0 = empty, not colliding)  %s\n",
            liveAtStartReport, noLiveGhost ? "PASS" : "FAIL");
-    printf("[collsync]   NEG-CTRL (sync OFF/frozen): start-pose sdf=%.3f m (<-0.1 = still collides = GHOST), "
-           "field driftErr=%.3f (>>tol = doesn't ride)  %s\n",
-           frozenAtStart, frozenMaxErr, (negCtrlGhost && negCtrlDrifts) ? "REJECTS(non-vacuous)" : "VACUOUS!");
-    printf("[collsync] %s\n", pass ? "ALL PASS (C2 no-ghost + C4 zero-lag tracking + neg-ctrl)" : "FAILURES PRESENT");
+    printf("[collsync]   NEG-CTRL A (sync OFF/frozen): start-pose sdf=%.3f m (<-0.1 = still collides = GHOST), "
+           "driftErr=%.3f  %s\n",
+           frozenAtStart, frozenMaxErr, (negCtrlGhost && negCtrlDrifts) ? "REJECTS" : "VACUOUS!");
+    printf("[collsync]   NEG-CTRL B (model<->invModel swap): driftErr=%.3f (>>tol = doesn't ride)  %s\n",
+           swapMaxErr, swapDrifts ? "REJECTS" : "VACUOUS!");
+    printf("[collsync]   NOTE: gate proves the world->local CONVENTION + placement math; the uploadColliders\n"
+           "[collsync]         call-site + GPU uniform binding are verified by code review + the fluid runtime smoke.\n");
+    printf("[collsync] %s\n", pass ? "ALL PASS (C2 no-ghost + C4 zero-lag tracking + 2 neg-ctrls)" : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;
 }

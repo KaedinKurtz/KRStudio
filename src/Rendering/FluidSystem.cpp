@@ -5,6 +5,7 @@
 #include "HardwareCaps.hpp"
 
 #include "SdfBaker.hpp"
+#include "SdfColliderQuery.hpp" // krs::fluid::sdfRigidModel (SSOT placement; shared with GATE C)
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <QDebug>
@@ -203,11 +204,15 @@ void FluidSystem::bakeSdfColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry
         const auto& mesh = registry.get<RenderableMeshComponent>(e);
         const auto& xf = registry.get<TransformComponent>(e);
 
-        // C2: bake in the body's LOCAL frame (identity transform) -> a rigid-body-invariant field +
-        // local AABB. The per-frame transform (model/invModel) places it in the world, so the field
-        // RIDES the body instead of being frozen at the play-time world pose.
+        // C2: bake in the body's SCALED-LOCAL frame (scale baked in; NO rotation/translation) -> a
+        // field whose distances are in world units and whose AABB carries the body's scale. The
+        // per-frame RIGID model (translation+rotation, krs::fluid::sdfRigidModel) then places it in
+        // the world, so the field RIDES the body and mat3(model) is orthonormal (correct normal
+        // rotation + penetration depth for any, incl. non-uniform, scale). Scale is captured at bake
+        // (re-baked on each play); rotation/translation track live.
         SdfBakeResult baked;
-        if (!bakeMeshToSdf(mesh.vertices, mesh.indices, glm::mat4(1.0f), sdfc.voxelSize, baked))
+        if (!bakeMeshToSdf(mesh.vertices, mesh.indices,
+                           glm::scale(glm::mat4(1.0f), xf.scale), sdfc.voxelSize, baked))
             continue;
 
         SdfCollider out;
@@ -216,7 +221,7 @@ void FluidSystem::bakeSdfColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry
         out.dims = baked.dims;
         out.cpuField = std::move(baked.field);
         out.entity = e;
-        out.model = xf.getTransform();
+        out.model = krs::fluid::sdfRigidModel(xf.translation, xf.rotation);
         out.invModel = glm::inverse(out.model);
 
         gl->glGenTextures(1, &out.texture);
@@ -350,7 +355,10 @@ void FluidSystem::uploadColliders(QOpenGLFunctions_4_3_Core* gl, entt::registry&
         for (auto& s : m_sdfColliders) {
             if (s.entity != entt::null && registry.valid(s.entity)
                 && registry.all_of<TransformComponent>(s.entity)) {
-                s.model = registry.get<TransformComponent>(s.entity).getTransform();
+                // RIGID model only (translation+rotation); scale is baked into the field (see
+                // bakeSdfColliders). Shared helper -> can't drift from the bake/gate convention.
+                const auto& xf = registry.get<TransformComponent>(s.entity);
+                s.model = krs::fluid::sdfRigidModel(xf.translation, xf.rotation);
                 s.invModel = glm::inverse(s.model);
             }
         }
