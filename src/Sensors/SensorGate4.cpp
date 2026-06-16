@@ -1,12 +1,16 @@
-// SensorGate4.cpp -- Phase 4 GATE L2-UNCERTAINTY. Proves the Layer-2 belief field KNOWS WHERE IT IS UNCERTAIN:
-//   (1) CONTRAST: sigma over poorly-observed cells (specular/dark -- high material drive -> holes + match
-//       noise) is much larger than over well-observed bright cells;
-//   (2) CO-LOCATION: recon holes (n==0) lie exactly in the occluded region, and sigma correlates with the
-//       shared material drive (the field is uncertain where the SENSOR is unreliable);
-//   (3) CALIBRATION (round-trip): for observed cells |mu - Z_true| < 2*sigma for >=90% -- the uncertainty is
-//       honest, not arbitrary.
-// NEG-CTRL (uniform sigma == median everywhere): CONTRAST ratio ~1 (FAILS) and calibration collapses
-// (over-confident in noisy regions). A real recon knows where it's uncertain; a uniform field does not.
+// SensorGate4.cpp -- Phase 4 GATE L2-UNCERTAINTY (hardened after adversarial review). Proves the Layer-2
+// belief field is an HONEST, Bayesian, shared-cause uncertainty -- not just "bigger numbers in noisy regions":
+//   (1) CONTRAST that RESPONDS to the cause: sigma_poor/sigma_bright > 2.5 with the material noise penalty on,
+//       and collapses to ~1 with the penalty OFF (so the contrast is the shared material, not a free knob);
+//   (2) CALIBRATION by reduced chi-square: mean((mu-Z_true)^2 / sigma^2) ~ 1 (TWO-SIDED -- detects an inflated
+//       OR over-confident sigma; the old one-sided <2sigma coverage was tautological);
+//   (3) MU ACCURACY standalone: RMS(mu - Z_true) over bright cells below a physical bound, independent of sigma;
+//   (4) 1/sqrt(n) BAYESIAN SCALING: at fixed material, sigma ~ n^-0.5 across observation counts -- a per-region
+//       CONSTANT impostor (right pattern, wrong rule) FAILS this;
+//   (5) SHARED-FIELD CORRELATION (the directive's core): across a material sweep, L2 sigma and L3 dropout rate
+//       co-vary (r>0.9) because BOTH read the same materialDrive; a channel materialDrive ignores moves neither.
+// NEG-CTRLS: (A) uniform sigma -> no contrast + chi-square off; (B) per-region-constant sigma -> passes
+// contrast but FAILS 1/sqrt(n) (it never divides by sqrt(n)). Both are excluded.
 #include "SensorGates.hpp"
 #include "SensorStats.hpp"
 #include "SensorProfile.hpp"
@@ -21,102 +25,171 @@
 
 namespace krs::sensor {
 
+// Reduced chi-square over cells with a RELIABLE variance estimate (n >= minN). Tiny-n cells have a
+// heavy-tailed normalized residual (Student-t, E[t^2]=(n-1)/(n-3)) that biases the mean upward; with n>=12
+// the estimate is stable (E[chi^2] ~ 1.1) so a roughly-2-sided ~1 test cleanly detects sigma mis-scaling.
+static double chiSqReduced(const ReconField& f, const ReconScene& s, const std::vector<double>& sigmaOverride, int minN) {
+    double acc = 0.0; int m = 0;
+    for (int i = 0; i < s.W * s.H; ++i) {
+        const ReconCell& c = f.cells[i];
+        if (c.hole || c.n < minN) continue;
+        const double sg = sigmaOverride.empty() ? c.sigma : sigmaOverride[i];
+        const double r = c.mu - s.trueDepth[i];
+        acc += (r * r) / (sg * sg); ++m;
+    }
+    return m ? acc / m : 0.0;
+}
+
 bool runL2UncertaintyGate() {
     using namespace stats;
-    std::printf("\n[SENSOR GATE L2-UNCERTAINTY] recon belief field: sigma contrast + hole co-location + calibration\n");
+    std::printf("\n[SENSOR GATE L2-UNCERTAINTY] honest Bayesian shared-cause recon uncertainty\n");
 
-    const int W = 64, H = 48, K = 12;
+    const int W = 64, H = 48, K = 24;
     SensorProfile prof;
     DepthModel model = DepthModel::fromProfile(prof.depth);
 
     ReconScene scene; scene.W = W; scene.H = H;
     scene.trueDepth.assign(W * H, 0.0);
-    scene.material.assign(W * H, MaterialSample{ 0.0, 0.85, 1.0 });   // bright Lambertian default
+    scene.material.assign(W * H, MaterialSample{ 0.0, 0.85, 1.0 });
     scene.framesObserving.assign(W * H, K);
 
-    // region membership for the gate's group statistics
-    std::vector<int> brightIdx, poorIdx, occludedIdx;
+    std::vector<int> brightFull, poorIdx, occludedIdx;
+    std::vector<int> nBand[4]; const int nObs[4] = { 3, 6, 12, 24 };
     auto inRect = [](int u, int v, int u0, int u1, int v0, int v1) { return u >= u0 && u < u1 && v >= v0 && v < v1; };
     for (int v = 0; v < H; ++v) {
         for (int u = 0; u < W; ++u) {
             const int i = v * W + u;
-            scene.trueDepth[i] = 1.0 + 0.6 * (double(u) / W);          // slanted plane 1.0 -> 1.6 m
-            const bool spec = inRect(u, v, 10, 22, 8, 20);
+            scene.trueDepth[i] = 1.0 + 0.6 * (double(u) / W);
+            const bool strip = inRect(u, v, 2, 8, 0, H);              // bright, varied observation count
+            const bool spec = inRect(u, v, 12, 24, 8, 20);
             const bool dark = inRect(u, v, 40, 52, 8, 20);
-            const bool occl = inRect(u, v, 28, 34, 0, H);             // occluded strip -> recon holes
+            const bool occl = inRect(u, v, 28, 34, 0, H);
             if (spec) scene.material[i] = MaterialSample{ 1.0, 0.85, 1.0 };
             if (dark) scene.material[i] = MaterialSample{ 0.0, 0.10, 1.0 };
-            if (occl) { scene.framesObserving[i] = 0; occludedIdx.push_back(i); }
-            else if (spec || dark) poorIdx.push_back(i);
-            else brightIdx.push_back(i);
+            if (occl) { scene.framesObserving[i] = 0; occludedIdx.push_back(i); continue; }
+            if (strip) {                                              // 4 v-bands with different n
+                const int band = std::min(3, v / (H / 4));
+                scene.framesObserving[i] = nObs[band];
+                nBand[band].push_back(i);
+                continue;
+            }
+            if (spec || dark) poorIdx.push_back(i);
+            else brightFull.push_back(i);
         }
     }
 
-    std::mt19937_64 rng(prof.seed);
-    const ReconField field = reconstruct(scene, model, K, /*sigmaPrior=*/0.5, rng);
+    auto reconWith = [&](double penalty) {
+        DepthModel m = model; m.matchNoisePenalty = penalty;
+        std::mt19937_64 r(prof.seed);
+        return reconstruct(scene, m, K, 0.5, r);
+    };
+    const ReconField field = reconWith(3.0);
 
-    // (1) CONTRAST: mean sigma poorly-observed vs bright (both observed).
-    auto meanSigma = [&](const std::vector<int>& idx) {
-        std::vector<double> s; for (int i : idx) if (!field.cells[i].hole) s.push_back(field.cells[i].sigma);
+    auto meanSig = [&](const std::vector<int>& idx, const std::vector<double>& ov) {
+        std::vector<double> s;
+        for (int i : idx) if (!field.cells[i].hole) s.push_back(ov.empty() ? field.cells[i].sigma : ov[i]);
         return mean(s);
     };
-    const double sigBright = meanSigma(brightIdx);
-    const double sigPoor = meanSigma(poorIdx);
-    const bool t_contrast = sigPoor > 2.0 * sigBright;
-    std::printf("  contrast : sigma poor=%.5f bright=%.5f ratio=%.2f (exp >2) -> %s\n",
-                sigPoor, sigBright, sigPoor / sigBright, t_contrast ? "ok" : "FAIL");
+    const std::vector<double> none;
 
-    // (2) CO-LOCATION: recon holes (n==0) == the occluded region (precision + recall); sigma vs material drive.
+    // (1) CONTRAST that responds to the shared material noise penalty.
+    const double ratioReal = meanSig(poorIdx, none) / meanSig(brightFull, none);
+    const ReconField field0 = reconWith(0.0);
+    auto meanSig0 = [&](const std::vector<int>& idx) {
+        std::vector<double> s; for (int i : idx) if (!field0.cells[i].hole) s.push_back(field0.cells[i].sigma);
+        return mean(s);
+    };
+    const double ratio0 = meanSig0(poorIdx) / meanSig0(brightFull);
+    const bool t_contrast = ratioReal > 2.5 && ratio0 < 1.5;
+    std::printf("  contrast : ratio=%.2f (penalty on) vs %.2f (penalty off) -> %s\n",
+                ratioReal, ratio0, t_contrast ? "ok (driven by shared material, not a free knob)" : "FAIL");
+
+    // (2) CALIBRATION: reduced chi-square ~ 1 over reliably-observed cells (two-sided -- detects an inflated
+    //     OR over-confident sigma). E[chi^2] sits slightly above 1 from the Student factor at finite n.
+    const double chi2 = chiSqReduced(field, scene, none, 12);
+    const bool t_calib = chi2 > 0.8 && chi2 < 1.4;
+    std::printf("  calibrate: reduced chi^2=%.3f (exp ~1.0-1.2, two-sided) -> %s\n", chi2, t_calib ? "ok (honest magnitude)" : "FAIL");
+
+    // (3) MU ACCURACY standalone (independent of sigma): RMS over bright cells below a physical bound.
+    double muErr2 = 0; int muN = 0;
+    for (int i : brightFull) { const double e = field.cells[i].mu - scene.trueDepth[i]; muErr2 += e * e; ++muN; }
+    const double rmsMu = std::sqrt(muErr2 / muN);
+    const bool t_mu = rmsMu < 0.0025;       // ~ rangeSigma(Z~1.3)/sqrt(K) + speckle/sqrt(K) ~ 1mm; bound 2.5mm
+    std::printf("  mu-accur : RMS(mu-truth)=%.5f m over bright (bound 0.0025) -> %s\n", rmsMu, t_mu ? "ok" : "FAIL");
+
+    // (4) 1/sqrt(n) Bayesian scaling at fixed material (bright strip, n in {3,6,12,24}).
+    std::vector<double> ln, lsig;
+    for (int b = 0; b < 4; ++b) { ln.push_back(nObs[b]); lsig.push_back(meanSig(nBand[b], none)); }
+    const double nSlope = powerFit(ln, lsig).exponent;
+    const bool t_nscale = std::fabs(nSlope + 0.5) < 0.12;
+    std::printf("  n-scaling: sigma ~ n^%.3f (exp -0.5; Bayesian fusion) -> %s\n", nSlope, t_nscale ? "ok" : "FAIL");
+
+    // (5) SHARED-FIELD CORRELATION: L2 sigma and L3 dropout co-vary across a material sweep (same cause).
+    std::mt19937_64 swr(prof.seed ^ 0x5EED5u);
+    auto l3Drop = [&](const MaterialSample& m) {
+        int holes = 0; const int T = 6000;
+        for (int t = 0; t < T; ++t) if (model.sample(1.3, m, swr) == DEPTH_INVALID) ++holes;
+        return double(holes) / T;
+    };
+    auto l2Sigma = [&](const MaterialSample& m) {
+        ReconScene s; s.W = 16; s.H = 16; const int n = 256;
+        s.trueDepth.assign(n, 1.3); s.material.assign(n, m); s.framesObserving.assign(n, K);
+        const ReconField f = reconstruct(s, model, K, 0.5, swr);
+        std::vector<double> sg; for (const auto& c : f.cells) if (!c.hole) sg.push_back(c.sigma);
+        return mean(sg);
+    };
+    std::vector<double> sweepDrop, sweepSig;
+    for (int s = 0; s <= 8; ++s) {
+        const double alb = 0.50 - 0.05 * s;                          // drive 0 -> 0.8 (graded)
+        const MaterialSample m{ 0.0, alb, 1.0 };
+        sweepDrop.push_back(l3Drop(m)); sweepSig.push_back(l2Sigma(m));
+    }
+    const LinFit sweepFit = linearFit(sweepDrop, sweepSig);
+    // control: vary a channel materialDrive IGNORES (incidenceCos) -> neither L3 drop nor L2 sigma should move.
+    std::vector<double> ctlDrop, ctlSig;
+    for (int s = 0; s <= 4; ++s) { const MaterialSample m{ 0.0, 0.85, 1.0 - 0.15 * s }; ctlDrop.push_back(l3Drop(m)); ctlSig.push_back(l2Sigma(m)); }
+    const double ctlDropSpread = *std::max_element(ctlDrop.begin(), ctlDrop.end()) - *std::min_element(ctlDrop.begin(), ctlDrop.end());
+    const double ctlSigSpread = (*std::max_element(ctlSig.begin(), ctlSig.end()) - *std::min_element(ctlSig.begin(), ctlSig.end())) / mean(ctlSig);
+    const bool t_shared = sweepFit.slope > 0 && sweepFit.r2 > 0.81 && ctlDropSpread < 0.02 && ctlSigSpread < 0.1;
+    std::printf("  shared   : corr(L3drop,L2sigma) slope>0 r2=%.3f (exp >0.81); ignored-channel spread drop=%.3f sig=%.2f -> %s\n",
+                sweepFit.r2, ctlDropSpread, ctlSigSpread, t_shared ? "ok (one shared material cause)" : "FAIL");
+
+    // (6) co-location sanity: recon holes (n==0) are the occluded region (the geometric recon-hole source).
     int holeInOccl = 0, holeTotal = 0;
-    for (int i = 0; i < W * H; ++i) if (field.cells[i].hole) { ++holeTotal; }
+    for (int i = 0; i < W * H; ++i) if (field.cells[i].hole) ++holeTotal;
     for (int i : occludedIdx) if (field.cells[i].hole) ++holeInOccl;
-    const double precision = holeTotal ? double(holeInOccl) / holeTotal : 0.0;       // holes that are occluded
+    const double precision = holeTotal ? double(holeInOccl) / holeTotal : 0.0;
     const double recall = occludedIdx.empty() ? 0.0 : double(holeInOccl) / occludedIdx.size();
-    // sigma vs material drive over OBSERVED cells (positive correlation).
-    std::vector<double> drive, sig;
-    for (int i = 0; i < W * H; ++i) if (!field.cells[i].hole) { drive.push_back(materialDrive(scene.material[i])); sig.push_back(field.cells[i].sigma); }
-    const LinFit corr = linearFit(drive, sig);
-    const bool t_coloc = precision > 0.95 && recall > 0.95 && corr.slope > 0.0 && corr.r2 > 0.3;
-    std::printf("  co-locate: holes precision=%.3f recall=%.3f ; sigma~drive slope=%.4f r2=%.3f -> %s\n",
-                precision, recall, corr.slope, corr.r2, t_coloc ? "ok (uncertain where sensor is unreliable)" : "FAIL");
+    const bool t_coloc = precision > 0.95 && recall > 0.95;
+    std::printf("  holes    : precision=%.3f recall=%.3f vs occlusion -> %s\n", precision, recall, t_coloc ? "ok" : "FAIL");
 
-    // (3) CALIBRATION: |mu - Z_true| < 2*sigma for >=90% of observed cells (honest uncertainty).
-    int observed = 0, covered = 0;
-    for (int i = 0; i < W * H; ++i) {
-        const ReconCell& c = field.cells[i];
-        if (c.hole || c.n < 2) continue;
-        ++observed;
-        if (std::fabs(c.mu - scene.trueDepth[i]) < 2.0 * c.sigma) ++covered;
-    }
-    const double coverage = observed ? double(covered) / observed : 0.0;
-    const bool t_calib = coverage >= 0.90;
-    std::printf("  calibrate: |mu-truth|<2sigma coverage=%.3f of %d observed (exp >=0.90) -> %s\n",
-                coverage, observed, t_calib ? "ok (uncertainty is honest)" : "FAIL");
+    // ---- NEG-A: uniform sigma = median -> no contrast + chi-square off. ----
+    std::vector<double> obsSig;
+    for (int i = 0; i < W * H; ++i) if (!field.cells[i].hole && field.cells[i].n >= 2) obsSig.push_back(field.cells[i].sigma);
+    std::sort(obsSig.begin(), obsSig.end());
+    const double uni = obsSig[obsSig.size() / 2];
+    std::vector<double> sigUniform(W * H, uni);
+    const double chi2Uni = chiSqReduced(field, scene, sigUniform, 12);
+    const double ratioUni = 1.0;
+    const bool t_negA = ratioUni < 2.5 && (chi2Uni < 0.8 || chi2Uni > 1.4);
+    std::printf("  NEG-A    : uniform sigma -> contrast=1.0 (FAILS) chi^2=%.3f (FAILS ~1) -> %s\n",
+                chi2Uni, t_negA ? "ok" : "FAIL");
 
-    // ---- NEG-CTRL: uniform sigma = median of the real field's observed sigmas. ----
-    std::vector<double> allSig;
-    for (int i = 0; i < W * H; ++i) if (!field.cells[i].hole && field.cells[i].n >= 2) allSig.push_back(field.cells[i].sigma);
-    std::sort(allSig.begin(), allSig.end());
-    const double uniformSigma = allSig.empty() ? 0.0 : allSig[allSig.size() / 2];
-    // contrast under uniform sigma -> exactly 1.
-    const double negRatio = 1.0;
-    // calibration under uniform sigma: same mu, but sigma replaced by the constant -> noisy regions fail.
-    int negObs = 0, negCov = 0;
-    for (int i = 0; i < W * H; ++i) {
-        const ReconCell& c = field.cells[i];
-        if (c.hole || c.n < 2) continue;
-        ++negObs;
-        if (std::fabs(c.mu - scene.trueDepth[i]) < 2.0 * uniformSigma) ++negCov;
-    }
-    const double negCoverage = negObs ? double(negCov) / negObs : 0.0;
-    // The real field achieves contrast>2 AND calibration>=0.90 SIMULTANEOUSLY; no single uniform sigma can --
-    // raise it and you lose contrast (ratio->1), keep the median and the noisy tail is under-covered. So the
-    // uniform field FAILS contrast (definitionally ~1) AND is strictly worse calibrated than the real field.
-    const bool t_neg = negRatio < 2.0 && negCoverage < coverage - 0.01;
-    std::printf("  NEG-CTRL : uniform sigma=%.5f -> contrast ratio=1.0 (FAILS >2); calibration=%.3f < real %.3f -> %s\n",
-                uniformSigma, negCoverage, coverage, t_neg ? "ok (no single sigma fits both regimes)" : "FAIL");
+    // ---- NEG-B: per-region constant sigma (right pattern, wrong rule -- no 1/sqrt(n)). Passes contrast but
+    //      FAILS the n-scaling test, because a constant ignores observation count. ----
+    const double sigBrightConst = meanSig(brightFull, none);
+    const double sigPoorConst = meanSig(poorIdx, none);
+    std::vector<double> sigRegion(W * H, sigBrightConst);
+    for (int i : poorIdx) sigRegion[i] = sigPoorConst;
+    std::vector<double> bn, bs;
+    for (int b = 0; b < 4; ++b) { bn.push_back(nObs[b]); bs.push_back(sigBrightConst); }   // constant across n-bands
+    const double negBslope = powerFit(bn, bs).exponent;
+    const double ratioRegion = sigPoorConst / sigBrightConst;        // passes contrast (by construction)
+    const bool t_negB = ratioRegion > 2.5 && std::fabs(negBslope + 0.5) > 0.12;   // passes contrast, FAILS 1/sqrt(n)
+    std::printf("  NEG-B    : per-region const -> contrast=%.2f (PASSES) but n-scaling slope=%.3f (FAILS -0.5) -> %s\n",
+                ratioRegion, negBslope, t_negB ? "ok (1/sqrt(n) excludes it)" : "FAIL");
 
-    const bool pass = t_contrast && t_coloc && t_calib && t_neg;
+    const bool pass = t_contrast && t_calib && t_mu && t_nscale && t_shared && t_coloc && t_negA && t_negB;
     std::printf("[SENSOR GATE L2-UNCERTAINTY] %s\n", pass ? "PASS" : "FAIL");
     return pass;
 }
