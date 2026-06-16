@@ -35,11 +35,19 @@ QComboBox* policyCombo(QWidget* container) {
             if (c->itemText(i) == QLatin1String("Continuous")) return c;
     return nullptr;
 }
-// The integrity predicate at the current (post-event) state: container background must NOT be the
-// frame-eating WA_TranslucentBackground, and the policy combo (if the node has one) must be visible.
+// The integrity predicate at the current (post-event) state: NO widget in the node body (the container OR
+// any descendant, e.g. a custom GaugeWidget) may carry the frame-eating WA_TranslucentBackground, and the
+// policy combo (if the node has one) must be visible.
 bool hoverIntegrityOk(QWidget* container, QComboBox* combo) {
     if (!container) return false;
-    if (container->testAttribute(Qt::WA_TranslucentBackground)) return false;   // Bug A root cause
+    if (container->testAttribute(Qt::WA_TranslucentBackground)) return false;   // Bug A root cause (container)
+    // ... or any IN-BODY descendant (a custom-paint widget like the gauge). Restrict to widgets in the SAME
+    // top-level as the container so Qt-internal detached popups (a combo's drop-shadow popup + its view,
+    // legitimately translucent and shown only on click) are not false positives.
+    QWidget* topw = container->window();
+    for (QWidget* w : container->findChildren<QWidget*>())
+        if (w->window() == topw && w->testAttribute(Qt::WA_TranslucentBackground))
+            return false;
     if (combo && !combo->isVisible()) return false;                             // Bug B: exec control hidden
     return true;
 }

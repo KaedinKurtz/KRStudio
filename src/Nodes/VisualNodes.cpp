@@ -20,7 +20,8 @@ class GaugeWidget : public QWidget {
 public:
     GaugeWidget() {
         setMinimumSize(130, 96);
-        setAttribute(Qt::WA_TranslucentBackground, true);
+        // NO WA_TranslucentBackground -- the same ARGB-backing-store attribute that caused the hover frame
+        // artifacts on the container. paintEvent fills an opaque dark body that blends with the node.
         setProperty("krs_gauge_norm", 0.0);
         setProperty("krs_gauge_value", 0.0);
     }
@@ -33,6 +34,7 @@ public:
 protected:
     void paintEvent(QPaintEvent*) override {
         QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+        p.fillRect(rect(), QColor(45, 45, 53));            // opaque body (blends with the node; no translucency)
         const QRectF r = QRectF(rect()).adjusted(10, 10, -10, -10);
         const double startDeg = 210.0, spanDeg = -240.0;  // open-bottom sweep, clockwise
         p.setPen(QPen(QColor(70, 70, 82), 8)); p.drawArc(r, int(startDeg * 16), int(spanDeg * 16));
