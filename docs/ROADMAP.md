@@ -2231,3 +2231,25 @@ through the transparent gaps, no opaque blob. GATE HOVER-INTEGRITY asserts the c
 WA_TranslucentBackground (the frame-eating attribute) + the exec control is visible, before/after a
 synthetic hoverEnter/Leave; NEG-CTRL: a WA_TranslucentBackground container + a hidden combo are both caught.
 Live hover persistence = OPERATOR VISUAL-CONFIRM.
+
+## §AQ NODE FRAME BUG A (the real cause) + clean-math fields (2026-06-16)
+The §AP transparency fix fixed the combo (Bug B) but NOT the blank frame (Bug A). Operator evidence:
+small nodes (time_source/drive_joint) render fine; the LARGE nodes (sine gen, PID) show a blank FRAME --
+until you zoom ALL the way out, then they paint. TWO causes, not one.
+- ROOT CAUSE (Bug A): NodeGraphicsObject.cpp:34 `setCacheMode(DeviceCoordinateCache)` + a drop-shadow
+  QGraphicsEffect (lines 40-47). Both render the item to an offscreen DEVICE pixmap (node size x dpr x
+  zoom). For large nodes on a hi-DPI (4K) screen that pixmap exceeds the max pixmap/GL-texture size -> the
+  FRAME paints blank (the embedded proxy widget, a separate child item, still renders); zooming out shrinks
+  the device size under the limit -> the frame appears. Earlier headless scene.render() bypassed the cache,
+  so the prior renders never reproduced it.
+- FIX: CustomDataFlowScene forces every node's NodeGraphicsObject to NoCache + setGraphicsEffect(nullptr)
+  (on nodeCreated AND for any pre-existing nodes in a loaded graph). Direct, unbounded paint -> the frame
+  renders at every zoom. GATE ZOOM-VISIBLE: 127/127 NoCache+no-effect GUARANTEE (no device pixmap to
+  overflow) + EVERY node's frame title painted at both terminal-zoom bounds 0.3x/2x (254/254). NEG-CTRL: an
+  un-fixed (base-scene) node carries DeviceCoordinateCache + the effect.
+- CLEAN-MATH FIELDS: the static constant nodes had createCustomWidget = nullptr (un-settable value). Now
+  float/double->spinbox, int->spinbox, bool->checkbox, string->lineedit, glm vec2/3/4->N spinboxes; editing
+  posts to the NodeEditQueue (per-component keys for vectors so deferred edits don't coalesce), sets value,
+  re-evaluates. Static nodes override needsExecutionControls()->false (a constant must always emit; no
+  Triggered footgun; smaller). GATE STATIC-CONST: 6/6 + a deferred-path test; matrix/quat/Eigen deferred.
+Bench 60/60 -> 62/62.
