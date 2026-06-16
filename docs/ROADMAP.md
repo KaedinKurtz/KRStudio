@@ -2209,3 +2209,25 @@ free (0.024 ms for 30 nodes). FIX: evaluate the graph QUIET (process + backend d
 dataUpdated -> no scene repaint) at the control rate; refresh display widgets only when their value changed
 AND at a capped ~30-60Hz UI rate (separate from eval). Viz nodes must stop calling widget update() inside
 compute(). FEATURE: an eval-rate control (30Hz..20kHz) with the UI repaint hard-capped independently.
+
+## §AP NODE HOVER BUGS -- ONE root cause (2026-06-16)
+RECON (before fixing): neither hover bug lives in a hover handler.
+- QtNodes NodeGraphicsObject::hoverEnterEvent (NodeGraphicsObject.cpp:298) only raises z-order, sets the
+  hovered flag, and calls update(); hoverLeaveEvent restores z + clears the flag. DefaultNodePainter::
+  drawNodeRect (DefaultNodePainter.cpp:53) uses hovered() ONLY for the boundary PEN width -- the gradient
+  FILL brush is drawn every paint regardless of hover. So the painter never makes the background vanish.
+- ExecutionControlWidget (ExecutionControlWidget.cpp:71) setVisible toggles only the EDGE combo when
+  policy==Triggered; the Execution-Mode (policy) combo is always added, never hover-gated.
+- The ONLY transparency mechanism was `WA_TranslucentBackground` on the embedded container (NodeDelegate.cpp
+  populateEmbeddedWidget, the prior FRAME-VIS sprint). In a QGraphicsProxyWidget the ARGB-backing-store path
+  produces compositing artifacts on the hover-triggered update(): (A) the node's frame fill behind the
+  widget gets alpha-eaten and is not restored on hover-leave; (B) child combo boxes do not render until a
+  hover repaint forces them. ONE root cause -> BOTH symptoms. The prior fix conflated the NODE frame
+  background with the EMBEDDED WIDGET background.
+FIX: drop WA_TranslucentBackground; make ONLY the container background transparent via a scoped
+`QWidget#krsNodeBody { background: transparent; }` stylesheet (does not cascade to the opaque child controls,
+no ARGB compositing). Verified by render: gen_sine still shows title + ports + Execution-Mode combo + dials
+through the transparent gaps, no opaque blob. GATE HOVER-INTEGRITY asserts the container is NOT
+WA_TranslucentBackground (the frame-eating attribute) + the exec control is visible, before/after a
+synthetic hoverEnter/Leave; NEG-CTRL: a WA_TranslucentBackground container + a hidden combo are both caught.
+Live hover persistence = OPERATOR VISUAL-CONFIRM.

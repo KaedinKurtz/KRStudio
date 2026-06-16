@@ -251,13 +251,16 @@ void NodeDelegate::populateEmbeddedWidget() const
         return;
     }
 
-    // 1. Create a container widget. This will be the main embedded widget. Make it TRANSPARENT so the
-    //    container itself never paints an opaque rectangle over the QtNodes frame/caption/ports (the
-    //    "half-mounted, no title bar" class). Individual child controls (spinboxes/dials) still paint
-    //    themselves, but they sit in the body area BELOW the caption (DefaultHorizontalNodeGeometry).
+    // 1. Create a container widget. Make ONLY the container's own background transparent so the node frame
+    //    shows through the gaps between controls -- but via a SCOPED #id stylesheet, NOT
+    //    WA_TranslucentBackground. The translucent-background ARGB path caused QGraphicsProxyWidget
+    //    compositing artifacts on the hover-triggered repaint (the node's frame fill got alpha-eaten and was
+    //    not restored on hover-leave = Bug A; child combo boxes failed to render until a hover repaint =
+    //    Bug B). A QWidget#id selector targets the container alone and never cascades to the opaque child
+    //    controls (spinboxes/dials/combos keep their own backgrounds).
     auto* container = new QWidget();
-    container->setAttribute(Qt::WA_TranslucentBackground, true);
-    container->setAttribute(Qt::WA_NoSystemBackground, true);
+    container->setObjectName(QStringLiteral("krsNodeBody"));
+    container->setStyleSheet(QStringLiteral("QWidget#krsNodeBody { background: transparent; }"));
     auto* layout = new QVBoxLayout(container);
     layout->setContentsMargins(2, 2, 2, 2); // Keep it tight
 

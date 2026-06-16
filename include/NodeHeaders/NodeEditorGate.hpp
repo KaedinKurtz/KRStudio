@@ -80,4 +80,9 @@ bool runPerfGate();
 // while UI repaint stays capped (~60Hz) independent of it; a single-rate knob would repaint at kHz.
 bool runRateGate();
 
+// GATE HOVER-INTEGRITY (KRS_HOVER_SELFTEST): for every node type, the frame background (no
+// WA_TranslucentBackground) + the exec-mode control's visibility survive a synthetic hoverEnter AND
+// hoverLeave; NEG-CTRL: a WA_TranslucentBackground container + a hidden combo are caught.
+bool runHoverIntegrityGate();
+
 } // namespace krs::nodes

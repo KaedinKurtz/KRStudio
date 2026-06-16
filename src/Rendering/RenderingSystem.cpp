@@ -960,6 +960,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // GATE HOVER-INTEGRITY: frame background + exec control survive a synthetic hover-enter/leave.
+    if (qEnvironmentVariableIntValue("KRS_HOVER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_HOVER_SELFTEST =================\n");
+        const bool ok = krs::nodes::runHoverIntegrityGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
 
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
@@ -1084,6 +1091,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE FRAME-GFX (every type's NodeGraphicsObject has caption+geometry+boundary ports)", krs::nodes::runFrameGfxGate() },
             { "GATE PERF (quiet eval bounded+linear; old per-eval scene cascade blows up)", krs::nodes::runPerfGate() },
             { "GATE RATE (eval rate configurable; UI repaint capped independently)", krs::nodes::runRateGate() },
+            { "GATE HOVER-INTEGRITY (frame bg + exec control survive hover-enter/leave; no WA_Translucent)", krs::nodes::runHoverIntegrityGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
