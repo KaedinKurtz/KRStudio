@@ -5,5 +5,6 @@
 namespace krs::grasp {
 
 bool runGraspImportGate();   // GATE IMPORT: YCB load + real-meter scale + mass/inertia + NaN; x1000 neg-ctrl
+bool runGraspCoacdGate();    // GATE COACD: concavity survives (ball rests inside bowl); convex-hull filler FAILS
 
 } // namespace krs::grasp

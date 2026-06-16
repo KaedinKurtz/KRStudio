@@ -2563,3 +2563,22 @@ physically-justified criterion, NOT a claim about a specific real robot/gripper.
 physically-reasonable STATED values (a representative rubber-jaw small parallel gripper), not calibrated to one
 hardware unit. The rate is honest FOR THIS LOCKED CRITERION; a different gripper/criterion would give a different
 number. Target = a HIGH honest rate with hard failures characterized, NOT a suspicious 100%.
+
+### Phase 0 -- DONE (commits 8fbbe06, hardened 054e503). GATE IMPORT green; bench 72/72.
+20 YCB objects, real-meter scale (per-object anchors), watertight (0.00% boundary on all 20; holed-mesh
+neg-ctrl rejected), finite mass. Adversarial review found + closed: no watertight check (CRITICAL), vacuous
+scale band (17/20), loose mass. locked-cfg e4615ee25c65d98f.
+
+### Phase 1 -- DONE (commit pending). GATE COACD green; bench 73/73.
+DECISION: CoACD vendoring DEFERRED, NOT a blocker. The submodule doesn't exist, the CMake hook is mis-wired
+(project CoACD vs targets coacd/_coacd), and CoACD's FetchContent of OpenVDB 8.2 + Boost + its own TBB would
+risk bricking the currently-green build (a hard-rule violation). The in-house CollisionCookingService already
+exposes the three colliders the gate needs. GATE COACD proves the directive's INTENT (grasp-faithful cavity-
+preserving collider vs cavity-filling collider) via a drop test, independent of which algorithm decomposes.
+EMPIRICAL FINDING (drop a 1cm ball into 024_bowl, opening-up, settle 2s, measure rest-Y vs rim 0.055m):
+  exact trimesh  -> ball -0.0436 m (caught INSIDE, near floor)
+  V-HACD decomp  -> ball -0.0421 m (caught INSIDE -- V-HACD 4.1 PRESERVES the cavity, it does NOT fill it;
+                    the directive's "V-HACD fills concavities" premise is OUTDATED for this version/resolution)
+  convex hull    -> ball +0.0094 m (ball ON TOP -> cavity FILLED) -- so the SINGLE CONVEX HULL is the
+                    cavity-filling FAILING neg-control, not V-HACD. Separation 0.0515 m.
+CoACD remains a one-function swap behind the decomposition backend (it must clear this identical drop test).
