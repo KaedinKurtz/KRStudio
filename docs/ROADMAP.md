@@ -2448,3 +2448,34 @@ correlates with materialDrive (positive, significant). (3) CALIBRATION (round-tr
 |mu - Z_true| < 2*sigma for >=90% (the uncertainty is honest, not arbitrary). NEG-CTRL (uniform sigma = median
 everywhere): CONTRAST ratio ~1 (FAILS) AND calibration fails (over-confident in noisy regions, under-confident
 in clean ones). The discriminator: a real recon KNOWS WHERE it is uncertain; a uniform field does not.
+
+### Phase 4 -- DONE (commit cb481d6, hardened 40de483). GATE L2-UNCERTAINTY green; bench 68/68.
+Adversarial review (impostors compiled + run) found 2 CRITICAL holes + the directive's CORE untested: the
+|mu-Z|<2sigma calibration was tautological (standard error covers its own mean ~95% for ANY unbiased model);
+a per-region-CONSTANT sigma passed; the SHARED material field was never structurally tested. Closed: reduced
+chi-square (two-sided, 1.12); 1/sqrt(n) Bayesian test (NEG-B per-region-const fails at slope 0); standalone
+mu-accuracy; and corr(L3 dropout, L2 sigma) r2=0.986 with an ignored-channel control -- the shared cause
+proven directly. The shared MaterialField now drives BOTH holes AND match noise in DepthModel.
+
+## §AR-5 PHASE 5 -- COMPOSITION, design before coding (2026-06-16)
+Pure CPU. New: Composition.{hpp,cpp} + SensorGate5.cpp. Wires the three layers: physics reads L1 TRUE; the
+robot's BELIEF reads L2 (mu,sigma); the CAMERA's live image is the belief surface observed through L3 (fresh
+per-frame noise + material dropout). Composable/toggleable (L1-only / L1+L3 / all three), per-seed deterministic
+with INDEPENDENT per-layer RNG substreams (toggling one layer does not shift another's stream).
+
+### The composition seam
+- physicsDepth(i) = L1 trueDepth (what physics acts on).
+- beliefMu/Sigma(i) = L2 field if useL2 else L1 truth (the robot's internal estimate).
+- cameraRead(i, rngL3) = (useL2 ? L2.mu : L1.true) observed through DepthModel.sample if useL3 else clean.
+  So the camera sees the BELIEF surface with LIVE noise; the SHARED material drives both L2 sigma (built into
+  the belief) AND L3 dropout/noise (in sample()). Determinism: seedL2, seedL3 drawn in fixed order from the
+  master seed (toggle-stable).
+
+### GATE COMPOSE (measured; independent-draw as the FAILING neg-control)
+(1) TRUE-vs-BELIEF differ CORRECTLY: physics(L1) != camera(L2+L3) (live divergence > 0) yet the belief mu is
+within k*sigma of L1 (honest, calibrated). (2) SPECULAR correlation: across the composed scene corr(L2 sigma,
+L3 dropout rate) > 0.9 -- specular cells are BOTH uncertain in belief AND dropping live. (3) TOGGLES: L1-only ->
+camera == L1 clean; L1+L3 -> camera base == L1 (no belief divergence) + live noise; all -> camera base == L2 mu.
+(4) DETERMINISM: same seed -> identical stream; seed+1 -> different draws, same statistics. NEG-CTRL
+(independent-draw): L3 dropout from an INDEPENDENT fixed-rate field (not the material) -> corr(L2 sigma, L3
+dropout) ~ 0 -> FAILS. The shared cause -- not coincident independent draws -- is what makes them correlate.
