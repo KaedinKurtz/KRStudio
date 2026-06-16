@@ -2510,3 +2510,56 @@ indistinguishable. (2) DISCRIMINATING POWER (the NEG that proves the comparison 
 detected. PASS = (A~B match) AND (A!~C mismatch). The harness PRINTS, every run, the honest label: it is gated
 against a second SYNTHETIC instance, NOT real hardware; real-transfer remains UNVALIDATED awaiting an operator
 D456 capture. This is the proven/proxy + internal/real-transfer boundary, made explicit and un-fakeable.
+
+## §GR GRASP PLANNER vs REAL OBJECT LIBRARY -- architecture (2026-06-16, recon before coding)
+A self-contained, headlessly-gateable module: src/Grasp/*.cpp + include/GraspHeaders/*.hpp (CMake glob +
+include dir, mirroring Sensors). RIGID-BODY parallel-jaw grasping (PhysX 5 contact+friction), NOT MPM. Deliverable
+= an HONESTLY-MEASURED success RATE that improved through PLANNER tuning + a failure catalog. The metric is
+LOCKED; only the planner is tuned. Recon (8-agent workflow) confirmed GO: PhysX headless works (ArticulationGate
+pattern: PxGetPhysics() singleton + throwaway PxScene), V-HACD installed (KR_WITH_VHACD), YCB google_16k live on
+S3 (HTTP 200), no grasp code exists (build fresh; reuse MeshUtils/Assimp, CollisionCookingService, RayPick).
+
+### THE LOCKED PHYSICS / SUCCESS CRITERION (constexpr GraspPhysicsConfig; configHash printed; runtime guard) -- UNCHANGED across the sprint
+| param | locked value | physical justification + anti-cheat |
+| g | 9.81 m/s^2 down | matches the engine's validated bench suite (SimulationController.cpp:604); guard asserts live scene gravity == this |
+| mu_s = mu_d | 0.70 (jaw<->object) | rubber gripper pad on rigid plastic dry friction ~0.6-0.9; 0.70 is conservative low-mid -- holds true force-closure, slips marginal/cheating grasps. NOT >1.0 (would mask bad geometry). |
+| F_grip | 40 N constant per jaw after contact | a 0.3 kg object needs >= m*g/mu ~ 4.2 N; 40 N = ~10x margin, within real parallel-jaw range (20-140 N); FINITE + bounded so a bad-normal grasp still squirts out |
+| density | 1000 kg/m^3 (engine default) x DECOMPOSED collider volume | hollow objects (mug) get ~shell volume -> physical light mass; mass asserted finite + in a physical band; NOT reducible to ease lifting |
+| h_lift | 0.15 m at <= 0.25 m/s | standard pick clearance; >> object size so a grasp that slips under lift acceleration is exposed |
+| t_hold | 2.0 s (480 steps @ 240 Hz) | slow creep/slip + solver relaxation surface over 2 s that a 1-frame snapshot misses |
+| success | object center within d_max=30 mm of (start + 0.15 m up) AND no ground contact after liftoff AND continuous jaw contact >= 90% of lift+hold steps | 30 mm << 150 mm lift, so a dropped/slipped object fails unambiguously; triple condition closes the thrown-object + one-frame loopholes |
+| solver/dt | TGS, dt=1/240, CCD+stabilization, seeded mt19937(seedBase^objIdx) | engine standard; deterministic -> a re-run is bit-identical |
+The grasp scene is built ONLY from kLockedPhysics with NO env overrides (unlike the diagnostic KRS_PGS/KRS_NO_CCD
+hooks). assertPhysicsLocked(scene, jawMat, appliedForce) re-reads the LIVE gravity/friction/force and returns
+false (gate FAIL) on any mismatch. SOFTENING ANY of these is a HARD FAILURE, not a path to green.
+
+### Gripper model (honest by construction)
+Two PxRigidDynamic jaw boxes (NOT kinematic -> no interpenetration-clamp cheat; NOT the FANUC), each D6-locked
+to a "palm" frame on all axes except the closing axis, driven inward by a finite F_grip. The palm is moved up
+for the lift; the jaws follow, and the object is held ONLY by the friction cone -- a bad grasp slips out. Contact
+tracked via the BenchContactLogger/PxSimulationEventCallback pattern.
+
+### Phase plan -> gates (measured number + the FAILING negative control; the neg-ctrls are the anti-cheat)
+- GATE IMPORT: N YCB objects load, real-meter scale vs published dims (+-15%), finite mass/inertia, 0 NaN.
+  NEG: a x1000 (mm-as-meters) mesh -> a 100 m mug -> scale check FAILS (the check has teeth).
+- GATE COACD: a point inside a known cavity (bowl/mug/cup) is OUTSIDE the collider -> a ball RESTS INSIDE the
+  bowl. NEG: the cavity-FILLING collider (single convex hull; and low-res V-HACD if it fills) -> ball ROLLS OFF.
+  CoACD attempted (vendoring, MIT, Eigen-only, infra ready); if infeasible, high-res V-HACD is the concavity-
+  preserving good case + convex hull the definitive filler -- determined EMPIRICALLY, reported honestly.
+- GATE SUCCESS-CRITERION (anti-cheat heart): a known-GOOD grasp PASSES + a known-BAD grasp FAILS under the SAME
+  locked physics. NEG: a no-gravity / sticky / loosened world would FALSELY pass the bad grasp -- assert the
+  LOCKED world (guard re-confirms g/mu/F/d_max unchanged, prints configHash) does NOT. This makes every later
+  number trustworthy.
+- GATE PLANNER: success RATE over the library under locked physics; must IMPROVE baseline -> tuned (report the
+  trajectory). NEG: a random-jaw-pose planner scores LOW under the same criterion (heuristic adds real signal).
+  NOT 100% unless every success survives the unchanged test AND adversarial review confirms no softening.
+- GATE FAILURE-CATALOG: 100% of failing objects classified (no "unknown") into {slip-out, never-closed,
+  crush/ejection, tipped-then-dropped, ground-collision, thin, slippery, awkward-CoM, unreachable-concavity,
+  scale-vs-jaw}; report taxonomy + counts. NEG: inject a known synthetic failure of each class -> correct label.
+
+### Honesty boundary
+Everything here is REAL rigid-body PhysX under LOCKED physics -- it is PROVEN grasp success under a stated,
+physically-justified criterion, NOT a claim about a specific real robot/gripper. The friction/force/density are
+physically-reasonable STATED values (a representative rubber-jaw small parallel gripper), not calibrated to one
+hardware unit. The rate is honest FOR THIS LOCKED CRITERION; a different gripper/criterion would give a different
+number. Target = a HIGH honest rate with hard failures characterized, NOT a suspicious 100%.
