@@ -1,9 +1,52 @@
 #include "VisualNodes.hpp"
-#include <iostream> 
+#include <iostream>
 #include <algorithm> // Required for std::clamp
 #include <memory>    // Required for std::make_unique
+#include <cmath>
+#include <QLCDNumber>
+#include <QPainter>
+#include <QString>
 
 namespace NodeLibrary {
+
+namespace {
+constexpr double kGaugePi = 3.14159265358979323846;
+
+// A display-only arc gauge: paints a background arc, a coloured fill to the normalized position, and a
+// needle. NO Q_OBJECT (no signals/slots) so it needs no moc. The current value + normalized position are
+// stored as dynamic properties (krs_gauge_value / krs_gauge_norm) so a headless gate can read what the
+// gauge is showing without depending on this file-local type.
+class GaugeWidget : public QWidget {
+public:
+    GaugeWidget() {
+        setMinimumSize(130, 96);
+        setAttribute(Qt::WA_TranslucentBackground, true);
+        setProperty("krs_gauge_norm", 0.0);
+        setProperty("krs_gauge_value", 0.0);
+    }
+    void setReading(double norm, double value) {
+        m_norm = std::clamp(norm, 0.0, 1.0); m_value = value;
+        setProperty("krs_gauge_norm", m_norm);
+        setProperty("krs_gauge_value", m_value);
+        update();
+    }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+        const QRectF r = QRectF(rect()).adjusted(10, 10, -10, -10);
+        const double startDeg = 210.0, spanDeg = -240.0;  // open-bottom sweep, clockwise
+        p.setPen(QPen(QColor(70, 70, 82), 8)); p.drawArc(r, int(startDeg * 16), int(spanDeg * 16));
+        p.setPen(QPen(QColor(80, 200, 120), 8)); p.drawArc(r, int(startDeg * 16), int(spanDeg * m_norm * 16));
+        const double ang = (startDeg + spanDeg * m_norm) * kGaugePi / 180.0;
+        const QPointF c = r.center();
+        const double rad = std::min(r.width(), r.height()) / 2.0 - 8.0;
+        p.setPen(QPen(QColor(232, 92, 92), 3));
+        p.drawLine(c, c + QPointF(std::cos(ang) * rad, -std::sin(ang) * rad));
+    }
+private:
+    double m_norm = 0.0, m_value = 0.0;
+};
+} // namespace
 
     // --- Visualization Node Implementations ---
 
@@ -53,9 +96,10 @@ namespace NodeLibrary {
         auto val = getInput<float>("Value");
         auto min = getInput<float>("Min");
         auto max = getInput<float>("Max");
-        if (val && min && max && (*max > *min)) {
-            float normalized = (*val - *min) / (*max - *min);
-            setOutput("Normalized", std::clamp(normalized, 0.0f, 1.0f));
+        if (val && min && max && (*max > *min)) {                 // disconnected/invalid range -> NO update
+            float normalized = std::clamp((*val - *min) / (*max - *min), 0.0f, 1.0f);
+            setOutput("Normalized", normalized);
+            if (m_gauge) static_cast<GaugeWidget*>(m_gauge.data())->setReading(normalized, *val);
         }
     }
     namespace {
@@ -157,9 +201,48 @@ QWidget* ValuePlotterNode::createCustomWidget()
 
 QWidget* DialGaugeNode::createCustomWidget()
 {
-    // TODO: Implement custom widget for "DialGaugeNode"
-    return nullptr;
+    auto* g = new GaugeWidget();
+    m_gauge = g;
+    return g;
 }
+
+// --- NumericReadoutNode: a 7-segment LCD readout (Value + Digits + Decimals) ---
+NumericReadoutNode::NumericReadoutNode() {
+    m_id = "viz_numeric_readout";
+    m_ports.push_back({ "Value",    {"double", "unitless"}, Port::Direction::Input,  this });
+    m_ports.push_back({ "Digits",   {"int", "count"},       Port::Direction::Input,  this });
+    m_ports.push_back({ "Decimals", {"int", "count"},       Port::Direction::Input,  this });
+    m_ports.push_back({ "Display",  {"std::string", "text"},Port::Direction::Output, this });
+}
+void NumericReadoutNode::compute() {
+    auto v = getInput<double>("Value");
+    if (!v) return;                                    // disconnected -> no update (NEG-CTRL)
+    int digits   = std::clamp(getInput<int>("Digits").value_or(6), 1, 16);
+    int decimals = std::clamp(getInput<int>("Decimals").value_or(2), 0, 10);
+    const QString text = QString::number(*v, 'f', decimals);
+    setOutput<std::string>("Display", text.toStdString());
+    if (m_lcd) { m_lcd->setDigitCount(digits); m_lcd->display(text); }
+}
+QWidget* NumericReadoutNode::createCustomWidget()
+{
+    auto* lcd = new QLCDNumber();
+    lcd->setSegmentStyle(QLCDNumber::Flat);
+    lcd->setDigitCount(6);
+    lcd->setMinimumSize(130, 48);
+    m_lcd = lcd;
+    return lcd;
+}
+namespace {
+    struct NumericReadoutRegistrar {
+        NumericReadoutRegistrar() {
+            NodeDescriptor desc = { "Numeric Readout", "Visualization",
+                "7-segment readout of a value; Digits sets segment count, Decimals sets fractional places." };
+            NodeFactory::instance().registerNodeType("viz_numeric_readout", desc,
+                []() { return std::make_unique<NumericReadoutNode>(); });
+        }
+    };
+    static NumericReadoutRegistrar g_numericReadoutRegistrar;
+} // namespace
 
 
 QWidget* ConditionalLightNode::createCustomWidget()

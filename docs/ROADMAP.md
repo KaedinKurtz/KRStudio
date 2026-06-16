@@ -2081,3 +2081,58 @@ screen; no hidden reject branch -- cannot pass while the widget is absent-on-scr
   `connectionPossible` asserted; add.B set THROUGH the mounted spinbox; ticking propagates through the edges
   to drive the live robot (link 0.3475, err 6.75e-07); omitting an edge localizes the break (2,3,4).
 KRS_OVERNIGHT_BENCH **48/48**. The mount itself remains OPERATOR VISUAL-CONFIRM.
+
+## §AM NODE-ECOSYSTEM SPRINT -- RECON (2026-06-15, before editing)
+Four-area recon mapping the system this sprint touches. file:line evidence, no edits.
+
+### Boot demo / joint-command OWNERSHIP (the two writers)
+- **Writer #1 (the hardcoded demo, to REMOVE)**: `SimulationController::tick()` lines 544-554 -- the
+  `if (m_articDemoDrive && articDofCount()==4)` block computes 3 hardcoded sines and calls
+  `setArticJointPositions(q)` every tick. Enabled at `MainWindow.cpp:712`
+  (`m_simulation->setArticulationDemoDrive(true)`) inside the `bootFanuc` path.
+- **Writer #2 (the node path)**: `SetJointAngleNode` (`physics_set_joint_angle`, BridgeNodes.cpp:43-53)
+  writes `JointComponent.currentPosition` in the ECS registry.
+- **THE GAP (confirmed)**: the FANUC articulation is driven ONLY by `setArticJointPositions(q)` (a 4-vector,
+  SimulationController.cpp:874). `writeBackArticulationViz()` (SimulationController.cpp:1288) goes the OTHER
+  way (live articulation pose -> viz solids). NOTHING reads `JointComponent.currentPosition` back into the
+  articulation. The FANUC has NO per-joint `JointComponent` entities (FanucArticulation.cpp drives a raw
+  4-vector + a viz mapping). So a node graph does NOT currently drive the live robot.
+- **DESIGN**: add a registry-singleton `ArticulationCommandComponent` (entt ctx) holding per-DOF target +
+  driven flags; a `physics_articulation_drive` node (Angle + Joint-index inputs) writes it via its injected
+  `m_scene`; `SimulationController::applyArticulationCommands()` reads it each tick and calls
+  `setArticJointPositions`. This bridge REPLACES the demo block as the SOLE writer. The boot spawns a REAL
+  editor graph (`graphModel->addNode/addConnection`: time_source -> gen_sine -> physics_articulation_drive)
+  -- the same path a user builds. FANUC J1 limit ~+-pi (real data); the demo amplitude stays well within.
+
+### Half-mounted FRAME (the screenshot bug)
+- The caption + node rect + ports are ALWAYS painted (DefaultNodePainter.cpp:18-35); caption defaults visible
+  (NodeDelegateModel::captionVisible()=true, not overridden). `recomputeSize`
+  (DefaultHorizontalNodeGeometry.cpp:31-60) always reserves caption height, and `widgetPosition` (147-165)
+  places the embedded widget BELOW the caption -- so a widget cannot cover the caption.
+- The base `Node()` ctor (Node.hpp:241-243) adds a `Trigger` input to EVERY node, so any node that does not
+  `m_ports.clear()` has >=1 port and renders framed+wireable. The ONLY confirmed 0-port type is
+  `util_comment` (UtilityNodes.cpp: `m_ports.clear()` with nothing re-added). Static nodes clear then add a
+  `Value` OUTPUT (1 port -> framed). So "no ports / can't be wired" == nPorts==0.
+- **APPROACH**: GATE FRAME instantiates EVERY registered type through the real `DataFlowGraphModel` and
+  asserts in+out port count > 0 (report N of M; neg-ctrl: a deliberately 0-port node is CAUGHT). Pruning the
+  category-C `util_comment` removes the one frameless type. The embedded container is also set transparent
+  (`WA_NoSystemBackground`/translucent) so an opaque body can never paint over the frame. Rendered frame =
+  OPERATOR VISUAL-CONFIRM.
+
+### Node-draft inventory (for CLASSIFY/PRUNE)
+~97 registered types across src/Nodes/*.cpp. Fully-implemented: all math/trig/linalg/state-space/signal,
+physics+kinematics bridges, time_source, MQTT pub/sub, controller knobs, generators. STUBS: perception_*
+(5, need PCL/OpenCV -> B), sensor_pose/sensor_float (B), ai_run_inference (B), util_comment/util_reroute/
+util_script (no-op -> C), static_* (17, output port but no value widget). Visualization viz_*/mon_* are
+real but display-only. Full A/B/C table lands in the CLASSIFY commit.
+
+### UI->physics THREADING
+- Physics ticks on the MAIN/GUI thread: `m_masterRenderTimer` (33ms) + the viewport `frameSwapped` signal
+  both call `m_simulation->tick()` (MainWindow.cpp ~1007-1029).
+- A dial edit's `valueChanged` lambda (NodeDelegate.cpp:276-298) calls `recomputeAndPropagate()`
+  SYNCHRONOUSLY on that same GUI thread (process() the node + emit dataUpdated) -- while it runs the QTimer
+  cannot fire, so the physics tick is delayed. No mutex; the stall is the shared-thread inline work.
+- Async idioms to mirror: SLAM `moveToThread`+queued signals (SlamManager.cpp), HilClock `std::thread`+
+  atomics. **DESIGN**: post dial edits to a lock-free/std::mutex command queue drained at the top of
+  `tick()`, so the UI handler returns immediately. GATE THREAD measures tick rate idle vs under hammering;
+  neg-ctrl is the old synchronous path.

@@ -198,6 +198,49 @@ int portIndexByName(Node* n, Port::Direction dir, const char* name) {
     return -1;
 }
 
+bool runFrameGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[frame] GATE FRAME -- every registered node type exposes ports via the REAL QtNodes model\n");
+    if (!QApplication::instance()) { printf("[frame] FAIL: needs QApplication\n"); return false; }
+    auto model = makeNodeGraphModel();
+
+    int M = 0, framed = 0;
+    std::vector<std::string> frameless;
+    // The real editor instancing path: addNode -> the registry builds the NodeDelegate; nPorts() is the
+    // SAME query QtNodes uses to draw port circles + decide connectability. >=1 port (in OR out) means the
+    // node is wireable and gets its frame chrome; 0 ports == the screenshot's "bare panel, can't be wired".
+    for (const auto& kv : NodeFactory::instance().getRegisteredNodeTypes()) {
+        const std::string& typeId = kv.first;
+        ++M;
+        const QtNodes::NodeId id = model->addNode(QString::fromStdString(typeId));
+        auto* del = model->delegateModel<NodeDelegate>(id);
+        const unsigned in  = del ? del->nPorts(QtNodes::PortType::In)  : 0u;
+        const unsigned out = del ? del->nPorts(QtNodes::PortType::Out) : 0u;
+        if (in + out > 0u) ++framed; else frameless.push_back(typeId);
+    }
+
+    // NEG-CTRL: the SAME predicate applied to a 0-port delegate flags it (an unregistered type -> null
+    // backend -> nPorts 0). Proves the gate would CATCH a frameless node, not silently count it as passed.
+    NodeDelegate canary("__frameless_canary_unregistered__");
+    const unsigned czero = canary.nPorts(QtNodes::PortType::In) + canary.nPorts(QtNodes::PortType::Out);
+    // and a real node is non-zero (the predicate discriminates, not always-true).
+    NodeDelegate real("math_add");
+    const unsigned creal = real.nPorts(QtNodes::PortType::In) + real.nPorts(QtNodes::PortType::Out);
+    const bool negOk = (czero == 0u) && (creal > 0u);
+
+    const bool pass = (M > 0) && (framed == M) && negOk;
+    printf("[frame]   FRAME coverage: %d/%d registered node types expose >=1 port (wireable, framed) via the real model\n", framed, M);
+    if (!frameless.empty()) { printf("[frame]   FRAMELESS (0 ports, caught): "); for (auto& s : frameless) printf("%s ", s.c_str()); printf("\n"); }
+    printf("[frame]   NEG-CTRL detector: 0-port delegate ports=%u (caught), real node ports=%u (>0)  %s\n",
+           czero, creal, negOk ? "PASS" : "FAIL!");
+    printf("[frame] %s (rendered frame on screen = OPERATOR VISUAL-CONFIRM)\n",
+           pass ? "ALL PASS (every registered type is wireable through the real QtNodes model)" : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
+}
+
 bool runTypeGate()
 {
     using std::printf;

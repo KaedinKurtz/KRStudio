@@ -23,15 +23,6 @@ namespace NodeLibrary {
         void setDataType(const DataType& type);
     };
 
-    class CommentNode : public Node {
-    public:
-        QWidget* createCustomWidget() override;
-        std::string commentText = "This is a comment.";
-        CommentNode();
-        void compute() override;
-    };
-
-
     // --- Logic & Flow Control Nodes ---
 
     class SwitchNode : public Node {

@@ -34,20 +34,8 @@ namespace NodeLibrary {
     }
     static RerouteRegistrar g_rerouteRegistrar;
 
-    // CommentNode
-    CommentNode::CommentNode() {
-	m_id = "util_comment"; m_ports.clear(); }
-    void CommentNode::compute() { /* Does nothing */ }
-    namespace {
-        struct CommentRegistrar {
-            CommentRegistrar() {
-                NodeDescriptor desc = { "Comment Box", "Utilities/Graph", "A non-functional box for adding comments." };
-                // FIX: Use std::make_unique
-                NodeFactory::instance().registerNodeType("util_comment", desc, []() { return std::make_unique<CommentNode>(); });
-            }
-        };
-    }
-    static CommentRegistrar g_commentRegistrar;
+    // CommentNode REMOVED (node-ecosystem sprint, classify C): a 0-port "non-functional box" cannot be
+    // wired into a control canvas and rendered as the screenshot's frameless bare panel. See GATE FRAME.
 
     // SwitchNode
     SwitchNode::SwitchNode() {
@@ -271,13 +259,6 @@ QWidget* SwitchCaseNode::createCustomWidget()
 QWidget* SwitchNode::createCustomWidget()
 {
     // TODO: Implement custom widget for "SwitchNode"
-    return nullptr;
-}
-
-
-QWidget* CommentNode::createCustomWidget()
-{
-    // TODO: Implement custom widget for "CommentNode"
     return nullptr;
 }
 

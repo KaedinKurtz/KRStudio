@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QWidget>
+#include <QPointer>
 
 #include "Node.hpp"
 #include "NodeFactory.hpp"
@@ -9,6 +10,8 @@
 #include <vector>
 #include <functional>
 #include <deque>
+
+class QLCDNumber;   // Qt's built-in 7-segment display (used by the numeric readout)
 
 namespace NodeLibrary {
 
@@ -49,13 +52,31 @@ namespace NodeLibrary {
     };
 
     /**
-     * @brief A node that visualizes a value on a dial or gauge.
+     * @brief A node that visualizes a value on a dial / gauge. Inputs Value/Min/Max; renders a painted
+     *        arc-gauge with a needle at the normalized position. The displayed value is tagged on the
+     *        widget (krs_gauge_value / krs_gauge_norm) so it is gate-observable (GATE VIS).
      */
     class DialGaugeNode : public Node {
     public:
         QWidget* createCustomWidget() override;
         DialGaugeNode();
         void compute() override;
+    private:
+        QPointer<QWidget> m_gauge;   // the painted GaugeWidget (owned by the node body once mounted)
+    };
+
+    /**
+     * @brief A numeric readout styled as a 7-segment LCD (QLCDNumber). Inputs: Value (the number to show),
+     *        Digits (int, segment count), Decimals (int, fractional places). Outputs the formatted text on
+     *        "Display" so the shown value is gate-observable; the LCD shows the same formatted value.
+     */
+    class NumericReadoutNode : public Node {
+    public:
+        QWidget* createCustomWidget() override;
+        NumericReadoutNode();
+        void compute() override;
+    private:
+        QPointer<QLCDNumber> m_lcd;
     };
 
     /**

@@ -870,6 +870,20 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Node-editor GATE FRAME: every registered node type exposes ports via the real QtNodes model.
+    if (qEnvironmentVariableIntValue("KRS_FRAME_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FRAME_SELFTEST =================\n");
+        const bool ok = krs::nodes::runFrameGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // Node-editor GATE VIS: visualizer readout/gauge displayed value matches input (digits/decimals).
+    if (qEnvironmentVariableIntValue("KRS_VIS_SELFTEST") != 0) {
+        std::printf("\n================= KRS_VIS_SELFTEST =================\n");
+        const bool ok = krs::nodes::runVisGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
 
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
@@ -983,6 +997,8 @@ void RenderingSystem::initializeSharedResources()
             { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },
+            { "GATE FRAME (every registered node type exposes ports via the real QtNodes model, N of M)", krs::nodes::runFrameGate() },
+            { "GATE VIS (readout/gauge displayed value matches input; digits/decimals; disconnected inert)", krs::nodes::runVisGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

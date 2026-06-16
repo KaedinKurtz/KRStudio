@@ -242,8 +242,13 @@ void NodeDelegate::populateEmbeddedWidget() const
         return;
     }
 
-    // 1. Create a container widget. This will be the main embedded widget.
+    // 1. Create a container widget. This will be the main embedded widget. Make it TRANSPARENT so the
+    //    container itself never paints an opaque rectangle over the QtNodes frame/caption/ports (the
+    //    "half-mounted, no title bar" class). Individual child controls (spinboxes/dials) still paint
+    //    themselves, but they sit in the body area BELOW the caption (DefaultHorizontalNodeGeometry).
     auto* container = new QWidget();
+    container->setAttribute(Qt::WA_TranslucentBackground, true);
+    container->setAttribute(Qt::WA_NoSystemBackground, true);
     auto* layout = new QVBoxLayout(container);
     layout->setContentsMargins(2, 2, 2, 2); // Keep it tight
 
