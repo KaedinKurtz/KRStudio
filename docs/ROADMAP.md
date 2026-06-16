@@ -2385,3 +2385,36 @@ enforced: true Z < minZ -> invalid. IR speckle = a small additive Z floor (speck
 ~ flyingPixelRate at edges, 0 on flats; (4) min-Z enforced (true Z<minZ -> invalid). NEG-CTRL (clean+fixed-
 Gaussian depth): power-fit exponent ~ 0 (FAILS quadratic) AND ~0 holes (FAILS material test). Discriminators:
 the Z^2 slope and the material-conditioned dropout -- a clean Gaussian sensor has neither.
+
+### Phase 2 -- DONE (commit 2791bc3, hardened 9bf3b52). GATE DEPTH-STRUCT green; bench 66/66.
+Adversarial review (exploits simulated) found 2 CRITICAL self-referential holes: the quadratic COEFFICIENT
+check was a tautology (gate + model both computed subpixelErr/(fx*b)); the material-hole test only proved "a
+Bernoulli yields ~p" (a boolean impostor passed). Closed: DepthModel now TRIANGULATES Z=fx*b/d so the Z^2 law
+EMERGES (validated vs an independent hand-computed literal); a dark-knee MAPPING check (albedo 0.4/0.3/0.2 ->
+0.077/0.145/0.214) pins the material map; flying-pixel mean tracks the far surface (interpolation); exponent
+band tightened; depthNoiseCoeff reconciled (subpixelErr is the single source of truth).
+
+## §AR-3 PHASE 3 -- STATEFUL IMU (BMI085), design before coding (2026-06-16)
+Pure CPU. New: ImuModel.{hpp,cpp} + SensorGate3.cpp. Recon: ImuDataPoint/ImuProfile exist (reuse types); no
+prior noise model; time in seconds; gravity Y-down -9.81. The defining feature is STATE carried frame-to-frame.
+
+### Per-axis stateful inertial channel (the noise stack, in causal order)
+- WHITE: discrete std = noiseDensity * sqrt(rateHz) (from the continuous density), signal-independent, IID.
+- BIAS INSTABILITY (the VIO-killer): 1st-order Gauss-Markov  b[k] = phi*b[k-1] + N(0, biasInstab*sqrt(1-phi^2)),
+  phi = exp(-dt/biasTau). Steady-state std = biasInstab. This is what creates the Allan-variance FLOOR.
+- RATE RANDOM WALK: biasRW += N(0, randomWalk*sqrt(dt)) -- integrated white -> the +1/2 Allan slope at long tau.
+- output = trueVal + white + biasGM + biasRW. State (biasGM, biasRW) persists across samples (that is the point).
+- SYSTEMATIC (deterministic): 3-axis scale-factor (diagonal), axis-misalignment (off-diagonal cross-coupling),
+  temperature bias (tempBiasCoeff * dTemp). Applied to the true vector before noise.
+NOTE: real BMI085 biasTau ~ 200-300 s; the gate uses a COMPRESSED tau so the Allan floor is observable in a
+tractable series (the real tau needs hours of data). The SIGNATURE (slope + floor + drift) is what is gated;
+the exact floor tau is a parameter. Disclosed, not hidden.
+
+### GATE IMU-ALLAN (Allan signature + integrated drift; per-sample-Gaussian as the FAILING neg-control)
+(1) Allan deviation of a long STATIONARY series has the white-noise -1/2 slope at short tau AND a
+bias-instability FLOOR -- an INTERIOR minimum after which it rises (random walk), not monotone. (2) Integrated
+output DRIFTS: RMS |integral| grows and is >> the white-only model's (the bias is a real non-zero offset; a
+VIO dead-reckon diverges). (3) Systematic errors deterministic: a known input recovers scale on the diagonal,
+misalignment cross-coupling, temp offset. NEG-CTRL (per-sample Gaussian, NO state): Allan is monotone -1/2
+(NO interior floor); integrated drift is small (zero-mean). The discriminators: the Allan floor + the drift,
+both of which require carried STATE a memoryless Gaussian cannot have.
