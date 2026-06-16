@@ -2,6 +2,8 @@
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include "ExecutionControlWidget.hpp"
+#include "NodeEditQueue.hpp"
+#include <string>
 
 #include <QtNodes/NodeData>
 #include <any>
@@ -279,19 +281,22 @@ void NodeDelegate::populateEmbeddedWidget() const
             auto* sb = new QDoubleSpinBox(); sb->setRange(-1.0e6, 1.0e6); sb->setDecimals(4); sb->setSingleStep(0.1);
             sb->setProperty("krs_input_port", tag);
             QObject::connect(sb, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-                [self, portName](double v) { if (self->m_backendNode) self->m_backendNode->setPortLiteral<float>(portName, float(v)); self->recomputeAndPropagate(); });
+                [self, portName](double v) { krs::nodes::NodeEditQueue::instance().post(self, portName,
+                    [self, portName, v]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<float>(portName, float(v)); self->recomputeAndPropagate(); }); });
             rl->addWidget(sb);
         } else if (tn == "int") {
             auto* sb = new QSpinBox(); sb->setRange(-1000000, 1000000);
             sb->setProperty("krs_input_port", tag);
             QObject::connect(sb, QOverload<int>::of(&QSpinBox::valueChanged),
-                [self, portName](int v) { if (self->m_backendNode) self->m_backendNode->setPortLiteral<int>(portName, v); self->recomputeAndPropagate(); });
+                [self, portName](int v) { krs::nodes::NodeEditQueue::instance().post(self, portName,
+                    [self, portName, v]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<int>(portName, v); self->recomputeAndPropagate(); }); });
             rl->addWidget(sb);
         } else if (tn == "bool") {
             auto* cb = new QCheckBox();
             cb->setProperty("krs_input_port", tag);
             QObject::connect(cb, &QCheckBox::toggled,
-                [self, portName](bool v) { if (self->m_backendNode) self->m_backendNode->setPortLiteral<bool>(portName, v); self->recomputeAndPropagate(); });
+                [self, portName](bool v) { krs::nodes::NodeEditQueue::instance().post(self, portName,
+                    [self, portName, v]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<bool>(portName, v); self->recomputeAndPropagate(); }); });
             rl->addWidget(cb);
         } else if (tn == "glm::vec3") {
             auto vec = std::make_shared<glm::vec3>(0.0f);
@@ -300,7 +305,8 @@ void NodeDelegate::populateEmbeddedWidget() const
                 if (k == 0) sb->setProperty("krs_input_port", tag);
                 QObject::connect(sb, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
                     [self, portName, vec, k](double v) { (*vec)[k] = float(v);
-                        if (self->m_backendNode) self->m_backendNode->setPortLiteral<glm::vec3>(portName, *vec); self->recomputeAndPropagate(); });
+                        krs::nodes::NodeEditQueue::instance().post(self, portName + std::to_string(k),
+                            [self, portName, vec]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<glm::vec3>(portName, *vec); self->recomputeAndPropagate(); }); });
                 rl->addWidget(sb);
             }
         } else {

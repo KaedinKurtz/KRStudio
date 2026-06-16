@@ -75,6 +75,7 @@
 #include "DroppableGraphicsView.hpp" // ADD THIS if you haven't already
 #include "NodeFactory.hpp" // ADD THIS if you haven't already
 #include "RobotGraph.hpp"  // default boot node graph (spawnDefaultRobotGraph / tickRobotGraph)
+#include "NodeEditQueue.hpp" // decouple UI edits from the physics thread
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -934,8 +935,14 @@ MainWindow::MainWindow(QWidget* parent)
 
     // LIVE GRAPH TICK: re-evaluate time-source nodes every frame so downstream time-parametric nodes
     // (sine/ramp/oscillator) actually move over wall-clock instead of emitting a constant.
+    // Decouple UI edits from the physics thread: dial/spinbox edits POST to the coalescing queue instead
+    // of recomputing inline, and we DRAIN it once per frame here. A rapid drag no longer does O(graph) work
+    // per event on the sim's critical path (GATE THREAD). Gates that read output immediately keep the
+    // default immediate mode; the live app turns deferral on.
+    krs::nodes::NodeEditQueue::instance().setDeferred(true);
     auto* nodeTickTimer = new QTimer(this);
     connect(nodeTickTimer, &QTimer::timeout, this, [graphModel]() {
+        krs::nodes::NodeEditQueue::instance().drain();   // apply coalesced UI edits (off the per-event path)
         krs::nodes::tickRobotGraph(*graphModel);
     });
     nodeTickTimer->start(33);   // ~30 Hz

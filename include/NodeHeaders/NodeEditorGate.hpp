@@ -50,4 +50,8 @@ bool runPidGate();
 // independent reference (and a meaningful negative control); no unverified filter ships.
 bool runFilterGate();
 
+// GATE THREAD (KRS_THREAD_SELFTEST): hammering UI edits through the async NodeEditQueue keeps the physics
+// tick rate near baseline; the old synchronous (inline-recompute) path drops it.
+bool runThreadGate();
+
 } // namespace krs::nodes

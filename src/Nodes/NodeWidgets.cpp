@@ -1,5 +1,6 @@
 #include "NodeWidgets.hpp"
 #include "Node.hpp"
+#include "NodeEditQueue.hpp"
 
 #include <QWidget>
 #include <QVBoxLayout>
@@ -43,21 +44,24 @@ QWidget* buildControlWidget(Node* node, const std::vector<ControlSpec>& controls
             sb->setReadOnly(c.kind == ControlSpec::Readout);
             sb->setProperty("krs_param", paramProp);
             QObject::connect(sb, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-                             [n, param](double v) { n->setParam<double>(param, v); n->process(); });
+                             [n, param](double v) { krs::nodes::NodeEditQueue::instance().post(n, param,
+                                 [n, param, v]{ n->setParam<double>(param, v); n->process(); }); });
             rl->addWidget(sb);
         } else if (c.kind == ControlSpec::Dial) {
             auto* d = new QDial(row);
             d->setRange(0, 1000); d->setValue(toTick(c.min, c.max, c.def)); d->setNotchesVisible(true);
             d->setProperty("krs_param", paramProp);
             QObject::connect(d, &QDial::valueChanged,
-                             [n, param, spec](int tick) { n->setParam<double>(param, fromTick(spec.min, spec.max, tick)); n->process(); });
+                             [n, param, spec](int tick) { const double val = fromTick(spec.min, spec.max, tick);
+                                 krs::nodes::NodeEditQueue::instance().post(n, param, [n, param, val]{ n->setParam<double>(param, val); n->process(); }); });
             rl->addWidget(d);
         } else { // Slider
             auto* s = new QSlider(Qt::Horizontal, row);
             s->setRange(0, 1000); s->setValue(toTick(c.min, c.max, c.def));
             s->setProperty("krs_param", paramProp);
             QObject::connect(s, &QSlider::valueChanged,
-                             [n, param, spec](int tick) { n->setParam<double>(param, fromTick(spec.min, spec.max, tick)); n->process(); });
+                             [n, param, spec](int tick) { const double val = fromTick(spec.min, spec.max, tick);
+                                 krs::nodes::NodeEditQueue::instance().post(n, param, [n, param, val]{ n->setParam<double>(param, val); n->process(); }); });
             rl->addWidget(s);
         }
         outer->addWidget(row);

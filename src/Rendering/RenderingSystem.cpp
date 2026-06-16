@@ -57,6 +57,7 @@
 #include "MqttNodes.hpp"          // Phase 2 GATE NODE-MQTT (krs::nodes auto-MQTT nodes)
 #include "ControllerGates.hpp"    // Phase 4 controller gates (krs::ctrl C-track/C-knob/C-glass)
 #include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE / TIME)
+#include "NodeEditQueue.hpp"      // force immediate UI-edit mode for the headless gates
 #include "ConnectControlGate.hpp" // node-editor GATE CONNECT-AND-CONTROL
 
 #include <QOpenGLContext>
@@ -617,6 +618,11 @@ void RenderingSystem::initializeSharedResources()
     // groups). The rigid-body KRS_BENCH (7 analytic checks) runs via its own
     // BenchmarkRunner path on a built sim world and is reported separately.
     // ------------------------------------------------------------------
+    // Headless gates run AFTER MainWindow construction, which turns the NodeEditQueue's deferred mode ON
+    // (UI edits coalesce per frame in the live app). Gates drive a widget and read the node's output
+    // immediately, so force IMMEDIATE mode here. (GATE THREAD toggles deferral locally and resets it.)
+    krs::nodes::NodeEditQueue::instance().setDeferred(false);
+
     // Phase F GATE G (F0): standalone headless render self-test. Validates the
     // colormap encoding / determinism / depth-bias / projection (G1-G9).
     if (qEnvironmentVariableIntValue("KRS_RENDER_SELFTEST") != 0) {
@@ -912,6 +918,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // GATE THREAD: UI edits decoupled from physics -- tick rate idle vs hammered (async) vs old sync path.
+    if (qEnvironmentVariableIntValue("KRS_THREAD_SELFTEST") != 0) {
+        std::printf("\n================= KRS_THREAD_SELFTEST =================\n");
+        const bool ok = krs::nodes::runThreadGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
 
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
@@ -1031,6 +1044,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE OWNERSHIP (node command sole joint driver, FK<1e-4; no graph->rest; switch-robust)", krs::nodes::runOwnershipGate() },
             { "GATE PID (PID node closes a plant onto a step vs independent reference; P-only retains offset)", krs::nodes::runPidGate() },
             { "GATE FILTER (Kalman/low-pass/moving-average each vs independent reference + neg-ctrl)", krs::nodes::runFilterGate() },
+            { "GATE THREAD (async UI edits keep tick rate; old synchronous path stalls it)", krs::nodes::runThreadGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
