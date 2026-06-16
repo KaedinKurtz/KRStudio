@@ -2253,3 +2253,47 @@ until you zoom ALL the way out, then they paint. TWO causes, not one.
   re-evaluates. Static nodes override needsExecutionControls()->false (a constant must always emit; no
   Triggered footgun; smaller). GATE STATIC-CONST: 6/6 + a deferred-path test; matrix/quat/Eigen deferred.
 Bench 60/60 -> 62/62.
+
+## §AR SYNTHETIC SENSOR PIPELINE -- architecture (2026-06-16, recon before coding)
+A self-contained, headlessly-gateable module: src/Sensors/*.cpp + include/SensorHeaders/*.hpp (CMake glob
+SENSOR_SOURCES + include dir added). Distributional/statistical fidelity (variance curves, conservation,
+reprojection error) -- NOT pixels. Reuses ImuDataPoint/ImuCalibration (components.hpp), Eigen+GLM, the
+env-trigger + KRS_OVERNIGHT_BENCH gate harness. No global param registry exists -> the SensorProfile IS the
+provenance-tagged param substrate (data separate from model code, per 0.1).
+
+### Three layers (generated in causal order)
+- L1 TRUE WORLD: clean ground truth. Physics/interaction act on this. Sensors never read it directly.
+- L2 RECONSTRUCTION UNCERTAINTY (world-space, baked, static per scene): a GPIS (mu, sigma^2) field = L1
+  corrupted by the sensor SPATIAL error model (Phase-2 depth structured error integrated over a recon). The
+  robot's BELIEF reads this. High sigma where poorly observed; holes where depth holes occur.
+- L3 LIVE SENSOR NOISE (camera-space, per-frame, fresh): shot->read->quantize (RGB) / structured depth noise,
+  applied at render time from the current viewpoint onto the L2 belief surface.
+- SHARED MATERIAL FIELD (the CORRELATION requirement): L2 sigma and L3 dropout are BOTH conditioned on the
+  same per-surface material field (reflectivity/specularity, angle, range) -- a black/specular patch is BOTH
+  a recon hole (L2 high sigma) AND a live dropout (L3). Not independent draws. MaterialSample is the shared
+  cause both layers consume.
+- Composable + toggleable: a SceneConfig declares active layers (L1-only / L1+L3 / all three).
+
+### Module map (built phase by phase, each gated)
+- SensorProfile.hpp -- Param<T>{value, Provenance(datasheet|second_source|defaulted_pending_calibration)};
+  D456 datasheet numbers + tagged defaults for RGB/depth/IMU. The substrate the model code consumes.
+- Stats.{hpp,cpp} -- mean/variance, variance-vs-signal slope (linear fit), histogram, RMS-vs-range fit,
+  Allan variance, hole rate, autocorrelation. Self-tested on analytic inputs.
+- CameraModel.{hpp,cpp} -- pinhole K (from focal length+sensor) + Brown-Conrady (k1,k2,k3,p1,p2); project +
+  round-trip.
+- Layer3Noise -- RGB shot(Poisson, signal-dependent) -> read(Gaussian, signal-independent) -> quantize.
+- DepthModel -- stereo geometry (baseline 95mm, depth-FOV(Z), invalid-left-band, per-res min-Z) + STRUCTURED
+  error: quadratic(~Z^2) range, material-conditioned holes, edge flying pixels, IR-speckle.
+- ImuModel -- STATEFUL: white(noise density)+bias instability(1st-order Gauss-Markov)+rate random walk+
+  scale/axis-misalignment+temp bias; state carried frame-to-frame.
+- Layer2Gpis -- the (mu,sigma^2) field from L1 + depth spatial error + the shared material field.
+- Composition + TransferHarness.
+### Gate plan (each = measured number + the NAIVE model as the FAILING neg-control)
+GATE 0 (harness self-test), INTRINSICS (<0.5px; neg pinhole-no-distortion), NOISE-STATS (Poisson slope; neg
+fixed-Gaussian), DEPTH-STRUCT (Z^2 fit + holes + flying pixels; neg clean+Gaussian), IMU-ALLAN (white slope
++ bias floor + drift; neg per-sample-Gaussian), L2-UNCERTAINTY (sigma contrast + hole co-location; neg
+uniform-sigma), COMPOSE (true-vs-belief divergence + L2/L3 material correlation; neg independent-draw), E2E
+(in-context + conservation), REAL-TRANSFER. HONESTY: every gate above is INTERNAL-CONSISTENCY or
+CONSERVATION and fully checkable tonight; the REAL-TRANSFER gate needs a real D456 capture (not available)
+-> the transfer-validation harness is BUILT but gated only vs a SECOND SYNTHETIC instance, labeled
+"self-consistent, NOT validated against real hardware -- awaiting operator capture." Never claim transfer.
