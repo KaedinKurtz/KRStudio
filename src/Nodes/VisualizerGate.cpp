@@ -99,12 +99,15 @@ bool runVisGate()
                 dn.recomputeAndPropagate();                       // no Value set
                 const std::string d0 = outStr(*nn, "Display");
                 const double before = ln->value();
+                if (auto* cdcn = findCtl(bn, "Decimals")) drive(cdcn, 2);
                 if (auto* cvn = findCtl(bn, "Value")) drive(cvn, 5.0);
                 dn.recomputeAndPropagate();
                 const double after = ln->value();
-                negOk = d0.empty() && std::abs(before) < 1e-9 && std::abs(after - 5.0) < 0.5;
-                printf("[vis]   NEG-CTRL readout: no-input display=\"%s\" lcd=%.3f -> Value=5 -> lcd=%.3f  %s\n",
-                       d0.c_str(), before, after, negOk ? "PASS" : "FAIL!");
+                const std::string dAfter = outStr(*nn, "Display");
+                // disconnected -> empty display + LCD at default 0; connected -> exactly 5.00 (tight).
+                negOk = d0.empty() && std::abs(before) < 1e-9 && std::abs(after - 5.0) < 1e-3 && dAfter == "5.00";
+                printf("[vis]   NEG-CTRL readout: no-input display=\"%s\" lcd=%.3f -> Value=5 -> lcd=%.3f display=\"%s\"  %s\n",
+                       d0.c_str(), before, after, dAfter.c_str(), negOk ? "PASS" : "FAIL!");
             }
         } else {
             printf("[vis]   readout: missing widgets (lcd=%p value=%p digits=%p dec=%p)  FAIL\n",

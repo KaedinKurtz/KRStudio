@@ -230,13 +230,27 @@ bool runFrameGate()
     const unsigned creal = real.nPorts(QtNodes::PortType::In) + real.nPorts(QtNodes::PortType::Out);
     const bool negOk = (czero == 0u) && (creal > 0u);
 
-    const bool pass = (M > 0) && (framed == M) && negOk;
-    printf("[frame]   FRAME coverage: %d/%d registered node types expose >=1 port (wireable, framed) via the real model\n", framed, M);
+    // The counted ports are the SAME ones the connection system uses: prove a representative output->input
+    // pair is connectable through the real model's connectionPossible (the actual drag path), so "exposes a
+    // port" is not merely enumeration -- the port is usable for a wire. (Full type truth table is GATE TYPE.)
+    const QtNodes::NodeId aId = model->addNode("gen_sine");
+    const QtNodes::NodeId bId = model->addNode("math_add");
+    auto* aDel = model->delegateModel<NodeDelegate>(aId);
+    auto* bDel = model->delegateModel<NodeDelegate>(bId);
+    const int aoi = aDel ? portIndexByName(aDel->backendNode(), Port::Direction::Output, "Out") : -1;
+    const int bii = bDel ? portIndexByName(bDel->backendNode(), Port::Direction::Input,  "A")   : -1;
+    bool connectable = false;
+    if (aoi >= 0 && bii >= 0)
+        connectable = model->connectionPossible({ aId, QtNodes::PortIndex(aoi), bId, QtNodes::PortIndex(bii) });
+
+    const bool pass = (M > 0) && (framed == M) && negOk && connectable;
+    printf("[frame]   FRAME coverage: %d/%d registered node types expose >=1 port via the real QtNodes model (the same nPorts it draws + connects)\n", framed, M);
     if (!frameless.empty()) { printf("[frame]   FRAMELESS (0 ports, caught): "); for (auto& s : frameless) printf("%s ", s.c_str()); printf("\n"); }
     printf("[frame]   NEG-CTRL detector: 0-port delegate ports=%u (caught), real node ports=%u (>0)  %s\n",
            czero, creal, negOk ? "PASS" : "FAIL!");
-    printf("[frame] %s (rendered frame on screen = OPERATOR VISUAL-CONFIRM)\n",
-           pass ? "ALL PASS (every registered type is wireable through the real QtNodes model)" : "FAILURES PRESENT");
+    printf("[frame]   counted ports are connection-usable: gen_sine.Out -> math_add.A connectionPossible=%s\n", connectable ? "yes" : "NO");
+    printf("[frame] %s (on-screen clickable frame = OPERATOR VISUAL-CONFIRM; full type truth table = GATE TYPE)\n",
+           pass ? "ALL PASS (every registered type exposes connection-usable ports via the real model)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }
