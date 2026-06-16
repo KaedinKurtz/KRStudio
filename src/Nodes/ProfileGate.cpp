@@ -11,7 +11,12 @@
 #include "NodeFactory.hpp"
 #include "NodeEditorGate.hpp"
 #include "EvalEngine.hpp"
+#include "RobotGraph.hpp"
 #include "CustomDataFlowScene.hpp"
+#include "Scene.hpp"
+#include "SimulationController.hpp"
+#include "FanucArticulation.hpp"
+#include "ArticulationSpec.hpp"
 
 #include <QtNodes/DataFlowGraphModel>
 #include <QtNodes/BasicGraphicsScene>
@@ -22,11 +27,14 @@
 #include <QWidget>
 #include <QImage>
 #include <QPainter>
+#include <QThread>
 
 #include <cstdio>
 #include <chrono>
 #include <vector>
 #include <string>
+#include <any>
+#include <cmath>
 
 namespace krs::nodes {
 
@@ -233,6 +241,74 @@ bool runPerfGate()
         return std::chrono::duration<double, std::milli>(clock::now() - t0).count() / reps;
     };
 
+    // CORRECTNESS first: the quiet eval must compute the SAME result as the cascade -- it is the real eval,
+    // not a shortcut that skips work. math_add(2,3)=5 -> math_multiply(*,4)=20 via a wired edge.
+    auto chainResult = [&](bool useQuiet) -> double {
+        auto model = makeNodeGraphModel();
+        const auto a = model->addNode("math_add");
+        const auto m = model->addNode("math_multiply");
+        auto* da = model->delegateModel<NodeDelegate>(a);
+        auto* dm = model->delegateModel<NodeDelegate>(m);
+        da->backendNode()->setPortLiteral<float>("A", 2.0f);
+        da->backendNode()->setPortLiteral<float>("B", 3.0f);
+        dm->backendNode()->setPortLiteral<float>("B", 4.0f);
+        const int oi = portIndexByName(da->backendNode(), Port::Direction::Output, "Result");
+        const int ii = portIndexByName(dm->backendNode(), Port::Direction::Input, "A");
+        model->addConnection({ a, QtNodes::PortIndex(oi), m, QtNodes::PortIndex(ii) });
+        if (useQuiet) evaluateGraphQuiet(*model); else da->recomputeAndPropagate();
+        for (const auto& p : dm->backendNode()->getPorts())
+            if (p.direction == Port::Direction::Output && p.name == "Result" && p.packet.has_value()) {
+                try { return double(std::any_cast<float>(p.packet->data)); } catch (...) {}
+                try { return std::any_cast<double>(p.packet->data); } catch (...) {}
+            }
+        return std::nan("");
+    };
+    const double rOld = chainResult(false), rNew = chainResult(true);
+    const bool correctChain = std::abs(rOld - 20.0) < 1e-4 && std::abs(rNew - 20.0) < 1e-4;
+
+    // DIAMOND/FAN-OUT correctness (a linear chain has only one topo order; this needs the right one):
+    // add(2,3)=5 -> mul(*,2)=10 AND sub(*,1)=4 -> add2(10,4)=14.
+    double rDiamond = std::nan("");
+    {
+        auto model = makeNodeGraphModel();
+        const auto a = model->addNode("math_add"), m = model->addNode("math_multiply"),
+                   s = model->addNode("math_subtract"), a2 = model->addNode("math_add");
+        auto bk = [&](QtNodes::NodeId id) { return model->delegateModel<NodeDelegate>(id)->backendNode(); };
+        bk(a)->setPortLiteral<float>("A", 2.0f); bk(a)->setPortLiteral<float>("B", 3.0f);
+        bk(m)->setPortLiteral<float>("B", 2.0f); bk(s)->setPortLiteral<float>("B", 1.0f);
+        auto conn = [&](QtNodes::NodeId o, const char* op, QtNodes::NodeId in, const char* ip) {
+            model->addConnection({ o, QtNodes::PortIndex(portIndexByName(bk(o), Port::Direction::Output, op)),
+                                   in, QtNodes::PortIndex(portIndexByName(bk(in), Port::Direction::Input, ip)) });
+        };
+        conn(a, "Result", m, "A"); conn(a, "Result", s, "A");        // fan-out
+        conn(m, "Result", a2, "A"); conn(s, "Result", a2, "B");      // join
+        evaluateGraphQuiet(*model);
+        for (const auto& p : bk(a2)->getPorts())
+            if (p.direction == Port::Direction::Output && p.name == "Result" && p.packet.has_value())
+                { try { rDiamond = double(std::any_cast<float>(p.packet->data)); } catch (...) {} }
+    }
+    const bool correctDiamond = std::abs(rDiamond - 14.0) < 1e-4;
+
+    // LIVELIHOOD: the APP's eval path (evaluateGraphQuiet, NOT the gates' recomputeAndPropagate) actually
+    // drives the live robot through the boot graph (time->sine->drive) + the command-bus bridge.
+    bool robotDriven = false;
+    {
+        Scene scene; SimulationController sim(&scene);
+        sim.setRobotArticulationSpec(krs::fanuc::canonicalSpec()); sim.play(); sim.setSceneGravity(0, 0, 0);
+        if (sim.articDofCount() == 4) {
+            auto model = makeNodeGraphModel();
+            spawnDefaultRobotGraph(*model, &scene, 0, 0.8, 0.5);
+            double maxAbs = 0.0;
+            for (int i = 0; i < 60; ++i) {
+                evaluateGraphQuiet(*model); sim.tick(); QThread::msleep(8);
+                maxAbs = std::max(maxAbs, std::abs(double(sim.articJointPositions()[0])));
+            }
+            robotDriven = maxAbs > 0.05;       // the joint actually moved under the quiet-eval app path
+        }
+        sim.stop();
+    }
+    const bool correct = correctChain && correctDiamond && robotDriven;
+
     const int Ns[] = { 5, 15, 30 };
     double oldMs[3], newMs[3];
     for (int i = 0; i < 3; ++i) { oldMs[i] = timeOld(Ns[i]); newMs[i] = timeNew(Ns[i]); }
@@ -246,7 +322,9 @@ bool runPerfGate()
     //     quiet eval stays bounded. This is the bug + the neg-ctrl.
     const bool cascadeGrows = oldMs[2] > 3.0 * oldMs[0];
 
-    const bool pass = quietBounded && cascadeCostly && cascadeGrows;
+    const bool pass = correct && quietBounded && cascadeCostly && cascadeGrows;
+    printf("[perf]   CORRECTNESS chain add(2,3)*4: old=%.2f new=%.2f (want 20) %s; diamond=%.2f (want 14) %s; live robot driven by quiet eval=%s\n",
+           rOld, rNew, correctChain ? "ok" : "FAIL", rDiamond, correctDiamond ? "ok" : "FAIL", robotDriven ? "yes" : "NO");
     for (int i = 0; i < 3; ++i)
         printf("[perf]   N=%2d : quiet eval = %7.4f ms   old scene-cascade = %7.4f ms   (cascade %.1fx)\n",
                Ns[i], newMs[i], oldMs[i], oldMs[i] / std::max(newMs[i], 1e-6));
@@ -282,12 +360,38 @@ bool runRateGate()
     const bool uiCappedFast = fastUiHz <= 90.0;                     // UI stays ~60Hz even at eval=20kHz
     const bool negReproduces = singleUiHz > 1000.0;                // single-rate -> UI at kHz (the bad path)
 
-    const bool pass = evalRateChanges && uiCappedSlow && uiCappedFast && negReproduces;
+    // REAL-FUNCTION decouple proof (not a toy): evaluateGraphQuiet must NOT push to widgets -- the gauge's
+    // tagged property stays put across 500 quiet evals; only refreshGraphUi (the capped UI tick) pushes it.
+    bool evalDoesntRepaint = false, uiDoesRepaint = false;
+    {
+        auto model = makeNodeGraphModel();
+        const auto gid = model->addNode("viz_dial_gauge");
+        auto* gd = model->delegateModel<NodeDelegate>(gid);
+        Node* gn = gd ? gd->backendNode() : nullptr;
+        QWidget* body = gn ? gd->embeddedWidget() : nullptr;
+        QWidget* gauge = nullptr;
+        if (body) for (QWidget* w : body->findChildren<QWidget*>())
+            if (w->property("krs_gauge_norm").isValid()) { gauge = w; break; }
+        if (gn && gauge) {
+            gn->setPortLiteral<float>("Value", 7.0f); gn->setPortLiteral<float>("Min", 0.0f); gn->setPortLiteral<float>("Max", 10.0f);
+            const double before = gauge->property("krs_gauge_norm").toDouble();
+            for (int i = 0; i < 500; ++i) evaluateGraphQuiet(*model);   // many evals: compute runs, widget NOT pushed
+            const double afterEval = gauge->property("krs_gauge_norm").toDouble();
+            refreshGraphUi(*model);                                     // the capped UI tick pushes
+            const double afterUi = gauge->property("krs_gauge_norm").toDouble();
+            evalDoesntRepaint = std::abs(afterEval - before) < 1e-9;    // 500 quiet evals did NOT touch the widget
+            uiDoesRepaint = std::abs(afterUi - 0.7) < 1e-4;            // refreshGraphUi pushed 7/10 = 0.7
+        }
+    }
+
+    const bool pass = evalRateChanges && uiCappedSlow && uiCappedFast && negReproduces && evalDoesntRepaint && uiDoesRepaint;
     printf("[rate]   eval=30Hz   -> measured eval %.0f Hz, UI %.0f Hz\n", slowEvalHz, slowUiHz);
     printf("[rate]   eval=20kHz  -> measured eval %.0f Hz, UI %.0f Hz (capped)\n", fastEvalHz, fastUiHz);
     printf("[rate]   eval-rate changes eval freq=%s; UI capped at both rates=%s\n",
            evalRateChanges ? "yes" : "NO", (uiCappedSlow && uiCappedFast) ? "yes" : "NO");
     printf("[rate]   NEG-CTRL single-rate (UI==eval) -> UI %.0f Hz (kHz repaints): %s\n", singleUiHz, negReproduces ? "PASS" : "FAIL!");
+    printf("[rate]   REAL decouple: 500 quiet evals did NOT push the gauge widget=%s; refreshGraphUi pushed it=%s\n",
+           evalDoesntRepaint ? "yes" : "NO", uiDoesRepaint ? "yes" : "NO");
     printf("[rate] %s\n", pass ? "ALL PASS (eval rate configurable; UI repaint capped independently; single-rate would repaint at kHz)"
                                : "FAILURES PRESENT");
     fflush(stdout);

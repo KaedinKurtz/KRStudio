@@ -104,8 +104,8 @@ private:
     }
     bool DialGaugeNode::refreshUi() {
         if (!m_have || !m_gauge) return false;
-        if (m_norm == m_lastNorm && m_value == m_lastValue) return false;   // unchanged -> no repaint
-        m_lastNorm = m_norm; m_lastValue = m_value;
+        if (m_pushed && m_norm == m_lastNorm && m_value == m_lastValue) return false;   // unchanged -> no repaint
+        m_lastNorm = m_norm; m_lastValue = m_value; m_pushed = true;
         static_cast<GaugeWidget*>(m_gauge.data())->setReading(m_norm, m_value);
         return true;
     }
@@ -232,8 +232,8 @@ void NumericReadoutNode::compute() {
 }
 bool NumericReadoutNode::refreshUi() {
     if (!m_have || !m_lcd) return false;
-    if (m_text == m_lastText && m_digits == m_lastDigits) return false;   // unchanged -> no repaint
-    m_lastText = m_text; m_lastDigits = m_digits;
+    if (m_pushed && m_text == m_lastText && m_digits == m_lastDigits) return false;   // unchanged -> no repaint
+    m_lastText = m_text; m_lastDigits = m_digits; m_pushed = true;
     m_lcd->setDigitCount(m_digits);
     m_lcd->display(QString::fromStdString(m_text));
     return true;
