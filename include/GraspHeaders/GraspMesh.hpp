@@ -11,8 +11,11 @@ struct MeshMetrics {
     glm::dvec3 aabbMin{0}, aabbMax{0}, extent{0};
     double longest{0}, shortest{0};
     double volume{0};         // |enclosed volume|, m^3 (signed-tet sum)
-    double signedVolume{0};   // signed (negative => inward-facing winding)
+    double signedVolume{0};   // signed (negative => inward-facing/inverted winding)
     glm::dvec3 centroid{0};   // volume-weighted centroid (= CoM if uniform density)
+    double boundaryFrac{1};   // fraction of unique edges used by exactly 1 triangle (open boundary)
+    double nonManifoldFrac{1};// fraction of unique edges used by > 2 triangles (non-manifold)
+    bool watertight{false};   // boundaryFrac & nonManifoldFrac < 2% AND signedVolume > 0 (cookable + correct winding)
     bool finite{false};       // all positions/normals finite AND volume finite & > 0
     int nVerts{0}, nTris{0};
 };

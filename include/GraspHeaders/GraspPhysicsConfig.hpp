@@ -27,6 +27,9 @@ struct GraspPhysicsConfig {
     float fixedDt      = 1.0f / 240.0f;// fixed PhysX step (engine standard; bit-identical re-runs)
 };
 
+// All-float, no padding -> the byte hash covers every locked value with no indeterminate padding bytes.
+static_assert(sizeof(GraspPhysicsConfig) == 10 * sizeof(float), "GraspPhysicsConfig must stay packed floats so lockedConfigHash() is reproducible");
+
 // The single source of truth. constexpr -> baked at compile time; an edit changes lockedConfigHash().
 inline constexpr GraspPhysicsConfig kLockedPhysics{};
 

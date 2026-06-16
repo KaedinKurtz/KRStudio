@@ -28,43 +28,72 @@ bool runGraspImportGate() {
     int pass = 0; const int total = int(cat.size());
 
     for (const YcbObject& o : cat) {
-        bool loaded = false, sOk = false, mOk = false, nOk = false;
-        double longest = 0, massKg = 0; int nv = 0, nt = 0;
+        bool loaded = false, sOk = false, mOk = false, nOk = false, wOk = false;
+        double longest = 0, massKg = 0, bfrac = 0; int nv = 0;
         try {
             const RenderableMeshComponent mesh = MeshUtils::loadMeshFromFile(o.meshPath());
             loaded = !mesh.vertices.empty() && !mesh.indices.empty();
             const MeshMetrics m = computeMetrics(mesh);
-            longest = m.longest; nv = m.nVerts; nt = m.nTris;
+            longest = m.longest; nv = m.nVerts; bfrac = m.boundaryFrac;
             nOk = m.finite;                                  // positions/normals finite AND volume > 0
-            massKg = density * m.volume;                     // stated density x enclosed volume
+            wOk = m.watertight;                              // closed + consistent winding (cookable; correct sign)
+            massKg = density * m.volume;                     // raw-mesh upper-bound mass (Phase-2 re-asserts vs live getMass)
             mOk = std::isfinite(massKg) && massKg >= 0.005 && massKg <= 5.0;
             sOk = scalePasses(m, o);
         } catch (const std::exception& e) {
             std::printf("  %-20s LOAD-FAILED: %s\n", o.id.c_str(), e.what());
         }
-        const bool ok = loaded && sOk && mOk && nOk;
+        const bool ok = loaded && sOk && mOk && nOk && wOk;
         if (ok) ++pass;
-        std::printf("  %-20s n=%6d tris=%6d longest=%.4f m mass=%.3f kg [scale %s mass %s nan-free %s] -> %s\n",
-                    o.id.c_str(), nv, nt, longest, massKg,
-                    sOk ? "ok" : "BAD", mOk ? "ok" : "BAD", nOk ? "ok" : "BAD", ok ? "ok" : "FAIL");
+        std::printf("  %-20s n=%6d longest=%.4f m mass=%.3f kg bdry=%.2f%% [scale %s mass %s nan %s watertight %s] -> %s\n",
+                    o.id.c_str(), nv, longest, massKg, 100.0 * bfrac,
+                    sOk ? "ok" : "BAD", mOk ? "ok" : "BAD", nOk ? "ok" : "BAD", wOk ? "ok" : "BAD", ok ? "ok" : "FAIL");
     }
 
-    // ---- NEG-CTRL: a x1000 (mm-as-meters) copy must be REJECTED by the scale check (the band has teeth). ----
-    bool negRejects = false; double negLongest = 0;
+    // ---- NEG-CTRLs: prove the scale check has teeth in BOTH directions and via the tight anchor path. ----
+    auto loadObj = [&](const char* id) -> RenderableMeshComponent {
+        for (const auto& o : cat) if (o.id == id) return MeshUtils::loadMeshFromFile(o.meshPath());
+        return MeshUtils::loadMeshFromFile(cat.front().meshPath());
+    };
+    bool negBig = false, negSmall = false, negAnchor = false;
+    double bigL = 0, smallL = 0, anchorL = 0;
     try {
-        const RenderableMeshComponent base = MeshUtils::loadMeshFromFile(cat.front().meshPath());
-        const RenderableMeshComponent big = scaledCopy(base, 1000.0);
-        const MeshMetrics m = computeMetrics(big);
-        negLongest = m.longest;
-        negRejects = !(m.longest >= kScaleBandMin && m.longest <= kScaleBandMax);
+        const RenderableMeshComponent base = loadObj("003_cracker_box");
+        bigL = computeMetrics(scaledCopy(base, 1000.0)).longest;        // mm-as-meters
+        negBig = !(bigL >= kScaleBandMin && bigL <= kScaleBandMax);
+        smallL = computeMetrics(scaledCopy(base, 0.001)).longest;        // m-as-km (under-scale)
+        negSmall = !(smallL >= kScaleBandMin && smallL <= kScaleBandMax);
+        // anchor-path: bowl x1.5 stays inside the universal band [0.02,0.40] but breaks its tight [0.145,0.175].
+        YcbObject bowl{}; for (const auto& o : cat) if (o.id == "024_bowl") bowl = o;
+        const MeshMetrics mb = computeMetrics(scaledCopy(loadObj("024_bowl"), 1.5));
+        anchorL = mb.longest;
+        negAnchor = (anchorL >= kScaleBandMin && anchorL <= kScaleBandMax) && !scalePasses(mb, bowl);
     } catch (const std::exception& e) {
         std::printf("  NEG-CTRL load-failed: %s\n", e.what());
     }
-    std::printf("  NEG-CTRL : %s x1000 -> longest=%.1f m -> scale check %s\n",
-                cat.front().id.c_str(), negLongest, negRejects ? "REJECTS (ok)" : "accepts (FAIL)");
+    std::printf("  NEG-CTRL : x1000 ->%.1f m %s ; x0.001 ->%.5f m %s ; bowl x1.5 ->%.3f m (in band) anchor %s\n",
+                bigL, negBig ? "REJECT(ok)" : "accept(FAIL)",
+                smallL, negSmall ? "REJECT(ok)" : "accept(FAIL)",
+                anchorL, negAnchor ? "REJECT(ok)" : "accept(FAIL)");
 
-    const bool result = (pass == total) && negRejects;
-    std::printf("[GRASP GATE IMPORT] %d/%d objects valid; neg-ctrl rejects x1000 -> %s\n",
+    // ---- NEG-CTRL (watertight has teeth): a HOLED copy (10% of triangles removed -> open boundary) must be
+    //      rejected by the watertight check, while the intact mesh passed it. ----
+    bool negHole = false; double holeBdry = 0;
+    try {
+        RenderableMeshComponent holed = loadObj("003_cracker_box");
+        const size_t keepTris = (holed.indices.size() / 3) * 9 / 10;   // drop ~10% of triangles
+        holed.indices.resize(keepTris * 3);
+        const MeshMetrics mh = computeMetrics(holed);
+        holeBdry = mh.boundaryFrac;
+        negHole = !mh.watertight && mh.boundaryFrac > 0.01;            // open boundary -> not watertight
+    } catch (const std::exception& e) {
+        std::printf("  NEG-CTRL(hole) load-failed: %s\n", e.what());
+    }
+    std::printf("  NEG-CTRL : holed cracker_box (10%% tris removed) bdry=%.1f%% -> watertight %s\n",
+                100.0 * holeBdry, negHole ? "REJECT(ok)" : "accept(FAIL)");
+
+    const bool result = (pass == total) && negBig && negSmall && negAnchor && negHole;
+    std::printf("[GRASP GATE IMPORT] %d/%d objects valid; neg-ctrls (x1000 / x0.001 / anchor / holed-mesh) reject -> %s\n",
                 pass, total, result ? "PASS" : "FAIL");
     return result;
 }
