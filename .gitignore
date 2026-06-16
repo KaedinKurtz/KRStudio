@@ -72,3 +72,6 @@ run_configure.bat
 # verify/ = overnight probe logs + selftest PNGs. Both pollute status; keep out of the tree.
 external/pinocchio/
 verify/
+
+# YCB object meshes (downloaded via scripts/download_ycb.sh; ~117MB, not committed)
+assets/ycb/
