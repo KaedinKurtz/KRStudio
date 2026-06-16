@@ -30,6 +30,12 @@ double rmsError(const std::vector<double>& a, const std::vector<double>& b) {
     return std::sqrt(s / double(n));
 }
 
+double sum(const std::vector<double>& x) { double s = 0.0; for (double v : x) s += v; return s; }
+
+double conservationResidual(const std::vector<double>& before, const std::vector<double>& after) {
+    return sum(after) - sum(before);
+}
+
 LinFit linearFit(const std::vector<double>& x, const std::vector<double>& y) {
     LinFit f;
     const size_t n = std::min(x.size(), y.size());
@@ -44,7 +50,9 @@ LinFit linearFit(const std::vector<double>& x, const std::vector<double>& y) {
     if (sxx <= 0) return f;
     f.slope = sxy / sxx;
     f.intercept = my - f.slope * mx;
-    f.r2 = (syy > 0) ? (sxy * sxy) / (sxx * syy) : 1.0;
+    // r2 = variance of y explained by x. A flat y (syy==0) is NOT explained by x -> 0, not 1.0
+    // (reporting 1.0 here would mask a degenerate power-fit as a perfect law).
+    f.r2 = (syy > 0) ? (sxy * sxy) / (sxx * syy) : 0.0;
     return f;
 }
 

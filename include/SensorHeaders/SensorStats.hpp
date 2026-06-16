@@ -12,6 +12,10 @@ double variance(const std::vector<double>& x);            // sample variance (Be
 double stddev(const std::vector<double>& x);
 double rms(const std::vector<double>& x);                 // sqrt(mean(x^2))
 double rmsError(const std::vector<double>& a, const std::vector<double>& b);  // sqrt(mean((a-b)^2))
+double sum(const std::vector<double>& x);
+// net imbalance of a conserved quantity between two snapshots (== 0 when conserved; == leak magnitude
+// otherwise). The real instrument later phases call to detect mass/energy leaks in the pipeline.
+double conservationResidual(const std::vector<double>& before, const std::vector<double>& after);
 
 struct LinFit { double slope = 0, intercept = 0, r2 = 0; };
 LinFit linearFit(const std::vector<double>& x, const std::vector<double>& y);   // y = intercept + slope*x
