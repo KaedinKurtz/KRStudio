@@ -16,6 +16,9 @@ struct InertialAxis {
     double biasInstab{0.0};     // Gauss-Markov steady-state std (the Allan floor)
     double biasTau{200.0};      // GM correlation time (s)
     double randomWalk{0.0};     // rate-random-walk density (the +1/2 Allan slope)
+    // toggles (for the gate's impostor controls): white+GM+RW (full), white+RW (no instability), white-only.
+    bool enableGM{true};
+    bool enableRW{true};
     // carried state:
     double biasGM{0.0};
     double biasRW{0.0};

@@ -6,14 +6,22 @@ namespace krs::sensor {
 double InertialAxis::step(double trueVal, std::mt19937_64& rng) {
     const double d = dt();
     std::normal_distribution<double> white(0.0, noiseDensity * std::sqrt(rateHz));
-    // 1st-order Gauss-Markov bias instability (steady-state std == biasInstab).
-    const double phi = std::exp(-d / biasTau);
-    std::normal_distribution<double> gmDrive(0.0, biasInstab * std::sqrt(1.0 - phi * phi));
-    biasGM = phi * biasGM + gmDrive(rng);
-    // rate random walk (integrated white).
-    std::normal_distribution<double> rwDrive(0.0, randomWalk * std::sqrt(d));
-    biasRW += rwDrive(rng);
-    return trueVal + white(rng) + biasGM + biasRW;
+    double out = trueVal + white(rng);
+    if (enableGM) {
+        // 1st-order Gauss-Markov bias instability (steady-state std == biasInstab). This -- not the random
+        // walk -- is the Allan-deviation FLOOR; removing it drops the floor (the gate's GM discriminator).
+        const double phi = std::exp(-d / biasTau);
+        std::normal_distribution<double> gmDrive(0.0, biasInstab * std::sqrt(1.0 - phi * phi));
+        biasGM = phi * biasGM + gmDrive(rng);
+        out += biasGM;
+    }
+    if (enableRW) {
+        // rate random walk (integrated white) -> the +1/2 Allan slope at long tau.
+        std::normal_distribution<double> rwDrive(0.0, randomWalk * std::sqrt(d));
+        biasRW += rwDrive(rng);
+        out += biasRW;
+    }
+    return out;
 }
 
 double InertialAxis::stepWhiteOnly(double trueVal, std::mt19937_64& rng) const {
