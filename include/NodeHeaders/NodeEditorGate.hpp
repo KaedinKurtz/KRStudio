@@ -1,11 +1,21 @@
 #pragma once
 // NodeEditorGate.hpp -- node-editor front-end gate declarations.
 #include <memory>
+#include <QtNodes/Definitions>   // QtNodes::NodeId
 #include "Node.hpp"   // Port::Direction
 
-namespace QtNodes { class DataFlowGraphModel; }
+class QString;
+namespace QtNodes { class DataFlowGraphModel; class AbstractGraphModel; }
 
 namespace krs::nodes {
+
+// The catalog-drop instancing path (shared by DroppableGraphicsView::dropEvent and GATE DRAGDROP): add a
+// node of `typeId` to `model` at the given scene position. Returns InvalidNodeId for an unknown/empty type.
+QtNodes::NodeId instanceDroppedNode(QtNodes::AbstractGraphModel& model, const QString& typeId, double sceneX, double sceneY);
+
+// GATE DRAGDROP (KRS_DRAGDROP_SELFTEST): a catalog drop (mime type-id -> instance) creates the CORRECT node
+// type with its ports + mounted widget at the drop position; an unknown/empty type creates nothing.
+bool runDragDropGate();
 
 // a REAL QtNodes DataFlowGraphModel over the node registry -- the gates use the editor's actual
 // addNode/connectionPossible/addConnection paths through it (shared by TYPE/TIME/CONNECT).

@@ -925,6 +925,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // GATE DRAGDROP: a catalog drop instances the correct typed node with ports+widgets at the drop pos.
+    if (qEnvironmentVariableIntValue("KRS_DRAGDROP_SELFTEST") != 0) {
+        std::printf("\n================= KRS_DRAGDROP_SELFTEST =================\n");
+        const bool ok = krs::nodes::runDragDropGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
 
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
@@ -1045,6 +1052,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE PID (PID node closes a plant onto a step vs independent reference; P-only retains offset)", krs::nodes::runPidGate() },
             { "GATE FILTER (Kalman/low-pass/moving-average each vs independent reference + neg-ctrl)", krs::nodes::runFilterGate() },
             { "GATE THREAD (async UI edits keep tick rate; old synchronous path stalls it)", krs::nodes::runThreadGate() },
+            { "GATE DRAGDROP (catalog drop instances the correct typed node with ports+widgets)", krs::nodes::runDragDropGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

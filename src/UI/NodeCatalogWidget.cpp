@@ -10,9 +10,6 @@
 #include <QLabel>           // Used to create the drag visual
 #include <QPixmap>          // Used for the drag visual
 
-// Store the starting position of a potential drag
-static QPoint startPos;
-
 NodeCatalogWidget::NodeCatalogWidget(QWidget* parent)
     : QWidget(parent)
     , m_searchBar(new QLineEdit(this))
@@ -22,11 +19,11 @@ NodeCatalogWidget::NodeCatalogWidget(QWidget* parent)
 
     m_tree->setHeaderHidden(true);
     m_tree->setRootIsDecorated(false);
-    //
-    // 1. DISABLE the default drag-and-drop. We will handle it ourselves.
-    //
+    // Handle drag-and-drop ourselves: the tree's own DnD is disabled and we filter the viewport's mouse
+    // events (the tree consumes them, so the parent's mouse overrides would never fire).
     m_tree->setDragEnabled(false);
     m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_tree->viewport()->installEventFilter(this);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -40,65 +37,46 @@ NodeCatalogWidget::NodeCatalogWidget(QWidget* parent)
     populateTree();
 }
 
-//
-// 2. Override mouse events to manually control the drag process.
-//
-void NodeCatalogWidget::mousePressEvent(QMouseEvent* event)
+bool NodeCatalogWidget::eventFilter(QObject* obj, QEvent* event)
 {
-    // We only care about the left mouse button to start a drag.
-    if (event->button() == Qt::LeftButton) {
-        startPos = event->pos();
+    if (obj == m_tree->viewport()) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            auto* me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::LeftButton) m_dragStart = me->pos();
+        } else if (event->type() == QEvent::MouseMove) {
+            auto* me = static_cast<QMouseEvent*>(event);
+            if ((me->buttons() & Qt::LeftButton) &&
+                (me->pos() - m_dragStart).manhattanLength() >= QApplication::startDragDistance()) {
+                startNodeDrag(m_dragStart);
+            }
+        }
     }
-    QWidget::mousePressEvent(event);
+    return QWidget::eventFilter(obj, event);   // don't consume: the tree still does selection
 }
 
-void NodeCatalogWidget::mouseMoveEvent(QMouseEvent* event)
+void NodeCatalogWidget::startNodeDrag(const QPoint& viewportPos)
 {
-    // Check if the left button is pressed and if the mouse has moved
-    // far enough to be considered a drag.
-    if (!(event->buttons() & Qt::LeftButton)) {
-        QWidget::mouseMoveEvent(event);
-        return;
-    }
-    if ((event->pos() - startPos).manhattanLength() < QApplication::startDragDistance()) {
-        QWidget::mouseMoveEvent(event);
-        return;
-    }
+    QTreeWidgetItem* item = m_tree->itemAt(viewportPos);     // viewport coords -> item
+    if (!item) return;
+    const QString typeId = item->data(0, Qt::UserRole).toString();
+    if (typeId.isEmpty()) return;                            // a category header, not a node
 
-    // Get the tree item under the cursor.
-    QTreeWidgetItem* item = m_tree->itemAt(startPos - m_tree->pos());
-    if (!item) {
-        return; // Not on an item.
-    }
-
-    // Get the unique ID from the item's data.
-    QString typeId = item->data(0, Qt::UserRole).toString();
-    if (typeId.isEmpty()) {
-        return; // This is a category header, not a draggable node.
-    }
-
-    qDebug() << "Attempting to start drag for typeId:" << typeId;
-    // A. Create the MimeData with the correct typeId.
+    // MimeData carries the node type id the drop handler instances.
     auto* mimeData = new QMimeData();
     mimeData->setText(typeId);
 
-    // B. Create the visual element for the drag (The Answer to your 2nd Question!)
-    QLabel* dragLabel = new QLabel(item->text(0)); // Create a label with the node's name.
-    dragLabel->setAutoFillBackground(true);
-    dragLabel->setFrameShape(QFrame::Panel);
-    dragLabel->setFrameShadow(QFrame::Raised);
-    dragLabel->setMargin(4);
-    QPixmap pixmap = dragLabel->grab(); // Render the label to a pixmap.
-    delete dragLabel; // Clean up the temporary label.
+    // A small drag-preview / ghost: the node's name on a raised panel.
+    QLabel dragLabel(item->text(0));
+    dragLabel.setAutoFillBackground(true);
+    dragLabel.setFrameShape(QFrame::Panel);
+    dragLabel.setFrameShadow(QFrame::Raised);
+    dragLabel.setMargin(4);
+    const QPixmap pixmap = dragLabel.grab();
 
-
-    // 3. Create and execute the QDrag object.
     auto* drag = new QDrag(this);
     drag->setMimeData(mimeData);
-    drag->setPixmap(pixmap); // Set our custom visual.
-    drag->setHotSpot({ pixmap.width() / 2, pixmap.height() / 2 }); // Set cursor to the center of the pixmap.
-
-    // Start the drag!
+    drag->setPixmap(pixmap);
+    drag->setHotSpot({ pixmap.width() / 2, pixmap.height() / 2 });
     drag->exec(Qt::CopyAction);
 }
 
