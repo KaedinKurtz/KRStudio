@@ -974,6 +974,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // GATE STATIC-CONST: constant math nodes have a value field that sets the emitted constant.
+    if (qEnvironmentVariableIntValue("KRS_STATIC_SELFTEST") != 0) {
+        std::printf("\n================= KRS_STATIC_SELFTEST =================\n");
+        const bool ok = krs::nodes::runStaticConstGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
 
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
@@ -1100,6 +1107,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE RATE (eval rate configurable; UI repaint capped independently)", krs::nodes::runRateGate() },
             { "GATE HOVER-INTEGRITY (frame bg + exec control survive hover-enter/leave; no WA_Translucent)", krs::nodes::runHoverIntegrityGate() },
             { "GATE ZOOM-VISIBLE (every node NoCache+no-effect; frame paints at 0.3x/2x terminal zoom)", krs::nodes::runZoomVisibilityGate() },
+            { "GATE STATIC-CONST (constant nodes' value field sets the emitted constant; matrix deferred)", krs::nodes::runStaticConstGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

@@ -90,4 +90,8 @@ bool runHoverIntegrityGate();
 // bounds (0.3x/2x); NEG-CTRL: an un-fixed node carries the overflow-prone DeviceCoordinateCache + effect.
 bool runZoomVisibilityGate();
 
+// GATE STATIC-CONST (KRS_STATIC_SELFTEST): the constant ("static") math nodes have a real value-editor field
+// whose edit sets the emitted constant (scalar/vector/string); NEG-CTRL: matrix constants are field-less.
+bool runStaticConstGate();
+
 } // namespace krs::nodes

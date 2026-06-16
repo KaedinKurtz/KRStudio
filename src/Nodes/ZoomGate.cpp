@@ -77,23 +77,24 @@ bool runZoomVisibilityGate()
         }
     }
 
-    // (2) PIXEL at the terminal-zoom bounds: render the LARGEST nodes isolated at 0.3x and 2.0x and assert
-    //     the frame title bar is painted (the strict, non-overlapped pixel measurement the operator asked for).
+    // (2) PIXEL at the terminal-zoom bounds: render EVERY node type ISOLATED (not the overlapped boot trio)
+    //     at BOTH 0.3x and 2.0x and assert the frame title bar is painted -- the strict, per-node pixel
+    //     measurement the operator asked for ("every node visible at the upper and lower bounds").
     int pix = 0, pixN = 0;
-    const char* bigNodes[] = { "gen_sine", "control_pid", "ctrl_goal_knob", "viz_dial_gauge", "math_add" };
+    std::vector<std::string> pixFail;
     const double zooms[] = { 0.3, 2.0 };
-    for (const char* t : bigNodes)
+    for (const auto& kv : NodeFactory::instance().getRegisteredNodeTypes()) {
+        auto m = makeNodeGraphModel();
+        CustomDataFlowScene sc(*m);
+        const QtNodes::NodeId id = m->addNode(QString::fromStdString(kv.first));
+        auto* go = id != QtNodes::InvalidNodeId ? sc.nodeGraphicsObject(id) : nullptr;
         for (double z : zooms) {
             ++pixN;
-            auto m = makeNodeGraphModel();
-            CustomDataFlowScene sc(*m);
-            const QtNodes::NodeId id = m->addNode(t);
-            auto* go = sc.nodeGraphicsObject(id);
             double frac = 0.0;
-            const bool okPx = go && frameTitlePainted(sc, go, z, frac);
-            if (okPx) ++pix;
-            printf("[zoom]   %-16s @ %.1fx zoom -> title painted %.0f%%  %s\n", t, z, frac * 100.0, okPx ? "ok" : "FAIL");
+            if (go && frameTitlePainted(sc, go, z, frac)) ++pix;
+            else pixFail.push_back(kv.first + "@" + (z < 1.0 ? "0.3x" : "2x"));
         }
+    }
 
     // NEG-CTRL: an UN-FIXED node (a base DataFlowGraphicsScene, the QtNodes default) carries the
     // overflow-prone DeviceCoordinateCache + a drop-shadow effect -- exactly the Bug-A condition the fix removes.
@@ -113,7 +114,8 @@ bool runZoomVisibilityGate()
     const bool pass = (M > 0) && (guaranteed == M) && (pix == pixN) && negOk;
     printf("[zoom]   GUARANTEE: %d/%d node types are NoCache + no offscreen effect (no device pixmap to overflow)\n", guaranteed, M);
     if (!bad.empty()) { printf("[zoom]   NOT GUARANTEED: "); for (auto& s : bad) printf("%s ", s.c_str()); printf("\n"); }
-    printf("[zoom]   PIXEL: %d/%d (largest nodes' frame title painted at both terminal-zoom bounds 0.3x and 2.0x)\n", pix, pixN);
+    printf("[zoom]   PIXEL: %d/%d (EVERY node's frame title painted at both terminal-zoom bounds 0.3x and 2.0x)\n", pix, pixN);
+    if (!pixFail.empty()) { printf("[zoom]   PIXEL FAILURES: "); for (auto& s : pixFail) printf("%s ", s.c_str()); printf("\n"); }
     printf("[zoom] %s (live on-screen zoom = OPERATOR VISUAL-CONFIRM)\n",
            pass ? "ALL PASS (every node renders its frame directly at any zoom; no offscreen-pixmap overflow)" : "FAILURES PRESENT");
     fflush(stdout);
