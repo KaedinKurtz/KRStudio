@@ -2136,3 +2136,45 @@ real but display-only. Full A/B/C table lands in the CLASSIFY commit.
   atomics. **DESIGN**: post dial edits to a lock-free/std::mutex command queue drained at the top of
   `tick()`, so the UI handler returns immediately. GATE THREAD measures tick rate idle vs under hammering;
   neg-ctrl is the old synchronous path.
+
+## §AN NODE-ECOSYSTEM SPRINT -- gates + node classification (2026-06-15)
+Bench 48/48 -> **56/56**. New gates: FRAME, VIS, DEMO-GRAPH, OWNERSHIP, PID, FILTER, THREAD, DRAGDROP.
+
+### SPINE: the default demo IS a real node graph (one joint writer)
+The hardcoded kinematic demo sweep (SimulationController::tick) is GONE. The FANUC is driven by the default
+editor graph `time_source -> gen_sine -> physics_articulation_drive` (spawnDefaultRobotGraph, the same helper
+MainWindow + the gates use). A registry-ctx ArticulationCommandComponent is the bus; applyArticulationCommands()
+reads it each tick. No second writer -> no conflict. GATE DEMO-GRAPH: editing the canvas sine's amp DIAL
+changes the live robot's motion (follows the new amp, not the old). GATE OWNERSHIP: joint==node command
+(FK<1e-4), no-graph->rest neg-ctrl, rapid DOF-switch robust.
+
+### FRAME / VIS / control library / THREAD / DRAGDROP
+- FRAME: 127/127 registered types expose connection-usable ports via the real model (clickable frame =
+  visual-confirm). VIS: 7-seg readout (digits/decimals) + arc gauge displayed value matches input.
+- Control library: control_pid (vs reference step response, P-only retains offset), filter_kalman_1d (vs
+  reference recursion + RMSE 0.66->0.016), signal_lowpass (vs EMA), filter_moving_average (vs boxcar).
+- THREAD: NodeEditQueue defers+coalesces UI edits, drained once/frame; async keeps 96% of tick rate, old
+  synchronous path drops to 48%.
+- DRAGDROP: catalog event-filter drag start + shared instanceDroppedNode; a drop instances the correct
+  typed node with ports+widgets (6/6).
+
+### Node-draft classification (A = implementable+gated this/prior sprint, B = needs ML/subsystem -> kept as
+###  explicit ungated stub or deferred, C = doesn't fit the control canvas -> removed)
+- **A (functional + gated):** math_* (arithmetic/trig/compare/calculus), linalg_* (vector/matrix/solvers/
+  RK4), control_* (controllability/observability/pole-placement/LQR), statespace_* (LTI/sim/regulator/
+  analysis/monitor), signal_* (lowpass/dot/transform/waveform), gen_sine/square/triangle/saw, math_affine,
+  util_switch/switch_case/latch/delay/reroute, ai_set/get_blackboard, ai_bt_sequence/selector, time_source,
+  ctrl_goal_knob/vel_knob, mqtt_pub/sub, world_scene_context, physics_get_velocity/apply_force/
+  set_velocity/check_overlap/set_joint_angle, kinematics_revolute_link_fk, sensor_imu_unpacker, AND the
+  sprint's NEW: control_pid, filter_kalman_1d, filter_moving_average, viz_numeric_readout, viz_dial_gauge
+  (now widget-backed), physics_articulation_drive. Gated by NODE-LIB/PID/FILTER/VIS/FRAME/INPUT-BIND/etc.
+- **B (real project -- needs a subsystem; kept as labeled stub / deferred, NOT claimed functional):**
+  perception_downsample/remove_outliers/segment_plane/to_grayscale/detect_edges (PCL/OpenCV),
+  sensor_pose/sensor_float (data-manager hookup), ai_run_inference (trained model), ai_bt_action (BT
+  runtime), util_script (scripting backend), the matrix control_kalman_filter + EKF/UKF (too complex to
+  gate this sprint -> the gated estimator is the scalar filter_kalman_1d), static_* constants (functional
+  source but lack a value-editor widget -> deferred enhancement), interaction_* draw/raycast/key/print
+  (editor/debug tooling, needs the interaction subsystem).
+- **C (doesn't fit a wireable control canvas -> REMOVED):** util_comment (a 0-port "non-functional box"
+  that rendered as the screenshot's frameless bare panel).
+RULE held: a node ships as functional ONLY if gated; B nodes are reported as stubs/deferred, never as done.
