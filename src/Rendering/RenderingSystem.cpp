@@ -898,6 +898,20 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Control-library GATE PID: PID node closes a plant onto a step, matching an independent reference.
+    if (qEnvironmentVariableIntValue("KRS_PID_SELFTEST") != 0) {
+        std::printf("\n================= KRS_PID_SELFTEST =================\n");
+        const bool ok = krs::nodes::runPidGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // Control-library GATE FILTER: Kalman/low-pass/moving-average each vs an independent reference.
+    if (qEnvironmentVariableIntValue("KRS_FILTER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FILTER_SELFTEST =================\n");
+        const bool ok = krs::nodes::runFilterGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
 
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
@@ -1015,6 +1029,8 @@ void RenderingSystem::initializeSharedResources()
             { "GATE VIS (readout/gauge displayed value matches input; digits/decimals; disconnected inert)", krs::nodes::runVisGate() },
             { "GATE DEMO-GRAPH (editing the canvas sine changes the live robot; boot graph IS the driver)", krs::nodes::runDemoGraphGate() },
             { "GATE OWNERSHIP (node command sole joint driver, FK<1e-4; no graph->rest; switch-robust)", krs::nodes::runOwnershipGate() },
+            { "GATE PID (PID node closes a plant onto a step vs independent reference; P-only retains offset)", krs::nodes::runPidGate() },
+            { "GATE FILTER (Kalman/low-pass/moving-average each vs independent reference + neg-ctrl)", krs::nodes::runFilterGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

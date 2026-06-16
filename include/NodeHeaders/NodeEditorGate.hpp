@@ -42,4 +42,12 @@ bool runDemoGraphGate();
 // graph the joint stays at rest (no second writer); rapid DOF-switching never crashes/corrupts.
 bool runOwnershipGate();
 
+// GATE PID (KRS_PID_SELFTEST): the PID node closes a 1st-order plant onto a step, matching an independent
+// reference PID+plant simulation to <tol and removing steady-state error; a P-only loop retains an offset.
+bool runPidGate();
+
+// GATE FILTER (KRS_FILTER_SELFTEST): the scalar Kalman / low-pass / moving-average nodes each match an
+// independent reference (and a meaningful negative control); no unverified filter ships.
+bool runFilterGate();
+
 } // namespace krs::nodes
