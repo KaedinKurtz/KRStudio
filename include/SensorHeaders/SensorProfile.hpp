@@ -66,10 +66,13 @@ struct DepthProfile {
     Param<double> minZmm_848 {350.0,Provenance::Datasheet, "min-Z @848x480"};
     Param<double> maxZm      {6.0,  Provenance::Datasheet, "range >6m; using 6m"};
     Param<double> distortMaxPct {1.5, Provenance::Datasheet};
-    // structured error model -- NOT in the datasheet (the differentiator). Quadratic depth noise:
-    // sigmaZ(mm) = depthNoiseCoeff * Z(m)^2 (the defining stereo characteristic, ~ subpixel * Z^2 / (f*b)).
-    Param<double> depthNoiseCoeff {2.5, Provenance::DefaultedPendingCalibration, "sigmaZ_mm = coeff * Z_m^2"};
-    Param<double> subpixelErr     {0.1, Provenance::DefaultedPendingCalibration, "disparity matching error, px"};
+    // structured error model -- NOT in the datasheet (the differentiator). The quadratic Z^2 range noise is
+    // DERIVED from the stereo geometry: subpixelErr is the SINGLE SOURCE OF TRUTH; DepthModel triangulates
+    // Z = fx*b/d with a sub-pixel-noisy disparity, so sigmaZ ~ Z^2 * subpixelErr / (fx*b) emerges. The
+    // coefficient below is the resulting magnitude (subpixelErr/(fx*b) in mm: 0.1/(640*0.095) ~ 1.645 mm/m^2),
+    // recorded as a cross-check only -- the model does NOT read it (avoids a second, divergent "truth").
+    Param<double> subpixelErr     {0.1,   Provenance::DefaultedPendingCalibration, "disparity matching error, px (drives range noise)"};
+    Param<double> depthNoiseCoeff {1.645, Provenance::DefaultedPendingCalibration, "DERIVED sigmaZ_mm/Z_m^2 = subpixelErr/(fx*b); cross-check, unused by model"};
     // hole rates conditioned on material (specular/dark drop stereo matches).
     Param<double> holeRateSpecular {0.35, Provenance::DefaultedPendingCalibration};
     Param<double> holeRateLambert  {0.01, Provenance::DefaultedPendingCalibration};
