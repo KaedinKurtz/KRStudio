@@ -6,5 +6,6 @@ namespace krs::grasp {
 
 bool runGraspImportGate();   // GATE IMPORT: YCB load + real-meter scale + mass/inertia + NaN; x1000 neg-ctrl
 bool runGraspCoacdGate();    // GATE COACD: concavity survives (ball rests inside bowl); convex-hull filler FAILS
+bool runGraspSuccessGate();  // GATE SUCCESS-CRITERION: good grasp passes / bad fails under LOCKED physics; softened-world anti-cheat neg-ctrl
 
 } // namespace krs::grasp
