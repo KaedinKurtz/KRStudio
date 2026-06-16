@@ -1103,6 +1103,22 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 6 (sensor pipeline) GATE E2E: one scene -> RGB+depth+IMU streams, each passing its gate in-context.
+    if (qEnvironmentVariableIntValue("KRS_SENSOR_E2E_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SENSOR_E2E_SELFTEST =================\n");
+        const bool ok = krs::sensor::runE2EGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Phase 6 (sensor pipeline) GATE REAL-TRANSFER: transfer harness vs a SECOND SYNTHETIC instance (NOT real hardware).
+    if (qEnvironmentVariableIntValue("KRS_SENSOR_TRANSFER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SENSOR_TRANSFER_SELFTEST =================\n");
+        const bool ok = krs::sensor::runRealTransferGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1172,6 +1188,8 @@ void RenderingSystem::initializeSharedResources()
             { "SENSOR GATE IMU-ALLAN (stateful: white slope + bias-instability floor + integrated drift; per-sample-Gaussian neg-ctrl)", krs::sensor::runImuAllanGate() },
             { "SENSOR GATE L2-UNCERTAINTY (recon sigma contrast + hole co-location + calibration; uniform-sigma neg-ctrl)", krs::sensor::runL2UncertaintyGate() },
             { "SENSOR GATE COMPOSE (L1 true / L2 belief / L3 live; shared correlation + toggles + determinism; independent-draw neg-ctrl)", krs::sensor::runComposeGate() },
+            { "SENSOR GATE E2E (one scene -> RGB+depth+IMU in-context signatures + conservation + determinism)", krs::sensor::runE2EGate() },
+            { "SENSOR GATE REAL-TRANSFER (harness vs 2nd SYNTHETIC instance; self-consistent + discriminating; NOT real-hardware validated)", krs::sensor::runRealTransferGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

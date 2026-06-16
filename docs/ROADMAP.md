@@ -2479,3 +2479,34 @@ camera == L1 clean; L1+L3 -> camera base == L1 (no belief divergence) + live noi
 (4) DETERMINISM: same seed -> identical stream; seed+1 -> different draws, same statistics. NEG-CTRL
 (independent-draw): L3 dropout from an INDEPENDENT fixed-rate field (not the material) -> corr(L2 sigma, L3
 dropout) ~ 0 -> FAILS. The shared cause -- not coincident independent draws -- is what makes them correlate.
+
+### Phase 5 -- DONE (commit 440cc6c, hardened 5686848). GATE COMPOSE green; bench 69/69.
+Adversarial review (honesty CLEAN -- no sim-to-real overclaim) found the "shared cause" test was just
+co-elevation in 3 rectangles (different-channel impostors passed). Closed: a 2D material sweep (specular x
+albedo INDEPENDENT) -> corr(L2 sigma, L3 dropout) r2=0.982 only because both read the same materialDrive; the
+specular-only-channel NEG scatters to 0.622. Plus a camera-reads-belief test (mean live read tracks the belief
+mu 0.00032 << truth 0.00134) and an occlusion strip exercising the belief-hole path.
+
+## §AR-6 PHASE 6 (FINAL) -- E2E + HONEST TRANSFER HARNESS, design before coding (2026-06-16)
+Pure CPU. New: TransferHarness.{hpp,cpp} + SensorGate6.cpp (two gates). THE HONEST LIMIT: the transfer gate is
+gated ONLY vs a second SYNTHETIC instance and labeled "self-consistent, NOT validated against real hardware --
+awaiting operator capture." It NEVER claims sim-to-real transfer.
+
+### GATE E2E (one scene/profile/seed -> RGB+depth+IMU, each passing its gate IN-CONTEXT)
+Split the master seed into RGB/depth/IMU substreams (fixed order, toggle-stable). (1) RGB stream: variance-vs-
+signal slope ~ 1/photonsPerDN (the Phase-1 shot signature, re-checked on the E2E stream). (2) Depth stream:
+sigma-vs-Z power-fit exp ~ 2 (the Phase-2 stereo signature). (3) IMU stream: white-noise short-tau slope ~ -0.5
++ stateful integrated drift >> white-only (the Phase-3 signature; the bias-instability FLOOR specifically stays
+a Phase-3 compressed-tau gate). (4) CONSERVATION: the noise is UNBIASED, so the ensemble mean preserves the
+true signal/depth/rate (energy/signal conservation) -- residual ~ 0; NEG (a biased model with a DC pedestal)
+fails. (5) DETERMINISM: same seed -> byte-identical streams.
+
+### GATE REAL-TRANSFER (the transfer-validation harness -- SELF-CONSISTENCY ONLY, by honest necessity)
+A statistical FINGERPRINT (RGB slope/floor, depth Z^2 exp + hole rate, IMU white std + drift, an RGB histogram)
+computed from a profile+seed. (1) SELF-CONSISTENT: instance A (profile P, seed s1) vs instance B (profile P,
+seed s2) MATCH within tolerance -- two independent synthetic draws of the same sensor are statistically
+indistinguishable. (2) DISCRIMINATING POWER (the NEG that proves the comparison is not vacuous): instance C
+(profile P' with perturbed photonsPerDN + holeRate, seed s3) MISMATCHES A -- a genuinely different sensor is
+detected. PASS = (A~B match) AND (A!~C mismatch). The harness PRINTS, every run, the honest label: it is gated
+against a second SYNTHETIC instance, NOT real hardware; real-transfer remains UNVALIDATED awaiting an operator
+D456 capture. This is the proven/proxy + internal/real-transfer boundary, made explicit and un-fakeable.

@@ -12,5 +12,7 @@ bool runDepthStructGate();     // GATE DEPTH-STRUCT: quadratic Z^2 range + mater
 bool runImuAllanGate();        // GATE IMU-ALLAN: Allan white slope + bias-instability floor + integrated drift; per-sample-Gaussian neg-ctrl
 bool runL2UncertaintyGate();   // GATE L2-UNCERTAINTY: sigma contrast + hole co-location + calibration; uniform-sigma neg-ctrl
 bool runComposeGate();         // GATE COMPOSE: L1 true vs L2 belief + L3 noise; shared correlation; toggles + determinism; independent-draw neg-ctrl
+bool runE2EGate();             // GATE E2E: one scene -> RGB+depth+IMU streams, each passing its gate in-context + conservation + determinism
+bool runRealTransferGate();    // GATE REAL-TRANSFER: transfer harness gated vs a SECOND SYNTHETIC instance (self-consistency only; NOT real hardware)
 
 } // namespace krs::sensor
