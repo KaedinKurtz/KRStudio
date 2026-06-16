@@ -37,6 +37,19 @@ public:
     void compute() override;
 };
 
+// Actuator node (node-ecosystem sprint): the SINGLE path from the node graph to live joint motion.
+// Writes a per-DOF target into the registry-ctx ArticulationCommandComponent (the command bus);
+// SimulationController::applyArticulationCommands() reads it each tick and teleports the articulation.
+// Inputs: Angle (radians, wired from a generator/control chain) + Joint (DOF index, set via the in-node
+// spinbox). No Registry port -- it pulls the live registry from the injected Scene, so the boot graph
+// (time -> sine -> drive) is minimal and just works. This replaces the hardcoded demo as the joint driver.
+class ArticulationDriveNode : public Node {
+public:
+    ArticulationDriveNode();
+    void compute() override;
+    bool needsExecutionControls() const override { return false; }
+};
+
 } // namespace NodeLibrary
 
 namespace krs::nodes {

@@ -34,4 +34,12 @@ bool runFrameGate();
 // to <tol and respects N-digits / decimals; a disconnected input does not update the display.
 bool runVisGate();
 
+// GATE DEMO-GRAPH (KRS_DEMOGRAPH_SELFTEST): the default boot graph (time->sine->drive) IS the robot's
+// driver -- editing the canvas sine's amp dial changes the live robot's motion; a bypass would not.
+bool runDemoGraphGate();
+
+// GATE OWNERSHIP (KRS_OWNERSHIP_SELFTEST): the node command is the sole joint driver (FK <1e-4); with no
+// graph the joint stays at rest (no second writer); rapid DOF-switching never crashes/corrupts.
+bool runOwnershipGate();
+
 } // namespace krs::nodes

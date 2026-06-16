@@ -74,6 +74,7 @@
 #include "NodeCatalogWidget.hpp"   // ADD THIS if you haven't already
 #include "DroppableGraphicsView.hpp" // ADD THIS if you haven't already
 #include "NodeFactory.hpp" // ADD THIS if you haven't already
+#include "RobotGraph.hpp"  // default boot node graph (spawnDefaultRobotGraph / tickRobotGraph)
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -709,11 +710,12 @@ MainWindow::MainWindow(QWidget* parent)
     if (bootFanuc) {
         krs::fanuc::Setup fs = krs::fanuc::setupFanucScene(*m_scene, *m_simulation, fanucStepPath);
         if (fs.ok) {
-            m_simulation->setArticulationDemoDrive(true);
-            qInfo() << "[FANUC] visible articulated demo booted:" << fs.solids
+            // The hardcoded demo sweep is GONE. The FANUC is driven by the DEFAULT NODE GRAPH spawned
+            // below (time_source -> gen_sine -> physics_articulation_drive) -- the single joint driver.
+            qInfo() << "[FANUC] visible articulated robot booted:" << fs.solids
                     << "bodies (solids+shells); assignment" << QString::fromStdString(fs.fingerprint);
         } else {
-            qWarning() << "[FANUC] demo setup failed:" << QString::fromStdString(fs.message);
+            qWarning() << "[FANUC] setup failed:" << QString::fromStdString(fs.message);
         }
     }
 
@@ -934,13 +936,20 @@ MainWindow::MainWindow(QWidget* parent)
     // (sine/ramp/oscillator) actually move over wall-clock instead of emitting a constant.
     auto* nodeTickTimer = new QTimer(this);
     connect(nodeTickTimer, &QTimer::timeout, this, [graphModel]() {
-        for (QtNodes::NodeId id : graphModel->allNodeIds()) {
-            auto* d = graphModel->delegateModel<NodeDelegate>(id);
-            if (d && d->backendNode() && d->backendNode()->getId() == "time_source")
-                d->recomputeAndPropagate();
-        }
+        krs::nodes::tickRobotGraph(*graphModel);
     });
     nodeTickTimer->start(33);   // ~30 Hz
+
+    // DEFAULT DEMO = A REAL NODE GRAPH. Spawn time_source -> gen_sine -> physics_articulation_drive on the
+    // actual editor canvas; it drives the live FANUC J1 via the command bus + SimulationController bridge.
+    // These nodes ARE the robot's driver (inspectable + editable), not a decorative copy -- editing the
+    // sine's amp/freq changes the real motion (GATE DEMO-GRAPH). This is the SINGLE path to joint motion.
+    if (bootFanuc) {
+        krs::nodes::BootGraphHandles bg = krs::nodes::spawnDefaultRobotGraph(*graphModel, m_scene.get(),
+                                                                             /*joint*/ 0, /*freqHz*/ 0.2, /*ampRad*/ 0.5);
+        if (bg.ok) qInfo() << "[FANUC] default robot graph spawned (time->sine->drive J1) -- the node editor drives the arm";
+        else       qWarning() << "[FANUC] default robot graph spawn FAILED";
+    }
 
     connect(m_dockManager, &ads::CDockManager::dockWidgetRemoved, this, &MainWindow::syncViewportManagerPopup);
 

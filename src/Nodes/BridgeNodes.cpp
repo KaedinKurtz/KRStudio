@@ -104,4 +104,37 @@ namespace {
     static RevoluteLinkFkRegistrar g_revoluteLinkFkRegistrar;
 }
 
+// ---- ArticulationDriveNode: node graph -> live joint motion (the SINGLE writer) ----
+ArticulationDriveNode::ArticulationDriveNode() {
+    m_id = "physics_articulation_drive";
+    m_ports.push_back({ "Angle", {"float", "radians"}, Port::Direction::Input, this });
+    m_ports.push_back({ "Joint", {"int", "index"},     Port::Direction::Input, this });
+}
+
+void ArticulationDriveNode::compute() {
+    if (!m_scene) return;
+    auto angle = getInput<float>("Angle");
+    if (!angle) return;                                // disconnected -> commands nothing (joint at rest)
+    const int joint = getInput<int>("Joint").value_or(0);
+    if (joint < 0) return;
+    auto& reg = m_scene->getRegistry();
+    ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
+    if (!cmd) cmd = &reg.ctx().emplace<ArticulationCommandComponent>();
+    if (int(cmd->target.size()) <= joint) { cmd->target.resize(joint + 1, 0.0f); cmd->driven.resize(joint + 1, 0); }
+    cmd->target[joint] = *angle;
+    cmd->driven[joint] = 1;
+}
+
+namespace {
+    struct ArticulationDriveRegistrar {
+        ArticulationDriveRegistrar() {
+            NodeDescriptor desc = { "Drive Joint", "Physics/Actions",
+                "Commands a live articulation DOF (Joint index) to Angle -- the node graph's joint driver." };
+            NodeFactory::instance().registerNodeType("physics_articulation_drive", desc,
+                []() { return std::make_unique<ArticulationDriveNode>(); });
+        }
+    };
+    static ArticulationDriveRegistrar g_articulationDriveRegistrar;
+}
+
 } // namespace NodeLibrary

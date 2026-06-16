@@ -538,20 +538,28 @@ void SimulationController::tick()
 
     if (steps > 0) { writeBackTransforms(float(steps) * kFixedDt); writeBackArticulationViz(); }
 
-    // Phase V: kinematic demo sweep. Runs every tick (not gated on physics steps) so the FANUC
-    // visibly articulates even when little wall-clock has accrued. Fixed phase step keeps it
-    // frame-rate-paced and deterministic in headless loops.
-    if (m_articDemoDrive && articDofCount() == 4) {
-        m_articDemoPhase += 0.018;                          // ~ rad of phase per tick (smooth at ~30 Hz)
-        const double p = m_articDemoPhase;
-        std::vector<float> q = {
-            float(0.60 * std::sin(0.50 * p)),               // J1 yaw
-            float(0.45 + 0.35 * std::sin(0.37 * p)),        // J2 shoulder
-            float(0.70 + 0.50 * std::sin(0.43 * p)),        // J3 elbow
-            0.0f };                                         // J4 frozen
-        setArticJointPositions(q);
-        writeBackArticulationViz();
-    }
+    // Node-ecosystem sprint: the node graph is the SOLE joint driver. The hardcoded demo sweep that used
+    // to write setArticJointPositions() here is REMOVED -- instead we apply the per-DOF targets the node
+    // graph (physics_articulation_drive) posted to the command bus. One writer -> no conflict, no crash.
+    applyArticulationCommands();
+}
+
+// Read the registry-ctx command bus and teleport the live articulation to the node-commanded per-DOF
+// targets. DOFs nobody drives keep their current position (rest). No command bus at all -> no motion,
+// which is the OWNERSHIP negative control (the joint only moves when the node graph drives it).
+void SimulationController::applyArticulationCommands()
+{
+    const int nDof = articDofCount();
+    if (!m_scene || nDof <= 0) return;
+    auto& reg = m_scene->getRegistry();
+    const ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
+    if (!cmd) return;
+    std::vector<float> q = articJointPositions();          // start from the live config
+    if (int(q.size()) != nDof) q.assign(nDof, 0.0f);
+    bool any = false;
+    for (int d = 0; d < nDof && d < int(cmd->target.size()); ++d)
+        if (d < int(cmd->driven.size()) && cmd->driven[d]) { q[d] = cmd->target[d]; any = true; }
+    if (any) { setArticJointPositions(q); writeBackArticulationViz(); }
 }
 
 // ===========================================================================
@@ -1306,11 +1314,6 @@ void SimulationController::writeBackArticulationViz()
 #endif
 }
 
-void SimulationController::setArticulationDemoDrive(bool on)
-{
-    m_articDemoDrive = on;
-    if (!on) m_articDemoPhase = 0.0;
-}
 
 // ===========================================================================
 // HIL CAN telemetry (Phase 2): bidirectional plant <-> bus coupling.

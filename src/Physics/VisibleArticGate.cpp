@@ -13,7 +13,11 @@ namespace krs::dyn { bool runVisibleArticGateV() { return true; } bool runFanucB
 #include "components.hpp"
 #include "CadImporter.hpp"
 #include "FanucArticulation.hpp"   // SINGLE SOURCE OF TRUTH for the solid->link assignment + setup
+#include "NodeEditorGate.hpp"      // makeNodeGraphModel
+#include "RobotGraph.hpp"          // spawnDefaultRobotGraph / tickRobotGraph (boot path == gate path)
 
+#include <QtNodes/DataFlowGraphModel>
+#include <QThread>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -24,6 +28,7 @@ namespace krs::dyn { bool runVisibleArticGateV() { return true; } bool runFanucB
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
+#include <memory>
 
 namespace krs::dyn {
 namespace {
@@ -257,33 +262,45 @@ bool runVisibleArticGateV()
 }
 
 // ===========================================================================
-// GATE V.6 — boot path: the SAME shared helper + demo drive + tick loop the app
-// boots with must make the FANUC visibly move (and the assignment fingerprint
-// must match the canonical map). Proves the boot path and the gate path are one.
+// GATE V.6 — boot path: the SAME shared helper + the DEFAULT NODE GRAPH + tick
+// loop the app boots with must make the FANUC visibly move (and the assignment
+// fingerprint must match the canonical map). The hardcoded demo sweep is gone;
+// the robot moves ONLY because the node graph (spawnDefaultRobotGraph, the exact
+// helper MainWindow calls) drives it. Proves the boot path and the gate path are one.
 // ===========================================================================
 bool runFanucBootGateV6()
 {
     using std::printf;
     setvbuf(stdout, nullptr, _IONBF, 0);
-    printf("[fanuc boot] GATE V.6 - boot path (shared helper + demo drive + tick) makes the FANUC move\n");
+    printf("[fanuc boot] GATE V.6 - boot path (shared helper + DEFAULT NODE GRAPH + tick) makes the FANUC move\n");
 
     const std::string path = krs::fanuc::findStepAsset();
-    const entt::entity FORE_IDX = entt::null; (void)FORE_IDX;
 
-    // helper to set up + tick N frames, returning the forearm's net translation + finiteness
-    auto run = [&](bool driveOn, float& moved, bool& finite, std::string& fp) -> bool {
+    // helper to set up + tick N frames, returning the MAX live forearm-link displacement (engine truth --
+    // the rendered solid follows it; the on-screen pixels are OPERATOR VISUAL-CONFIRM). When graphOn, spawn
+    // the default robot graph (the app's boot helper) to drive J1; otherwise drive nothing.
+    auto run = [&](bool graphOn, float& moved, bool& finite, std::string& fp) -> bool {
         Scene scene; SimulationController sim(&scene);
         krs::fanuc::Setup s = krs::fanuc::setupFanucScene(scene, sim, path);
         if (!s.ok) { printf("[fanuc boot] FAIL: setupFanucScene: %s\n", s.message.c_str()); sim.stop(); return false; }
         fp = s.fingerprint;
-        auto& reg = scene.getRegistry();
-        const entt::entity fore = s.solidEntity[1];        // inspect idx 1 = forearm (link 3)
-        const glm::vec3 p0 = reg.get<TransformComponent>(fore).translation;
-        sim.setArticulationDemoDrive(driveOn);
-        for (int i = 0; i < 60; ++i) sim.tick();           // the app's per-frame call
-        const glm::vec3 p1 = reg.get<TransformComponent>(fore).translation;
-        finite = std::isfinite(p1.x) && std::isfinite(p1.y) && std::isfinite(p1.z);
-        moved = glm::length(p1 - p0);
+        const int link = std::min(2, sim.articDofCount() - 1);   // a far link (forearm) -- moves most under J1
+        auto linkPos = [&]() { const auto p = sim.articLinkPoses()[link]; return glm::vec3(p[0], p[1], p[2]); };
+        const glm::vec3 p0 = linkPos();
+        std::shared_ptr<QtNodes::DataFlowGraphModel> model;
+        if (graphOn) {
+            model = krs::nodes::makeNodeGraphModel();
+            krs::nodes::spawnDefaultRobotGraph(*model, &scene, /*joint*/0, /*freqHz*/0.5, /*ampRad*/0.6);
+        }
+        moved = 0.0f; finite = true;
+        for (int i = 0; i < 80; ++i) {                     // the app's per-frame calls (graph tick + sim tick)
+            if (model) krs::nodes::tickRobotGraph(*model);
+            sim.tick();
+            QThread::msleep(12);                           // let the LIVE wall-clock time source advance
+            const glm::vec3 p = linkPos();
+            finite = finite && std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
+            moved = std::max(moved, glm::length(p - p0)); // MAX over the cycle (robust to final phase)
+        }
         sim.stop();
         return true;
     };
@@ -293,12 +310,12 @@ bool runFanucBootGateV6()
     if (!run(false, movedOff, finOff, fpOff)) return false;
 
     const bool fpMatch = (fpOn == krs::fanuc::assignmentFingerprint());
-    const bool moves   = movedOn > 0.05f && finOn;         // forearm translates >5 cm over 60 ticks
-    const bool ctrl    = movedOff < 1e-4f;                 // NEGATIVE CONTROL: no drive -> no motion
-    printf("[fanuc boot]  fingerprint=%s (%s); demoDrive: forearm moved=%.3f m finite=%d; neg-ctrl(no drive) moved=%.3e m\n",
+    const bool moves   = movedOn > 0.05f && finOn;         // forearm link translates >5 cm under the node graph
+    const bool ctrl    = movedOff < 1e-4f;                 // NEG-CTRL: NO graph -> no motion (no 2nd writer)
+    printf("[fanuc boot]  fingerprint=%s (%s); node graph: forearm link moved=%.3f m finite=%d; neg-ctrl(no graph) moved=%.3e m\n",
            fpOn.c_str(), fpMatch ? "canonical" : "MISMATCH", movedOn, int(finOn), movedOff);
     const bool pass = fpMatch && moves && ctrl;
-    printf("[fanuc boot] %s\n", pass ? "ALL PASS (boot path moves the FANUC; fingerprint canonical; neg-ctrl still)"
+    printf("[fanuc boot] %s\n", pass ? "ALL PASS (the default node graph moves the FANUC; fingerprint canonical; no-graph neg-ctrl still)"
                                      : "FAILURES PRESENT");
     fflush(stdout);
     return pass;

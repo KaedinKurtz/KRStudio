@@ -518,6 +518,18 @@ struct JointComponent
     double currentPosition = 0.0;
 };
 
+// Node-graph -> live articulation command bus (node-ecosystem sprint). A registry-ctx singleton: the
+// node graph (physics_articulation_drive) writes a per-DOF target angle + a "driven" flag; the
+// SimulationController reads it each tick (applyArticulationCommands) and teleports the articulation to
+// those targets. This makes the NODE GRAPH the SINGLE writer of joint motion -- the hardcoded demo sweep
+// that used to fight it is removed, so the two-writer conflict cannot occur. DOFs with driven==0 are left
+// at their current position (rest), so an empty/absent command bus means the robot does not move.
+struct ArticulationCommandComponent
+{
+    std::vector<float> target;   // per-DOF commanded angle (radians for revolute)
+    std::vector<char>  driven;   // 1 if a node currently commands this DOF, else 0
+};
+
 struct ParentComponent {
     entt::entity parent = entt::null;
 };
