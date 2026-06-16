@@ -42,6 +42,8 @@ double RgbNoiseModel::apply(double signalDN, std::mt19937_64& rng) const {
         noisy = S + g(rng);
     }
 
+    noisy += biasDN;                                                    // DC pedestal (0 for the real model)
+
     // quantize to the sensor bit depth, then clip to the valid DN range.
     const double maxLevel = double((1 << bitDepth) - 1);                 // 8-bit -> 255
     const double scale = maxLevel / fullScaleDN;                         // DN -> level (1:1 when fullScale==255)

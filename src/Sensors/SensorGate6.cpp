@@ -36,19 +36,17 @@ bool runE2EGate() {
     // ---- RGB stream: shot variance-vs-signal slope (1/photonsPerDN); UNBIASED mean conserves the signal. ----
     const RgbNoiseModel rgb = RgbNoiseModel::fromRgb(prof.rgb);
     std::mt19937_64 rR(sRgb);
-    std::vector<double> rsig, rvar; double rgbConsErr = 0, rgbBiasErr = 0;
+    std::vector<double> rsig, rvar; double rgbConsErr = 0;
     const int M = 80000;
     for (double S = 30.0; S <= 200.0; S += 17.0) {
         std::vector<double> o(M); for (auto& v : o) v = rgb.apply(S, rR);
         rsig.push_back(S); rvar.push_back(variance(o));
-        const double mn = mean(o);
-        rgbConsErr = std::max(rgbConsErr, std::fabs(mn - S));               // unbiased -> ~0
-        rgbBiasErr = std::max(rgbBiasErr, std::fabs(mn + 5.0 - S));         // a +5 DN pedestal would NOT conserve
+        rgbConsErr = std::max(rgbConsErr, std::fabs(mean(o) - S));          // unbiased -> ~0
     }
     const double rgbSlope = linearFit(rsig, rvar).slope;
     const bool t_rgb = std::fabs(rgbSlope - 1.0 / double(prof.rgb.photonsPerDN)) < 0.05 / double(prof.rgb.photonsPerDN);
-    std::printf("  rgb       : var-slope=%.5f (exp %.5f) ; conservation err=%.3f DN (biased would be %.2f) -> %s\n",
-                rgbSlope, 1.0 / double(prof.rgb.photonsPerDN), rgbConsErr, rgbBiasErr, t_rgb ? "ok" : "FAIL");
+    std::printf("  rgb       : var-slope=%.5f (exp %.5f) ; unbiased mean err=%.3f DN -> %s\n",
+                rgbSlope, 1.0 / double(prof.rgb.photonsPerDN), rgbConsErr, t_rgb ? "ok" : "FAIL");
 
     // ---- Depth stream: sigma-vs-Z power exponent (~2); UNBIASED mean conserves depth. ----
     DepthModel dep = DepthModel::fromProfile(prof.depth);
@@ -94,15 +92,51 @@ bool runE2EGate() {
     std::printf("  imu       : white-slope=%.3f drift stateful=%.4f white=%.4f (%.1fx) ; stationary mean=%.2e -> %s\n",
                 imuSlope, dS, dW, dS / dW, imuMean, t_imu ? "ok" : "FAIL");
 
-    // ---- CONSERVATION verdict + DETERMINISM (same seed -> byte-identical RGB stream). ----
-    const bool t_conserve = rgbConsErr < 0.5 && rgbBiasErr > 1.0 && depConsErr < 0.005;
-    std::printf("  conserve  : unbiased (rgb %.3f<0.5, depth %.4f<0.005) ; biased pedestal FAILS (%.2f) -> %s\n",
-                rgbConsErr, depConsErr, rgbBiasErr, t_conserve ? "ok (true signal preserved)" : "FAIL");
-    std::mt19937_64 da(sRgb), db(sRgb); bool identical = true;
-    for (int i = 0; i < 5000; ++i) if (rgb.apply(120.0, da) != rgb.apply(120.0, db)) { identical = false; break; }
-    std::printf("  determ    : same-seed RGB stream byte-identical=%s -> %s\n", identical ? "yes" : "no", identical ? "ok" : "FAIL");
+    // ---- SHARED SCENE: ONE geometry+material observed by BOTH depth (geometry) and RGB (reflectance). The
+    //      two streams co-observe the same world: dark cells are dim in RGB AND drop in depth (shared
+    //      material), so the per-cell RGB brightness and depth valid-rate correlate. (The IMU is ego-motion,
+    //      not a scene observer, so it shares only the seed lineage -- physically correct.) ----
+    DepthModel depScene = DepthModel::fromProfile(prof.depth);     // holes ON
+    std::mt19937_64 rS(sRgb ^ 0x5CE2Eu);
+    std::vector<double> cellRgb, cellValid;
+    const int SW = 40, SH = 30;
+    for (int v = 0; v < SH; ++v)
+        for (int u = 0; u < SW; ++u) {
+            const bool dark = (u >= 12 && u < 24 && v >= 8 && v < 22);
+            const double alb = dark ? 0.12 : 0.85;
+            const MaterialSample mat{ 0.0, alb, 1.0 };
+            const double sigDN = alb * double(prof.rgb.fullScaleDN);    // reflectance -> RGB signal
+            double accR = 0; for (int t = 0; t < 200; ++t) accR += rgb.apply(sigDN, rS);
+            int valid = 0; for (int t = 0; t < 200; ++t) if (depScene.sample(1.5, mat, rS) != DEPTH_INVALID) ++valid;
+            cellRgb.push_back(accR / 200.0); cellValid.push_back(valid / 200.0);
+        }
+    const LinFit sceneFit = linearFit(cellRgb, cellValid);
+    const bool t_scene = sceneFit.slope > 0 && sceneFit.r2 > 0.5;
+    std::printf("  scene     : RGB-brightness vs depth-valid-rate corr slope>0 r2=%.3f (one shared scene) -> %s\n",
+                sceneFit.r2, t_scene ? "ok (RGB+depth observe the same world)" : "FAIL");
 
-    const bool pass = t_rgb && t_depth && t_imu && t_conserve && identical;
+    // ---- CONSERVATION through the model bias knob + DETERMINISM across all three streams. ----
+    RgbNoiseModel biased = rgb; biased.biasDN = 5.0;
+    std::mt19937_64 rc(sRgb ^ 0xC04Eu);
+    std::vector<double> ub(40000), bi(40000);
+    for (auto& v : ub) v = rgb.apply(120.0, rc);
+    for (auto& v : bi) v = biased.apply(120.0, rc);
+    const double ubErr = std::fabs(mean(ub) - 120.0), biErr = std::fabs(mean(bi) - 120.0);
+    const bool t_conserve = rgbConsErr < 0.5 && depConsErr < 0.005 && ubErr < 0.3 && biErr > 4.0;
+    std::printf("  conserve  : unbiased mean err=%.3f (depth %.4f) ; biased MODEL mean err=%.3f (>4, FAILS) -> %s\n",
+                ubErr, depConsErr, biErr, t_conserve ? "ok (true signal preserved; biased model breaks it)" : "FAIL");
+
+    bool identRgb = true, identDepth = true, identImu = true;
+    { std::mt19937_64 a(sRgb), b(sRgb); for (int i = 0; i < 4000; ++i) if (rgb.apply(120.0, a) != rgb.apply(120.0, b)) { identRgb = false; break; } }
+    { std::mt19937_64 a(sDepth), b(sDepth); DepthModel d = DepthModel::fromProfile(prof.depth);
+      for (int i = 0; i < 4000; ++i) if (d.sample(2.0, bright, a) != d.sample(2.0, bright, b)) { identDepth = false; break; } }
+    { std::mt19937_64 a(sImu), b(sImu); InertialAxis x = imu.gyro, y = imu.gyro;
+      for (int i = 0; i < 4000; ++i) if (x.step(0.0, a) != y.step(0.0, b)) { identImu = false; break; } }
+    const bool identical = identRgb && identDepth && identImu;
+    std::printf("  determ    : same-seed byte-identical rgb=%s depth=%s imu=%s -> %s\n",
+                identRgb ? "y" : "n", identDepth ? "y" : "n", identImu ? "y" : "n", identical ? "ok" : "FAIL");
+
+    const bool pass = t_rgb && t_depth && t_imu && t_scene && t_conserve && identical;
     std::printf("[SENSOR GATE E2E] %s\n", pass ? "PASS" : "FAIL");
     return pass;
 }
@@ -111,11 +145,18 @@ bool runRealTransferGate() {
     std::printf("\n[SENSOR GATE REAL-TRANSFER] transfer harness -- SELF-CONSISTENCY ONLY (NOT real hardware)\n");
     std::printf("  HONESTY  : %s\n", transferHonestyLabel());
 
+    // SCOPE: the fingerprint reflects RGB gain/read, depth Z^2 + hole rate, IMU white-noise + bias-instability
+    // floor (measured at a COMPRESSED biasTau, so a difference in the PROFILED biasTau is NOT captured -- a
+    // known blind spot of this proxy). It is also a SELF-CONSISTENCY check: A~B matching proves the synthetic
+    // pipeline is reproducible across seeds, NOT that it is faithful to real hardware.
+    std::printf("  scope     : fingerprint blind to profiled biasTau (compressed for observability); A~B is reproducibility, NOT fidelity\n");
+
     SensorProfile prof;
-    // Two independent SYNTHETIC instances of the SAME profile (different seed salts) -> must MATCH.
+    // Two independent SYNTHETIC instances of the SAME profile (different seed salts) -> must MATCH. Tolerance
+    // 0.05 is ~8x the measured A~B seed-noise floor, so a ~>=5% sensor difference is detectable (not just gross).
     const SensorFingerprint A = computeFingerprint(prof, 0xA0A0u);
     const SensorFingerprint B = computeFingerprint(prof, 0xB0B0u);
-    const TransferComparison ab = compareFingerprints(A, B, /*relTol=*/0.12, /*histTol=*/0.15);
+    const TransferComparison ab = compareFingerprints(A, B, /*relTol=*/0.05, /*histTol=*/0.08);
     std::printf("  self-cons : A vs B (same profile, diff seed) maxRelDiff=%.4f histL1=%.4f -> %s\n",
                 ab.maxRelDiff, ab.histL1, ab.match ? "MATCH (self-consistent)" : "mismatch");
 
@@ -125,7 +166,7 @@ bool runRealTransferGate() {
     prof2.depth.holeRateSpecular = 0.55;    // different dropout
     prof2.imu.gyroNoiseDensity = double(prof.imu.gyroNoiseDensity) * 1.6;   // noisier gyro
     const SensorFingerprint C = computeFingerprint(prof2, 0xC0C0u);
-    const TransferComparison ac = compareFingerprints(A, C, 0.12, 0.15);
+    const TransferComparison ac = compareFingerprints(A, C, 0.05, 0.08);
     std::printf("  discrim   : A vs C (perturbed profile) maxRelDiff=%.4f histL1=%.4f -> %s\n",
                 ac.maxRelDiff, ac.histL1, ac.match ? "MATCH (BAD -- not discriminating)" : "mismatch (detects a different sensor)");
 

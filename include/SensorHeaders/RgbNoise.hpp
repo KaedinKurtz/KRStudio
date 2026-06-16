@@ -18,6 +18,7 @@ struct RgbNoiseModel {
     bool   gaussianShot{false};  // true => signal-DEPENDENT GAUSSIAN shot (neg-ctrl B): matches the affine
                                  //         photon-transfer curve but is NOT Poisson (continuous, not integer)
     double fixedSigmaDN{0.0};    // used only when !signalDependent
+    double biasDN{0.0};          // a DC pedestal added to every pixel -- a BIASED model (breaks signal conservation)
 
     static RgbNoiseModel fromRgb(const RgbProfile& p);
 
