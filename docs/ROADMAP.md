@@ -2418,3 +2418,33 @@ VIO dead-reckon diverges). (3) Systematic errors deterministic: a known input re
 misalignment cross-coupling, temp offset. NEG-CTRL (per-sample Gaussian, NO state): Allan is monotone -1/2
 (NO interior floor); integrated drift is small (zero-mean). The discriminators: the Allan floor + the drift,
 both of which require carried STATE a memoryless Gaussian cannot have.
+
+### Phase 3 -- DONE (commit 17c8d89, hardened 805ecf4). GATE IMU-ALLAN green; bench 67/67.
+Adversarial review (impostors compiled + run) found 2 CRITICAL holes: the floor test verified "interior min +
+rise" which RANDOM WALK alone produces (a no-GM model passed); fromProfile (shipped path) had zero coverage.
+Closed: the Allan floor is now proven by SUBTRACTION (min(full) > 1.5*min(white+RW-no-GM); the no-GM impostor
+NEG-B fails); fromProfile covered (BMI085 unit conversions + physical white std); clusters capped at K>=16;
+systematic tested on a general vector (off-diagonal coupling).
+
+## §AR-4 PHASE 4 -- LAYER 2 reconstruction-uncertainty field, design before coding (2026-06-16)
+Pure CPU. New: Layer2Gpis.{hpp,cpp} (ReconField fusion) + SensorGate4.cpp. The shared MaterialField now drives
+BOTH the Phase-2 holes AND per-observation match noise (DepthModel.matchNoisePenalty: effSubpix *= 1+penalty*
+drive) -- specular/dark give noisier disparity, the physical basis for high recon uncertainty there. drive==0
+(bright) is unchanged, so the Phase-2 quadratic gate stays green.
+
+### L2 = L1 truth observed through the Phase-2 sensor, fused (mu, sigma^2)
+L1: a known true depth map Z_true(u,v) (slanted plane) with a per-pixel MaterialSample map (bright Lambertian,
+a specular patch, a dark patch) and an OCCLUDED strip (seen by 0 frames -> a true recon hole). Observe K frames:
+each pixel -> DepthModel.sample (quadratic noise scaled by material, material holes). Fuse per cell with Welford
+-> mu (mean depth), n (valid obs), sigma = sqrt(obsVar/n) (standard error of the estimate); n==0 -> recon hole,
+sigma = sigma_prior (max). GPIS-style: a (mu, sigma^2) belief field, high sigma where poorly observed. NOTE:
+this is per-cell Bayesian depth fusion (mean + calibrated uncertainty), not a full kernel GP -- the gated
+BEHAVIOR (sigma contrast, hole co-location, calibration) is the GPIS essence; kernel smoothing is a later refinement.
+
+### GATE L2-UNCERTAINTY (measured; uniform-sigma as the FAILING neg-control)
+(1) CONTRAST: mean sigma over poorly-observed cells (specular/dark/occluded) >> well-observed (bright); the
+shared material drives it. (2) CO-LOCATION: recon holes (n==0) lie in the occluded/high-drive region; sigma
+correlates with materialDrive (positive, significant). (3) CALIBRATION (round-trip): for observed cells,
+|mu - Z_true| < 2*sigma for >=90% (the uncertainty is honest, not arbitrary). NEG-CTRL (uniform sigma = median
+everywhere): CONTRAST ratio ~1 (FAILS) AND calibration fails (over-confident in noisy regions, under-confident
+in clean ones). The discriminator: a real recon KNOWS WHERE it is uncertain; a uniform field does not.

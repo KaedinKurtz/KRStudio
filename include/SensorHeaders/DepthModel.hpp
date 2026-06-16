@@ -27,6 +27,10 @@ struct DepthModel {
     double flyingPixelRate{0.25};
     double holeRateLambert{0.01};
     double holeRateSpecular{0.35};
+    // the SHARED material field drives both holes AND match noise: a specular/dark surface gives a noisier
+    // disparity (poor stereo correspondence), so effective subpixelErr *= (1 + matchNoisePenalty*drive).
+    // drive==0 (bright Lambertian) -> unchanged, so the Phase-2 quadratic gate is unaffected.
+    double matchNoisePenalty{3.0};
 
     static DepthModel fromProfile(const DepthProfile& p);
 

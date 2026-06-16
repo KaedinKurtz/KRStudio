@@ -39,8 +39,10 @@ double DepthModel::sample(double Zm, const MaterialSample& mat, std::mt19937_64&
         // PHYSICAL stereo: triangulate Z from a sub-pixel-noisy disparity. The quadratic Z^2 range noise
         // EMERGES from Z = fx*b/d (it is NOT injected as a coeff*Z^2 term) -- so the gate can validate the
         // emergent law against an independent hand-computed coefficient rather than the model's own formula.
+        // The disparity error is amplified for poor-match materials (shared field): effSubpix grows with drive.
+        const double effSubpix = subpixelErr * (1.0 + matchNoisePenalty * materialDrive(mat));
         const double dTrue = fx * baselineM / Zm;
-        std::normal_distribution<double> dn(0.0, subpixelErr);
+        std::normal_distribution<double> dn(0.0, effSubpix);
         const double dNoisy = dTrue + dn(rng);
         if (dNoisy <= 1e-6) return DEPTH_INVALID;        // non-positive disparity -> no stereo match
         z = fx * baselineM / dNoisy;

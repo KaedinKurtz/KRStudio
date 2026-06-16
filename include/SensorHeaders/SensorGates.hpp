@@ -10,5 +10,6 @@ bool runRgbIntrinsicsGate();   // GATE INTRINSICS : distort/undistort round-trip
 bool runRgbNoiseStatsGate();   // GATE NOISE-STATS: shot variance scales with signal (Poisson slope); fixed-Gaussian neg-ctrl flat
 bool runDepthStructGate();     // GATE DEPTH-STRUCT: quadratic Z^2 range + material holes + flying pixels + min-Z; clean+Gaussian neg-ctrl
 bool runImuAllanGate();        // GATE IMU-ALLAN: Allan white slope + bias-instability floor + integrated drift; per-sample-Gaussian neg-ctrl
+bool runL2UncertaintyGate();   // GATE L2-UNCERTAINTY: sigma contrast + hole co-location + calibration; uniform-sigma neg-ctrl
 
 } // namespace krs::sensor
