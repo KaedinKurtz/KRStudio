@@ -2347,3 +2347,41 @@ At S=0 (dark frame) variance ~ readNoiseDN^2 (pure read). NEG-CTRL: a fixed-Gaus
 variance at mid-signal but signal-INDEPENDENT) has variance-vs-signal slope ~0 -> FAILS the Poisson
 signal-dependence test (slope not significantly >0). This is the discriminator: real sensor noise grows with
 light; the naive fixed-Gaussian does not. Both can match at one operating point -- the SLOPE separates them.
+
+### Phase 1 -- DONE (commit 4855de3, hardened 7f6009b). GATE INTRINSICS + NOISE-STATS green; bench 65/65.
+The adversarial review (exploits proven by simulation) found 3 CRITICAL pass-while-broken holes: the
+intrinsics round-trip was self-consistency only (a wrong lens passed at 0.0px); NOISE proved variance affine
+but never Poisson (a signal-dependent Gaussian passed). All closed: an INDEPENDENT hand-computed forward-
+distortion anchor pins the lens to Brown-Conrady; the raw shot stage is probed for the defining Poisson
+property (integer electrons + Fano~1); NEG-CTRL B (signal-dependent Gaussian) now demonstrably passes the
+affine PTC yet fails discreteness. fy/vertical-FOV constrained; slope tol 15%->5%.
+
+## §AR-2 PHASE 2 -- STEREO DEPTH (geometry + structured error), design before coding (2026-06-16)
+Pure CPU. New: include/SensorHeaders/MaterialField.hpp (MaterialSample + stereoDropProb -- the SHARED cause
+L2 sigma + L3 dropout will both consume in Phase 4/5), DepthModel.{hpp,cpp}, SensorGate2.cpp. Recon: build
+fresh (DepthProfile is data-only); MaterialComponent (components.hpp:98-200, metallic/roughness/specular/
+albedo) is what the shared field maps from later; SdfBaker/VoxelMap reserved for Phase-4 L2. Units: meters
+internally, mm at boundaries.
+
+### Stereo geometry (Z from disparity -- the noise is DERIVED, not a free knob)
+Depth intrinsics fx_d = (W/2)/tan(fovH/2) = 640 px (W=1280, fovH=90). disparity d = fx_d * baseline_m / Z_m.
+Sub-pixel matching error sigma_d = subpixelErr px (Gaussian on disparity). Propagating d -> Z = fx_d*b/d:
+sigma_Z(Z) = Z^2 * sigma_d / (fx_d * baseline_m)  -- the Z^2 law falls out of the geometry, coefficient
+= subpixelErr/(fx_d*b) ~ 0.00164 /m (sigma_Z_mm ~ 1.64 * Z_m^2). min-Z per resolution (520mm @1280x720)
+enforced: true Z < minZ -> invalid. IR speckle = a small additive Z floor (speckleStdMm), kept separable.
+
+### Structured error (the differentiators -- each tested, each with the clean/Gaussian model as neg-ctrl)
+- QUADRATIC range: sigma_Z ~ Z^2 (above), the defining stereo signature. NEG: a constant-Gaussian depth
+  (sigma_Z = const) has power-fit exponent ~ 0.
+- MATERIAL-CONDITIONED HOLES: stereoDropProb(material) high for specular (~holeRateSpecular 0.35) and dark
+  (low albedo), ~holeRateLambert 0.01 for bright Lambertian. NEG: clean model -> ~0 holes everywhere.
+- EDGE FLYING PIXELS: at a depth discontinuity (zNear|zFar), a fraction (flyingPixelRate) of edge pixels
+  interpolate to INTERMEDIATE depths (strictly between near and far). NEG: flat region -> 0 intermediates;
+  clean model -> 0 flying pixels at edges too.
+
+### GATE DEPTH-STRUCT (measured numbers + the NAIVE clean+Gaussian as the FAILING neg-control)
+(1) RMS-vs-range power-fit exponent ~ 2 (not constant) AND coefficient ~ derived subpixelErr/(fx*b);
+(2) hole rate nonzero on specular AND dark, ~holeRateLambert on bright Lambertian; (3) flying-pixel fraction
+~ flyingPixelRate at edges, 0 on flats; (4) min-Z enforced (true Z<minZ -> invalid). NEG-CTRL (clean+fixed-
+Gaussian depth): power-fit exponent ~ 0 (FAILS quadratic) AND ~0 holes (FAILS material test). Discriminators:
+the Z^2 slope and the material-conditioned dropout -- a clean Gaussian sensor has neither.
