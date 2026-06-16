@@ -59,6 +59,7 @@
 #include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE / TIME)
 #include "NodeEditQueue.hpp"      // force immediate UI-edit mode for the headless gates
 #include "ConnectControlGate.hpp" // node-editor GATE CONNECT-AND-CONTROL
+#include "SensorGates.hpp"        // synthetic-sensor pipeline gates (krs::sensor GATE 0 ...)
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -1046,6 +1047,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 0 (sensor pipeline) GATE 0: statistical harness self-test + wrong-statistic neg-ctrl + profile round-trip.
+    if (qEnvironmentVariableIntValue("KRS_SENSOR0_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SENSOR0_SELFTEST =================\n");
+        const bool ok = krs::sensor::runStatsHarnessGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1108,6 +1117,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE HOVER-INTEGRITY (frame bg + exec control survive hover-enter/leave; no WA_Translucent)", krs::nodes::runHoverIntegrityGate() },
             { "GATE ZOOM-VISIBLE (every node NoCache+no-effect; frame paints at 0.3x/2x terminal zoom)", krs::nodes::runZoomVisibilityGate() },
             { "GATE STATIC-CONST (constant nodes' value field sets the emitted constant; matrix deferred)", krs::nodes::runStaticConstGate() },
+            { "SENSOR GATE 0 (stats harness self-test + wrong-statistic neg-ctrl + profile round-trip)", krs::sensor::runStatsHarnessGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
