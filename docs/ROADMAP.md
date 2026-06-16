@@ -2297,3 +2297,53 @@ uniform-sigma), COMPOSE (true-vs-belief divergence + L2/L3 material correlation;
 CONSERVATION and fully checkable tonight; the REAL-TRANSFER gate needs a real D456 capture (not available)
 -> the transfer-validation harness is BUILT but gated only vs a SECOND SYNTHETIC instance, labeled
 "self-consistent, NOT validated against real hardware -- awaiting operator capture." Never claim transfer.
+
+### Phase 0 -- DONE (commits 83c3b18, hardened cacdd41). SENSOR GATE 0 green; bench 63/63.
+SensorProfile (provenance-tagged), SensorStats harness, GATE 0 (self-test + neg-ctrl + round-trip). The
+adversarial review found 5 ways to pass-while-broken (vacuous conservation, slope-only Allan, inline neg-ctrl,
+round-trip theater, unverified Bessel) -- all closed. Conservation now uses a real harness primitive; Allan
+asserts level+slope; one isPoissonByVarMean() discriminator serves both accept+reject; round-trip is a 5-point
+var=slope*sigma^2 regression (slope 1.0+-0.02 catches a 3% bug). Provenance/arithmetic audited clean.
+
+## §AR-1 PHASE 1 -- RGB CAMERA (intrinsics + Layer-3 noise), design before coding (2026-06-16)
+Pure CPU math, no GL. New files: include/SensorHeaders/CameraModel.hpp + src/Sensors/CameraModel.cpp
+(intrinsics+distortion), Layer3Noise in the same or RgbNoise.{hpp,cpp}, and SensorGate1.cpp with the two
+gates. Recon confirmed: no existing CPU pinhole+distortion (V.2 FanucRenderGate projects via GL P*V -- a
+cross-check, not reuse); reuse SensorProfile (RgbProfile already has focalMm/pixelUm/k1..p2/noise stack), plain
+std::vector for buffers, raw <random>, GLM available.
+
+### Intrinsics K (from focal length + sensor, NOT hand-set fx)
+fx = focalMm / (pixelUm*1e-3)  [px];  fy = fx (square pixels assumed; D456 RGB);  cx=(W-1)/2, cy=(H-1)/2.
+With focalMm 1.93, pixelUm 3.016 -> fx = 640.0 px, matching (W/2)/tan(fovH/2) for 90deg -- the provenance
+cross-check (pixelUm was DEFAULTED to make these agree). K = [[fx,0,cx],[0,fy,cy],[0,0,1]].
+
+### Brown-Conrady distortion (k1,k2,k3 radial; p1,p2 tangential)
+Forward (normalized x,y -> distorted): r2=x^2+y^2; radial = 1 + k1 r2 + k2 r2^2 + k3 r2^3;
+xd = x*radial + 2 p1 x y + p2 (r2 + 2 x^2);  yd = y*radial + p1 (r2 + 2 y^2) + 2 p2 x y.
+Pixel = (fx*xd + cx, fy*yd + cy). Inverse (pixel -> ray, undistort) by iterative fixed-point (Newton not
+needed at these coeffs): start from distorted normalized, iterate x = (xd - tangential)/radial ~10 iters.
+
+### GATE INTRINSICS (reprojection round-trip <0.5px; neg-ctrl pinhole-no-distortion fails at edges)
+Sample >=50 normalized points spanning the FOV incl. corners. Forward-distort -> pixel -> undistort ->
+re-project. Assert max round-trip error < 0.5px across all >=50 (tight: corners are where distortion is
+largest). Cross-check fx==640 vs the FOV formula (<0.1px). NEG-CTRL: a pinhole model (k*=p*=0) reprojecting
+the SAME distorted pixels has error that GROWS toward the edges and EXCEEDS a threshold at the corners
+(>2px) -- proving distortion is doing real work and the gate is sensitive to it (a clean pinhole FAILS where
+a real lens bends). Center error stays ~0 for both (distortion vanishes on-axis) -- so the discriminator is
+specifically the edge/corner behavior.
+
+### Layer-3 noise: shot (Poisson, signal-dependent) -> read (Gaussian, signal-independent) -> quantize
+For a pixel with clean signal S in DN [0..fullScaleDN]: electrons e = S*photonsPerDN; shot ~ Poisson(e)
+-> back to DN (/photonsPerDN) gives shot variance = S/photonsPerDN (scales WITH signal). Then add read
+~ Gaussian(0, readNoiseDN) (constant floor, signal-INDEPENDENT). Then quantize to bitDepth and clamp.
+Total per-pixel variance(S) = S/photonsPerDN + readNoiseDN^2 -- an AFFINE function of S: slope 1/photonsPerDN,
+intercept readNoiseDN^2.
+
+### GATE NOISE-STATS (shot variance scales with signal; read = constant floor; neg fixed-Gaussian fails)
+For a sweep of constant signal levels S_i, draw many noisy samples per level, measure variance(S_i). Linear-fit
+variance vs S: slope ~ 1/photonsPerDN (>0, significant), intercept ~ readNoiseDN^2 (the read floor). Assert
+slope matches 1/photonsPerDN within tol AND intercept matches readNoiseDN^2 within tol AND r2>0.98 (affine).
+At S=0 (dark frame) variance ~ readNoiseDN^2 (pure read). NEG-CTRL: a fixed-Gaussian model (same total
+variance at mid-signal but signal-INDEPENDENT) has variance-vs-signal slope ~0 -> FAILS the Poisson
+signal-dependence test (slope not significantly >0). This is the discriminator: real sensor noise grows with
+light; the naive fixed-Gaussian does not. Both can match at one operating point -- the SLOPE separates them.

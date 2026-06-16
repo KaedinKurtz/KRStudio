@@ -5,6 +5,8 @@
 // FAILING negative control -- which is what proves physical faithfulness.
 namespace krs::sensor {
 
-bool runStatsHarnessGate();   // GATE 0  : stats harness self-tests + wrong-statistic neg-ctrl + profile round-trip
+bool runStatsHarnessGate();    // GATE 0         : stats harness self-tests + wrong-statistic neg-ctrl + profile round-trip
+bool runRgbIntrinsicsGate();   // GATE INTRINSICS : distort/undistort round-trip <0.5px; pinhole neg-ctrl fails at edges
+bool runRgbNoiseStatsGate();   // GATE NOISE-STATS: shot variance scales with signal (Poisson slope); fixed-Gaussian neg-ctrl flat
 
 } // namespace krs::sensor

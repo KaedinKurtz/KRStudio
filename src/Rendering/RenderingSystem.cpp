@@ -1055,6 +1055,22 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 1 (sensor pipeline) GATE INTRINSICS: K + Brown-Conrady round-trip + pinhole neg-ctrl.
+    if (qEnvironmentVariableIntValue("KRS_SENSOR_INTRINSICS_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SENSOR_INTRINSICS_SELFTEST =================\n");
+        const bool ok = krs::sensor::runRgbIntrinsicsGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Phase 1 (sensor pipeline) GATE NOISE-STATS: shot+read signal dependence + fixed-Gaussian neg-ctrl.
+    if (qEnvironmentVariableIntValue("KRS_SENSOR_NOISE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SENSOR_NOISE_SELFTEST =================\n");
+        const bool ok = krs::sensor::runRgbNoiseStatsGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1118,6 +1134,8 @@ void RenderingSystem::initializeSharedResources()
             { "GATE ZOOM-VISIBLE (every node NoCache+no-effect; frame paints at 0.3x/2x terminal zoom)", krs::nodes::runZoomVisibilityGate() },
             { "GATE STATIC-CONST (constant nodes' value field sets the emitted constant; matrix deferred)", krs::nodes::runStaticConstGate() },
             { "SENSOR GATE 0 (stats harness self-test + wrong-statistic neg-ctrl + profile round-trip)", krs::sensor::runStatsHarnessGate() },
+            { "SENSOR GATE INTRINSICS (K + Brown-Conrady round-trip <0.5px; pinhole neg-ctrl fails at edges)", krs::sensor::runRgbIntrinsicsGate() },
+            { "SENSOR GATE NOISE-STATS (shot+read variance scales with signal; fixed-Gaussian neg-ctrl flat)", krs::sensor::runRgbNoiseStatsGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
