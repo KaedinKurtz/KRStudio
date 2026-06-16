@@ -932,6 +932,34 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Recon/profile harness for the node-UI+perf sprint (geometry dump + eval cascade cost).
+    if (qEnvironmentVariableIntValue("KRS_NODEPROF_SELFTEST") != 0) {
+        std::printf("\n================= KRS_NODEPROF_SELFTEST =================\n");
+        const bool ok = krs::nodes::runNodeProfileDiag();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // GATE FRAME-GFX: every node type's NodeGraphicsObject has caption + geometry + boundary ports.
+    if (qEnvironmentVariableIntValue("KRS_FRAMEGFX_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FRAMEGFX_SELFTEST =================\n");
+        const bool ok = krs::nodes::runFrameGfxGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // GATE PERF: quiet eval bounded + linear; old per-eval scene cascade blows up.
+    if (qEnvironmentVariableIntValue("KRS_PERF_SELFTEST") != 0) {
+        std::printf("\n================= KRS_PERF_SELFTEST =================\n");
+        const bool ok = krs::nodes::runPerfGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // GATE RATE: eval rate configurable; UI repaint capped independently.
+    if (qEnvironmentVariableIntValue("KRS_RATE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_RATE_SELFTEST =================\n");
+        const bool ok = krs::nodes::runRateGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
 
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
@@ -1053,6 +1081,9 @@ void RenderingSystem::initializeSharedResources()
             { "GATE FILTER (Kalman/low-pass/moving-average each vs independent reference + neg-ctrl)", krs::nodes::runFilterGate() },
             { "GATE THREAD (async UI edits keep tick rate; old synchronous path stalls it)", krs::nodes::runThreadGate() },
             { "GATE DRAGDROP (catalog drop instances the correct typed node with ports+widgets)", krs::nodes::runDragDropGate() },
+            { "GATE FRAME-GFX (every type's NodeGraphicsObject has caption+geometry+boundary ports)", krs::nodes::runFrameGfxGate() },
+            { "GATE PERF (quiet eval bounded+linear; old per-eval scene cascade blows up)", krs::nodes::runPerfGate() },
+            { "GATE RATE (eval rate configurable; UI repaint capped independently)", krs::nodes::runRateGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

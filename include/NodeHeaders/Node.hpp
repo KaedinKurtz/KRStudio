@@ -62,6 +62,13 @@ public:
 
     virtual QWidget* createCustomWidget() { return nullptr; }
 
+    // Push this node's freshly-computed value into its DISPLAY widget, IF it changed since the last push.
+    // Called at a capped UI rate (refreshGraphUi), NEVER per eval -- so widget repaints are decoupled from
+    // (and far below) the evaluation rate. Returns true if it actually repainted (the value changed).
+    // Default: nodes with no display widget do nothing. Display nodes (readout/gauge) override this and
+    // must NOT touch their widget inside compute().
+    virtual bool refreshUi() { return false; }
+
     // --- Core Execution Logic (remains the same) ---
     void process() {
         auto start_time = std::chrono::high_resolution_clock::now();

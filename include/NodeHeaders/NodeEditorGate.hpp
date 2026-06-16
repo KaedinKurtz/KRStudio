@@ -64,4 +64,20 @@ bool runFilterGate();
 // tick rate near baseline; the old synchronous (inline-recompute) path drops it.
 bool runThreadGate();
 
+// Recon/profile harness (KRS_NODEPROF_SELFTEST): dumps real NodeGraphicsObject geometry (framed vs
+// frameless) and the eval cascade cost with/without the scene. No asserts -- it informs the fixes.
+bool runNodeProfileDiag();
+
+// GATE FRAME-GFX (KRS_FRAMEGFX_SELFTEST): one layer up from GATE FRAME -- every registered type builds a
+// NodeGraphicsObject with a caption, a frame body, and boundary ports (graphics level, not just data model).
+bool runFrameGfxGate();
+
+// GATE PERF (KRS_PERF_SELFTEST): quiet eval cost is bounded + scales linearly with N (5/15/30); the old
+// per-eval scene-repaint cascade is much costlier and scales worse (reproduces the ~45ms blowup).
+bool runPerfGate();
+
+// GATE RATE (KRS_RATE_SELFTEST): the eval rate is configurable (30Hz..20kHz) and changes eval frequency,
+// while UI repaint stays capped (~60Hz) independent of it; a single-rate knob would repaint at kHz.
+bool runRateGate();
+
 } // namespace krs::nodes

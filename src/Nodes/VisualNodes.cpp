@@ -99,8 +99,15 @@ private:
         if (val && min && max && (*max > *min)) {                 // disconnected/invalid range -> NO update
             float normalized = std::clamp((*val - *min) / (*max - *min), 0.0f, 1.0f);
             setOutput("Normalized", normalized);
-            if (m_gauge) static_cast<GaugeWidget*>(m_gauge.data())->setReading(normalized, *val);
+            m_norm = normalized; m_value = *val; m_have = true;   // value only -- the WIDGET is pushed in refreshUi()
         }
+    }
+    bool DialGaugeNode::refreshUi() {
+        if (!m_have || !m_gauge) return false;
+        if (m_norm == m_lastNorm && m_value == m_lastValue) return false;   // unchanged -> no repaint
+        m_lastNorm = m_norm; m_lastValue = m_value;
+        static_cast<GaugeWidget*>(m_gauge.data())->setReading(m_norm, m_value);
+        return true;
     }
     namespace {
         // FIX: Added semicolon after struct definition
@@ -221,7 +228,15 @@ void NumericReadoutNode::compute() {
     int decimals = std::clamp(getInput<int>("Decimals").value_or(2), 0, 10);
     const QString text = QString::number(*v, 'f', decimals);
     setOutput<std::string>("Display", text.toStdString());
-    if (m_lcd) { m_lcd->setDigitCount(digits); m_lcd->display(text); }
+    m_text = text.toStdString(); m_digits = digits; m_have = true;   // value only -- the LCD is pushed in refreshUi()
+}
+bool NumericReadoutNode::refreshUi() {
+    if (!m_have || !m_lcd) return false;
+    if (m_text == m_lastText && m_digits == m_lastDigits) return false;   // unchanged -> no repaint
+    m_lastText = m_text; m_lastDigits = m_digits;
+    m_lcd->setDigitCount(m_digits);
+    m_lcd->display(QString::fromStdString(m_text));
+    return true;
 }
 QWidget* NumericReadoutNode::createCustomWidget()
 {

@@ -76,6 +76,11 @@
 #include "NodeFactory.hpp" // ADD THIS if you haven't already
 #include "RobotGraph.hpp"  // default boot node graph (spawnDefaultRobotGraph / tickRobotGraph)
 #include "NodeEditQueue.hpp" // decouple UI edits from the physics thread
+#include "EvalEngine.hpp"  // quiet eval + capped UI refresh (decouple eval from UI-update)
+#include <QDoubleSpinBox>
+#include <QLabel>
+#include <algorithm>
+#include <cmath>
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -913,9 +918,22 @@ MainWindow::MainWindow(QWidget* parent)
     splitter->addWidget(m_nodeView);
     splitter->setStretchFactor(0, 1);
     splitter->setStretchFactor(1, 3);
-    auto* containerLayout = new QHBoxLayout(nodeEditorContainer);
+    // Eval-rate control (the refresh-rate feature): the graph EVALUATES at this rate (30Hz..20kHz for a
+    // tight control loop); the UI repaint is hard-capped at 30Hz independently (so widgets never repaint at
+    // kHz). The two rates are deliberately different (GATE RATE).
+    auto* evalRateRow = new QWidget(nodeEditorContainer);
+    auto* evalRateLayout = new QHBoxLayout(evalRateRow);
+    evalRateLayout->setContentsMargins(6, 2, 6, 2);
+    evalRateLayout->addWidget(new QLabel(QStringLiteral("Eval Hz:")));
+    auto* evalRateSpin = new QDoubleSpinBox(evalRateRow);
+    evalRateSpin->setRange(1.0, 20000.0); evalRateSpin->setDecimals(0); evalRateSpin->setValue(30.0);
+    evalRateLayout->addWidget(evalRateSpin);
+    evalRateLayout->addWidget(new QLabel(QStringLiteral("(UI repaint capped at 30 Hz)")));
+    evalRateLayout->addStretch(1);
+    auto* containerLayout = new QVBoxLayout(nodeEditorContainer);
     containerLayout->setContentsMargins(0, 0, 0, 0);
-    containerLayout->addWidget(splitter);
+    containerLayout->addWidget(evalRateRow, 0);
+    containerLayout->addWidget(splitter, 1);
     nodeEditorContainer->setLayout(containerLayout);
     auto* combinedNodeDock = new ads::CDockWidget("Node Editor");
     combinedNodeDock->setWidget(nodeEditorContainer);
@@ -940,12 +958,31 @@ MainWindow::MainWindow(QWidget* parent)
     // per event on the sim's critical path (GATE THREAD). Gates that read output immediately keep the
     // default immediate mode; the live app turns deferral on.
     krs::nodes::NodeEditQueue::instance().setDeferred(true);
-    auto* nodeTickTimer = new QTimer(this);
-    connect(nodeTickTimer, &QTimer::timeout, this, [graphModel]() {
+
+    // EVALUATION tick (BUG 2 fix): evaluate the graph QUIETLY -- process every node + propagate backend data
+    // with NO QtNodes dataUpdated, so there is NO per-eval scene repaint cascade (the ~45ms blowup). The math
+    // is ~free, so this runs at the configurable eval rate (a tight control loop can ask for kHz).
+    auto evalIterPerFire = std::make_shared<int>(1);
+    auto* evalTimer = new QTimer(this);
+    connect(evalTimer, &QTimer::timeout, this, [graphModel, evalIterPerFire]() {
         krs::nodes::NodeEditQueue::instance().drain();   // apply coalesced UI edits (off the per-event path)
-        krs::nodes::tickRobotGraph(*graphModel);
+        for (int i = 0; i < *evalIterPerFire; ++i) krs::nodes::evaluateGraphQuiet(*graphModel);
     });
-    nodeTickTimer->start(33);   // ~30 Hz
+    auto setEvalRate = [evalTimer, evalIterPerFire](double hz) {
+        hz = std::clamp(hz, 1.0, 20000.0);
+        if (hz <= 250.0) { evalTimer->setInterval(int(std::round(1000.0 / hz))); *evalIterPerFire = 1; }
+        else { evalTimer->setInterval(4); *evalIterPerFire = std::max(1, int(std::round(hz / 250.0))); }  // >1kHz: iterate per fire
+    };
+    setEvalRate(30.0);
+    evalTimer->start();
+    connect(evalRateSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+            [setEvalRate](double hz) { setEvalRate(hz); });
+
+    // UI repaint tick -- CAPPED at 30 Hz, INDEPENDENT of the eval rate. Display widgets (readout/gauge) push
+    // their value here only when it CHANGED; they never repaint per eval (GATE PERF / GATE RATE).
+    auto* uiRefreshTimer = new QTimer(this);
+    connect(uiRefreshTimer, &QTimer::timeout, this, [graphModel]() { krs::nodes::refreshGraphUi(*graphModel); });
+    uiRefreshTimer->start(33);   // ~30 Hz UI cap
 
     // DEFAULT DEMO = A REAL NODE GRAPH. Spawn time_source -> gen_sine -> physics_articulation_drive on the
     // actual editor canvas; it drives the live FANUC J1 via the command bus + SimulationController bridge.

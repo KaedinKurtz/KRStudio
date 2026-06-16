@@ -2178,3 +2178,34 @@ changes the live robot's motion (follows the new amp, not the old). GATE OWNERSH
 - **C (doesn't fit a wireable control canvas -> REMOVED):** util_comment (a 0-port "non-functional box"
   that rendered as the screenshot's frameless bare panel).
 RULE held: a node ships as functional ONLY if gated; B nodes are reported as stubs/deferred, never as done.
+
+## §AO NODE-UI + PERF DEBUG SPRINT -- RECON/PROFILE (2026-06-15, before fixing)
+
+### BUG 1 (frameless nodes): NOT reproduced -- the graphics frame IS built + rendered
+Built the REAL NodeGraphicsObject via a CustomDataFlowScene and dumped geometry for every node type
+(KRS_NODEPROF_SELFTEST). For ALL types (incl. the "suspect-frameless" gen_sine / ctrl_goal_knob / control_pid):
+GO=yes, captionRect.height=16, valid boundingRect, ports positioned on the node boundary (inPort0=(0,39),
+outPort0=(width,39)), and the embedded widget sits BELOW the caption (wpos.y=26..37, caption baseline ~21).
+Rendered time_source.png + gen_sine.png to PNG: BOTH show the full frame -- title ("Sine Gen"), ports
+(Hold/t/Out), and body. So the directive's hypothesis ("heavy nodes fail to build the NodeGraphicsObject /
+frame") is refuted by the evidence; the prior sprint's transparent-container fix already resolved the
+widget-covering-the-frame issue. The real remaining UX cost is SIZE: heavy nodes are large (gen_sine
+286x435) because every non-source node mounts the 180x120 ExecutionControlWidget ("Execution Mode" combo).
+GATE FRAME-GFX still lands as the missing "one layer up" assertion (graphics object + caption + boundary
+ports exist for every type), so a future regression that drops the frame is caught.
+
+### BUG 2 (catastrophic eval): PROVEN -- the per-eval scene cascade
+tickRobotGraph -> NodeDelegate::recomputeAndPropagate -> Q_EMIT dataUpdated -> DataFlowGraphModel
+onOutPortDataUpdated -> setInData (downstream) -> inPortDataWasSet -> BasicGraphicsScene::onNodeUpdated
+-> recomputeSize (queries the proxy widget height -> layout) + node->update() (REPAINT the heavy proxy
+widget) + moveConnections. This fires PER downstream node PER eval, with NO dirty-tracking. Measured eval
+cost over a chain of N gen_sine nodes:
+  N= 5: WITH scene 0.206 ms/eval, WITHOUT 0.003 ms  (scene overhead 0.203 ms)
+  N=15: WITH scene 0.664 ms/eval, WITHOUT 0.011 ms  (scene overhead 0.652 ms)
+  N=30: WITH scene 1.150 ms/eval, WITHOUT 0.024 ms  (scene overhead 1.126 ms)
+The scene cascade is ~50x the pure eval and GROWS with N; headless this is recomputeSize-only (no real
+paint), so the live app's actual proxy-widget repaints push it to the reported ~45ms. The math itself is
+free (0.024 ms for 30 nodes). FIX: evaluate the graph QUIET (process + backend data propagation, NO QtNodes
+dataUpdated -> no scene repaint) at the control rate; refresh display widgets only when their value changed
+AND at a capped ~30-60Hz UI rate (separate from eval). Viz nodes must stop calling widget update() inside
+compute(). FEATURE: an eval-rate control (30Hz..20kHz) with the UI repaint hard-capped independently.

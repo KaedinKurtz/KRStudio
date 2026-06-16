@@ -61,8 +61,12 @@ namespace NodeLibrary {
         QWidget* createCustomWidget() override;
         DialGaugeNode();
         void compute() override;
+        bool refreshUi() override;   // push m_norm/m_value to the gauge IF changed (capped UI rate)
     private:
         QPointer<QWidget> m_gauge;   // the painted GaugeWidget (owned by the node body once mounted)
+        double m_norm = 0.0, m_value = 0.0;          // set by compute()
+        double m_lastNorm = 1e30, m_lastValue = 1e30; // last value pushed to the widget
+        bool m_have = false;
     };
 
     /**
@@ -75,8 +79,11 @@ namespace NodeLibrary {
         QWidget* createCustomWidget() override;
         NumericReadoutNode();
         void compute() override;
+        bool refreshUi() override;   // push m_text/m_digits to the LCD IF changed (capped UI rate)
     private:
         QPointer<QLCDNumber> m_lcd;
+        std::string m_text; int m_digits = 6; bool m_have = false;   // set by compute()
+        std::string m_lastText; int m_lastDigits = -1;               // last pushed to the LCD
     };
 
     /**

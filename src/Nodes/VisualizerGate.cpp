@@ -77,6 +77,7 @@ bool runVisGate()
                 ++rdChecks;
                 drive(cdg, t.digits); drive(cdc, t.decimals); drive(cv, t.value);
                 d.recomputeAndPropagate();
+                n->refreshUi();                                                 // push value -> widget (UI tick)
                 const double vIn = qobject_cast<QDoubleSpinBox*>(cv)->value();   // what the widget delivered
                 const QString expect = QString::number(vIn, 'f', t.decimals);
                 const std::string disp = outStr(*n, "Display");
@@ -96,12 +97,12 @@ bool runVisGate()
             QWidget* bn = nn ? dn.embeddedWidget() : nullptr;
             QLCDNumber* ln = bn ? bn->findChild<QLCDNumber*>() : nullptr;
             if (nn && ln) {
-                dn.recomputeAndPropagate();                       // no Value set
+                dn.recomputeAndPropagate(); nn->refreshUi();       // no Value set -> refreshUi pushes nothing
                 const std::string d0 = outStr(*nn, "Display");
                 const double before = ln->value();
                 if (auto* cdcn = findCtl(bn, "Decimals")) drive(cdcn, 2);
                 if (auto* cvn = findCtl(bn, "Value")) drive(cvn, 5.0);
-                dn.recomputeAndPropagate();
+                dn.recomputeAndPropagate(); nn->refreshUi();
                 const double after = ln->value();
                 const std::string dAfter = outStr(*nn, "Display");
                 // disconnected -> empty display + LCD at default 0; connected -> exactly 5.00 (tight).
@@ -132,6 +133,7 @@ bool runVisGate()
                 ++ggChecks;
                 drive(cmin, g.mn); drive(cmax, g.mx); drive(cv, g.v);
                 d.recomputeAndPropagate();
+                n->refreshUi();                                                 // push value -> gauge widget (UI tick)
                 const double norm  = outD(*n, "Normalized");
                 const double wnorm = gauge->property("krs_gauge_norm").toDouble();
                 const double wval  = gauge->property("krs_gauge_value").toDouble();
