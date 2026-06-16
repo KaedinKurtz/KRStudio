@@ -42,6 +42,8 @@ struct GraspResult {
     bool      grippedAtLiftoff = false;    // did both jaws ever close on the object before lift
     float     objectMassKg = 0.0f;         // densityKgM3 * volume (logged + Phase-0 mass re-assert)
     bool      physicsLocked = false;       // assertPhysicsLocked() verdict for this run's LIVE scene
+    float     maxJawForceN = 0.0f;         // peak per-substep jaw->object contact force during HOLD (impulse/dt);
+                                           // PROVES the squeeze is bounded by ~gripForceN (anvil is no infinite clamp)
 };
 
 // Run the full settle->close->lift->hold sequence for one grasp on one object mesh, under `world` (LOCKED

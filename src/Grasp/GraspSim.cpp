@@ -30,17 +30,31 @@ inline PxQuat toPxQ(const glm::quat& q) { return PxQuat(q.x, q.y, q.z, q.w); }
 inline glm::vec3 toGlm(const PxVec3& v) { return glm::vec3(v.x, v.y, v.z); }
 
 // per-step contact latches: set on TOUCH_FOUND, cleared on TOUCH_LOST -> reflect the current contact state.
+// Also measures the per-step contact NORMAL force on the object from a jaw (impulse/dt) while `recording`, so
+// the gate can PROVE the squeeze is bounded by gripForceN (the kinematic anvil cannot clamp harder than the
+// finger pushes -- not a hidden infinite grip).
 struct Tracker : PxSimulationEventCallback {
     bool objJaw0 = false, objJaw1 = false, objGround = false;
+    bool recording = false;
+    float maxJawForce = 0.0f;
     void onContact(const PxContactPairHeader& h, const PxContactPair* pairs, PxU32 n) override {
         const int ta = tagOf(h.actors[0]), tb = tagOf(h.actors[1]);
         int other = 0;
         if (ta == TAG_OBJ) other = tb; else if (tb == TAG_OBJ) other = ta; else return;
         bool* latch = (other == TAG_JAW0) ? &objJaw0 : (other == TAG_JAW1) ? &objJaw1 : (other == TAG_GROUND) ? &objGround : nullptr;
         if (!latch) return;
+        const bool isJaw = (other == TAG_JAW0 || other == TAG_JAW1);
         for (PxU32 i = 0; i < n; ++i) {
             if (pairs[i].events & PxPairFlag::eNOTIFY_TOUCH_FOUND) *latch = true;
             if (pairs[i].events & PxPairFlag::eNOTIFY_TOUCH_LOST)  *latch = false;
+            if (recording && isJaw) {
+                PxContactPairPoint pts[24];
+                const PxU32 np = pairs[i].extractContacts(pts, 24);
+                PxVec3 imp(0.0f);
+                for (PxU32 k = 0; k < np; ++k) imp += pts[k].impulse;   // total contact impulse this substep
+                const float force = imp.magnitude() / kLockedPhysics.fixedDt;
+                if (force > maxJawForce) maxJawForce = force;
+            }
         }
     }
     void onTrigger(PxTriggerPair*, PxU32) override {}
@@ -52,7 +66,9 @@ struct Tracker : PxSimulationEventCallback {
 
 PxFilterFlags graspFilter(PxFilterObjectAttributes, PxFilterData, PxFilterObjectAttributes, PxFilterData,
                           PxPairFlags& pf, const void*, PxU32) {
-    pf = PxPairFlag::eCONTACT_DEFAULT | PxPairFlag::eNOTIFY_TOUCH_FOUND | PxPairFlag::eNOTIFY_TOUCH_LOST;
+    pf = PxPairFlag::eCONTACT_DEFAULT | PxPairFlag::eNOTIFY_TOUCH_FOUND | PxPairFlag::eNOTIFY_TOUCH_LOST
+       | PxPairFlag::eNOTIFY_TOUCH_PERSISTS    // fire onContact EVERY step while touching (else steady HOLD is silent)
+       | PxPairFlag::eNOTIFY_CONTACT_POINTS;   // expose per-substep contact impulse -> prove the squeeze is bounded
     return PxFilterFlag::eDEFAULT;
 }
 
@@ -192,6 +208,10 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
     const int holdSteps = int(std::lround(kLockedPhysics.holdSeconds / dt));
     R.windowSteps = liftSteps + holdSteps;
     bool hasLiftedOff = false; bool groundAfter = false;
+    // Record jaw->object contact force across BOTH LIFT and HOLD: LIFT is the palm-acceleration phase where a
+    // disguised infinite clamp or inertial spike would manifest most strongly -- recording only the steady HOLD
+    // would leave that window untested. The peak over lift+hold must still be bounded near gripForceN.
+    tracker.recording = true;
     for (int s = 0; s < liftSteps; ++s) {
         const float y = graspC.y + kLockedPhysics.liftSpeedMps * dt * float(s + 1);
         palm->setKinematicTarget(PxTransform(toPx(glm::vec3(graspC.x, y, graspC.z)), toPxQ(q)));
@@ -205,7 +225,8 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
             std::printf("    [dbg-lift s=%3d] palmY=%.3f objCoM=(%.3f,%.3f,%.3f) j0t=%d j1t=%d\n", s, y, oc.x, oc.y, oc.z, tracker.objJaw0, tracker.objJaw1);
         }
     }
-    // HOLD (force, palm frozen at apex).
+    // HOLD (force, palm frozen at apex). Force recording continues from LIFT (proves the squeeze is bounded by
+    // gripForceN across the whole high-force window -- the kinematic anvil cannot press harder than the finger).
     const float apexY = graspC.y + kLockedPhysics.liftHeightM;
     for (int s = 0; s < holdSteps; ++s) {
         palm->setKinematicTarget(PxTransform(toPx(glm::vec3(graspC.x, apexY, graspC.z)), toPxQ(q)));
@@ -214,6 +235,8 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
         if (!tracker.objGround) hasLiftedOff = true;
         if (hasLiftedOff && tracker.objGround) groundAfter = true;
     }
+    tracker.recording = false;
+    R.maxJawForceN = tracker.maxJawForce;
     R.endCenter = worldCoM(obj);
     R.targetCenter = R.startCenter + glm::vec3(0.0f, kLockedPhysics.liftHeightM, 0.0f);
     R.centerErrM = glm::length(R.endCenter - R.targetCenter);

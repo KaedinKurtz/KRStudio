@@ -4,8 +4,8 @@
 // guard. Three runs on 036_wood_block:
 //   Run 1  GOOD grasp, LOCKED world        -> PASS (object lifted + held).
 //   Run 2  BAD grasp, SAME LOCKED world    -> FAIL (object slips out -- the criterion has teeth).
-//   Run 3  BAD grasp, SOFTENED world (g=0) -> the three success clauses FALSELY read PASS, BUT assertPhysicsLocked
-//                                            trips (gravity != -9.81) so the verdict is FAIL. This proves the
+//   Run 3  BAD grasp, SOFTENED world (sticky mu=5.0) -> the three success clauses FALSELY read PASS, BUT assertPhysicsLocked
+//                                            trips (friction != 0.70) so the verdict is FAIL. This proves the
 //                                            criterion is non-trivially passable (softening DOES rescue a bad
 //                                            grasp) AND that softening is un-fakeable (the guard catches it).
 // This is what makes every later success number trustworthy.
@@ -26,9 +26,9 @@ namespace krs::grasp { bool runGraspSuccessGate() { std::printf("[GRASP GATE SUC
 namespace krs::grasp {
 
 static void report(const char* tag, const GraspResult& r) {
-    std::printf("  %-22s mass=%.3f kg gripped=%d centerErr=%.4f m groundAfter=%d contactFrac=%.3f locked=%d -> %s\n",
+    std::printf("  %-22s mass=%.3f kg gripped=%d centerErr=%.4f m groundAfter=%d contactFrac=%.3f jawF=%.1fN locked=%d -> %s\n",
                 tag, r.objectMassKg, r.grippedAtLiftoff ? 1 : 0, r.centerErrM,
-                r.groundContactAfterLiftoff ? 1 : 0, r.contactFrac, r.physicsLocked ? 1 : 0,
+                r.groundContactAfterLiftoff ? 1 : 0, r.contactFrac, r.maxJawForceN, r.physicsLocked ? 1 : 0,
                 r.ok ? "SUCCESS" : "fail");
 }
 
@@ -64,16 +64,30 @@ bool runGraspSuccessGate() {
                            && (r3.contactFrac >= kLockedPhysics.contactFrac);
 
     const bool t_good   = r1.ok;                          // good grasp succeeds under the lock
-    const bool t_bad    = !r2.ok && r2.physicsLocked;     // SAME locked physics rejects the bad grasp
+    // SAME locked physics rejects the bad grasp -- AND rejects it by a COMFORTABLE MARGIN (not a knife-edge that
+    // a small change could flip): either the object missed the target by >2x the success distance, or it fell
+    // back to the ground. A "barely fails" bad grasp would mean the criterion's discriminating power had quietly
+    // collapsed while still reading green.
+    const bool badFailsHard = (r2.centerErrM > 2.0f * kLockedPhysics.successDistM) || r2.groundContactAfterLiftoff;
+    const bool t_bad    = !r2.ok && r2.physicsLocked && badFailsHard;
     const bool t_cheat  = r3clauses;                      // softened world DOES make the bad grasp 'succeed'
     const bool t_guard  = !r3.physicsLocked && !r3.ok;    // ...but the guard catches the softening -> still FAIL
 
+    // FORCE-BOUNDEDNESS (the kinematic-anvil anti-cheat): during HOLD the only thing pressing the object into
+    // the kinematic anvil is the finger's locked gripForceN, so the measured jaw->object contact force must be
+    // REAL (the grip exists) yet BOUNDED near gripForceN -- NOT an unbounded clamp a kinematic jaw could fake.
+    // (An infinite-grip anvil would read hundreds of N here; we require < 2x the locked force.)
+    const float Flock = kLockedPhysics.gripForceN;
+    const bool t_force = (r1.maxJawForceN > 0.5f * Flock) && (r1.maxJawForceN < 2.0f * Flock);
+
     std::printf("  anti-cheat: bad-grasp clauses in softened world = %s (cheat works) ; guard rejected softening = %s\n",
                 t_cheat ? "PASS" : "fail", (!r3.physicsLocked) ? "yes" : "NO");
+    std::printf("  force-bound: good-grasp peak jaw force = %.1f N (locked grip %.1f N) -> %s (real grip, bounded -- no infinite clamp)\n",
+                r1.maxJawForceN, Flock, t_force ? "PASS" : "FAIL");
 
-    const bool pass = t_good && t_bad && t_cheat && t_guard;
-    std::printf("[GRASP GATE SUCCESS-CRITERION] good=%d bad-fails=%d softened-cheats=%d guard-catches=%d -> %s\n",
-                t_good, t_bad, t_cheat, t_guard, pass ? "PASS" : "FAIL");
+    const bool pass = t_good && t_bad && t_cheat && t_guard && t_force;
+    std::printf("[GRASP GATE SUCCESS-CRITERION] good=%d bad-fails=%d softened-cheats=%d guard-catches=%d force-bounded=%d -> %s\n",
+                t_good, t_bad, t_cheat, t_guard, t_force, pass ? "PASS" : "FAIL");
     return pass;
 }
 
