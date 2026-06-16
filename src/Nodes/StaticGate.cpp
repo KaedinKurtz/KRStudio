@@ -6,6 +6,7 @@
 #include "Node.hpp"
 #include "NodeDelegate.hpp"
 #include "NodeEditorGate.hpp"
+#include "NodeEditQueue.hpp"
 
 #include <QApplication>
 #include <QWidget>
@@ -108,7 +109,34 @@ bool runStaticConstGate()
         negOk = !hasField;     // correctly field-less (not falsely claimed editable)
     }
 
-    const bool pass = (ok == M) && (M > 0) && negOk;
+    // DEFERRED-PATH test: the LIVE app runs the NodeEditQueue in deferred mode -- an edit must survive
+    // post -> drain (and a vec3's three components, edited in ONE frame, must NOT coalesce/drop).
+    bool deferredOk = false, vecDeferOk = false;
+    {
+        auto& Q = NodeEditQueue::instance();
+        Q.setDeferred(true); Q.drain();
+        NodeDelegate d("static_StaticFloatNode"); Node* n = d.backendNode(); QWidget* body = n ? d.embeddedWidget() : nullptr;
+        if (auto* sb = body ? body->findChild<QDoubleSpinBox*>() : nullptr) sb->setValue(4.25);
+        const double beforeDrain = n ? outScalar(*n) : std::nan("");   // queued, not yet applied
+        Q.drain();
+        const double afterDrain = n ? outScalar(*n) : std::nan("");
+        deferredOk = std::abs(beforeDrain - 4.25) > 1e-6 && std::abs(afterDrain - 4.25) < 1e-4;
+
+        NodeDelegate dv("static_StaticVec3Node"); Node* nv = dv.backendNode(); QWidget* bv = nv ? dv.embeddedWidget() : nullptr;
+        auto vb = bv ? bv->findChildren<QDoubleSpinBox*>() : QList<QDoubleSpinBox*>();
+        if (vb.size() == 3) { vb[0]->setValue(5); vb[1]->setValue(6); vb[2]->setValue(7); }   // all 3 in one frame
+        Q.drain();
+        glm::vec3 vv(0); bool found = false;
+        if (nv) for (const auto& p : nv->getPorts())
+            if (p.direction == Port::Direction::Output && p.name == "Value" && p.packet.has_value())
+                { try { vv = std::any_cast<glm::vec3>(p.packet->data); found = true; } catch (...) {} }
+        vecDeferOk = found && std::abs(vv.x - 5) < 1e-4 && std::abs(vv.y - 6) < 1e-4 && std::abs(vv.z - 7) < 1e-4;
+        Q.setDeferred(false);
+        printf("[static]   DEFERRED: edit queued then drained -> %.4f (want 4.25)=%s; vec3 3 components in one frame -> (%.1f,%.1f,%.1f) no coalesce=%s\n",
+               afterDrain, deferredOk ? "ok" : "FAIL", vv.x, vv.y, vv.z, vecDeferOk ? "ok" : "FAIL");
+    }
+
+    const bool pass = (ok == M) && (M > 0) && negOk && deferredOk && vecDeferOk;
     printf("[static]   coverage: %d/%d constant types' value field sets the emitted constant; NEG-CTRL matrix const has no field=%s\n",
            ok, M, negOk ? "yes" : "NO");
     if (!fail.empty()) { printf("[static]   FAILURES: "); for (auto& s : fail) printf("%s ", s.c_str()); printf("\n"); }

@@ -26,6 +26,11 @@ namespace NodeLibrary {
     template<typename T>
     class StaticNode : public Node {
     public:
+        // A constant source needs no execution-policy controls: it must ALWAYS emit (Asynchronous). Without
+        // this a user could set the node to "Triggered" and the constant would stop updating on edit; it
+        // also keeps the node small.
+        bool needsExecutionControls() const override { return false; }
+
         // A real value editor bound to `value` for the clean scalar/vector/string constants (the math ones).
         // Editing it posts to the NodeEditQueue (consistent with the rest of the node UI), sets `value`, and
         // re-evaluates so the constant the node emits is the one shown. Matrix/quat/Eigen constants stay
@@ -60,8 +65,11 @@ namespace NodeLibrary {
                 for (int k = 0; k < N; ++k) {
                     auto* sb = new QDoubleSpinBox(); sb->setRange(-1.0e9, 1.0e9); sb->setDecimals(3); sb->setValue(double(value[k]));
                     if (k == 0) sb->setProperty("krs_static_value", true);
+                    // PER-COMPONENT key: in deferred mode a shared key would coalesce x/y/z edits made in the
+                    // same frame and drop all but the last; "static<k>" keeps each component independent.
                     QObject::connect(sb, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [node, k](double v) {
-                        krs::nodes::NodeEditQueue::instance().post(node, "static", [node, k, v]{ node->value[k] = float(v); node->process(); }); });
+                        krs::nodes::NodeEditQueue::instance().post(node, std::string("static") + std::to_string(k),
+                            [node, k, v]{ node->value[k] = float(v); node->process(); }); });
                     l->addWidget(sb);
                 }
                 return w;

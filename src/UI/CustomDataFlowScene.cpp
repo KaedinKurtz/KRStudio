@@ -19,12 +19,16 @@ CustomDataFlowScene::CustomDataFlowScene(QtNodes::DataFlowGraphModel& model, QOb
     // paint produces a BLANK frame (only the embedded proxy widget shows) until you zoom far enough out.
     // We connect AFTER the base scene's onNodeCreated has built the graphics object and switch it to a
     // direct, unbounded paint so every node's frame renders at every zoom.
-    connect(&model, &QtNodes::AbstractGraphModel::nodeCreated, this, [this](QtNodes::NodeId id) {
+    auto fix = [this](QtNodes::NodeId id) {
         if (QtNodes::NodeGraphicsObject* go = nodeGraphicsObject(id)) {
             go->setCacheMode(QGraphicsItem::NoCache);
             go->setGraphicsEffect(nullptr);
         }
-    });
+    };
+    connect(&model, &QtNodes::AbstractGraphModel::nodeCreated, this, fix);
+    // The base scene's constructor already built graphics objects for any nodes PRE-EXISTING in the model
+    // (e.g. a loaded/deserialized graph) before this connect was made -- fix those too.
+    for (QtNodes::NodeId id : model.allNodeIds()) fix(id);
 }
 
 void CustomDataFlowScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
