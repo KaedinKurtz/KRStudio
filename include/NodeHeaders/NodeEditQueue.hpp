@@ -32,6 +32,11 @@ public:
     std::size_t drain();          // apply all pending (coalesced) closures; returns how many ran
     std::size_t pending() const;
 
+    // Drop every pending edit posted for `obj` (keys are prefixed by the object pointer). MUST be called
+    // when an object whose closures capture raw pointers is destroyed (e.g. ~NodeDelegate), so a node
+    // deleted mid-drag cannot leave a dangling-pointer closure for the next drain() (use-after-free).
+    void cancel(const void* obj);
+
 private:
     NodeEditQueue() = default;
     mutable std::mutex m_mtx;

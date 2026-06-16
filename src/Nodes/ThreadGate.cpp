@@ -19,6 +19,7 @@
 #include <QApplication>
 #include <QWidget>
 #include <QAbstractSlider>
+#include <QDoubleSpinBox>
 
 #include <cstdio>
 #include <chrono>
@@ -98,11 +99,37 @@ bool runThreadGate()
         }
     }
 
+    // Use-after-free safety: a node destroyed while edits are queued must cancel them so the next drain()
+    // does not call a dangling-pointer closure. Post via both a param dial (keyed by the backend Node*)
+    // and an input spinbox (keyed by the delegate), destroy the delegate, then drain.
+    bool uafSafe = false;
+    {
+        Q.setDeferred(true); Q.drain();
+        size_t afterPost = 0;
+        {
+            NodeDelegate tmp("gen_sine");
+            QWidget* b = tmp.embeddedWidget();
+            if (b) for (QWidget* w : b->findChildren<QWidget*>()) {
+                if (w->property("krs_param").toString() == "freq")
+                    if (auto* s = qobject_cast<QAbstractSlider*>(w)) s->setValue(s->value() + 50);
+                if (w->property("krs_input_port").toString() == "t")
+                    if (auto* sb = qobject_cast<QDoubleSpinBox*>(w)) sb->setValue(1.234);
+            }
+            afterPost = Q.pending();
+        }                                   // ~NodeDelegate cancels tmp's queued edits here
+        const size_t afterDtor = Q.pending();
+        Q.drain();                          // must be safe even though tmp is gone
+        Q.setDeferred(false);
+        uafSafe = (afterPost > 0) && (afterDtor == 0);
+        printf("[thread]   use-after-free safety: queued=%zu before destroy -> %zu after (cancelled), drain safe: %s\n",
+               afterPost, afterDtor, uafSafe ? "yes" : "NO");
+    }
+
     const bool asyncOk  = idle > 0 && async > 0.8 * idle;          // async stays within ~20% of baseline
     const bool syncDrop = sync < 0.7 * idle;                       // old synchronous path drops >=30%
     const bool clearGap = idle > 0 && (async - sync) / idle > 0.2; // async is >=20 points better than sync
     const bool widgetOk = widgetDefers && widgetImmediate;
-    const bool pass = asyncOk && syncDrop && clearGap && widgetOk;
+    const bool pass = asyncOk && syncDrop && clearGap && widgetOk && uafSafe;
 
     printf("[thread]   tick rate: idle=%.0f/s, async(hammered)=%.0f/s (%.0f%% of idle), sync(old path)=%.0f/s (%.0f%% of idle)\n",
            idle, async, idle > 0 ? 100.0 * async / idle : 0.0, sync, idle > 0 ? 100.0 * sync / idle : 0.0);

@@ -30,4 +30,13 @@ std::size_t NodeEditQueue::pending() const
     return m_latest.size();
 }
 
+void NodeEditQueue::cancel(const void* obj)
+{
+    char buf[32]; std::snprintf(buf, sizeof(buf), "%p:", obj);
+    const std::string prefix(buf);
+    std::lock_guard<std::mutex> lk(m_mtx);
+    for (auto it = m_latest.begin(); it != m_latest.end(); )
+        if (it->first.rfind(prefix, 0) == 0) it = m_latest.erase(it); else ++it;
+}
+
 } // namespace krs::nodes

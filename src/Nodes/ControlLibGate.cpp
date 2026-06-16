@@ -47,13 +47,13 @@ bool runPidGate()
     n->setPortLiteral<double>("Setpoint", sp);
 
     double nodeX = 0.0, refX = 0.0, refI = 0.0, refPrev = 0.0;
-    double maxU = 0.0, maxX = 0.0;
+    double maxU = 0.0, maxX = 0.0, u0Full = std::nan("");
     const int N = 600;
     for (int k = 0; k < N; ++k) {
         // NODE closed loop
         n->setPortLiteral<double>("Measurement", nodeX);
         n->process();
-        const double u = outD(*n, "Control");
+        const double u = outD(*n, "Control"); if (k == 0) u0Full = u;
         nodeX += dt * (-a * nodeX + b * u);
         // INDEPENDENT reference PID + plant
         const double err = sp - refX;
@@ -73,11 +73,34 @@ bool runPidGate()
     for (int k = 0; k < N; ++k) { const double e = sp - pX; pX += dt * (-a * pX + b * (Kp * e)); }
     const bool pOnlyOffset = std::abs(pX - sp) > 0.1;
 
-    const bool pass = matches && reaches && pOnlyOffset;
+    // INDEPENDENT gain-usage checks: prove the NODE actually uses Ki and Kd (not silently ignores them).
+    auto runNodeLoop = [&](double kp, double ki, double kd, double& finalX, double& firstU) {
+        auto m = NodeFactory::instance().createNode("control_pid");
+        m->setPortLiteral<double>("Kp", kp); m->setPortLiteral<double>("Ki", ki);
+        m->setPortLiteral<double>("Kd", kd); m->setPortLiteral<double>("dt", dt);
+        m->setPortLiteral<double>("Setpoint", sp);
+        double x = 0.0; firstU = std::nan("");
+        for (int k = 0; k < N; ++k) {
+            m->setPortLiteral<double>("Measurement", x); m->process();
+            const double u = outD(*m, "Control"); if (k == 0) firstU = u;
+            x += dt * (-a * x + b * u);
+        }
+        finalX = x;
+    };
+    double xKi0, uKi0, xKd0, uKd0;
+    runNodeLoop(Kp, 0.0, Kd, xKi0, uKi0);            // node with Ki=0
+    runNodeLoop(Kp, Ki, 0.0, xKd0, uKd0);            // node with Kd=0
+    const bool kiUsed = reaches && std::abs(xKi0 - sp) > 0.1;        // full node reaches; Ki=0 keeps offset -> Ki is used
+    const bool kdUsed = std::abs(uKd0 - u0Full) > 1e-6;             // Kd changes the first (derivative-kick) control
+    (void)uKi0;
+
+    const bool pass = matches && reaches && pOnlyOffset && kiUsed && kdUsed;
     printf("[pid]   node vs reference: max|u-uref|=%.2e max|x-xref|=%.2e (%s); step response settles x=%.4f -> setpoint=%.1f (%s)\n",
            maxU, maxX, matches ? "match" : "MISMATCH", nodeX, sp, reaches ? "reached" : "NOT reached");
     printf("[pid]   NEG-CTRL P-only loop settles x=%.4f (offset %.3f > 0.1): %s\n", pX, std::abs(pX - sp), pOnlyOffset ? "PASS" : "FAIL!");
-    printf("[pid] %s\n", pass ? "ALL PASS (PID matches reference + removes steady-state error; P-only retains offset)" : "FAILURES PRESENT");
+    printf("[pid]   gain usage: Ki=0 node keeps offset x=%.4f (Ki used=%s); Kd changes first control %.4f vs %.4f (Kd used=%s)\n",
+           xKi0, kiUsed ? "yes" : "NO", uKd0, u0Full, kdUsed ? "yes" : "NO");
+    printf("[pid] %s\n", pass ? "ALL PASS (PID matches reference; removes steady-state error; node provably uses Ki and Kd)" : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
 }
@@ -97,13 +120,13 @@ bool runFilterGate()
             const double truth = 5.0, Q = 1e-3, R = 1.0;
             n->setPortLiteral<double>("Q", Q); n->setPortLiteral<double>("R", R);
             double rx = 0.0, rP = 1.0; bool rInit = false;        // reference recursion
-            double maxDiff = 0.0, sumRaw = 0.0, sumFilt = 0.0; int cnt = 0;
+            double maxDiff = 0.0, sumRaw = 0.0, sumFilt = 0.0; int cnt = 0; double finalEst = std::nan("");
             const int N = 200;
             for (int i = 0; i < N; ++i) {
                 const double noise = 0.8 * std::sin(1.3 * i) + 0.5 * std::cos(2.7 * i + 0.4);
                 const double z = truth + noise;
                 n->setPortLiteral<double>("Measurement", z); n->process();
-                const double est = outD(*n, "Estimate");
+                const double est = outD(*n, "Estimate"); finalEst = est;
                 // reference
                 if (!rInit) { rx = z; rP = R; rInit = true; }
                 else { rP += Q; const double K = rP / (rP + R); rx += K * (z - rx); rP *= (1.0 - K); }
@@ -111,9 +134,13 @@ bool runFilterGate()
                 if (i >= N / 2) { sumRaw += (z - truth) * (z - truth); sumFilt += (est - truth) * (est - truth); ++cnt; }
             }
             const double rawRmse = std::sqrt(sumRaw / cnt), filtRmse = std::sqrt(sumFilt / cnt);
-            kalmanOk = (maxDiff < 1e-9) && (filtRmse < rawRmse * 0.5);   // matches reference AND reduces error
-            printf("[filter]   Kalman: max|node-ref|=%.2e; raw RMSE=%.4f -> filtered RMSE=%.4f (%s)  %s\n",
-                   maxDiff, rawRmse, filtRmse, filtRmse < rawRmse ? "noise reduced" : "NO reduction", kalmanOk ? "ok" : "FAIL");
+            // (a) matches the reference recursion exactly, (b) reduces error well below raw (catches K=1
+            // passthrough), and (c) INDEPENDENT TRUTH ORACLE: converges to the true 5.0 (catches a K=0
+            // frozen filter stuck at the noisy first sample, which would NOT reach the truth).
+            const bool converged = std::abs(finalEst - truth) < 0.1;
+            kalmanOk = (maxDiff < 1e-9) && (filtRmse < rawRmse * 0.3) && converged;
+            printf("[filter]   Kalman: max|node-ref|=%.2e; raw RMSE=%.4f -> filtered RMSE=%.4f; estimate=%.4f->truth %.1f (%s)  %s\n",
+                   maxDiff, rawRmse, filtRmse, finalEst, truth, converged ? "converged" : "NOT converged", kalmanOk ? "ok" : "FAIL");
         }
     }
 

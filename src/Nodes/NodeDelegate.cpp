@@ -69,7 +69,14 @@ NodeDelegate::NodeDelegate(std::string typeId)
     , m_typeId(std::move(typeId))
 {
 }
-NodeDelegate::~NodeDelegate() = default;
+NodeDelegate::~NodeDelegate()
+{
+    // Drop any deferred UI edits still queued for this delegate or its backend node, so a node deleted
+    // mid-drag cannot leave a dangling-pointer closure for the next drain() (use-after-free). The spinbox
+    // closures key by `this`; the param-dial closures (NodeWidgets) key by the backend Node*.
+    krs::nodes::NodeEditQueue::instance().cancel(this);
+    if (m_backendNode) krs::nodes::NodeEditQueue::instance().cancel(m_backendNode.get());
+}
 
 // MOUNT FIX: lazily create the backend node + its widget the first time QtNodes touches this delegate
 // (nPorts/dataType/embeddedWidget during NodeGraphicsObject construction), so embeddedWidget() is non-null
