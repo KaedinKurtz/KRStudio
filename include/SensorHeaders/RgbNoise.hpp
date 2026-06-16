@@ -14,10 +14,17 @@ struct RgbNoiseModel {
     double readNoiseDN{2.0};     // read-noise std (DN), signal-independent dark floor
     double fullScaleDN{255.0};   // clipping ceiling
     int    bitDepth{8};          // quantization levels = 2^bitDepth - 1
-    bool   signalDependent{true};// false => the FIXED-GAUSSIAN neg-ctrl (read+shot collapsed to a constant)
+    bool   signalDependent{true};// false => the FIXED-GAUSSIAN neg-ctrl A (read+shot collapsed to a constant)
+    bool   gaussianShot{false};  // true => signal-DEPENDENT GAUSSIAN shot (neg-ctrl B): matches the affine
+                                 //         photon-transfer curve but is NOT Poisson (continuous, not integer)
     double fixedSigmaDN{0.0};    // used only when !signalDependent
 
     static RgbNoiseModel fromRgb(const RgbProfile& p);
+
+    // The raw shot stage: electron count for a clean signal S. Poisson (integer) normally; a continuous
+    // Gaussian(e, sqrt(e)) when gaussianShot (the neg-ctrl B that fools the affine test). Used BY apply(),
+    // and probed directly by the gate to test the DEFINING Poisson property (var==mean AND integer counts).
+    double shotElectrons(double signalDN, std::mt19937_64& rng) const;
 
     // Apply the noise stack to one clean signal S (DN). Returns the quantized, clipped noisy DN.
     double apply(double signalDN, std::mt19937_64& rng) const;
