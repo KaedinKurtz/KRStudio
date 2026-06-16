@@ -85,4 +85,9 @@ bool runRateGate();
 // hoverLeave; NEG-CTRL: a WA_TranslucentBackground container + a hidden combo are caught.
 bool runHoverIntegrityGate();
 
+// GATE ZOOM-VISIBLE (KRS_ZOOM_SELFTEST): every node is NoCache + has no offscreen drop-shadow effect (no
+// device pixmap to overflow at zoom), and the largest nodes' frame title renders at both terminal-zoom
+// bounds (0.3x/2x); NEG-CTRL: an un-fixed node carries the overflow-prone DeviceCoordinateCache + effect.
+bool runZoomVisibilityGate();
+
 } // namespace krs::nodes

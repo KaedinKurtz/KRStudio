@@ -967,6 +967,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // GATE ZOOM-VISIBLE: every node frame visible at both terminal-zoom bounds (no offscreen-pixmap overflow).
+    if (qEnvironmentVariableIntValue("KRS_ZOOM_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ZOOM_SELFTEST =================\n");
+        const bool ok = krs::nodes::runZoomVisibilityGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
 
     // Phase 3 GATE F3: hard-feature disambiguation (small bore / shared edge / edge-vs-face).
     if (qEnvironmentVariableIntValue("KRS_DISAMBIG_SELFTEST") != 0) {
@@ -1092,6 +1099,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE PERF (quiet eval bounded+linear; old per-eval scene cascade blows up)", krs::nodes::runPerfGate() },
             { "GATE RATE (eval rate configurable; UI repaint capped independently)", krs::nodes::runRateGate() },
             { "GATE HOVER-INTEGRITY (frame bg + exec control survive hover-enter/leave; no WA_Translucent)", krs::nodes::runHoverIntegrityGate() },
+            { "GATE ZOOM-VISIBLE (every node NoCache+no-effect; frame paints at 0.3x/2x terminal zoom)", krs::nodes::runZoomVisibilityGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

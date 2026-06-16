@@ -6,8 +6,26 @@
 #include <QGraphicsSceneContextMenuEvent>
 #include <QGraphicsItem> // <-- FIX 1
 #include <QtNodes/DataFlowGraphModel>
+#include <QtNodes/internal/NodeGraphicsObject.hpp>
 #include <map>
 #include <QTransform>
+
+CustomDataFlowScene::CustomDataFlowScene(QtNodes::DataFlowGraphModel& model, QObject* parent)
+    : QtNodes::DataFlowGraphicsScene(model, parent)
+{
+    // QtNodes' NodeGraphicsObject ctor sets DeviceCoordinateCache + a drop-shadow QGraphicsEffect. Both
+    // render the item to an offscreen DEVICE-coordinate pixmap (size x devicePixelRatio x zoom). For large
+    // nodes on a hi-DPI screen that pixmap exceeds the max pixmap/GL-texture size -> the cached/effected
+    // paint produces a BLANK frame (only the embedded proxy widget shows) until you zoom far enough out.
+    // We connect AFTER the base scene's onNodeCreated has built the graphics object and switch it to a
+    // direct, unbounded paint so every node's frame renders at every zoom.
+    connect(&model, &QtNodes::AbstractGraphModel::nodeCreated, this, [this](QtNodes::NodeId id) {
+        if (QtNodes::NodeGraphicsObject* go = nodeGraphicsObject(id)) {
+            go->setCacheMode(QGraphicsItem::NoCache);
+            go->setGraphicsEffect(nullptr);
+        }
+    });
+}
 
 void CustomDataFlowScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 {
