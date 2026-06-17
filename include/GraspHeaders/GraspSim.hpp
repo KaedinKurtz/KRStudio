@@ -47,8 +47,12 @@ struct GraspResult {
 };
 
 // Run the full settle->close->lift->hold sequence for one grasp on one object mesh, under `world` (LOCKED
-// unless world.softened). Cooks the object's convex decomposition internally and seats it on a ground plane.
-GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const GraspSpec& grasp, const WorldOverride& world);
+// unless world.softened). Seats the object on a ground plane. The OBJECT COLLIDER is the ONLY thing the
+// `coacdPath` argument changes: if it names a loadable CoACD parts file the collider is the precomputed CoACD
+// convex decomposition; otherwise (empty/missing) it falls back to the runtime V-HACD decomposition. The
+// physics + success criterion are identical in both cases (same configHash) -- the collider is the variable.
+GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const GraspSpec& grasp, const WorldOverride& world,
+                          const std::string& coacdPath = "");
 
 // The LOCKED criterion, EXACTLY: centerErrM < successDistM AND no post-liftoff ground contact AND
 // contactFrac >= contactFrac AND the live-physics guard held. Pure function of a measured GraspResult.

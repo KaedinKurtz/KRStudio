@@ -3,20 +3,24 @@
 #if !defined(KR_WITH_PHYSX)
 #include <cstdio>
 namespace krs::grasp {
-GraspResult runGripperSim(const RenderableMeshComponent&, const GraspSpec&, const WorldOverride&) { return {}; }
+GraspResult runGripperSim(const RenderableMeshComponent&, const GraspSpec&, const WorldOverride&, const std::string&) { return {}; }
 bool graspSucceeded(const GraspResult&) { return false; }
 bool assertPhysicsLocked(physx::PxScene*, physx::PxMaterial*, float) { return false; }
 }
 #else
 
 #include "GraspMesh.hpp"
+#include "CoacdCollider.hpp"
 #include "CollisionCookingService.hpp"
 #include "SimulationController.hpp"
+#include "components.hpp"          // Vertex
 #include <PxPhysicsAPI.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 using namespace physx;
 
@@ -103,7 +107,29 @@ bool graspSucceeded(const GraspResult& r) {
     return r.physicsLocked && c1 && c2 && c3 && c4;
 }
 
-GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const GraspSpec& grasp, const WorldOverride& world) {
+// Build the object collider. If coacdPath loads, cook each precomputed CoACD convex part into a PxConvexMesh
+// (via the same convex-hull cooker the V-HACD path uses, so flags/64-vert cap are identical); else fall back to
+// the runtime V-HACD decomposition. Returns the hull list to attach.
+static std::vector<PxConvexMesh*> cookObjectCollider(CollisionCookingService& cook,
+                                                     const RenderableMeshComponent& objectMesh,
+                                                     const std::string& coacdPath) {
+    std::vector<std::vector<glm::vec3>> parts;
+    if (!coacdPath.empty() && loadCoacdParts(coacdPath, parts)) {
+        std::vector<PxConvexMesh*> hulls;
+        hulls.reserve(parts.size());
+        for (size_t i = 0; i < parts.size(); ++i) {
+            std::vector<Vertex> vv(parts[i].size());
+            for (size_t k = 0; k < parts[i].size(); ++k) vv[k].position = parts[i][k];   // hull cook uses position only
+            PxConvexMesh* h = cook.requestConvexHull(vv, "coacd_part").get();
+            if (h) hulls.push_back(h);
+        }
+        if (!hulls.empty()) return hulls;            // CoACD collider
+    }
+    return cook.requestConvexDecomposition(objectMesh.vertices, objectMesh.indices, "grasp_obj").get();  // V-HACD fallback
+}
+
+GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const GraspSpec& grasp, const WorldOverride& world,
+                          const std::string& coacdPath) {
     GraspResult R;
     PxPhysics* phys = &PxGetPhysics();
     SimulationController::ensurePhysxExtensions();
@@ -133,10 +159,11 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
     ground->userData = (void*)(intptr_t)TAG_GROUND;
     scene->addActor(*ground);
 
-    // object: cooked convex decomposition, seated with AABB bottom on the ground, CoM over the origin.
+    // object collider, seated with AABB bottom on the ground, CoM over the origin. The collider is the ONLY
+    // variable: CoACD precomputed parts if coacdPath loads, else the runtime V-HACD decomposition (fallback).
     const MeshMetrics mm = computeMetrics(objectMesh);
-    R.objectMassKg = float(kLockedPhysics.densityKgM3) * float(mm.volume);
-    std::vector<PxConvexMesh*> hulls = cook.requestConvexDecomposition(objectMesh.vertices, objectMesh.indices, "grasp_obj").get();
+    R.objectMassKg = float(kLockedPhysics.densityKgM3) * float(mm.volume);   // mass is from the render-mesh volume, collider-independent
+    std::vector<PxConvexMesh*> hulls = cookObjectCollider(cook, objectMesh, coacdPath);
     if (hulls.empty()) { scene->release(); disp->release(); return R; }
     const PxTransform objPose(PxVec3(-float(mm.centroid.x), -float(mm.aabbMin.y), -float(mm.centroid.z)));
     PxRigidDynamic* obj = phys->createRigidDynamic(objPose);

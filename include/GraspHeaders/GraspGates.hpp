@@ -9,5 +9,7 @@ bool runGraspCoacdGate();    // GATE COACD: concavity survives (ball rests insid
 bool runGraspSuccessGate();  // GATE SUCCESS-CRITERION: good grasp passes / bad fails under LOCKED physics; softened-world anti-cheat neg-ctrl
 bool runGraspPlannerGate();  // GATE PLANNER: antipodal heuristic raises the success rate baseline->tuned; random neg-ctrl
 bool runGraspFailureCatalogGate(); // GATE FAILURE-CATALOG: classify 100% of tuned-planner failures; incomplete-taxonomy neg-ctrl
+bool runGraspCoacdRealGate();  // GATE COACD-REAL: CoACD preserves grasp-relevant concavities V-HACD FILLS (discriminating)
+bool runGraspRemeasureGate();  // GATE REMEASURE: V-HACD vs CoACD success rate, same grasps + LOCKED criterion (apples-to-apples)
 
 } // namespace krs::grasp

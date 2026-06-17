@@ -81,13 +81,14 @@ bool runGraspFailureCatalogGate() {
         catch (const std::exception& e) { std::printf("  %-22s load failed: %s\n", o.id.c_str(), e.what()); return false; }
         const MeshMetrics mm = computeMetrics(mesh);
         const std::vector<GraspSpec> specs = planAntipodal(mesh, mm, tune);
+        const std::string cp = o.coacdPath();      // CoACD collider (the new default)
 
         std::array<int, F_COUNT> objHist{};
         int succ = 0;
         for (int k = 0; k < kAttempts; ++k) {
             const bool found = (k < int(specs.size()));
             GraspResult r{};
-            if (found) r = runGripperSim(mesh, specs[size_t(k)], locked);
+            if (found) r = runGripperSim(mesh, specs[size_t(k)], locked, cp);
 
             const int mFull = classifyFull(found, r);
             if (mFull < 0) { ++unclassifiedFull; }

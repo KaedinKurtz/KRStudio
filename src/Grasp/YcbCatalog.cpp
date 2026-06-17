@@ -12,6 +12,10 @@ std::string YcbObject::meshPath() const {
     return ycbRoot() + "/" + id + "/google_16k/nontextured.ply";
 }
 
+std::string YcbObject::coacdPath() const {
+    return ycbRoot() + "/" + id + "/coacd.bin";   // offline-generated CoACD convex parts (scripts/gen_coacd.py)
+}
+
 const std::vector<YcbObject>& ycbCatalog() {
     // anchorLongest{Min,Max}: a tight scale band on the AABB longest axis for EVERY object. The center is the
     // as-shipped measured longest (the meshes are verified real-meter via independent published anchors --

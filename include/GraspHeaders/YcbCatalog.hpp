@@ -15,6 +15,7 @@ struct YcbObject {
     double      anchorLongestMin;  // tight published-dimension anchor on the AABB longest axis (m); 0 = none
     double      anchorLongestMax;
     std::string meshPath() const;  // resolved absolute path to the geometry (.ply)
+    std::string coacdPath() const; // resolved absolute path to the cooked CoACD convex parts (.bin)
 };
 
 // The library. Mesh dir defaults to the repo assets/ycb, overridable via KRS_YCB_DIR.

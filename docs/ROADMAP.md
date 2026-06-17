@@ -2642,3 +2642,33 @@ gripper + criterion -- NOT a claim about a specific real robot. PROXY/LIMIT: a r
 parallel gripper with STATED (not hardware-calibrated) friction/force/density; the convex-decomposition collider
 and the tabletop seating are sim choices. The number would differ for another gripper. Target met: a high HONEST
 rate (53.3%, not a suspicious 100%) with every failure characterized by physical root cause.
+
+## §GR-CoACD COLLIDER SWITCH + RE-MEASURE (2026-06-16, recon before coding)
+The prior sprint shipped V-HACD colliders despite the CoACD requirement. This swaps the OBJECT COLLIDER to CoACD
+and RE-MEASURES the rate under the UNCHANGED locked criterion (hash 868489ff8e07da5f) -- the collider is the
+ONLY variable. RECON: CoACD (github.com/SarahWeiii/CoACD) is **MIT** (OSI-approved, verified via package
+metadata) -> ships freely. Feasibility: `pip install coacd` provides a prebuilt Windows wheel (coacd 1.0.11) --
+it RUNS here (mug -> 78 convex parts). DECISION: rather than vendor CoACD's C++ build deps (the prior sprint
+deferred it for OpenVDB/TBB build-brick risk), generate colliders OFFLINE via the Python wheel and ship only the
+OUTPUT convex parts (derivatives of the YCB meshes, MIT-permitted) -- the C++ build is untouched.
+- scripts/gen_coacd.py: CoACD (threshold 0.04, max_hull 64, seed 0 -> deterministic) on all 20 YCB meshes ->
+  assets/ycb/<id>/coacd.bin (magic 'COAC' | u32 numParts | per part u32 nVerts + float32[3]*nVerts; each part's
+  convex-hull vertices). Box-like objects ~5 parts; concave (mug) ~78. coacd.bin is a derived asset (gitignored
+  with the meshes; regenerable from the committed script).
+- CoacdCollider.hpp: loadCoacdParts() reads the .bin into per-part glm::vec3 clouds.
+- GraspSim::runGripperSim gains a trailing `coacdPath` arg: if it loads, the collider is the CoACD parts cooked
+  via requestConvexHull (same 64-vert cap as the V-HACD path); else V-HACD fallback. The planner is geometry-only
+  (ray-casts the VISUAL mesh, never the collider), so the SAME grasps are scored under either collider.
+- All production gates (SUCCESS / PLANNER / FAILURE-CATALOG) switched to CoACD (the new default). Locked physics
+  UNCHANGED -> assertPhysicsLocked still passes with hash 868489ff8e07da5f (collider is not in the config struct).
+
+GATE COACD-REAL (the discriminating test the prior bowl-only drop missed): a "cavity point" = a grid point that
+is EMPTY (outside the watertight mesh by ray-parity) yet INSIDE the V-HACD collider (PxGeometryQuery::pointDistance
+== 0) -- i.e. a point V-HACD WRONGLY fills. V-HACD preserves 0% of these BY DEFINITION (the failing neg-control);
+CoACD must leave most empty. EARLY RESULT (3 of 4 concave objects; cups generating):
+  019_pitcher_base: 404 cavity pts, V-HACD preserve 0%, CoACD preserve 82.4%  (handle gap)  -> discriminates
+  024_bowl        : 1158 cavity pts, V-HACD preserve 0%, CoACD preserve 73.4% (interior)
+  025_mug         : 1498 cavity pts, V-HACD preserve 0%, CoACD preserve 70.4% (handle+interior) -> discriminates
+CONFIRMS the hypothesis: V-HACD was FILLING the mug handle/interior and pitcher handle (concavities a jaw needs
+to enter), which CoACD preserves 70-82%. GATE REMEASURE then scores the same tuned grasps under both colliders
+(apples-to-apples, same hash) and reports the before/after rate + per-object flips. [results pending full run]

@@ -34,12 +34,12 @@ bool gDebug = false;
 
 // Run K grasps for one planner-variant on one object; missing grasps (planner found < K) count as failures.
 static int scoreVariant(const char* label, const RenderableMeshComponent& mesh, const std::vector<GraspSpec>& specs,
-                        const WorldOverride& locked, int& outFound) {
+                        const WorldOverride& locked, const std::string& coacdPath, int& outFound) {
     outFound = int(specs.size());
     int succ = 0;
     for (int k = 0; k < kAttempts; ++k) {
         if (k >= int(specs.size())) continue;               // no grasp proposed -> failure (counts in denominator)
-        const GraspResult r = runGripperSim(mesh, specs[size_t(k)], locked);
+        const GraspResult r = runGripperSim(mesh, specs[size_t(k)], locked, coacdPath);
         if (graspSucceeded(r)) ++succ;
         if (gDebug) {
             const auto& g = specs[size_t(k)];
@@ -80,10 +80,11 @@ bool runGraspPlannerGate() {
         std::vector<GraspSpec> tuneSpecs = planAntipodal(mesh, mm, tune);
 
         if (gDebug) std::printf("    -- %s --\n", o.id.c_str());
+        const std::string cp = o.coacdPath();    // CoACD collider (the new default; V-HACD fallback if missing)
         int fr = 0, fb = 0, ft = 0;
-        const int sR = scoreVariant("rnd ", mesh, randSpecs, locked, fr);
-        const int sB = scoreVariant("base", mesh, baseSpecs, locked, fb);
-        const int sT = scoreVariant("tune", mesh, tuneSpecs, locked, ft);
+        const int sR = scoreVariant("rnd ", mesh, randSpecs, locked, cp, fr);
+        const int sB = scoreVariant("base", mesh, baseSpecs, locked, cp, fb);
+        const int sT = scoreVariant("tune", mesh, tuneSpecs, locked, cp, ft);
 
         std::printf("  %-22s  %d/%d  %d/%d   %d/%d   [%s baseFound=%d tunedFound=%d]\n",
                     o.id.c_str(), sR, kAttempts, sB, kAttempts, sT, kAttempts,

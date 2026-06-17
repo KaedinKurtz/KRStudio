@@ -43,10 +43,12 @@ bool runGraspSuccessGate() {
 
     // GOOD: closing axis = world +X, perpendicular to the block's flat faces, through the CoM.
     GraspSpec good; good.centerOffset = glm::vec3(0.0f); good.approach = glm::quat(1, 0, 0, 0); good.jawSpanM = 0.13f;
-    // BAD: grip the long block near one END (off-centre 0.08 m along its long axis). It DOES grip, but the long
-    // overhang's weight torques the block out of the grip during the lift -- the friction cone at mu=0.70 cannot
-    // hold the rotation, so it slips and re-touches the ground. Sticky friction (the softened world) CAN hold it.
-    GraspSpec bad; bad.centerOffset = glm::vec3(0.0f, 0.0f, 0.08f);
+    // BAD: grip the long block near one END (off-centre 0.092 m along its ~0.103 m half-length). It DOES grip,
+    // but almost the whole block overhangs to one side, so its weight torques the block out of the grip during
+    // the lift -- the friction cone at mu=0.70 cannot hold the rotation and it slips well past the success
+    // distance. Sticky friction (the softened world) CAN hold it. (Far enough off-centre to fail decisively even
+    // with the faithful CoACD collider, which grips a centred bite more securely than the coarser V-HACD hull.)
+    GraspSpec bad; bad.centerOffset = glm::vec3(0.0f, 0.0f, 0.092f);
     bad.approach = glm::quat(1, 0, 0, 0); bad.jawSpanM = 0.13f;
 
     const WorldOverride locked{};                       // kLockedPhysics verbatim
@@ -55,9 +57,10 @@ bool runGraspSuccessGate() {
     // and the guard catches mu != 0.70. (A no-gravity world instead exposes squeeze-ejection, a different mode.)
     WorldOverride soft; soft.softened = true; soft.frictionMu = 5.0f;
 
-    const GraspResult r1 = runGripperSim(mesh, good, locked);  report("run1 GOOD/locked", r1);
-    const GraspResult r2 = runGripperSim(mesh, bad,  locked);  report("run2 BAD /locked", r2);
-    const GraspResult r3 = runGripperSim(mesh, bad,  soft);    report("run3 BAD /SOFTENED", r3);
+    const std::string cp = o.coacdPath();                      // CoACD collider (the new default)
+    const GraspResult r1 = runGripperSim(mesh, good, locked, cp);  report("run1 GOOD/locked", r1);
+    const GraspResult r2 = runGripperSim(mesh, bad,  locked, cp);  report("run2 BAD /locked", r2);
+    const GraspResult r3 = runGripperSim(mesh, bad,  soft,  cp);   report("run3 BAD /SOFTENED", r3);
 
     // r3's three success clauses, evaluated WITHOUT the guard precondition -- to show the softened world DOES
     // rescue the bad grasp (the criterion is not trivially passable), while the guard is what rejects it.
