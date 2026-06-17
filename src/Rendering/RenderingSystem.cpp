@@ -1193,6 +1193,15 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Grasp pipeline Phase 3+4 GATE GENERALIZE+TAXONOMY-SCALE: fixed Heuristic-V2 over the valid GSO library
+    // (standalone -- grasps hundreds of objects).
+    if (qEnvironmentVariableIntValue("KRS_GRASP_GENERALIZE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_GRASP_GENERALIZE_SELFTEST =================\n");
+        const bool ok = krs::grasp::runGraspGeneralizeGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };

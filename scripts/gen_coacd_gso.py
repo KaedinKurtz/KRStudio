@@ -5,13 +5,13 @@
 # max_hull 32) to keep hundreds of objects tractable; the generalized rate is the goal, not perfect colliders.
 import os, sys, struct, time
 import numpy as np
-import coacd, trimesh                       # module-level: shared by all worker THREADS (CoACD frees the GIL in C++)
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import coacd, trimesh                       # module-level: re-imported by each spawned PROCESS worker (true parallel)
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 coacd.set_log_level("error")
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GSO  = os.path.join(REPO, "assets", "gso")
-THRESHOLD, MAX_HULL, SEED = 0.06, 32, 0
+THRESHOLD, MAX_HULL, SEED = 0.09, 16, 0     # coarser than YCB -> faster at scale; the generalized RATE is the goal
 
 def gen(name):
     obj = os.path.join(GSO, name, "model.obj")
@@ -22,7 +22,11 @@ def gen(name):
         m = trimesh.load(obj, process=False, force="mesh")
         cm = coacd.Mesh(np.asarray(m.vertices), np.asarray(m.faces))
         t0 = time.time()
-        parts = coacd.run_coacd(cm, threshold=THRESHOLD, max_convex_hull=MAX_HULL, seed=SEED)
+        # speed knobs for the LARGE set (GSO scans are high-poly): decimate input + lower voxel/MCTS resolution.
+        # Coarser colliders, but the FILTER already guaranteed graspable shape and the generalized RATE is the goal.
+        parts = coacd.run_coacd(cm, threshold=THRESHOLD, max_convex_hull=MAX_HULL, seed=SEED,
+                                preprocess_resolution=30, resolution=1000, mcts_iterations=20, mcts_max_depth=2,
+                                decimate=True, max_ch_vertex=48)
         with open(out, "wb") as f:
             f.write(b"COAC"); f.write(struct.pack("<I", len(parts)))
             for v, faces in parts:
@@ -38,10 +42,10 @@ if __name__ == "__main__":
     if not os.path.isfile(valid_path):
         print("no _valid.txt -- run the FILTER gate first"); sys.exit(1)
     names = [l.strip() for l in open(valid_path) if l.strip()]
-    workers = int(sys.argv[1]) if len(sys.argv) > 1 else 6
-    print(f"CoACD-GSO: {len(names)} valid objects, threshold={THRESHOLD} max_hull={MAX_HULL}, {workers} threads", flush=True)
+    workers = int(sys.argv[1]) if len(sys.argv) > 1 else 8
+    print(f"CoACD-GSO: {len(names)} valid objects, threshold={THRESHOLD} max_hull={MAX_HULL}, {workers} processes", flush=True)
     ok = cached = err = 0
-    with ThreadPoolExecutor(max_workers=workers) as ex:
+    with ProcessPoolExecutor(max_workers=workers) as ex:
         futs = {ex.submit(gen, nm): nm for nm in names}
         for i, fu in enumerate(as_completed(futs)):
             nm, st, dt = fu.result()

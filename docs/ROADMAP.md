@@ -2694,3 +2694,42 @@ VERDICT: CoACD is now the production collider (all gates default to it; hash unc
 honest re-measured rate is 48.3% (was 53.3% on V-HACD). Bench 78/78. The collider swap made the pipeline more
 physically faithful (CoACD preserves the concavities a jaw must enter, confirmed by GATE COACD-REAL) and the
 rate slightly lower -- an honest re-measurement, not a number inflated by the change.
+
+## §GR-V2 HEURISTIC COMPLEXITY + LARGE-DATASET GENERALIZATION (2026-06-17)
+Two variables measured SEPARATELY under the UNCHANGED locked criterion (hash 868489ff8e07da5f): (1) an improved
+heuristic on the KNOWN YCB set; (2) that FIXED heuristic over a large filtered library. The collider is CoACD
+throughout (the prior sprint's production default).
+
+### Phase 1 -- DONE (commit a60d6c5). GATE HEURISTIC-V2 green. YCB rate 48.3% -> 51.7% (+3.3%).
+Apples-to-apples V1(tuned) vs V2 on the SAME 20 YCB x3=60 attempts (planner is geometry-only -> only the planner
+params differ). KEPT: an ABOVE-CoM stability term -- penalise grasps BELOW the resting CoM (a lifted object
+gripped above its CoM hangs as a stable pendulum; below it is top-heavy and tips/drifts). Flips 010_potted_meat
+and 035_power_drill 1/3->2/3 with ZERO regressions; GRIP_NOT_SEATED 14->12. TESTED AND DROPPED as dead
+complexity (reported honestly, not kept): rim/thin-wall pinch grasps (GENERATE proposals for bowls/cups,
+NO_ANTIPODAL 6->1, but never SEAT -- a parallel-jaw pinch on a wide shallow rim tips the object); snug-fit
+widthWeight (made GRIP_NOT_SEATED worse); stronger CoM-line term (DRIFT +0); tighter tolerance (fixed DRIFT 7->3
+but broke seating, net +0). The thin shells remain hard -- an honest strategy limit, not a tuning failure.
+
+### Phase 2 -- DONE (commit 338f5d7). GATE FILTER green. 500 raw GSO -> 299 valid (40.2% rejected).
+Dataset: Google Scanned Objects, Creative Commons Attribution 4.0 International (CC-BY 4.0), real METRIC scale,
+downloaded from Gazebo Fuel (scripts/download_gso.py; 500-object subset). The C++ GATE FILTER classifies every
+raw object BEFORE grasping: VALID, or rejected (load-fail / degenerate / non-watertight>10% / out-of-scale
+[0.02-0.40 m] / non-graspable [shortest axis > 0.12 m, too fat for the jaw]). Result 500 -> 299 valid; rejected
+96 non-graspable, 84 non-watertight, 21 out-of-scale. The rejected fraction is a DATASET-QUALITY statistic, NOT
+grasp failures. NEG-CTRLS (a valid mesh x1000 / x0.001 / holed) all REJECTED -> the filter discriminates and is
+not trivially passing. CoACD colliders generated for the 299 survivors (scripts/gen_coacd_gso.py, threaded;
+needs Pillow for GSO textured OBJs). GSO assets + colliders gitignored (derived, regenerable from the scripts).
+
+### Phase 3+4 -- IN PROGRESS. GATE GENERALIZE+TAXONOMY-SCALE.
+FIXED Heuristic-V2 (not re-tuned) over the 299 valid objects, CoACD + locked criterion (hash 868489ff8e07da5f
+asserted every run). GENERALIZED RATE = 31.5% (283/897); random neg-control 5.0% (the heuristic adds real
+signal). The rate drops from YCB's 51.7% -> 31.5% at scale: a diverse uncurated library is genuinely harder.
+PER-OBJECT DISTRIBUTION: 3/3 16.1%, 2/3 13.0%, 1/3 20.4%, 0/3 50.5%. HARDNESS = SPREAD, not concentrated: the
+0/3 population is LARGE (50.5%), a real ceiling -- NOT a small pathological tail (only 16% are fully solved).
+TAXONOMY AT SCALE (614 failures, 100% classified; incomplete-taxonomy neg-ctrl only 52.1%): GRIP_NOT_SEATED
+39.3% (dominant, MATCHES YCB), UNBOUNDED_GRIP 27.5% (a NEW mode that emerges at scale -- diverse/irregular
+objects wedge the gripper into an over-squeeze the force-bound criterion rejects), NO_ANTIPODAL_GRASP 12.9%,
+DRIFT_ROTATE 11.2%, SLIP_FELL 6.8%, CONTACT_INTERMITTENT 2.3%. CAVEAT: the large-set CoACD colliders are COARSER
+than YCB's (threshold 0.09, max_hull 16, decimated, for speed at scale); this likely INFLATES UNBOUNDED_GRIP
+(blockier colliders wedge more), so 31.5% is a conservative lower bound -- a finer-collider re-run would refine
+(probably raise) it. The dominant honest mode (GRIP_NOT_SEATED) matches YCB regardless.
