@@ -2720,16 +2720,27 @@ grasp failures. NEG-CTRLS (a valid mesh x1000 / x0.001 / holed) all REJECTED -> 
 not trivially passing. CoACD colliders generated for the 299 survivors (scripts/gen_coacd_gso.py, threaded;
 needs Pillow for GSO textured OBJs). GSO assets + colliders gitignored (derived, regenerable from the scripts).
 
-### Phase 3+4 -- IN PROGRESS. GATE GENERALIZE+TAXONOMY-SCALE.
-FIXED Heuristic-V2 (not re-tuned) over the 299 valid objects, CoACD + locked criterion (hash 868489ff8e07da5f
-asserted every run). GENERALIZED RATE = 31.5% (283/897); random neg-control 5.0% (the heuristic adds real
-signal). The rate drops from YCB's 51.7% -> 31.5% at scale: a diverse uncurated library is genuinely harder.
-PER-OBJECT DISTRIBUTION: 3/3 16.1%, 2/3 13.0%, 1/3 20.4%, 0/3 50.5%. HARDNESS = SPREAD, not concentrated: the
-0/3 population is LARGE (50.5%), a real ceiling -- NOT a small pathological tail (only 16% are fully solved).
-TAXONOMY AT SCALE (614 failures, 100% classified; incomplete-taxonomy neg-ctrl only 52.1%): GRIP_NOT_SEATED
-39.3% (dominant, MATCHES YCB), UNBOUNDED_GRIP 27.5% (a NEW mode that emerges at scale -- diverse/irregular
-objects wedge the gripper into an over-squeeze the force-bound criterion rejects), NO_ANTIPODAL_GRASP 12.9%,
-DRIFT_ROTATE 11.2%, SLIP_FELL 6.8%, CONTACT_INTERMITTENT 2.3%. CAVEAT: the large-set CoACD colliders are COARSER
-than YCB's (threshold 0.09, max_hull 16, decimated, for speed at scale); this likely INFLATES UNBOUNDED_GRIP
-(blockier colliders wedge more), so 31.5% is a conservative lower bound -- a finer-collider re-run would refine
-(probably raise) it. The dominant honest mode (GRIP_NOT_SEATED) matches YCB regardless.
+### Phase 3+4 -- DONE. GATE GENERALIZE+TAXONOMY-SCALE green. (numbers below are the DE-CONTAMINATED re-measurement)
+FIXED Heuristic-V2 (not re-tuned) over the FILTER-valid GSO objects, CoACD + locked criterion (hash
+868489ff8e07da5f asserted every run). GENERALIZED RATE = 33.2% (250/753 over 251 valid objects); random
+neg-control 4.8% (the heuristic adds real signal). The rate drops from YCB's 51.7% -> 33.2% at scale: a diverse
+uncurated library is genuinely harder. PER-OBJECT: 3/3 16.3%, 2/3 15.1%, 1/3 20.3%, 0/3 48.2%. HARDNESS =
+SPREAD: the 0/3 population is LARGE (48.2%), a real ceiling, NOT a small pathological tail (only 16% fully solved).
+TAXONOMY AT SCALE (503 failures, 100% classified; incomplete-taxonomy neg-ctrl 53.3%): GRIP_NOT_SEATED 38.8%
+(dominant, MATCHES YCB), UNBOUNDED_GRIP 27.2% (a NEW mode that emerges at scale -- irregular objects wedge the
+symmetric force-driven gripper into an over-squeeze the force-bound criterion rejects), NO_ANTIPODAL_GRASP 14.5%,
+DRIFT_ROTATE 9.9%, SLIP_FELL 6.2%, CONTACT_INTERMITTENT 3.4%.
+
+ADVERSARIAL REVIEW (2-lens workflow) found + drove fixes: (R2/R3) the FILTER was too lenient on watertightness
+(boundaryFrac<=10%, non-manifold UNCHECKED). FIXED: added the non-manifold check; set a data-justified 8%
+boundary bar (the strict IMPORT 1% rejects 100% of real GSO scans -- measured boundaryFrac is <1%=0, 1-2%=29,
+2-4%=82, 4-10%=261, >10%=128). 500 raw -> 251 valid (49.8% rejected), down from a too-lenient 299.
+(R1) the review hypothesised UNBOUNDED_GRIP (27.5%) was a COARSE-COLLIDER ARTIFACT (blocky hulls spiking the
+contact solver) and predicted a finer re-run would lift the rate to ~40-50%. I TESTED it: regenerated all
+colliders at fidelity (no decimation, max_hull 16->40, median 27 parts vs <=16). RESULT: UNBOUNDED_GRIP barely
+moved (27.5% -> 27.2%) and the rate rose only +1.7% (31.5% -> 33.2%). The artifact hypothesis is EMPIRICALLY
+REFUTED: UNBOUNDED is a REAL over-squeeze failure mode at scale, robust to collider fidelity (and to the stricter
+filter, which selects cleaner objects -- both changes would have reduced an artifact but did not). 33.2% is the
+honest generalized rate, NOT artifactually low. (Caveat unchanged: this is one rigid-body gripper + criterion, a
+representative proxy, not a specific hardware unit; a compliant force-controlled gripper would back off instead
+of spiking, so UNBOUNDED partly reflects this sim's rigid force-driven jaws.)

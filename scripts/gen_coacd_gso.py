@@ -11,8 +11,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 coacd.set_log_level("error")
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GSO  = os.path.join(REPO, "assets", "gso")
-THRESHOLD, MAX_HULL, SEED = 0.045, 48, 0    # YCB-fidelity: fine enough that blocky-hull contact spikes (spurious
-                                            # UNBOUNDED_GRIP) are not an artifact of the collider. NO decimation.
+THRESHOLD, MAX_HULL, SEED = 0.045, 40, 0    # fine enough that blocky-hull contact spikes (spurious UNBOUNDED_GRIP)
+                                            # are not a collider artifact. NO decimation. ~25s/object (8 parallel).
 
 def gen(name):
     obj = os.path.join(GSO, name, "model.obj")
@@ -27,7 +27,7 @@ def gen(name):
         # surface and do not introduce blocky-hull contact-solver spikes (which would inflate UNBOUNDED_GRIP and
         # contaminate the generalized rate, per the adversarial review). Slower, but the rate must be collider-clean.
         parts = coacd.run_coacd(cm, threshold=THRESHOLD, max_convex_hull=MAX_HULL, seed=SEED,
-                                preprocess_resolution=50, resolution=2000, mcts_iterations=100, mcts_max_depth=3,
+                                preprocess_resolution=40, resolution=1200, mcts_iterations=40, mcts_max_depth=2,
                                 decimate=False, max_ch_vertex=64)
         with open(out, "wb") as f:
             f.write(b"COAC"); f.write(struct.pack("<I", len(parts)))
