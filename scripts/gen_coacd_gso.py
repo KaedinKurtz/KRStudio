@@ -11,7 +11,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 coacd.set_log_level("error")
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GSO  = os.path.join(REPO, "assets", "gso")
-THRESHOLD, MAX_HULL, SEED = 0.09, 16, 0     # coarser than YCB -> faster at scale; the generalized RATE is the goal
+THRESHOLD, MAX_HULL, SEED = 0.045, 48, 0    # YCB-fidelity: fine enough that blocky-hull contact spikes (spurious
+                                            # UNBOUNDED_GRIP) are not an artifact of the collider. NO decimation.
 
 def gen(name):
     obj = os.path.join(GSO, name, "model.obj")
@@ -22,11 +23,12 @@ def gen(name):
         m = trimesh.load(obj, process=False, force="mesh")
         cm = coacd.Mesh(np.asarray(m.vertices), np.asarray(m.faces))
         t0 = time.time()
-        # speed knobs for the LARGE set (GSO scans are high-poly): decimate input + lower voxel/MCTS resolution.
-        # Coarser colliders, but the FILTER already guaranteed graspable shape and the generalized RATE is the goal.
+        # YCB-fidelity settings: NO input decimation + full voxel/MCTS resolution, so the colliders hug the true
+        # surface and do not introduce blocky-hull contact-solver spikes (which would inflate UNBOUNDED_GRIP and
+        # contaminate the generalized rate, per the adversarial review). Slower, but the rate must be collider-clean.
         parts = coacd.run_coacd(cm, threshold=THRESHOLD, max_convex_hull=MAX_HULL, seed=SEED,
-                                preprocess_resolution=30, resolution=1000, mcts_iterations=20, mcts_max_depth=2,
-                                decimate=True, max_ch_vertex=48)
+                                preprocess_resolution=50, resolution=2000, mcts_iterations=100, mcts_max_depth=3,
+                                decimate=False, max_ch_vertex=64)
         with open(out, "wb") as f:
             f.write(b"COAC"); f.write(struct.pack("<I", len(parts)))
             for v, faces in parts:

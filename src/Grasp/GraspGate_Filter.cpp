@@ -44,6 +44,7 @@ bool runGraspFilterGate() {
     if (cat.empty()) { std::printf("  NO GSO objects under assets/gso -- run scripts/download_gso.py\n"); return false; }
 
     std::array<int, F_COUNT> hist{};
+    std::array<int, 5> bdist{};   // boundaryFrac buckets: <1% / 1-2% / 2-4% / 4-10% / >10% (to justify the threshold)
     std::vector<std::string> valid;
     RenderableMeshComponent firstValidMesh; bool haveValidMesh = false;
 
@@ -58,6 +59,8 @@ bool runGraspFilterGate() {
         const MeshMetrics mm = computeMetrics(mesh);
         r = classifyGraspable(mm);
         ++hist[size_t(r)];
+        const double bf = mm.boundaryFrac;
+        ++bdist[bf < 0.01 ? 0 : bf < 0.02 ? 1 : bf < 0.04 ? 2 : bf < 0.10 ? 3 : 4];
         if (r == F_VALID) {
             valid.push_back(o.name);
             if (!haveValidMesh) { firstValidMesh = mesh; haveValidMesh = true; }
@@ -72,6 +75,8 @@ bool runGraspFilterGate() {
     std::printf("  ---- N raw=%d -> N valid=%d  (rejection rate %.1f%%) ----\n", raw, nValid, rejectRate);
     for (int i = 1; i < F_COUNT; ++i)
         if (hist[size_t(i)] > 0) std::printf("    rejected %-16s %d\n", filterName(i), hist[size_t(i)]);
+    std::printf("  boundaryFrac distribution (justifies the %.0f%% watertight threshold): <1%%=%d  1-2%%=%d  2-4%%=%d  4-10%%=%d  >10%%=%d\n",
+                kFilterMaxBoundary * 100, bdist[0], bdist[1], bdist[2], bdist[3], bdist[4]);
 
     // write the survivor list for CoACD generation + GATE GENERALIZE.
     const char* env = std::getenv("KRS_GSO_DIR");
