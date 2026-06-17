@@ -41,8 +41,13 @@ inline glm::vec3 toGlm(const PxVec3& v) { return glm::vec3(v.x, v.y, v.z); }
 struct Tracker : PxSimulationEventCallback {
     bool objJaw0 = false, objJaw1 = false, objGround = false;
     bool recording = false;
+    bool inHold = false;              // true during the SETTLED apex HOLD -> the static firm-grip window
+    bool recSqueeze = false;          // true during the PRE-LIFT squeeze-settle -> the STATIC grip (lift not engaged)
     float maxJawForce = 0.0f;
+    float stepPeakForce = 0.0f;       // PEAK jaw->object contact this step; the force-limited lift's feedback signal
     std::vector<float> forceSeries;   // every recorded per-substep jaw force; its MEDIAN is the SUSTAINED grip level
+    std::vector<float> holdForceSeries;  // HOLD-only samples: the static settled grip (= squeeze, lift-compliance-free)
+    std::vector<float> squeezeSeries;    // PRE-LIFT static-squeeze samples: the firm grip = 40 N, lift-INDEPENDENT
     void onContact(const PxContactPairHeader& h, const PxContactPair* pairs, PxU32 n) override {
         const int ta = tagOf(h.actors[0]), tb = tagOf(h.actors[1]);
         int other = 0;
@@ -53,14 +58,18 @@ struct Tracker : PxSimulationEventCallback {
         for (PxU32 i = 0; i < n; ++i) {
             if (pairs[i].events & PxPairFlag::eNOTIFY_TOUCH_FOUND) *latch = true;
             if (pairs[i].events & PxPairFlag::eNOTIFY_TOUCH_LOST)  *latch = false;
-            if (recording && isJaw) {
+            if ((recording || recSqueeze) && isJaw) {
                 PxContactPairPoint pts[24];
                 const PxU32 np = pairs[i].extractContacts(pts, 24);
                 PxVec3 imp(0.0f);
                 for (PxU32 k = 0; k < np; ++k) imp += pts[k].impulse;   // total contact impulse this substep
                 const float force = imp.magnitude() / kLockedPhysics.fixedDt;
+                if (recSqueeze) { if (force > 0.0f) squeezeSeries.push_back(force); }   // static pre-lift grip
+                if (!recording) continue;                                              // squeeze window: don't touch lift stats
+                if (force > stepPeakForce) stepPeakForce = force;   // per-step peak -> the lift force-feedback signal
                 if (force > maxJawForce) maxJawForce = force;
                 if (force > 0.0f) forceSeries.push_back(force);   // sample the sustained level for the median
+                if (force > 0.0f && inHold) holdForceSeries.push_back(force);   // settled static grip only
 
             }
         }
@@ -191,10 +200,17 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
     //       (there is no kinematic surface the object is pressed against; contact force <= ~gripForceN);
     //   (b) closing does NOT shove the grounded object sideways -- it is pinched in place at the grasp centre,
     //       so a poor grasp SLIPS OUT (honest) instead of being tipped by a one-sided push.
-    // The palm raises kinematically during the lift, carrying both fingers (D6 locks Y/Z); the object is then
-    // held ONLY by the bounded friction of the two finite-force fingers -- exactly a real parallel-jaw grip.
+    // The palm is a KINEMATIC frame (rigid grip + lift driver) that rises during the lift, carrying both fingers.
+    // The GRIP-FIDELITY fix is at the FINGERS, not the palm: a COMPLIANT gripper FORCE-LIMITS each finger's Y/Z
+    // joint to the palm, so a wedge that would push a jaw off-track with more than the actuator rating SLIPS the
+    // jaw (relieving the geometric amplification at its source -- the jaw GIVES instead of transmitting a
+    // manufactured force through a rigid lock). A good grasp (jaw load <= rating) is held firmly, so the rigid
+    // kinematic palm still delivers the full ~40 N firm grip. The OLD rigid gripper (legacyRigidGripper) LOCKS the
+    // finger Y/Z to the palm -> a wedge manufactures 116-173 N (the GRIP-COMPLIANT negative control). The INVARIANT
+    // is the ACTUATOR force (gripForceN, asserted every run), NOT the contact force, which the compliant jaws
+    // correctly modulate down to respect the limit.
     PxRigidDynamic* palm = phys->createRigidDynamic(PxTransform(toPx(graspC), toPxQ(q)));
-    palm->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);   // joint anchor + lift driver; carries no shape
+    palm->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
     scene->addActor(*palm);
 
     // The squeeze is a constant bounded force (addForce, gripForceN) -- a CLEAN finite grip with no clamp. To stop
@@ -214,8 +230,11 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
         scene->addActor(*f);
         PxD6Joint* j = PxD6JointCreate(*phys, palm, PxTransform(PxVec3(sideSign * half, 0, 0)), f, PxTransform(PxIdentity));
         j->setMotion(PxD6Axis::eX, PxD6Motion::eFREE);    // closing axis -- the finger slides under the squeeze force
-        j->setMotion(PxD6Axis::eY, PxD6Motion::eLOCKED);
-        j->setMotion(PxD6Axis::eZ, PxD6Motion::eLOCKED);
+        // Y/Z: LOCKED for the OLD rigid jaws (neg-control); FREE for the NEW compliant jaws -- then held by a
+        // FORCE-CLAMPED controller (holdFingers below) that yields above the rating, so a wedge slips the jaw.
+        const PxD6Motion::Enum yz = world.legacyRigidGripper ? PxD6Motion::eLOCKED : PxD6Motion::eFREE;
+        j->setMotion(PxD6Axis::eY, yz);
+        j->setMotion(PxD6Axis::eZ, yz);
         j->setMotion(PxD6Axis::eTWIST, PxD6Motion::eLOCKED);
         j->setMotion(PxD6Axis::eSWING1, PxD6Motion::eLOCKED);
         j->setMotion(PxD6Axis::eSWING2, PxD6Motion::eLOCKED);
@@ -231,7 +250,24 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
         fingerA->addForce(toPx(-closeAxis * Fgrip), PxForceMode::eFORCE);
         fingerB->addForce(toPx( closeAxis * Fgrip), PxForceMode::eFORCE);
     };
-    auto stepOnce = [&]() { squeeze(); scene->simulate(dt); scene->fetchResults(true); };
+    // COMPLIANT JAWS (NEW gripper): the finger Y/Z are FREE, held to the palm by a force-CLAMPED controller. It
+    // tracks the palm's Y (so the jaw lifts with the palm) and the grasp-plane Z, but the restoring force is hard-
+    // clamped to +/- kLiftActuatorForceRatingN -- so a wedge pushing the jaw off-track by more than the rating
+    // SLIPS the jaw (the actuator yields), capping the contact at the rating instead of manufacturing force. A
+    // normal grasp's jaw load (friction ~mu*gripForce <= rating) is held firmly, so the firm grip is undiminished.
+    auto holdFingers = [&]() {
+        if (world.legacyRigidGripper) return;               // rigid jaws: Y/Z locked by the joint, no manual hold
+        const float py = palm->getGlobalPose().p.y;
+        for (PxRigidDynamic* f : { fingerA, fingerB }) {
+            const PxVec3 fp = f->getGlobalPose().p, fv = f->getLinearVelocity();
+            float fy = 1.0e4f * (py - fp.y)        - 1.0e2f * fv.y;   // track palm Y (lift), damped
+            float fz = 1.0e4f * (graspC.z - fp.z)  - 1.0e2f * fv.z;   // hold the grasp-plane Z
+            fy = std::clamp(fy, -kLiftActuatorForceRatingN, kLiftActuatorForceRatingN);   // jaw YIELDS above rating
+            fz = std::clamp(fz, -kLiftActuatorForceRatingN, kLiftActuatorForceRatingN);
+            f->addForce(PxVec3(0.0f, fy, fz), PxForceMode::eFORCE);
+        }
+    };
+    auto stepOnce = [&]() { tracker.stepPeakForce = 0.0f; squeeze(); holdFingers(); scene->simulate(dt); scene->fetchResults(true); };
 
     // SETTLE (no squeeze): object rests, fingers open (held by the damper).
     for (int s = 0; s < 120; ++s) stepOnce();
@@ -243,8 +279,11 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
         consec = (tracker.objJaw0 && tracker.objJaw1) ? consec + 1 : 0;
         if (consec >= 24) break;
     }
-    // SQUEEZE settle: firm the grip before lifting.
-    for (int s = 0; s < 120; ++s) stepOnce();
+    // SQUEEZE settle: firm the grip before lifting. The LAST third is the STATIC firm-grip window: the lift is
+    // not engaged, so the jaw<->object contact here = the bounded squeeze (~40 N) for EITHER lift model, which
+    // is how GRIP-COMPLIANT proves the actuator is undiminished by the force-limited lift.
+    for (int s = 0; s < 120; ++s) { tracker.recSqueeze = (s >= 80); stepOnce(); }
+    tracker.recSqueeze = false;
     // raise the finger speed cap so they can follow the lift (palm rises at liftSpeed); the grip is already seated.
     fingerA->setMaxLinearVelocity(1.0f);
     fingerB->setMaxLinearVelocity(1.0f);
@@ -267,6 +306,10 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
     // disguised infinite clamp or inertial spike would manifest most strongly -- recording only the steady HOLD
     // would leave that window untested. The peak over lift+hold must still be bounded near gripForceN.
     tracker.recording = true;
+    const float apexY = graspC.y + kLockedPhysics.liftHeightM;
+    // The kinematic palm rises at liftSpeed (same for both gripper models). The force limiting is at the COMPLIANT
+    // FINGERS (holdFingers): a wedge slips the jaws, so the kinematic lift cannot drag the object with more than
+    // the rating -- the jaw gives. The OLD rigid jaws (legacyRigidGripper) transmit the full manufactured force.
     for (int s = 0; s < liftSteps; ++s) {
         const float y = graspC.y + kLockedPhysics.liftSpeedMps * dt * float(s + 1);
         palm->setKinematicTarget(PxTransform(toPx(glm::vec3(graspC.x, y, graspC.z)), toPxQ(q)));
@@ -277,12 +320,12 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
         if (hasLiftedOff && tracker.objGround) groundAfter = true;
         if (dbg && (s % 36 == 0 || s == liftSteps - 1)) {
             const glm::vec3 oc = worldCoM(obj);
-            std::printf("    [dbg-lift s=%3d] palmY=%.3f objCoM=(%.3f,%.3f,%.3f) j0t=%d j1t=%d\n", s, y, oc.x, oc.y, oc.z, tracker.objJaw0, tracker.objJaw1);
+            std::printf("    [dbg-lift s=%3d] palmY=%.3f f=%.0f objCoM=(%.3f,%.3f,%.3f) j0t=%d j1t=%d\n",
+                        s, y, tracker.stepPeakForce, oc.x, oc.y, oc.z, tracker.objJaw0, tracker.objJaw1);
         }
     }
-    // HOLD (palm frozen at apex). Force recording continues from LIFT (proves the squeeze is bounded by
-    // gripForceN across the whole high-force window -- both force-limited jaws cannot press harder than the grip).
-    const float apexY = graspC.y + kLockedPhysics.liftHeightM;
+    // HOLD (palm frozen at apex).
+    tracker.inHold = true;     // settled-grip window
     for (int s = 0; s < holdSteps; ++s) {
         palm->setKinematicTarget(PxTransform(toPx(glm::vec3(graspC.x, apexY, graspC.z)), toPxQ(q)));
         stepOnce();
@@ -296,6 +339,16 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
         std::vector<float>& fs = tracker.forceSeries;
         std::nth_element(fs.begin(), fs.begin() + fs.size() / 2, fs.end());
         R.medianJawForceN = fs[fs.size() / 2];
+    }
+    if (!tracker.holdForceSeries.empty()) {                                // settled static grip (lift-independent)
+        std::vector<float>& hs = tracker.holdForceSeries;
+        std::nth_element(hs.begin(), hs.begin() + hs.size() / 2, hs.end());
+        R.holdMedianJawForceN = hs[hs.size() / 2];
+    }
+    if (!tracker.squeezeSeries.empty()) {                                  // STATIC pre-lift grip (the firm 40 N)
+        std::vector<float>& ss = tracker.squeezeSeries;
+        std::nth_element(ss.begin(), ss.begin() + ss.size() / 2, ss.end());
+        R.squeezeMedianJawForceN = ss[ss.size() / 2];
     }
     R.endCenter = worldCoM(obj);
     R.targetCenter = R.startCenter + glm::vec3(0.0f, kLockedPhysics.liftHeightM, 0.0f);

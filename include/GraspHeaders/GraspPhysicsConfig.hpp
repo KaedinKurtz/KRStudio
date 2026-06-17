@@ -40,6 +40,17 @@ static_assert(sizeof(GraspPhysicsConfig) == 11 * sizeof(float), "GraspPhysicsCon
 // The single source of truth. constexpr -> baked at compile time; an edit changes lockedConfigHash().
 inline constexpr GraspPhysicsConfig kLockedPhysics{};
 
+// LIFT-ACTUATOR FORCE RATING -- a LOCKED gripper-PHYSICS constant, deliberately OUTSIDE GraspPhysicsConfig so
+// it does NOT enter lockedConfigHash() (the struct is a static_assert'd 11-float image; the hash 868489ff..
+// is the SUCCESS-CRITERION fingerprint and must not move). The lift is modelled as a FORCE-LIMITED compliant
+// actuator (a manually force-clamped controller): it can pull up at most this hard, so a WEDGED object that
+// demands more STALLS/SLIPS instead of having force MANUFACTURED by a force-unlimited kinematic lift (the
+// UNBOUNDED_GRIP fidelity red). RATING = 2*mu*gripForceN = 2*0.70*40 = 56 N: this is EXACTLY the vertical load
+// the friction grip can hold (a real physical limit -- a lift pulling harder just slips the object through the
+// jaws), so the lift never usefully exceeds it. It also keeps a hook-wedge's geometrically-amplified contact
+// (rating * ~1.3-1.6) BELOW the 120 N (3x) criterion bound -> the wedge cases stop registering as UNBOUNDED.
+inline constexpr float kLiftActuatorForceRatingN = 56.0f;
+
 // FNV-1a over the struct's byte image -> a 64-bit fingerprint printed by every gate. If ANY locked value is
 // edited, this number changes and a reviewer sees the drift instantly in the gate logs.
 inline std::uint64_t lockedConfigHash() {

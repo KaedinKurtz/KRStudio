@@ -26,6 +26,12 @@ struct WorldOverride {
     bool  softened   = false;                         // false => kLockedPhysics verbatim
     float gravity    = kLockedPhysics.gravity;        // softened may set 0 (object can't fall)
     float frictionMu = kLockedPhysics.frictionMu;     // softened may set e.g. 5.0 (sticky)
+    bool  legacyRigidGripper = false;                 // false => NEW compliant gripper: the finger Y/Z joints are
+                                                      // FORCE-LIMITED (a wedge SLIPS the jaws, relieving the
+                                                      // amplified contact at its source). true => OLD rigid jaws
+                                                      // (Y/Z LOCKED to the kinematic palm -> a wedge manufactures
+                                                      // 116-173 N). The GRIP-COMPLIANT negative control. NOT a
+                                                      // physics softening: gravity/friction/gripForceN identical.
 };
 
 // Everything the verdict reads (all measured from the live sim).
@@ -47,6 +53,12 @@ struct GraspResult {
     float     medianJawForceN = 0.0f;      // MEDIAN per-substep jaw->object contact force over LIFT+HOLD. Peak>>median
                                            // means an UNBOUNDED peak is a TRANSIENT solver spike, not a sustained wedge
                                            // (the fidelity UNBOUNDED-DIAGNOSIS reads this to call real-vs-artifact).
+    float     holdMedianJawForceN = 0.0f;  // MEDIAN jaw->object contact during the SETTLED apex HOLD only -- the
+                                           // STATIC firm grip (= the squeeze), free of lift dynamics. GRIP-COMPLIANT
+                                           // reads this to prove a good grasp still delivers ~40 N under EITHER lift.
+    float     squeezeMedianJawForceN = 0.0f;  // MEDIAN jaw->object contact during the PRE-LIFT static squeeze (the
+                                           // lift is NOT engaged) = the firm 40 N grip, lift-model-INDEPENDENT. The
+                                           // clean "the actuator still delivers its rated force" measure.
 };
 
 // Run the full settle->close->lift->hold sequence for one grasp on one object mesh, under `world` (LOCKED

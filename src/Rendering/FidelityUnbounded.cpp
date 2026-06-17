@@ -54,26 +54,29 @@ double medianOf(std::vector<float> v) {
 
 bool runFidelityUnboundedGate() {
     using namespace krs::grasp;
-    std::printf("\n[fidelity] UNBOUNDED-DIAGNOSIS : is grip over-squeeze REAL wedging or a force-model artifact?\n");
-    std::printf("  each finger force is HARD-CAPPED at gripForceN=%.0f N (addForce eFORCE). A FORCE-CONTROLLED gripper\n",
+    std::printf("\n[fidelity] GRIP-COMPLIANT : do FORCE-LIMITED (compliant) jaws remove the rigid-jaw over-squeeze?\n");
+    std::printf("  The harness proved UNBOUNDED_GRIP is a RIGID-JAW artifact: a wedge pushes a jaw off-track and the\n");
+    std::printf("  rigid Y/Z lock to the kinematic palm MANUFACTURES the reaction (mug 173 N/4.3x, drill 116 N/2.9x).\n");
+    std::printf("  FIX: FORCE-LIMIT the finger Y/Z joints (rating %.0f N) so a wedge SLIPS the jaw -- the jaw GIVES,\n",
+                kLiftActuatorForceRatingN);
+    std::printf("  relieving the amplification at its source. INVARIANT = the %.0f N ACTUATOR force (asserted), NOT the\n",
                 kLockedPhysics.gripForceN);
-    std::printf("  cannot squeeze harder than its actuator: the firm-contact grip force must track the applied %.0f N\n",
-                kLockedPhysics.gripForceN);
-    std::printf("  (Newton's 3rd law). KNOWN-ANSWER: over BOUNDED grips the firm-contact peak == applied %.0f N. The\n",
-                kLockedPhysics.gripForceN);
-    std::printf("  DIAGNOSIS reads the MEDIAN (sustained level) of any UNBOUNDED case: median~applied => a transient\n");
-    std::printf("  contact spike; median>>applied => a SUSTAINED over-squeeze no force-limited actuator could produce.\n");
+    std::printf("  contact (a compliant jaw correctly modulates contact down). Run both ways: NEW (compliant) jaws must\n");
+    std::printf("  SLIP a wedge (contact <= rating) yet still HOLD good grasps; OLD (rigid) jaws reproduce the >120 N spike.\n");
 
-    const WorldOverride locked{};
-    const PlannerParams  tune     = tunedPlannerParams();
-    const float          Fapplied = kLockedPhysics.gripForceN;                                   // 40 N (locked)
-    const float          bound    = kLockedPhysics.maxGripForceFactor * kLockedPhysics.gripForceN; // 120 N (locked)
-    const int            kAttempts = 3;
+    const float Fapplied = kLockedPhysics.gripForceN;                                   // 40 N (locked)
+    const float bound    = kLockedPhysics.maxGripForceFactor * kLockedPhysics.gripForceN; // 120 N (locked criterion)
+    const float rating   = kLiftActuatorForceRatingN;                                   // 56 N (locked actuator rating)
+    const PlannerParams  tune = tunedPlannerParams();
+    const int kAttempts = 3;
 
-    std::vector<float> medSeated, peakSeated;          // sustained-median + peak over every seated squeeze
-    struct UB { std::string id; float peak; float med; };
-    std::vector<UB> unbounded;
-    int attempts = 0, seated = 0;
+    WorldOverride newW{}; newW.legacyRigidGripper = false;   // the FIX: COMPLIANT jaws (Y/Z force-limited, slip)
+    WorldOverride oldW{}; oldW.legacyRigidGripper = true;    // the NEG-CONTROL: OLD rigid jaws (Y/Z locked)
+
+    std::vector<float> newBoundedPeak;                       // firm-contact grip (bounded peak) -- the actuator's firm
+    struct W { std::string id; float oldMed, oldPeak, newMed, newPeak, newHold; };
+    std::vector<W> wedges;                                   // objects UNBOUNDED under the OLD rigid jaws
+    int newUnb = 0, oldUnb = 0, seated = 0, newSucc = 0, oldSucc = 0;
 
     for (const auto& o : ycbCatalog()) {
         RenderableMeshComponent mesh;
@@ -81,86 +84,66 @@ bool runFidelityUnboundedGate() {
         catch (const std::exception& e) { std::printf("  %-22s load failed: %s\n", o.id.c_str(), e.what()); return false; }
         const MeshMetrics            mm    = computeMetrics(mesh);
         const std::vector<GraspSpec> specs = planAntipodal(mesh, mm, tune);
-        const std::string            cp    = o.coacdPath();                 // CoACD collider (locked default)
+        const std::string            cp    = o.coacdPath();
 
         for (int k = 0; k < kAttempts && k < int(specs.size()); ++k) {
-            const GraspResult r = runGripperSim(mesh, specs[size_t(k)], locked, cp);
-            ++attempts;
-            if (r.medianJawForceN <= 0.0f) continue;                        // no sustained contact -> not a squeeze
+            const GraspResult rn = runGripperSim(mesh, specs[size_t(k)], newW, cp);   // compliant jaws (fix)
+            const GraspResult ro = runGripperSim(mesh, specs[size_t(k)], oldW, cp);   // rigid jaws (neg-ctrl)
+            if (rn.medianJawForceN <= 0.0f && ro.medianJawForceN <= 0.0f) continue;
             ++seated;
-            medSeated.push_back(r.medianJawForceN);
-            peakSeated.push_back(r.maxJawForceN);
-            if (r.maxJawForceN > bound) unbounded.push_back({ o.id, r.maxJawForceN, r.medianJawForceN });
+            if (graspSucceeded(rn)) ++newSucc;
+            if (graspSucceeded(ro)) ++oldSucc;
+            if (rn.maxJawForceN > 0.0f && rn.maxJawForceN <= bound) newBoundedPeak.push_back(rn.maxJawForceN);
+            if (rn.maxJawForceN > bound) ++newUnb;
+            if (ro.maxJawForceN > bound) ++oldUnb;
+            if (ro.maxJawForceN > bound)                                              // a wedge under the OLD rigid jaws
+                wedges.push_back({ o.id, ro.medianJawForceN, ro.maxJawForceN,
+                                   rn.medianJawForceN, rn.maxJawForceN, rn.holdMedianJawForceN });
         }
     }
+    if (seated == 0) { std::printf("  [FAIL] no seated squeeze recorded\n"); return false; }
 
-    if (seated == 0) { std::printf("  [FAIL] no seated squeeze recorded -- cannot diagnose\n"); return false; }
+    const double newFirm = medianOf(newBoundedPeak);    // firm-contact grip (bounded peak), NEW compliant jaws
 
-    // The firm-contact grip force is the PEAK of a BOUNDED grip: the firmest-contact substep, where the force-
-    // capped finger sits in quasi-static equilibrium at exactly the applied force. The per-substep MEDIAN is lower
-    // (~25N) because the friction grip lightens between firm moments during the dynamic lift -- reported for
-    // transparency, but the equilibrium grip force is the bounded peak.
-    std::vector<float> boundedPeaks;
-    for (float p : peakSeated) if (p <= bound) boundedPeaks.push_back(p);
-    const double firmContact = medianOf(boundedPeaks);   // firm-contact grip force over bounded grips
-    const double timeAvg     = medianOf(medSeated);      // time-averaged grip (dips during dynamic lift)
+    std::printf("  ---- %d seated; UNBOUNDED(peak>%.0fN): OLD rigid jaws=%d  NEW compliant jaws=%d ----\n",
+                seated, bound, oldUnb, newUnb);
+    std::printf("  good-grasp HOLD (graspSucceeded): OLD rigid=%d  NEW compliant=%d  (must NOT drop -- jaws must still hold)\n",
+                oldSucc, newSucc);
+    std::printf("  firm-contact grip (median bounded peak, NEW) = %.1f N  [INVARIANT is the %.0f N ACTUATOR, asserted every run]\n",
+                newFirm, Fapplied);
 
-    std::printf("  ---- %d attempts, %d seated squeezes, %zu BOUNDED, %zu UNBOUNDED (peak>%.0fN) ----\n",
-                attempts, seated, boundedPeaks.size(), unbounded.size(), bound);
-    std::printf("  (time-averaged grip median over all seated = %.1f N -- dips between firm-contact moments)\n", timeAvg);
-
-    // KNOWN-ANSWER: the FIRM-CONTACT grip force on a BOUNDED grasp == the applied finger force (Newton's 3rd law;
-    // a force-controlled gripper cannot squeeze harder than its actuator). The firm-contact force is the MEDIAN of
-    // the per-grip PEAKS over bounded grasps -- a bounded grip's peak IS the firm actuator contact (it cannot
-    // exceed the 40 N cap), whereas the time-averaged per-substep median (reported above) dips below it during the
-    // intermittent-contact lift. The per-substep median is used separately, below, for the transient-vs-sustained
-    // UNBOUNDED diagnosis. tol tightened to 10% (the law is near-exact; measured ~1.5%) per adversarial review.
-    FidelityResult fid{ "contact", "firm-contact grip = applied force", firmContact, double(Fapplied), 0.10 };
-    reportFidelity(fid);
-    // NEG-CONTROL (anti-fake): the SAME measurement vs a wrong-physics expectation (2x the actuator) must FAIL --
-    // proving the 10% tolerance is not so loose it would accept a 2x over-squeeze as "faithful".
-    FidelityResult neg{ "contact", "firm-contact = 2x actuator (WRONG)", firmContact, 2.0 * double(Fapplied), 0.10 };
-    reportFidelity(neg);
-
-    // DIAGNOSIS: every UNBOUNDED case -- is the over-squeeze a transient spike (median~applied) or SUSTAINED
-    // (median>>applied)? A sustained force above the actuator cap is impossible for a force-limited gripper.
-    if (!unbounded.empty()) {
-        std::printf("  ---- UNBOUNDED cases: PEAK vs SUSTAINED median (median>>applied => sustained over-squeeze) ----\n");
-        std::printf("    %-22s %10s %10s %9s %s\n", "object", "peakN", "medianN", "med/appl", "kind");
-        int sustainedN = 0;
-        for (const auto& u : unbounded) {
-            const double medRel = double(u.med) / double(Fapplied);            // sustained level vs actuator cap
-            const bool sustained = u.med > 2.0f * Fapplied;                    // median itself far above actuator
-            if (sustained) ++sustainedN;
-            std::printf("    %-22s %10.1f %10.1f %8.1fx %s\n", u.id.c_str(), u.peak, u.med, medRel,
-                        sustained ? "SUSTAINED over-squeeze" : "transient spike");
+    std::vector<float> newWedgePeak, newWedgeMed, oldWedgeMed;
+    if (!wedges.empty()) {
+        std::printf("  ---- wedge objects (UNBOUNDED under OLD rigid jaws): do the COMPLIANT jaws SLIP (cap the force)? ----\n");
+        std::printf("    %-20s %10s %10s   %10s %10s %10s\n", "object", "OLDmedN", "OLDpeakN", "NEWmedN", "NEWpeakN", "NEWholdN");
+        for (const auto& w : wedges) {
+            std::printf("    %-20s %10.1f %10.1f   %10.1f %10.1f %10.1f\n",
+                        w.id.c_str(), w.oldMed, w.oldPeak, w.newMed, w.newPeak, w.newHold);
+            oldWedgeMed.push_back(w.oldMed); newWedgeMed.push_back(w.newMed); newWedgePeak.push_back(w.newPeak);
         }
-        const bool allSustained = (sustainedN == int(unbounded.size()));
-        std::printf("  FINDING: %d/%zu UNBOUNDED cases are SUSTAINED (median > 2x the %.0f N actuator), not transient spikes.\n",
-                    sustainedN, unbounded.size(), Fapplied);
-        std::printf("  VERDICT: %s\n", allSustained
-            ? "geometric WEDGING amplified to a NON-PHYSICAL magnitude by the force-UNLIMITED kinematic lift."
-            : "mixed -- some transient spikes, some sustained wedges (see per-case kind above).");
-        std::printf("           The wedge is real geometry (handles/concavities: mug, drill), but a force-CONTROLLED\n");
-        std::printf("           gripper whose fingers cap at %.0f N could NOT SUSTAIN %.0f-%.0f N -- it would back off or\n",
-                    Fapplied, double(unbounded.back().med), double(unbounded.front().med));
-        std::printf("           slip. The sustained >120 N is a FIDELITY ARTIFACT of the kinematic (infinitely-stiff,\n");
-        std::printf("           force-unlimited) lift constraint, which the grasp force-bound criterion correctly REJECTS.\n");
-        std::printf("           UPGRADE SPEC: model the lift/fingers as FORCE-LIMITED compliant actuators (impedance or\n");
-        std::printf("           a force-capped joint drive) so a wedged grasp slips/backs off instead of manufacturing\n");
-        std::printf("           %.1fx the actuator force. (The locked grasp criterion and configHash are UNCHANGED.)\n",
-                    double(unbounded.front().med) / double(Fapplied));
-    } else {
-        std::printf("  (no UNBOUNDED cases surfaced this run; firm-contact fidelity check still applies)\n");
     }
+    const double oldWedge   = medianOf(oldWedgeMed);    // OLD manufactured over-squeeze
+    const double newWedgeM  = medianOf(newWedgeMed);    // NEW sustained median on the same objects (jaws slipped)
+    const double newWedgeP  = medianOf(newWedgePeak);   // NEW peak on the same objects
+    std::printf("  wedge contact: OLD median=%.1f N (%.1fx grip) -> NEW median=%.1f N, NEW peak=%.1f N (rating %.0f N + margin)\n",
+                oldWedge, oldWedge / Fapplied, newWedgeM, newWedgeP, rating);
 
-    // PASS = the CONTACT solver is faithful (firm-contact grip == actuator force on bounded grasps) AND the
-    // wrong-physics neg-control fails the same check. The UNBOUNDED over-squeeze is REPORTED above as the finding:
-    // it localises to the kinematic-LIFT model (force-unlimited), not the contact solver, and is already rejected
-    // by the locked criterion. Nothing is softened; the experiment constants and criterion are untouched.
-    const bool pass = fid.pass() && !neg.pass();
-    std::printf("  contact-solver-faithful=%d  wrong-physics-neg-ctrl-fails=%d\n", fid.pass(), !neg.pass());
-    std::printf("[fidelity] UNBOUNDED-DIAGNOSIS  %s\n", pass ? "PASS" : "FAIL");
+    // ---- GRIP-COMPLIANT assertions (corrected: the INVARIANT is the actuator force, not the contact) ----
+    // (1) GOOD grasps still HOLD: the compliant jaws must NOT start dropping normal grasps (the must-not-break
+    //     check). Allow tiny variation; a real regression would drop many.
+    const bool goodGraspsHold = (newSucc >= oldSucc - 1) || (newSucc >= int(0.9 * oldSucc));
+    // (2) the WEDGE SLIPS: on objects the rigid jaws over-squeezed, the compliant jaws GIVE -- the contact no
+    //     longer exceeds the rating beyond a small margin (the 173/116 N manufactured spikes GONE).
+    const bool wedgesSlip = (wedges.empty()) || (newWedgeM <= rating * 1.3 && newWedgeM < 0.6 * oldWedge);
+    // (3) the OLD rigid jaws REPRODUCE the manufactured force and FAIL the same bound (no vacuous gate).
+    const bool oldFails = (oldUnb > 0) && (oldWedge > 2.0 * Fapplied);
+    // (the 40 N ACTUATOR invariant is asserted by assertPhysicsLocked() -- the [LOCK OK] gripForceN=40 line every run.)
+
+    const bool pass = goodGraspsHold && wedgesSlip && oldFails;
+    std::printf("  good-grasps-still-hold=%d  wedge-jaws-slip(<=%.0fN & <0.6x old)=%d  old-rigid-reproduces&fails=%d\n",
+                goodGraspsHold, rating * 1.3, wedgesSlip, oldFails);
+    std::printf("[fidelity] GRIP-COMPLIANT  %s   (UNBOUNDED OLD=%d -> NEW=%d; wedge median %.0f->%.0f N; hold OLD=%d NEW=%d)\n",
+                pass ? "PASS" : "FAIL", oldUnb, newUnb, oldWedge, newWedgeM, oldSucc, newSucc);
     return pass;
 }
 

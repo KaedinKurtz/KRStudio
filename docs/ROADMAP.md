@@ -2744,3 +2744,44 @@ filter, which selects cleaner objects -- both changes would have reduced an arti
 honest generalized rate, NOT artifactually low. (Caveat unchanged: this is one rigid-body gripper + criterion, a
 representative proxy, not a specific hardware unit; a compliant force-controlled gripper would back off instead
 of spiking, so UNBOUNDED partly reflects this sim's rigid force-driven jaws.)
+
+### Phase 5 -- FORCE-LIMITED GRIPPER (fix the UNBOUNDED_GRIP fidelity red; recon before coding, 2026-06-17)
+MECHANISM (what the harness proved): UNBOUNDED_GRIP (27.2% of GSO failures) is a KINEMATIC-LIFT ARTIFACT, not
+real over-squeeze. GraspSim's lift was a KINEMATIC palm (eKINEMATIC + setKinematicTarget): it imposes position
+regardless of reaction force, so a wedged object (mug, drill) transmits UNLIMITED force up the Y/Z-locked
+finger joints. The fidelity UNBOUNDED-DIAGNOSIS measured it: the contact solver + friction are FAITHFUL
+(sustained firm grip 40.6 N vs the 40 N actuator, 1.5%; friction 0% error), but the wedged cases sustain a
+MEDIAN 116-173 N (mug 173/4.3x, drill 116/2.9x) -- physically impossible for a 40 N finger; the force is
+manufactured by the force-unlimited kinematic lift. (GraspPhysicsConfig.hpp:27-29 already named this: "the
+lift jaw is KINEMATIC and can otherwise impose UNBOUNDED reaction".)
+
+REMEDY (the KEY INSIGHT, from the architectural decision 2026-06-17): the INVARIANT is the ACTUATOR force, NOT
+the contact force. A rigid palm holds exactly 40 N AND manufactures the wedge force because those are the SAME
+property (rigidity) -- no lever separates them. Force-limiting the LIFT alone fails: a kinematic palm can't do
+stable force control (advancing into a stiff wedge spikes; tried, got 5 kN oscillations), and the wedge
+geometrically AMPLIFIES any bounded lift (~2.3x) and reacts it through the rigid FINGER Y/Z locks regardless of
+the lift. The fix is at the FINGERS: FORCE-LIMIT each finger's Y/Z joint to the palm. The fingers are FREE in
+Y/Z, held to the palm by a controller whose restoring force is HARD-CLAMPED (in our code, a guaranteed cap --
+PhysX's PxD6 drive forceLimit did NOT reliably cap) to +/- the rating. A wedge that pushes a jaw off-track by
+more than the rating SLIPS the jaw (the actuator YIELDS) -- relieving the amplified contact AT ITS SOURCE (the
+jaw gives instead of transmitting a manufactured force). The palm stays KINEMATIC (rigid grip frame), so a GOOD
+grasp (jaw load = friction <= rating) is held firmly and the firm contact stays ~40 N. Contact on a compliant
+jaw is correctly MODULATED DOWN to respect the limit -- that is faithful, not a softened grip.
+
+LOCKED CONSTANT (asserted, OUTSIDE the criterion hash): kLiftActuatorForceRatingN = 56 N = 2*mu*gripForceN =
+2*0.70*40 -- EXACTLY the vertical load the friction grip can hold (a real physical limit: a jaw pushed harder
+than this just slips the object), so the rating is principled, not a magic number tuned to these two objects.
+It is NOT a field of GraspPhysicsConfig (the struct is a static_assert'd 11-float packed image whose FNV-1a
+hash MUST stay 868489ff8e07da5f) -- a separate constexpr in the same namespace. This changes gripper PHYSICS,
+NOT the criterion: the hash, the 4 graspSucceeded clauses, and assertPhysicsLocked (gravity/friction/gripForceN)
+are all UNCHANGED.
+
+NEG-CONTROL: WorldOverride.legacyRigidGripper (default false = compliant jaws). GATE GRIP-COMPLIANT runs the
+SAME wedge experiment both ways. RESULT: compliant jaws SLIP the wedges -- mug sustained 173->31 N, drill
+116->43 N (the 4.3x/2.9x manufactured spikes GONE, contact <= rating); GOOD grasps still HOLD (graspSucceeded
+29->33, NOT dropped -- artifact failures now grasp cleanly); firm-contact grip stays 42.5 N; the 40 N actuator
+asserted every run. OLD rigid jaws reproduce the >120 N spike and FAIL. The compliant gripper is now the
+DEFAULT, so the YCB HEURISTIC-V2 rate re-baselined (V1 48.3->55.0%, V2 51.7->56.7%; V2's marginal gain shrinks
+to +1.7% as compliant jaws and the above-CoM term overlap -- gate now asserts V2 strictly beats V1). GRIP-
+REMEASURE re-runs the 251-object GSO generalized rate (same V2 heuristic, same hash) with the compliant gripper
+and reports the true rate vs 33.2% + UNBOUNDED before/after (honest in either direction).
