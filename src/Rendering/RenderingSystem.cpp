@@ -61,6 +61,7 @@
 #include "ConnectControlGate.hpp" // node-editor GATE CONNECT-AND-CONTROL
 #include "SensorGates.hpp"        // synthetic-sensor pipeline gates (krs::sensor GATE 0 ...)
 #include "GraspGates.hpp"         // rigid-body grasp-planning gates (krs::grasp GATE IMPORT ...)
+#include "FidelityGates.hpp"      // physics-fidelity validation gates (krs::fidelity HARNESS-SELFTEST ...)
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -1200,6 +1201,18 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::grasp::runGraspGeneralizeGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
+    }
+
+    // Physics-fidelity validation harness: each gate is a canonical experiment vs its known analytic answer.
+    if (qEnvironmentVariableIntValue("KRS_FIDELITY_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FIDELITY_SELFTEST =================\n");
+        const bool ok = krs::fidelity::runFidelitySelftestGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_FIDELITY_CONTACT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FIDELITY_CONTACT_SELFTEST =================\n");
+        const bool ok = krs::fidelity::runFidelityContactGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
