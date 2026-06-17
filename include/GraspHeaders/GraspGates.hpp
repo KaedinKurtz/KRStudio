@@ -8,5 +8,6 @@ bool runGraspImportGate();   // GATE IMPORT: YCB load + real-meter scale + mass/
 bool runGraspCoacdGate();    // GATE COACD: concavity survives (ball rests inside bowl); convex-hull filler FAILS
 bool runGraspSuccessGate();  // GATE SUCCESS-CRITERION: good grasp passes / bad fails under LOCKED physics; softened-world anti-cheat neg-ctrl
 bool runGraspPlannerGate();  // GATE PLANNER: antipodal heuristic raises the success rate baseline->tuned; random neg-ctrl
+bool runGraspFailureCatalogGate(); // GATE FAILURE-CATALOG: classify 100% of tuned-planner failures; incomplete-taxonomy neg-ctrl
 
 } // namespace krs::grasp
