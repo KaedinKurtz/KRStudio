@@ -107,6 +107,13 @@ public:
     // conduction scale 0 -> spread does not shrink. Gated by KRS_MPMTHERMAL_SELFTEST + overnight bench.
     bool runThermalGate1_4(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl);
 
+    // PHYSICS-FIDELITY gate (Phase 4) -- GRANULAR ANGLE OF REPOSE. A Drucker-Prager sand column released
+    // from rest slumps to a pile whose flank angle is governed by the material's INTERNAL friction angle.
+    // Ground truth: repose angle tracks the friction parameter (frictionless => spreads flat; higher phi =>
+    // steeper pile). Validates the causal link friction->repose (the physical prediction), not a single
+    // magic number. Gated by KRS_FIDELITY_REPOSE_SELFTEST. Runs on the engine GL context.
+    bool runReposeFidelity(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl);
+
 private:
     void allocate(QOpenGLFunctions_4_3_Core* gl);
     void seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& registry);

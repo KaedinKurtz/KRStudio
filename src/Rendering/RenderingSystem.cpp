@@ -1240,6 +1240,11 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::fidelity::runFidelityThermalGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    if (m_mpm && qEnvironmentVariableIntValue("KRS_FIDELITY_REPOSE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FIDELITY_REPOSE_SELFTEST =================\n");
+        const bool ok = m_mpm->runReposeFidelity(*this, m_gl);
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
 
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
