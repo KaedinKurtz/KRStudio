@@ -29,12 +29,21 @@ struct PlannerParams {
                                            // slide its lower jaw UNDER a grounded object, so a top/bottom grasp never
                                            // seats -- the heuristic must grip from the sides (closing axis horizontal)
     float widthWeight           = 0.0f;    // mild penalty on wide grasps (snugger = more stable)
+    // --- V2 terms (each maps to a CHARACTERISED failure mode; 0 = the term is off, i.e. V1 behaviour) ---
+    float rimMinSpanM           = 0.0f;    // >0 enables RIM / thin-wall pinch grasps (targets NO_ANTIPODAL_GRASP on
+                                           // open thin shells -- bowls/cups): admit pairs with pairDist in
+                                           // [rimMinSpanM, minJawSpanM) that the normal pass rejects as too thin
+    float rimClearanceM         = 0.012f;  // (smaller) initial gap for a rim pinch -- the inner jaw enters the cavity
+    float aboveComWeight        = 0.0f;    // penalise grasps BELOW the CoM (targets DRIFT_ROTATE): a lifted object
+                                           // gripped above its CoM hangs as a stable pendulum; gripped below it is
+                                           // top-heavy and tips/drifts out of the success window
     int   maxGrasps             = 3;       // distinct grasps returned per object
     float diversityM            = 0.02f;   // min grasp-centre separation between returned grasps
 };
 
 PlannerParams baselinePlannerParams();   // loose normals, few samples, CoM-blind  -> a modest success rate
-PlannerParams tunedPlannerParams();      // tight normals, more samples, CoM-aware  -> the improved rate
+PlannerParams tunedPlannerParams();      // tight normals, more samples, CoM-aware  -> the improved rate (V1)
+PlannerParams tunedV2PlannerParams();    // V1 + rim/thin-wall grasps + snug-fit + stronger CoM (targets the failure modes)
 
 // Plan up to params.maxGrasps spatially-distinct antipodal grasps for `mesh`, best-scored first. Pure CPU
 // geometry; returns specs in the object's resting frame (centreOffset relative to the resting CoM), ready for

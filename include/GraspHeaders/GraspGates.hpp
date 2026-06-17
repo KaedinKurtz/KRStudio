@@ -11,5 +11,6 @@ bool runGraspPlannerGate();  // GATE PLANNER: antipodal heuristic raises the suc
 bool runGraspFailureCatalogGate(); // GATE FAILURE-CATALOG: classify 100% of tuned-planner failures; incomplete-taxonomy neg-ctrl
 bool runGraspCoacdRealGate();  // GATE COACD-REAL: CoACD preserves grasp-relevant concavities V-HACD FILLS (discriminating)
 bool runGraspRemeasureGate();  // GATE REMEASURE: V-HACD vs CoACD success rate, same grasps + LOCKED criterion (apples-to-apples)
+bool runGraspHeuristicV2Gate();// GATE HEURISTIC-V2: improved planner (rim/snug/CoM) vs V1 on YCB; targeted failure modes drop
 
 } // namespace krs::grasp

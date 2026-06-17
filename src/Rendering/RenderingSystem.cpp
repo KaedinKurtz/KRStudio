@@ -1176,6 +1176,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Grasp pipeline Phase 1 (V2) GATE HEURISTIC-V2: improved planner vs V1 on YCB; targeted failure modes drop.
+    if (qEnvironmentVariableIntValue("KRS_GRASP_HEURV2_SELFTEST") != 0) {
+        std::printf("\n================= KRS_GRASP_HEURV2_SELFTEST =================\n");
+        const bool ok = krs::grasp::runGraspHeuristicV2Gate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1254,6 +1262,7 @@ void RenderingSystem::initializeSharedResources()
             { "GRASP GATE FAILURE-CATALOG (100% of tuned-planner failures classified into a taxonomy; incomplete-taxonomy neg-ctrl)", krs::grasp::runGraspFailureCatalogGate() },
             { "GRASP GATE COACD-REAL (CoACD preserves grasp-relevant concavities V-HACD FILLS; discriminating handle/interior test)", krs::grasp::runGraspCoacdRealGate() },
             { "GRASP GATE REMEASURE (V-HACD vs CoACD success rate, same grasps + LOCKED criterion, apples-to-apples)", krs::grasp::runGraspRemeasureGate() },
+            { "GRASP GATE HEURISTIC-V2 (improved planner +above-CoM raises YCB rate 48.3->51.7%; targeted modes drop; dead terms reported)", krs::grasp::runGraspHeuristicV2Gate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },

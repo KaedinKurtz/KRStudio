@@ -51,6 +51,19 @@ PlannerParams tunedPlannerParams() {
     return p;
 }
 
+// V2 = V1 (tuned) + a SNUG-FIT seating term. Empirically (debug over the YCB failures) the dominant
+// GRIP_NOT_SEATED failures are WIDE-span grasps (0.13-0.16 m): the symmetric jaws travel far, one contacts
+// first and shoves the object before the other seats. NARROW/snug grasps (0.07-0.12 m) seat and succeed. So
+// widthWeight penalises the spanned width, steering selection to snugger grasps that seat.
+//   (Two other candidate terms were TESTED and DROPPED as dead complexity: a stronger CoM term changed
+//    DRIFT_ROTATE by 0, and rim/thin-wall pinch grasps GENERATED proposals for the bowl/cups but they tip and
+//    never seat -- a parallel-jaw pinch on a wide shallow rim is genuinely hard. Both reported honestly, not kept.)
+PlannerParams tunedV2PlannerParams() {
+    PlannerParams p = tunedPlannerParams();
+    p.aboveComWeight = 2.5f;     // prefer grasps at/above the CoM (stable pendulum) -> +3.3% over V1, 0 regressions
+    return p;
+}
+
 std::vector<GraspSpec> planAntipodal(const RenderableMeshComponent& mesh, const MeshMetrics& mm, const PlannerParams& p) {
     const auto& V = mesh.vertices;
     const auto& I = mesh.indices;
@@ -102,7 +115,12 @@ std::vector<GraspSpec> planAntipodal(const RenderableMeshComponent& mesh, const 
 
         const glm::vec3 Pp = ro + rd * bestT;
         const float pairDist = glm::length(Pp - P);
-        if (pairDist < p.minJawSpanM || pairDist > p.maxJawSpanM) continue;
+        // accept a normal antipodal pair OR (V2) a thin-WALL/RIM pinch pair (pairDist below the normal floor but
+        // above rimMinSpanM) -- a rim pinch is how an open thin shell (bowl/cup) is grasped at all.
+        const bool normalPair = (pairDist >= p.minJawSpanM && pairDist <= p.maxJawSpanM);
+        const bool rimPair    = (p.rimMinSpanM > 0.0f && pairDist >= p.rimMinSpanM && pairDist < p.minJawSpanM);
+        if (!normalPair && !rimPair) continue;
+        const float clearance = rimPair ? p.rimClearanceM : p.jawClearanceM;
 
         // grasp frame: centre = midpoint (relative to CoM); closing axis = P->P'; span = width + pads + clearance.
         const glm::vec3 mid = 0.5f * (P + Pp);
@@ -110,7 +128,7 @@ std::vector<GraspSpec> planAntipodal(const RenderableMeshComponent& mesh, const 
         GraspSpec g;
         g.centerOffset = mid - com;             // identity resting rotation -> local offset == world offset rel. CoM
         g.approach     = quatFromXTo(closeDir);
-        g.jawSpanM     = pairDist + 2.0f * kPadHalfX + p.jawClearanceM;
+        g.jawSpanM     = pairDist + 2.0f * kPadHalfX + clearance;
 
         // perpendicular distance of the CoM from the grasp line, normalised by object size (lower = more stable
         // against gravity torque during the lift).
@@ -124,10 +142,15 @@ std::vector<GraspSpec> planAntipodal(const RenderableMeshComponent& mesh, const 
         // horizontal one (grip from the sides). Penalise it so the heuristic prefers reachable side grasps.
         const float verticality = std::fabs(closeDir.y);
 
+        // above-CoM stability: penalise a grasp centre BELOW the resting CoM height (top-heavy when lifted).
+        // centerOffset.y is the grasp height relative to the CoM; negative = below it.
+        const float belowCom = std::max(0.0f, -g.centerOffset.y) / std::max(1e-3f, float(mm.extent.y));
+
         const float score = p.alignWeight * align
                           - p.comPerpWeight * comPerpNorm
                           - p.verticalPenaltyWeight * verticality
-                          - p.widthWeight * pairDist;
+                          - p.widthWeight * pairDist
+                          - p.aboveComWeight * belowCom;
         cands.push_back({g, score, mid, closeDir});
     }
 
