@@ -2952,3 +2952,22 @@ use (Phases 1-2). UI deferred to a supervised session.
 - **CHAIN-EXPORT-ROUNDTRIP PASS**: serialize -> deserialize is lossless (4 joints, base placement, mount, and all
   provenance + engineering fields preserved to 1e-12). A truncated/corrupted export is **REJECTED** (ok=false, no
   fabricated robot); a flipped engineering field is **DETECTED** by the round-trip compare.
+
+### OMPL PHASE 5 RESULT (2026-06-17, KRS_E2E_SELFTEST + bench GATE E2E) — ALL PASS
+End-to-end closure: a robot is DEFINED via the Phase-4 chain data model -> toChain() -> PLANNED (Phase-1
+MotionPlanner) -> EXECUTED (Phase-2 computed torque under gravity). Every stage's number is asserted, and
+severing any single stage localizes the break to THAT stage (upstream stages stay healthy) -- the causal-chain
+instrument.
+- **E2E-PLAN-EXECUTE PASS**: DEFINE nq=**3** | PLAN solved, path penetration **0.0000** | EXECUTE tracking error
+  **0.0154 rad**, achieved penetration **0.0000**. The pipeline closes with every stage's number healthy.
+- **SEVER-DEFINE -> localized@DEFINE**: an empty robot -> nq=0, define unhealthy; downstream cannot run.
+- **SEVER-PLAN -> localized@PLAN**: define healthy, but disconnected (tight-pitch) bounds -> the planner returns
+  FAILURE -> plan unhealthy; the break is at PLAN, not DEFINE.
+- **SEVER-EXECUTE -> localized@EXECUTE**: define + plan healthy, but the soft PD (no model/gravity feedforward)
+  -> tracking error **0.5984 rad** -> execute unhealthy; the break is at EXECUTE.
+
+### OMPL SPRINT COMPLETE (2026-06-17) — all 5 phases gated green, branch ompl-phase1 (PR-ready)
+KRS_OVERNIGHT_BENCH now includes GATE PLAN / EXECUTE / SUBFEAT / ROBOT-CHAIN / E2E. OMPL 1.7.0 BSD-3-clause
+license ships. INTERACTIVE UI (selection picking, 3D indicator rendering, joint-property HUD) DEFERRED to a
+supervised session per the directive -- the backends (planning, execution, selection, chain, mount port) are
+proven; the pixel-level UI needs the operator's eyes.

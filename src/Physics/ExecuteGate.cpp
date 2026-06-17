@@ -22,6 +22,7 @@
 // ===========================================================================
 #include "MotionPlanner.hpp"
 #include "ComputedTorque.hpp"
+#include "RobotModel.hpp"     // Phase 5 E2E: define the robot via the chain data model
 
 #include <cstdio>
 #include <cmath>
@@ -245,6 +246,89 @@ bool runExecuteGate() {
 
     std::printf("  [execute gate] %s\n", allOk ? "ALL PASS" : "FAIL");
     return allOk;
+}
+
+// ===========================================================================
+// Phase 5 — E2E: a robot DEFINED via the chain data model (Phase 4) is PLANNED
+// (Phase 1) and EXECUTED (Phase 2). Every stage's number is asserted, and
+// severing any stage localizes the break to that stage (upstream stays healthy).
+// ===========================================================================
+bool runE2EGate() {
+    std::fprintf(stderr, "TRACE e2e: enter\n");
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[e2e] GATE E2E -- robot DEFINED via chain -> PLANNED -> EXECUTED; sever any stage localizes the break\n");
+    const Eigen::Vector3d gravity(0, 0, -9.81);
+    const double trueR = 0.25, planR = 0.35;
+    const Eigen::VectorXd qA = q3(-1.2, 0, 0), qB = q3(1.2, 0, 0);
+
+    const std::vector<LinkCapsule> caps = {
+        { 0, Eigen::Vector3d(0,0,0), Eigen::Vector3d(0,0,0.3), 0.06 },
+        { 1, Eigen::Vector3d(0,0,0), Eigen::Vector3d(0.5,0,0), 0.05 },
+        { 2, Eigen::Vector3d(0,0,0), Eigen::Vector3d(0.5,0,0), 0.05 } };
+    const JointLimits lim = armLimits();
+    JointLimits tight = armLimits();                     // sever PLAN: disconnected bounds
+    tight.qLower[1] = -0.05; tight.qUpper[1] = 0.05; tight.qLower[2] = -0.08; tight.qUpper[2] = 0.08;
+    const CollisionWorld planWorld = sphereWorld(caps, planR);
+    const CollisionWorld trueWorld = sphereWorld(caps, trueR);
+
+    // DEFINE the robot via the Phase-4 chain data model (empty -> severed DEFINE).
+    auto makeRobot = [](bool empty) {
+        krs::robot::Robot r; r.name = "e2ebot"; r.nLinks = 4;
+        if (!empty) {
+            krs::robot::Joint j1; j1.member = true; j1.axis = Eigen::Vector3d(0,0,1); j1.ptree = Eigen::Vector3d(0,0,0);   j1.qLower = -kPi; j1.qUpper = kPi;
+            krs::robot::Joint j2; j2.member = true; j2.axis = Eigen::Vector3d(0,1,0); j2.ptree = Eigen::Vector3d(0,0,0.3); j2.qLower = -1.5; j2.qUpper = 1.5;
+            krs::robot::Joint j3; j3.member = true; j3.axis = Eigen::Vector3d(0,1,0); j3.ptree = Eigen::Vector3d(0.5,0,0); j3.qLower = -2.5; j3.qUpper = 2.5;
+            krs::robot::Joint jX; jX.member = false; jX.axis = Eigen::Vector3d(1,0,0); jX.ptree = Eigen::Vector3d(0.5,0,0);
+            r.joints = { j1, j2, j3, jX };
+        }
+        r.mount.type = "flange"; r.mount.link = 2; r.mount.framePos = Eigen::Vector3d(0.5,0,0);
+        return r;
+    };
+
+    struct Stages { int nq; bool defineH, planH, execH; double planPen, trackErr, achievedPen; };
+    auto pipeline = [&](bool severDefine, bool severPlan, bool severExecute) -> Stages {
+        Stages st{ 0, false, false, false, 1e30, 1e30, 1e30 };
+        krs::robot::Robot r = makeRobot(severDefine);
+        const krs::dyn::SerialChain chain = r.toChain();
+        st.nq = chain.nq();
+        st.defineH = (st.nq == 3);
+        if (!st.defineH) return st;                       // DEFINE severed -> cannot proceed
+        MotionPlanner planner(chain, planWorld, severPlan ? tight : lim);
+        PlanRequest rq; rq.start = qA; rq.goal = qB; rq.seed = 7; rq.denseWaypoints = 8; rq.maxIterations = 20000;
+        const PlanResult pr = planner.plan(rq);
+        st.planPen = pr.solved ? trajMaxPen(chain, planWorld, pr.waypoints) : 1e30;
+        st.planH = pr.solved && st.planPen < 1e-6;
+        if (!pr.solved) return st;                        // PLAN severed -> no path downstream
+        TimedTraj traj; traj.build(pr.waypoints, lim, 1.0);
+        const ExecResult ex = execute(chain, traj, lim, !severExecute, gravity);  // sever EXECUTE -> soft PD
+        st.trackErr = ex.peakErr;
+        st.achievedPen = trajMaxPen(chain, trueWorld, ex.achieved);
+        st.execH = ex.peakErr < 0.10 && st.achievedPen < 1e-3;
+        return st;
+    };
+
+    const Stages full = pipeline(false, false, false);
+    printf("[e2e]   PIPELINE: DEFINE nq=%d | PLAN solved pen=%.4f | EXECUTE trackErr=%.4f achievedPen=%.4f\n",
+           full.nq, full.planPen, full.trackErr, full.achievedPen);
+    const bool fullOk = full.defineH && full.planH && full.execH;
+    printf("[e2e]   E2E-PLAN-EXECUTE (every stage's number healthy): %s\n", fullOk ? "PASS" : "FAIL");
+
+    const Stages sD = pipeline(true, false, false);
+    const Stages sP = pipeline(false, true, false);
+    const Stages sE = pipeline(false, false, true);
+    const bool locD = !sD.defineH;                                   // break at DEFINE
+    const bool locP = sP.defineH && !sP.planH;                       // DEFINE ok, break at PLAN
+    const bool locE = sE.defineH && sE.planH && !sE.execH;           // DEFINE+PLAN ok, break at EXECUTE
+    printf("[e2e]   SEVER-DEFINE  -> nq=%d defineH=%d  %s\n", sD.nq, int(sD.defineH), locD ? "localized@DEFINE" : "NOT");
+    printf("[e2e]   SEVER-PLAN    -> defineH=%d planH=%d  %s\n", int(sP.defineH), int(sP.planH), locP ? "localized@PLAN" : "NOT");
+    printf("[e2e]   SEVER-EXECUTE -> defineH=%d planH=%d execH=%d trackErr=%.4f  %s\n",
+           int(sE.defineH), int(sE.planH), int(sE.execH), sE.trackErr, locE ? "localized@EXECUTE" : "NOT");
+    const bool ok = fullOk && locD && locP && locE;
+    printf("[e2e] %s\n", ok ? "ALL PASS (define->plan->execute closes; severing any stage localizes the break)"
+                            : "FAILURES PRESENT");
+    fflush(stdout);
+    return ok;
 }
 
 } // namespace krs::plan

@@ -1285,6 +1285,14 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
+    // OMPL sprint Phase 5: E2E -- robot defined via chain -> planned -> executed;
+    // every stage's number asserted; severing any stage localizes the break. Pure CPU.
+    if (qEnvironmentVariableIntValue("KRS_E2E_SELFTEST") != 0) {
+        std::printf("\n================= KRS_E2E_SELFTEST =================\n");
+        const bool ok = krs::plan::runE2EGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1329,6 +1337,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE PLAN (OMPL RRTConnect/RRTstar over SerialChain: collision-free/limits/connectivity/determinism + straight-line & boxed-in neg-ctrls)", krs::plan::runPlanningGate() },
             { "GATE EXECUTE (planned path run through computed-torque under gravity: tracks/collision-free/limits; soft-PD lag + colliding-ref + 3x-fast neg-ctrls)", krs::plan::runExecuteGate() },
             { "GATE ROBOT-CHAIN (entity owns links+joints+base+mount: owned-DOF chain/joint-from-feature/typed-mount-port/lossless-export; non-member & non-coaxial & mismatched-type & corrupt-export neg-ctrls)", krs::robot::runRobotChainGate() },
+            { "GATE E2E (robot defined-via-chain -> planned -> executed; every stage asserted; severing define/plan/execute localizes the break)", krs::plan::runE2EGate() },
             { "GATE C-track (computed torque tracks moving setpoint; soft PD lags)", krs::ctrl::runControllerTrackGate() },
             { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },

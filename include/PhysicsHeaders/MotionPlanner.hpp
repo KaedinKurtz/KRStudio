@@ -65,4 +65,11 @@ bool runPlanningGate();
 // collides) and EXECUTE-LIMITS. Returns true iff every sub-gate passes.
 bool runExecuteGate();
 
+// E2E gate (env KRS_E2E_SELFTEST; folded into KRS_OVERNIGHT_BENCH): a robot is
+// DEFINED via the chain data model -> PLANNED -> EXECUTED. Every stage's number
+// is asserted, and severing any stage (define/plan/execute) localizes the break
+// to that stage (upstream stages stay healthy). Returns true iff E2E + all three
+// sever-localizations behave as expected.
+bool runE2EGate();
+
 } // namespace krs::plan
