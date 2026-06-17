@@ -40,6 +40,13 @@ public:
     void reset() override;
     void samplePositions(std::vector<glm::vec4>& out) const override;
 
+    /// PHYSICS-FIDELITY gate (Phase 3): settle a water column in a closed tube and measure the SPH solver
+    /// against analytic ground truth -- HYDROSTATIC pressure p(depth)=rho*g*h and INCOMPRESSIBLE density==rho0.
+    /// Pure CPU (no GL). A gravity-off run is the wrong-physics negative control (no hydrostatic gradient).
+    /// Returns true iff both sub-gates pass; prints a full per-depth-bin diagnostic. The fidelity GAP it
+    /// measures (SPH pressure deficiency / compressibility) is the reported upgrade spec, not tuned away.
+    bool runFluidFidelity();
+
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;

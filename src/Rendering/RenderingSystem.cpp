@@ -1224,6 +1224,12 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::fidelity::runFidelityUnboundedGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    if (qEnvironmentVariableIntValue("KRS_FIDELITY_FLUID_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FIDELITY_FLUID_SELFTEST =================\n");
+        DfsphBackend fluidProbe;                       // CPU SPH fidelity probe (no GL needed)
+        const bool ok = fluidProbe.runFluidFidelity();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
 
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
