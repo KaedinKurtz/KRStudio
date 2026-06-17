@@ -2669,6 +2669,28 @@ CoACD must leave most empty. EARLY RESULT (3 of 4 concave objects; cups generati
   019_pitcher_base: 404 cavity pts, V-HACD preserve 0%, CoACD preserve 82.4%  (handle gap)  -> discriminates
   024_bowl        : 1158 cavity pts, V-HACD preserve 0%, CoACD preserve 73.4% (interior)
   025_mug         : 1498 cavity pts, V-HACD preserve 0%, CoACD preserve 70.4% (handle+interior) -> discriminates
-CONFIRMS the hypothesis: V-HACD was FILLING the mug handle/interior and pitcher handle (concavities a jaw needs
-to enter), which CoACD preserves 70-82%. GATE REMEASURE then scores the same tuned grasps under both colliders
-(apples-to-apples, same hash) and reports the before/after rate + per-object flips. [results pending full run]
+CONFIRMS half the hypothesis: V-HACD WAS filling the mug handle/interior, pitcher handle, cup interior (404-1498
+cavity pts each, V-HACD preserve 0%, CoACD preserve 70-83%, CoACD solid-coverage 91-99.9% so the colliders are
+faithful, not gappy -- the bowl's 83% solid-coverage is thin-shell grid noise). GATE COACD-REAL PASSES (guard
+LOCKED, 3 grasp-relevant discriminators). The discriminating handle/interior test the prior bowl-only drop missed.
+
+GATE REMEASURE (apples-to-apples, same tuned grasps, same hash 868489ff8e07da5f asserted in every run): V-HACD
+(before) 53.3% (32/60) -> CoACD (after) 48.3% (29/60), **delta -5.0%**; random under CoACD stays low at 8.3%.
+3 objects improved (019_pitcher_base 0->1: handle now reachable; 010_potted_meat, 048_hammer), 5 regressed
+(003_cracker 3->1, 007_tuna 3->2, 011_banana 3->2, 025_mug 1->0, 035_drill 2->1). HONEST FINDING -- the
+motivating hypothesis is REFUTED: V-HACD's concavity-filling was NOT artificially depressing the rate. The
+faithful CoACD colliders (preserved hollow interiors, thin walls, open handles) make grasping slightly HARDER
+and MORE honest -- V-HACD's coarser, slightly-inflated, cavity-filling hulls gave more forgiving solid contact.
+The 48.3% is the more physically-honest number; the collider was NOT the bottleneck.
+
+GATE FAILURE-CATALOG re-run under CoACD (31 failures vs V-HACD's 28): NO_ANTIPODAL_GRASP UNCHANGED at 6 (bowl,
+cups) -- proving those are PLANNER-side (the planner ray-casts the VISUAL mesh, never the collider), NOT collider
+artifacts, so CoACD cannot fix them. GRIP_NOT_SEATED 11->13 and DRIFT_ROTATE 4->7 (the faithful collider grips
+less forgivingly -> more held-but-drifted and unseated failures); CONTACT_INTERMITTENT 4->2; UNBOUNDED_GRIP 2,
+SLIP_FELL 1 unchanged. 100% classified (incomplete-taxonomy neg-ctrl 64.5%). The remaining failures are
+genuinely hard (thin shells defeat the antipodal planner; hollow/concave objects grip poorly), not artifacts.
+
+VERDICT: CoACD is now the production collider (all gates default to it; hash unchanged 868489ff8e07da5f). The
+honest re-measured rate is 48.3% (was 53.3% on V-HACD). Bench 78/78. The collider swap made the pipeline more
+physically faithful (CoACD preserves the concavities a jaw must enter, confirmed by GATE COACD-REAL) and the
+rate slightly lower -- an honest re-measurement, not a number inflated by the change.
