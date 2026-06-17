@@ -56,6 +56,7 @@
 #include "BridgeNodes.hpp"        // Phase 5 GATE ND (krs::nodes graph->backend bridge)
 #include "MqttNodes.hpp"          // Phase 2 GATE NODE-MQTT (krs::nodes auto-MQTT nodes)
 #include "ControllerGates.hpp"    // Phase 4 controller gates (krs::ctrl C-track/C-knob/C-glass)
+#include "MotionPlanner.hpp"      // OMPL sprint Phase 1 motion-planning gate (krs::plan)
 #include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE / TIME)
 #include "NodeEditQueue.hpp"      // force immediate UI-edit mode for the headless gates
 #include "ConnectControlGate.hpp" // node-editor GATE CONNECT-AND-CONTROL
@@ -1251,6 +1252,14 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
+    // OMPL sprint Phase 1: motion planning + collision checking (PLAN-COLLISION-FREE/
+    // LIMITS/CONNECTIVITY/DETERMINISM + fuzz/profile). Pure CPU (Eigen + OMPL), no GL.
+    if (qEnvironmentVariableIntValue("KRS_PLANNING_SELFTEST") != 0) {
+        std::printf("\n================= KRS_PLANNING_SELFTEST =================\n");
+        const bool ok = krs::plan::runPlanningGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1291,6 +1300,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE NODE-UI (in-node widget param drives output + bounded footprint)", krs::nodes::runNodeUiGate() },
             { "GATE NODE-LIB (math/signal/time/logic nodes vs closed-form, <tol)", krs::nodes::runNodeLibraryGate() },
             { "GATE NODE-MQTT (publish-node drives live robot over the bus, FK <1e-4)", krs::nodes::runMqttNodeGate() },
+            { "GATE PLAN (OMPL RRTConnect/RRTstar over SerialChain: collision-free/limits/connectivity/determinism + straight-line & boxed-in neg-ctrls)", krs::plan::runPlanningGate() },
             { "GATE C-track (computed torque tracks moving setpoint; soft PD lags)", krs::ctrl::runControllerTrackGate() },
             { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },

@@ -2825,3 +2825,76 @@ UPGRADE SPEC: a solver-level granular upgrade (implicit/semi-implicit MPM for st
 DEPOSITION test instead of a violent collapse). The stress-space plasticity is the correct foundation; the
 angle-of-repose red is NOT closed -- reported, not faked. (Sets up the dusty<->brown-sugar cohesion work:
 once phi drives the angle on a stable solver, cohesion is the second parameter.)
+
+## OMPL SPRINT — Phase 1: MOTION PLANNING + COLLISION CHECKING (2026-06-17)
+**Goal:** plan over the live articulation config space (`krs::dyn::SerialChain`, the same Eigen oracle the
+controller/FK gates use), collision-checked vs the scene + self, with RRT-Connect AND an optimizing planner
+(RRT*). OMPL 1.7.0 integrated via vcpkg (BSD-3-clause, license ships at
+`vcpkg_installed/x64-windows/share/ompl/copyright`). `find_package(ompl CONFIG REQUIRED)` -> `ompl::ompl`.
+
+**Collision world (`krs::plan`, header-only, pure CPU/Eigen — NO GL/PhysX/OpenVDB):** the planner's state
+validity checker must be deterministic (for PLAN-DETERMINISM) and independent of the live stateful PhysX scene,
+so it is an ANALYTIC capsule-robot-vs-primitive-obstacle model (the textbook motion-planning collision model;
+what FCL would compute, but closed-form and reproducible). Robot links = capsules in body-local frames; at a
+config q, `SerialChain::fk` places them in the world. Obstacles = Sphere / HalfSpace / Box. All distances are
+closed-form (point-segment, segment-segment, point-OBB + convex 1-D line-search for segment-OBB), so every
+"penetration" is a REAL measured metre value, not a flag. Penetration(capsule,obstacle) = max(0, r - segDist);
+self-collision = segment-segment distance on non-adjacent links (adjacency read from `joint(b).parent`).
+
+**Planner (`krs::plan::MotionPlanner`):** `RealVectorStateSpace(nq)` bounded by per-dof `qLower/qUpper`;
+StateValidityChecker = FK + `CollisionWorld::maxPenetration(q) < tol`; `setStateValidityCheckingResolution`
+so OMPL densely checks motion segments. Determinism via `ompl::RNG::setSeed(seed)` BEFORE planner construction
+AND termination on a DETERMINISTIC condition (not wall-clock): `plannerOrTerminationCondition(exactSoln,
+IterationTerminationCondition(maxIters))` — success terminates on exact solution at the same iteration each run;
+unreachable goal exhausts the deterministic iteration cap and returns FAILURE.
+
+**Test robot (gate-controlled, hand-verifiable):** 3R arm — J1 yaw(Z), J2/J3 pitch(Y), two 0.5 m links
+(r=0.05) + a 0.3 m shoulder post. At q=0 it points along +X at height 0.3 reaching x=1.0. Scenarios:
+- **Open** (sphere obstacle at (0.8,0,0.3) r=0.25 + floor halfspace z=-0.2): start yaw=-1.2, goal yaw=+1.2.
+  The straight-line config interp sweeps yaw through 0 -> forearm passes through the sphere centre
+  (penetration ~0.30 m); a planned path lifts pitch over the sphere (penetration 0).
+- **Boxed-in** (same sphere + pitch limits tightened to [-0.05,0.05]): the yaw=0 hyperplane is FULLY blocked
+  for all reachable pitch, and RealVectorStateSpace (no SO(2) wrap) severs the long-way-around at the +/-pi
+  yaw limit -> start and goal are in genuinely DISCONNECTED c-space components -> planner MUST return FAILURE.
+
+**GATES (env `KRS_PLANNING_SELFTEST`; folded into KRS_OVERNIGHT_BENCH):**
+- **PLAN-COLLISION-FREE** — RRTConnect AND RRTstar paths, re-checked INDEPENDENTLY at >=256 dense waypoints:
+  max penetration == 0 (< 1e-6 m). NEG-CTRLS: (a) the naive straight-line "planner" path penetrates the sphere
+  (measured ~0.30 m > 0 -> the independent checker FAILS it, proving the checker is load-bearing); (b) RRTstar
+  path length <= RRTConnect length (the optimizing planner is exercised and no worse). Report both penetrations
+  and both path lengths.
+- **PLAN-LIMITS** — every planned waypoint within [qLower,qUpper] (min margin reported); time-parameterized at
+  per-dof vMax respects velocity limits. NEG-CTRLS: a waypoint forced to qUpper+0.5 -> position-checker flags
+  margin<0; a 2x-fast re-parameterization -> velocity-checker flags ratio>1.
+- **PLAN-CONNECTIVITY** — solved path's first state == start and last == goal to < 1e-6. NEG-CTRL: the boxed-in
+  (disconnected) scenario returns FAILURE (status != EXACT_SOLUTION, no path), NOT a fabricated path; the SAME
+  planner on the open scenario SUCCEEDS (non-vacuous contrast).
+- **PLAN-DETERMINISM** — same seed twice -> bitwise-identical waypoints (< 1e-9). NEG-CTRL: two DIFFERENT seeds
+  -> paths differ (> 1e-6 at some waypoint), proving the seed actually drives the RNG (not a trivially-constant
+  planner).
+- **Profile:** plan time vs scene complexity (1/4/16 obstacles), reported as `[plan-profile]`.
+
+### OMPL PHASE 1 RESULT (2026-06-17, KRS_PLANNING_SELFTEST + bench GATE PLAN) — ALL PASS
+- **PLAN-COLLISION-FREE PASS**: RRTConnect path pen=0.000000, len=3.2611; RRTstar (optimizing) pen=0.000000,
+  len=2.5803 (21% shorter — the optimizer is exercised and strictly improves). NEG straight-line interp
+  start->goal penetrates the sphere by **0.2962 m** (matches the hand-computed 0.30) -> the INDEPENDENT
+  256-waypoint re-check FAILS the naive path, proving the checker is load-bearing.
+- **PLAN-LIMITS PASS**: posMargin=1.0005 (all waypoints in [qLower,qUpper]); velRatio=1.0000 at the constant-
+  speed parameterization. NEG out-of-range waypoint -> margin -0.5000; NEG 2x-fast -> velRatio 2.0000 (flagged).
+- **PLAN-CONNECTIVITY PASS**: solved path startErr=0, goalErr=0 (first==start, last==goal exactly). NEG boxed-in
+  (pitch frozen to [-0.05,0.05] so the yaw=0 slice is fully blocked and the +/-pi limit severs the long way)
+  -> solved=0 after the full 20001-iteration cap = FAILURE, not a fabricated path. Same planner on the open
+  scene SUCCEEDS (non-vacuous contrast).
+- **PLAN-DETERMINISM PASS**: same seed -> maxdiff 0.00e+00 (bit-identical waypoints); different seed -> maxdiff
+  9.21e-01 (paths genuinely differ -> the seed drives the RNG, not a trivially-constant planner). Achieved via
+  a locally-seeded RealVectorStateSampler (OMPL's global RNG::setSeed is one-shot per process and cannot make
+  two in-process plans reproducible; RRTConnect's only randomness is uniform sampling, so the seeded sampler
+  fully determinizes it).
+- **Fuzz**: 8/8 random valid endpoint pairs solved, worst path penetration 0.000000 (no solved path collides).
+- **Profile**: plan time ~0ms at 1/4/16 obstacles (off-corridor obstacles don't change the easy solve).
+- **License**: OMPL 1.7.0, BSD-3-clause, ships at vcpkg_installed/x64-windows/share/ompl/copyright (Rice Univ).
+- **BUILD-INFRA NOTE**: this sprint's builds initially never compiled because Git Bash mangles `cmd.exe /c`
+  (POSIX path conversion turns `/c` into `C:\`), so run_configure.bat never ran and the stale exe lacked the
+  new code. Fix: invoke the build from PowerShell with absolute paths --
+  `cmd /c 'C:\Users\kurtz\KRStudio\KRStudio\run_configure.bat > C:\...\build.log 2>&1'`. Also: new source files
+  need a FRESH cmake configure (CONFIGURE_DEPENDS glob) to enter build.ninja.

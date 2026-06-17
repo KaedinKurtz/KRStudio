@@ -432,6 +432,14 @@ else()
   message(STATUS "OpenCASCADE not found; STEP import compiled out (CadImporter stub).")
 endif()
 
+# --- OMPL (OMPL sprint, Phase 1: sampling-based motion planning over the
+# SerialChain config space). BSD-3-clause; in vcpkg.json so REQUIRED. The config
+# exposes the ompl::ompl target (pulls Boost + eigen3 include dirs transitively).
+find_package(ompl CONFIG REQUIRED)
+target_link_libraries(RoboticsSoftware PRIVATE ompl::ompl)
+target_compile_definitions(RoboticsSoftware PRIVATE KR_WITH_OMPL)
+message(STATUS "OMPL ${OMPL_VERSION} found; motion planning enabled (KR_WITH_OMPL).")
+
 # --- Mosquitto / MQTT (Phase 4: broker on startup + joint cmd/state topic tree) ---
 # libmosquitto is the C client (vcpkg port builds WITH_BROKER=OFF). The broker itself
 # is the system mosquitto.exe, spawned via QProcess on startup. KR_WITH_MQTT gates the

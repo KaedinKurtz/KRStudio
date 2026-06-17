@@ -26,6 +26,7 @@
     "urdfdom",
     "urdfdom-headers",
     "opencascade",
-    "mosquitto"
+    "mosquitto",
+    "ompl"
   ]
 }
