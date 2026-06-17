@@ -170,6 +170,10 @@ private:
     glm::vec3 m_gravity{ 0.0f, -9.81f, 0.0f };
     float m_maxWaveSpeed = 10.0f;       // max sqrt(stiffness/density), for CFL
     float m_floorFriction = 0.4f;       // Coulomb friction at the grid floor (Phase 5)
+    float m_picBlend = 0.0f;            // SAND per-substep affine APIC->PIC blend (0 = none; the stress-space DP
+                                        // friction now dissipates on its own, so this band-aid is off by default)
+    float m_sandVelDampRate = 0.0f;     // SAND dt-scaled velocity bleed [1/s] (0 = none; see above)
+    float m_floorStick = 0.0f;          // basal tangential bleed/step (sticky floor; the repose gate raises it)
     float m_renderRadius = 0.02f;       // point-sprite radius (= dx; floor-contact offset)
     std::vector<float> m_seedScratch;   // CPU staging for seeding
 

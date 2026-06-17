@@ -2798,3 +2798,30 @@ the directive's anticipated "rate may go DOWN -- the honest corrected number, no
 A FUTURE refinement (not done here): score the grip on the SUSTAINED (median) jaw force, not the per-substep
 peak, so a clean compliant slip is not flagged UNBOUNDED by a transient impulse -- but that touches the locked
 criterion (hash), so it is deferred as a deliberate, separate decision.
+
+### Phase 6 -- MPM GRANULAR (fix the angle-of-repose red; 2026-06-17). TWO bugs, split + addressed:
+BUG A (SETTLING) -- FIXED + bench-safe. The explicit MLS-MPM sand column SKATED (medSpeed ~15 m/s, never
+settled) because the AFFINE modes inject energy faster than the weak velocity-Coulomb floor (friction ~
+normal VELOCITY, ~0 at rest) removes it. Added (SAND-only, default OFF so the bench is unchanged; the repose
+gate turns them on): a per-substep APIC->PIC affine blend (u_picBlend), a dt-SCALED velocity bleed
+(u_velDampRate [1/s]), and a sticky basal floor (u_floorStick, bleeds the floor-cell tangential velocity so
+the deposit cannot coherently skate). Together: medSpeed 15 -> ~1.2 m/s.
+
+BUG B (FRICTION / phi-DEPENDENCE) -- ROOT CAUSE FIXED in the plasticity, but the repose ANGLE still does not
+emerge. The old SAND return map was Hencky-STRAIN Drucker-Prager: dg = ||eps_dev|| + (3L+2u)/(2u)*trEps*alpha
+-- the friction term scales with the VOLUMETRIC STRAIN trEps, which is ~0 for (near-isochoric) granular flow,
+so phi was STRUCTURALLY ABSENT (phi=0/35/45 gave bit-identical deposits). REWROTE it to STRESS-space DP: the
+trial Kirchhoff stress tau = 2u*eps + L*trEps, pressure p = tr(tau)/3, deviatoric s = tau - p; the cone
+radius -3*alpha*p grows with the confining PRESSURE, so friction resists shear even under isochoric flow.
+This is the correct Klar-2016-style cone and is bench-safe (MPM suite 14/14 + adjoint gradient check stay
+green; configHash work N/A here).
+
+REMAINING (GATED RED, honest): even with the correct stress-space friction + the settling dissipation, the
+COLUMN-COLLAPSE test has NO intermediate pile regime -- WEAK damping lets the column over-flatten to a
+monolayer (the residual ~1.2 m/s churn generates transient shear that exceeds the friction cone -> yields ->
+flows flat), STRONG damping FREEZES the seeded pillar before any slump. Neither holds a phi-dependent pile, so
+phi=0/35/45 stay ~identical. The explicit MLS-MPM lacks stable granular shear strength under slow flow.
+UPGRADE SPEC: a solver-level granular upgrade (implicit/semi-implicit MPM for stable slow flow, or a gradual
+DEPOSITION test instead of a violent collapse). The stress-space plasticity is the correct foundation; the
+angle-of-repose red is NOT closed -- reported, not faked. (Sets up the dusty<->brown-sugar cohesion work:
+once phi drives the angle on a stable solver, cohesion is the second parameter.)

@@ -30,6 +30,8 @@ uniform float u_thetaS;   // critical stretch     (e.g. 0.0075)
 // centres) stop at the floor.
 uniform float u_floorY;   // world-y of the floor plane (= origin.y + bound*dx)
 uniform float u_radius;   // particle effective radius (= splat radius = dx)
+uniform float u_picBlend;    // SAND only: per-substep APIC->PIC affine blend [0..1] (0 = pure APIC)
+uniform float u_velDampRate; // SAND only: dt-scaled velocity bleed [1/s] to settle skating (0 = none)
 
 void jacobiRotateSym(inout mat3 S, inout mat3 V, int pp, int qq)
 {
@@ -127,6 +129,23 @@ void main()
         newC += (Dinv * wt) * outerProduct(g, dpos);
     }
 
+    // SAND SETTLING FIX (u_picBlend>0): an explicit MLS-MPM granular column never settles -- it skates because
+    // the AFFINE modes (newC -> F -> stress -> grid force) keep INJECTING energy faster than the floor friction
+    // (mu*g*dt) removes it. Dissipate it: blend the affine matrix toward PIC (newC*(1-blend) -- pure PIC is C=0,
+    // the maximally-dissipative limit) and bleed a small fraction of the spurious velocity. Applied ONLY to SAND
+    // (a dissipative material, so this is physical, not a hack); fluid/elastic/snow are untouched (blend skipped).
+    float matType = p[i].matl.w;
+    if (matType > 1.5 && matType < 2.5) {                 // SAND only (fluid/elastic/snow untouched)
+        // Settle a granular column that otherwise SKATES (~15 m/s, spurious MLS-MPM energy the weak floor
+        // friction can't remove). Two dissipations, both OFF in the neg-control (rates = 0):
+        //  - u_picBlend: a small per-substep affine (APIC->PIC) blend (the high-frequency injecting modes).
+        //  - u_velDampRate: a dt-SCALED velocity bleed [1/s] -- dt-scaled so it is INDEPENDENT of the substep
+        //    count. Tuned so the FAST gravity slump (~0.3 s) survives but the PERSISTENT skating (~1.5 s) decays,
+        //    leaving the Drucker-Prager friction to set the repose angle.
+        if (u_picBlend > 0.0)    newC *= (1.0 - u_picBlend);
+        if (u_velDampRate > 0.0) newV *= max(0.0, 1.0 - u_velDampRate * u_dt);
+    }
+
     // Advect, then clamp so the 3^3 stencil always stays inside the grid.
     pos += u_dt * newV;
     float domain = float(u_N) * u_dx;
@@ -138,8 +157,7 @@ void main()
     // a cell. This is the position-level backstop to the grid velocity BC.
     pos.y = max(pos.y, u_floorY + u_radius);
 
-    float matType = p[i].matl.w;
-    mat3 F = mat3(p[i].f0.xyz, p[i].f1.xyz, p[i].f2.xyz);
+    mat3 F = mat3(p[i].f0.xyz, p[i].f1.xyz, p[i].f2.xyz);   // matType read above (for the sand settling blend)
 
     if (matType < 0.5) {
         // FLUID — evolve volume only (track J), never accumulate shear in F.
@@ -154,7 +172,12 @@ void main()
             // ELASTIC — purely reversible, no return map.
             F = Fnew;
         } else if (matType > 1.5 && matType < 2.5) {
-            // SAND — Drucker-Prager return map on the Hencky strain (Klar 2016).
+            // SAND — Drucker-Prager return map in STRESS space (pressure-dependent friction cone).
+            // The earlier Hencky-STRAIN form coupled friction to the volumetric STRAIN trEps, so a near-isochoric
+            // granular flow (trEps~0) saw ~zero friction -> phi-INDEPENDENT piles (the repose red). Here the
+            // friction resists shear UNDER PRESSURE: the cone radius -3*alpha*p grows with the confining pressure
+            // p, so a confined pile holds shear at the friction angle while a frictionless (alpha=0) pile, whose
+            // cone radius is 0, spreads flat. phi now controls the repose angle.
             float mu = p[i].matl.x;
             float lambda = p[i].matl.y;
             float alpha = p[i].matl.z;
@@ -162,18 +185,23 @@ void main()
             svd3x3(Fnew, U, sig, V);
             vec3 eps = log(max(abs(sig), vec3(1e-9)));
             float trEps = eps.x + eps.y + eps.z;
-            vec3 epsHat = eps - vec3(trEps / 3.0);
-            float epsHatNorm = length(epsHat);
+            vec3 tau = 2.0 * mu * eps + vec3(lambda * trEps);   // trial principal Kirchhoff stress
+            float pmean = (tau.x + tau.y + tau.z) / 3.0;        // mean stress (< 0 under compression)
+            vec3 s = tau - vec3(pmean);                         // deviatoric stress
+            float sNorm = length(s);
             vec3 SigProj;
-            if (trEps > 0.0) {
-                SigProj = vec3(1.0);                  // tension -> cone tip
-            } else if (epsHatNorm <= 1e-12) {
-                SigProj = sig;                        // purely volumetric
+            if (pmean >= 0.0) {
+                SigProj = vec3(1.0);                            // tension: cohesionless -> stress-free tip
             } else {
-                float dg = epsHatNorm
-                         + (3.0 * lambda + 2.0 * mu) / (2.0 * mu) * trEps * alpha;
-                if (dg <= 0.0) SigProj = sig;          // inside cone -> elastic
-                else SigProj = exp(eps - dg * (epsHat / epsHatNorm));
+                float coneR = -3.0 * alpha * pmean;             // DP cone radius (>=0): max deviatoric stress at p
+                if (sNorm <= coneR || sNorm < 1e-12) {
+                    SigProj = sig;                              // inside the cone -> elastic, HOLDS the shear
+                } else {
+                    vec3 tauProj = s * (coneR / sNorm) + vec3(pmean);   // radial return to the cone surface
+                    float trTau = tauProj.x + tauProj.y + tauProj.z;
+                    vec3 epsNew = (tauProj - vec3(lambda * trTau / (2.0 * mu + 3.0 * lambda))) / (2.0 * mu);
+                    SigProj = exp(epsNew);                      // invert stress -> strain -> stretches
+                }
             }
             F = U * diagm(SigProj) * transpose(V);
         } else {

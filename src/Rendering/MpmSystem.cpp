@@ -459,6 +459,7 @@ void MpmSystem::runSubstep(QOpenGLFunctions_4_3_Core* gl, Shader* p2g, Shader* g
     grid->setVec3(gl, "u_gravity", gravity);
     grid->setInt(gl, "u_bound", 2);
     grid->setFloat(gl, "u_floorFriction", m_floorFriction);
+    grid->setFloat(gl, "u_floorStick", m_floorStick);   // sticky floor: arrest basal skating (0 = neg-ctrl)
     gl->glDispatchCompute(cGroups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -476,6 +477,8 @@ void MpmSystem::runSubstep(QOpenGLFunctions_4_3_Core* gl, Shader* p2g, Shader* g
     // the live domain); offset particle centres by the effective radius so surfaces rest on it.
     g2p->setFloat(gl, "u_floorY", m_origin.y + 2.0f * dx);
     g2p->setFloat(gl, "u_radius", m_renderRadius);
+    g2p->setFloat(gl, "u_picBlend", m_picBlend);          // SAND settling: affine APIC->PIC blend (0 = neg-ctrl)
+    g2p->setFloat(gl, "u_velDampRate", m_sandVelDampRate); // SAND settling: dt-scaled velocity bleed [1/s]
     gl->glDispatchCompute(pGroups, 1, 1);
     gl->glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
@@ -747,6 +750,9 @@ bool MpmSystem::runReposeFidelity(RenderingSystem& renderer, QOpenGLFunctions_4_
                                                      // only buys resolution, not different physics).
     m_floorFriction = 1.0f;                          // STICKY floor: the base grips, so INTERNAL friction
                                                      // (not basal slip) governs the slump angle.
+    m_floorStick = 0.4f;                             // basal tangential bleed: arrests the deposit's coherent skating
+    m_picBlend = 0.05f; m_sandVelDampRate = 8.0f;    // moderate bulk damping: settle the bulk without freezing the
+                                                     // slump; the stress-space DP friction then holds the pile angle.
     m_renderRadius = 0.018f;
     const float dx = m_size.x / float(m_N);
     const float floorY = m_origin.y + 2.0f * dx;
@@ -756,8 +762,11 @@ bool MpmSystem::runReposeFidelity(RenderingSystem& renderer, QOpenGLFunctions_4_
     auto seedColumn = [&](float phiDeg, float halfR, float halfH, float spacing) -> int {
         m_seedScratch.clear(); m_particleCount = 0;
         const float vol = spacing * spacing * spacing, density = 1600.0f, mass = density * vol;
-        const float E = 1.5e6f, nu = 0.3f;            // stiffer than Test-4 sand: a STATIC column needs a higher
-                                                      // elastic-wave CFL margin than a falling block (else it churns)
+        const float E = 1.5e6f, nu = 0.3f;            // STIFF: resist vertical compaction (the DP yield resists
+                                                      // SHEAR, not volumetric compression, so a soft column just
+                                                      // compacts to a monolayer). With the STRESS-space DP the
+                                                      // friction cone grows with pressure, so stiff E (higher
+                                                      // pressure) gives MORE friction -- stiffness helps phi here.
         const float mu = E / (2.0f * (1.0f + nu)), lambda = E * nu / ((1.0f + nu) * (1.0f - 2.0f * nu));
         const float sphi = std::sin(glm::radians(phiDeg));
         const float alpha = (phiDeg <= 0.0f) ? 0.0f : std::sqrt(2.0f / 3.0f) * (2.0f * sphi) / (3.0f - sphi);
@@ -870,21 +879,21 @@ bool MpmSystem::runReposeFidelity(RenderingSystem& renderer, QOpenGLFunctions_4_
     const bool pass = frictionlessFlat && monotone && piled;
 
     if (!pass) {
-        // HONEST RED GATE -- do NOT fake a pass. The angle-of-repose fidelity could NOT be established here, and
-        // the failure mechanism is localised with NUMBERS (this IS the deliverable -- "measure HOW as upgrade spec").
+        // HONEST RED GATE -- do NOT fake a pass. TWO fixes from this sprint are IN and bench-safe, but the
+        // phi-dependent repose still does not emerge -- the remaining cause is localised with NUMBERS.
         printf("\n  >>> GATED RED : MPM angle-of-repose fidelity UNVERIFIED (reported, not tuned away) <<<\n");
-        printf("  EVIDENCE: the Drucker-Prager sand column does NOT settle into a stable pile -- the deposit is a flat\n");
-        printf("    monolayer (height extent ~0) and shows NO friction-dependence (phi=0/35/45 -> identical spread,\n");
-        printf("    flank angle 0). The yield coefficient alpha DOES propagate (0 / 0.386 / 0.504, confirmed in-buffer),\n");
-        printf("    so this is NOT a parameter-plumbing bug. The deposit never comes to rest: median particle speed\n");
-        printf("    stays ~15 m/s after 1.5 s, and it is dt-DEPENDENT (~25 m/s at CFL 0.25 -> ~15 at CFL 0.06) ==>\n");
-        printf("    the explicit MLS-MPM INJECTS energy faster than a static granular column dissipates it, and the\n");
-        printf("    velocity-based grid floor BC (friction ~ normal velocity, ~0 at rest) cannot damp the resulting\n");
-        printf("    coherent horizontal skating. Ruled out: alpha plumbing, timestep (CFL 0.25->0.06), stiffness\n");
-        printf("    (E 6e5->1.5e6), grid resolution (dx 0.047->0.019).\n");
-        printf("  UPGRADE SPEC: add PIC/FLIP (or APIC) velocity damping to stop the energy injection, and a FORCE-based\n");
-        printf("    Coulomb floor (friction ~ normal IMPULSE, not normal velocity) so a resting deposit is held; only\n");
-        printf("    then can a settled, friction-dependent angle of repose be measured against phi.\n");
+        printf("  FIXES APPLIED (both real + bench-safe, kept): (1) STRESS-SPACE Drucker-Prager return map -- the\n");
+        printf("    friction cone now scales with the PRESSURE (-3*alpha*p), not the volumetric STRAIN (which was ~0\n");
+        printf("    for isochoric flow -> phi structurally absent). (2) Settling dissipation (PIC/affine blend +\n");
+        printf("    dt-scaled velocity bleed + sticky basal floor) -- medSpeed DROPS 15 -> ~1.2 m/s (the skating is\n");
+        printf("    largely arrested; the OLD config skates at 15).\n");
+        printf("  REMAINING BLOCKER: the column-collapse test has NO intermediate 'cone' regime -- WEAK damping lets it\n");
+        printf("    over-flatten to a monolayer (extent ~0), STRONG damping FREEZES it as the seeded pillar (extent ~0.31)\n");
+        printf("    before any slump; neither holds a phi-dependent pile, so phi=0/35/45 stay ~identical. The explicit\n");
+        printf("    MLS-MPM sand lacks the granular shear-strength-under-flow to arrest a slump at the repose angle.\n");
+        printf("  UPGRADE SPEC: this needs a solver-level granular upgrade (implicit/semi-implicit MPM for stable\n");
+        printf("    slow flow, or a deposition test that builds the pile gradually rather than a violent collapse) --\n");
+        printf("    beyond the explicit-solver scope. The stress-space plasticity is the correct foundation for it.\n");
     }
     printf("  frictionless-flat=%d monotone(phi up=>steeper)=%d piled(apex>3*dx)=%d\n",
            frictionlessFlat, monotone, piled);

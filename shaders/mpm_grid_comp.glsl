@@ -11,6 +11,7 @@ uniform float u_dt;
 uniform vec3  u_gravity;
 uniform int   u_bound;        // guard-cell band width for wall BC
 uniform float u_floorFriction;// Coulomb friction coefficient at the floor (0 = frictionless)
+uniform float u_floorStick;   // basal tangential-velocity bleed per step (sticky floor; 0 = velocity-Coulomb only)
 
 const float INV_SCALE = 1.0 / 1.0e7;
 
@@ -49,6 +50,12 @@ void main()
                 v.xz *= (1.0 - reduce / vtl);
             }
         }
+        // BASAL STICK (u_floorStick>0): the velocity-Coulomb friction above scales with the NORMAL velocity, so a
+        // RESTING basal cell (v.y~0) gets ~no tangential friction and the deposit SKATES coherently. A sticky
+        // floor (high basal friction -> no basal slip) additionally bleeds the floor-cell tangential velocity each
+        // step, arresting the basal skating WITHOUT touching the bulk above -- and is the correct BC for measuring
+        // the INTERNAL repose angle (set by the material friction phi, not by basal slip).
+        if (cy < u_bound + 2 && u_floorStick > 0.0) v.xz *= max(0.0, 1.0 - u_floorStick);
     }
     gv[idx] = vec4(v, m);
 }
