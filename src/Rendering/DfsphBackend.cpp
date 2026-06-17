@@ -722,7 +722,10 @@ bool DfsphBackend::runFluidFidelity()
            real.maxDensErr * 100.0, real.meanDensErr * 100.0, real.compression * 100.0);
     printf("           teeth: g=0 unconfined fluid disperses to max density error=%.1f%% (metric discriminates)\n",
            neg.maxDensErr * 100.0);
-    const bool incompOk    = real.maxDensErr <= 0.01 && std::fabs(real.compression) <= 0.005;  // <=1% dens, <=0.5% compress
+    const bool incompOk    = real.maxDensErr <= 0.001 && std::fabs(real.compression) <= 0.001;  // <=0.1% dens & compress
+                                                                                                 // (tightened from 1% per
+                                                                                                 // adversarial review; DFSPH
+                                                                                                 // measures ~0.02%, 5x margin)
     const bool incompTeeth = neg.maxDensErr  >  0.05;                                           // metric can read big errors
 
     // ===========================================================================================
@@ -756,7 +759,7 @@ bool DfsphBackend::runFluidFidelity()
     // ---- overall ----
     const bool settled = real.residualSpeed < 0.03;                   // equilibrium reached
     const bool pass = rho0Locked && settled && incompOk && incompTeeth && hydroFormOk && hydroNegOk;
-    printf("\n  rho0-locked=%d settled=%d(|v|=%.3g) incompressible(<=1%%)=%d incomp-teeth=%d hydro-form(profile-r>=.90)=%d hydro-negctrl=%d\n",
+    printf("\n  rho0-locked=%d settled=%d(|v|=%.3g) incompressible(<=0.1%%)=%d incomp-teeth=%d hydro-form(profile-r>=.90)=%d hydro-negctrl=%d\n",
            rho0Locked, settled, real.residualSpeed, incompOk, incompTeeth, hydroFormOk, hydroNegOk);
     printf("[fidelity] FLUID  %s   (INCOMPRESSIBLE faithful=%.2f%%; HYDROSTATIC magnitude unrecoverable -> upgrade spec)\n",
            pass ? "PASS" : "FAIL", real.maxDensErr * 100.0);

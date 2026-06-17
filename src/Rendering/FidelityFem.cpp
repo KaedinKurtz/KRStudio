@@ -89,6 +89,12 @@ bool runFidelityCantileverGate() {
     reportFidelity(rL3);
     FidelityResult rP { "fem", "cantilever load linearity d(2P)/d(P)", scaleP, 2.0, 0.05 };
     reportFidelity(rP);
+    // INJECTED NEG-CONTROL (the L^3 check must have teeth): a WRONG bending model linear in L would give
+    // d(2L)/d(L)=2 (quadratic=4). Feeding that mock to the same check must FAIL, proving the L^3 test rejects
+    // a wrong scaling law -- the ratio is blind to a *constant* factor but NOT to the wrong *exponent*.
+    FidelityResult rNeg{ "fem", "NEG-CTRL linear-bending d~L (must fail)", 2.0, 8.0, 0.15 };
+    reportFidelity(rNeg);
+    const bool l3HasTeeth = !rNeg.pass();
 
     // (3) convergence: refining h moves delta/EB toward 1 -> proves the deficit is shear-lock discretisation,
     //     not a bug. (the finding/upgrade spec.)
@@ -103,9 +109,9 @@ bool runFidelityCantileverGate() {
 
     // PASS: the bending LAW holds (L^3 + linear-in-load) AND the absolute deflection sits in the documented
     // shear-lock band AND refinement converges toward EB. The shear-lock deficit is the reported finding.
-    const bool pass = rL3.pass() && rP.pass() && rAbs.pass() && converging;
-    std::printf("  L^3-law=%d load-linear=%d in-shearlock-band=%d converging=%d\n",
-                rL3.pass(), rP.pass(), rAbs.pass(), converging);
+    const bool pass = rL3.pass() && rP.pass() && rAbs.pass() && converging && l3HasTeeth;
+    std::printf("  L^3-law=%d load-linear=%d in-shearlock-band=%d converging=%d L^3-has-teeth=%d\n",
+                rL3.pass(), rP.pass(), rAbs.pass(), converging, l3HasTeeth);
     std::printf("[fidelity] FEM-CANTILEVER  %s\n", pass ? "PASS" : "FAIL");
     return pass;
 }
@@ -125,12 +131,14 @@ bool runFidelityThermalGate() {
     ThermalBC bc;
     for (int n : nodesAtX(m, xmin)) bc.dirichlet.push_back({ n, T0 });
     for (int n : nodesAtX(m, xmax)) bc.dirichlet.push_back({ n, T1 });
-    FemMaterial mat;                               // conductivity k = 167 W/mK (uniform -> profile is k-invariant)
+    FemMaterial mat; mat.k = 167.0;                // LOCKED conductivity k = 167 W/m.K (asserted, not defaulted)
 
     const ThermalResult r = FemSolver::solveThermalSteady(m, mat, bc);
     if (!r.ok) { std::printf("[fidelity] THERMAL-ANALYTIC  FAIL (solve error)\n"); return false; }
 
-    // full-profile max deviation from the analytic line over INTERIOR nodes (exclude the two fixed faces).
+    // (1) baseline -- two-end Dirichlet gives the linear profile. NOTE (per adversarial review): this is the
+    //     HARMONIC interpolation any consistent Laplace solver returns; it is k-INDEPENDENT, so it validates the
+    //     BC handling + linear exactness but NOT the conduction coefficient. The Fourier test below tests k.
     auto lineT = [&](double x) { return T0 + (T1 - T0) * (x - xmin) / span; };
     double maxDev = 0.0;
     for (int n = 0; n < m.numNodes; ++n) {
@@ -139,32 +147,42 @@ bool runFidelityThermalGate() {
         maxDev = std::max(maxDev, std::fabs(r.temperature[size_t(n)] - lineT(x)));
     }
     const int midN = m.nearestNode(glm::dvec3((xmin + xmax) / 2, 0, 0));
-    const double Tmid = r.temperature[size_t(midN)];
-
-    FidelityResult rMid{ "fem", "conduction midpoint T", Tmid, 50.0, 0.03 };   // 50 C +-1.5
+    FidelityResult rMid{ "fem", "Dirichlet linear midpoint T", r.temperature[size_t(midN)], 50.0, 0.03 };
     reportFidelity(rMid);
-    std::printf("  full-profile max deviation from linear = %.3f C (trilinear is EXACT for a linear profile)\n", maxDev);
+    std::printf("  (baseline) full-profile max dev from linear = %.3f C -- BC interpolation, k-INDEPENDENT\n", maxDev);
 
-    // NEG-CONTROL with TEETH: an internal heat source at mid-span bows the steady profile PARABOLIC (mid > 50),
-    // so the same linear check must now FAIL -- proving the gate detects the source term, not just any profile.
-    ThermalBC bcSrc = bc;
-    double Qtotal = 0.0;
-    for (int n = 0; n < m.numNodes; ++n)
-        if (std::fabs(m.nodePos[size_t(n)].x - (xmin + xmax) / 2) < h) { bcSrc.nodalSource.push_back({ n, 50.0 }); Qtotal += 50.0; }
-    const ThermalResult rs = FemSolver::solveThermalSteady(m, mat, bcSrc);
-    double srcMaxDev = 0.0; double TmidSrc = rs.ok ? rs.temperature[size_t(midN)] : -1e9;
-    if (rs.ok) for (int n = 0; n < m.numNodes; ++n) {
-        const double x = m.nodePos[size_t(n)].x;
-        if (x <= xmin + 1e-6 || x >= xmax - 1e-6) continue;
-        srcMaxDev = std::max(srcMaxDev, std::fabs(rs.temperature[size_t(n)] - lineT(x)));
+    // (2) FOURIER-FLUX conduction (the k-DEPENDENT physics test the baseline lacks). Cold end x=0 held at 0 C;
+    //     a total heat Q injected over the x=L face; everything else adiabatic. Steady-state Fourier law gives
+    //     T(L) = Q * L / (k * A), A = cross-section. This DOES depend on k, so a wrong conductivity misses it.
+    double ymin = 1e30, ymax = -1e30, zmin = 1e30, zmax = -1e30;
+    for (int n = 0; n < m.numNodes; ++n) {
+        ymin = std::min(ymin, m.nodePos[size_t(n)].y); ymax = std::max(ymax, m.nodePos[size_t(n)].y);
+        zmin = std::min(zmin, m.nodePos[size_t(n)].z); zmax = std::max(zmax, m.nodePos[size_t(n)].z);
     }
-    std::printf("  NEG-CTRL (internal source %.0fW at mid): T_mid=%.1fC (was 50), profile max-dev=%.1fC -> %s\n",
-                Qtotal, TmidSrc, srcMaxDev, (TmidSrc > 52.0 && srcMaxDev > 5.0) ? "bows PARABOLIC (teeth OK)" : "no bow?!");
+    const double A = (ymax - ymin) * (zmax - zmin);            // bar cross-section [m^2]
+    const double Q = 167.0;                                    // total injected heat [W]
+    ThermalBC bcF;
+    for (int n : nodesAtX(m, xmin)) bcF.dirichlet.push_back({ n, 0.0 });        // cold end held at 0 C
+    const std::vector<int> hot = nodesAtX(m, xmax);
+    for (int n : hot) bcF.nodalSource.push_back({ n, Q / double(hot.size()) }); // inject Q over the hot face
+    const ThermalResult rf = FemSolver::solveThermalSteady(m, mat, bcF);
+    if (!rf.ok) { std::printf("[fidelity] THERMAL-ANALYTIC  FAIL (Fourier solve error)\n"); return false; }
+    double Thot = 0.0; for (int n : hot) Thot += rf.temperature[size_t(n)]; Thot /= double(hot.size());
+    const double ThotAnalytic = Q * span / (mat.k * A);        // Fourier: T(L) = Q L / (k A)
+    FidelityResult rFourier{ "fem", "Fourier T(L)=Q*L/(k*A)", Thot, ThotAnalytic, 0.05 };
+    reportFidelity(rFourier);
+    // NEG-CONTROL: the SAME measurement vs a WRONG conductivity (2k) must FAIL -> proves T(L) is k-SENSITIVE
+    // (the gate validates the conduction coefficient, not just any temperature field).
+    FidelityResult rWrongK{ "fem", "Fourier vs WRONG k (2k)", Thot, Q * span / (2.0 * mat.k * A), 0.05 };
+    reportFidelity(rWrongK);
+    std::printf("  (Q=%.0fW, L=%.2f, k=%.0f, A=%.4f -> analytic T(L)=%.1f C)\n", Q, span, mat.k, A, ThotAnalytic);
 
-    const bool linearOk = rMid.pass() && maxDev < 1.0;
-    const bool teeth    = rs.ok && TmidSrc > 52.0 && srcMaxDev > 5.0;
-    const bool pass = linearOk && teeth;
-    std::printf("  linear-profile(mid=50,maxdev<1C)=%d  source-bows-profile(teeth)=%d\n", linearOk, teeth);
+    const bool baselineOk = rMid.pass() && maxDev < 1.0;       // BC interpolation + linear exactness
+    const bool fourierOk  = rFourier.pass();                   // k-dependent conduction matches analytic
+    const bool kSensitive = !rWrongK.pass();                   // wrong k fails (the test has teeth)
+    const bool pass = baselineOk && fourierOk && kSensitive;
+    std::printf("  baseline-linear=%d  fourier-conduction(k-dep)=%d  k-sensitive(wrong-k-fails)=%d\n",
+                baselineOk, fourierOk, kSensitive);
     std::printf("[fidelity] THERMAL-ANALYTIC  %s\n", pass ? "PASS" : "FAIL");
     return pass;
 }
