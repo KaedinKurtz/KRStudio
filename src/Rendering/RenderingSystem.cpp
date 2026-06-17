@@ -1268,6 +1268,14 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
+    // OMPL sprint Phase 3: sub-feature selection backend (ray -> exact B-Rep face
+    // params + indicator geometry; small-bore disambiguation). OCCT, no GL needed.
+    if (qEnvironmentVariableIntValue("KRS_SUBFEAT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SUBFEAT_SELFTEST =================\n");
+        const bool ok = krs::cad::runSubFeatSelectionGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1298,6 +1306,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 2 canonical chain cmd->FK->push->cube->fluid (severed-stage localization)", runCanonicalChainGate2() },
             { "GATE 3.1 raycast ray-triangle pick >=99% (AABB-only neg-ctrl)", krs::pick::runRaycastGate3_1() },
             { "GATE F B-Rep selector (ray-pick -> analytic axis/radius <1e-9 + mesh-fit neg-ctrl)", krs::cad::runBRepSelectorGateF() },
+            { "GATE SUBFEAT (selection backend: ray->exact B-Rep params <1e-9 + indicator-geometry on-surface + small-bore disambiguation; miss & centroid neg-ctrls)", krs::cad::runSubFeatSelectionGate() },
             { "GATE J joint tooling (derive revolute frame <1e-6 vs oracle -> RobotArticSpec + reject neg-ctrl)", krs::cad::runJointGateJ() },
             { "GATE M MQTT (real broker; joint cmd->FK->state round-trip <1e-4; broadcast duality)", krs::mqtt::runMqttGateM() },
             { "GATE ND node graph (scene->node->ECS effect + graph->robot + disconnected/type neg-ctrls)", krs::nodes::runNodeGraphGateND() },

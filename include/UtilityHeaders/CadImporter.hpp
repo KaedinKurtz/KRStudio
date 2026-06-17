@@ -56,6 +56,12 @@ bool runUvGateU();
 /// B-Rep, not a mesh fit) to <1e-9 vs OCCT. Returns true on PASS (vacuous in the no-OCCT stub).
 bool runBRepSelectorGateF();
 
+/// OMPL sprint Phase 3 GATE SUBFEAT (gated by KRS_SUBFEAT_SELFTEST): the sub-feature SELECTION
+/// BACKEND (krs::sel) -- a ray resolves to a specific B-Rep face + exact analytic params (<1e-9 vs
+/// OCCT) + a selection-indicator GEOMETRY computed as data (rendering deferred); plus small-bore
+/// disambiguation (a 5mm bore on a 100mm part resolved as the small cylinder). Vacuous no-OCCT stub.
+bool runSubFeatSelectionGate();
+
 /// Phase 3 GATE J (gated by KRS_JOINT_SELFTEST): joint/mate tooling. Derives a revolute joint frame
 /// from two selected cylindrical bore features (krs::joint::deriveRevoluteFromBores), checks the
 /// frame matches the analytic oracle axis/origin to <1e-6, writes it into the canonical

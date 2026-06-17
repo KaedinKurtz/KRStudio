@@ -41,6 +41,7 @@
 #include <gp_Sphere.hxx>
 #include <gp_Pln.hxx>
 #include "RayPick.hpp"       // GATE F: ray-triangle pick (krs::pick) for the selector test
+#include "SelectionService.hpp"  // GATE SUBFEAT: sub-feature selection backend (krs::sel)
 #include "JointTooling.hpp"  // GATE J: derive a revolute frame from two bore features (krs::joint)
 #include "ArticulationSpec.hpp" // GATE J: write the derived joint into the canonical RobotArticSpec
 #include <GeomAbs_SurfaceType.hxx>
@@ -673,6 +674,148 @@ bool runBRepSelectorGateF()
 }
 
 // ===========================================================================
+// GATE SUBFEAT (OMPL sprint Phase 3): the sub-feature SELECTION BACKEND
+// (krs::sel). A ray resolves to a SPECIFIC B-Rep face + exact analytic params
+// (read from OCCT, NOT a mesh fit) + a selection-indicator GEOMETRY computed as
+// DATA (rendering deferred). Three sub-gates, each a measured number + a
+// non-vacuous neg-control:
+//   SUBFEAT-SELECT          >=100 rays -> Cylinder selection, radius/axis <1e-9 vs
+//                           OCCT; a miss ray -> NO selection; centroid-approx >1e-6.
+//   SUBFEAT-INDICATOR-GEO   the indicator ring lies on the analytic cylinder <1e-6.
+//   SUBFEAT-HARD            a 5 mm bore on a 100 mm part is resolved as the SMALL
+//                           cylinder (not the large planar face); a face ray -> Plane.
+// ===========================================================================
+bool runSubFeatSelectionGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[subfeat] GATE SUBFEAT -- ray -> selection backend -> exact B-Rep params + indicator geometry\n");
+    const float sUnit = 0.001f;
+    std::error_code ec;
+    bool allOk = true;
+
+    // ---------- SUBFEAT-SELECT + INDICATOR-GEOMETRY: a 20 mm cylinder ----------
+    {
+        const double Rmm = 20.0, Hmm = 50.0;
+        TopoDS_Shape cyl = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), Rmm, Hmm).Shape();
+        const std::string path = (std::filesystem::temp_directory_path(ec) / "krs_subfeat_cyl.step").string();
+        { STEPControl_Writer w;
+          if (w.Transfer(cyl, STEPControl_AsIs) != IFSelect_RetDone || w.Write(path.c_str()) != IFSelect_RetDone) {
+              printf("[subfeat] FAIL: STEP write\n"); return false; } }
+        Scene scene; const ImportResult ir = importStep(scene, path, sUnit);
+        std::filesystem::remove(path, ec);
+        if (ir.solids < 1) { printf("[subfeat] FAIL: import\n"); return false; }
+        auto& reg = scene.getRegistry();
+        const float Rm = float(Rmm) * sUnit;            // 0.02 m
+        const glm::vec3 axisTrue(0, 0, 1);
+
+        int total = 0, sel = 0;
+        double maxRadErr = 0, maxAxisErr = 0, maxAxisPosErr = 0, maxRingErr = 0;
+        const int Naz = 24, Nz = 8;
+        for (int iz = 0; iz < Nz; ++iz)
+            for (int ia = 0; ia < Naz; ++ia) {
+                const float z = 0.01f + (0.04f - 0.01f) * float(iz) / float(Nz - 1);
+                const float th = 6.2831853f * float(ia) / float(Naz);
+                krs::pick::Ray ray;
+                ray.origin = glm::vec3(0.2f * std::cos(th), 0.2f * std::sin(th), z);
+                ray.dir = glm::normalize(glm::vec3(0, 0, z) - ray.origin);
+                ++total;
+                const krs::sel::Selection s = krs::sel::pick(reg, ray);
+                if (!s.valid || s.type != krs::sel::FeatureType::Cylinder) continue;
+                ++sel;
+                maxRadErr = std::max(maxRadErr, double(std::abs(s.radius - Rm)));
+                maxAxisErr = std::max(maxAxisErr, double(std::abs(1.0f - std::abs(glm::dot(s.axisDir, axisTrue)))));
+                maxAxisPosErr = std::max(maxAxisPosErr,
+                    std::sqrt(double(s.axisPos.x) * s.axisPos.x + double(s.axisPos.y) * s.axisPos.y));
+                // INDICATOR: every ring point must lie on the analytic cylinder surface.
+                const krs::sel::IndicatorGeometry g = krs::sel::indicator(s, 48);
+                for (const glm::vec3& p : g.points) {
+                    const glm::vec3 w = p - s.axisPos;
+                    const float along = glm::dot(w, s.axisDir);
+                    const float perp = glm::length(w - along * s.axisDir);
+                    maxRingErr = std::max(maxRingErr, double(std::abs(perp - Rm)));
+                }
+            }
+
+        // miss neg-ctrl: a ray pointing away from the part -> NO selection.
+        krs::pick::Ray away; away.origin = glm::vec3(1, 1, 1); away.dir = glm::normalize(glm::vec3(1, 1, 1));
+        const bool missOk = !krs::sel::pick(reg, away).valid;
+
+        // centroid neg-ctrl: a mesh-centroid radius is biased by the facet sagitta
+        // (>>1e-9) -- proving the backend's analytic B-Rep read is load-bearing.
+        entt::entity body = entt::null;
+        for (auto e : reg.view<RenderableMeshComponent, BRepFaceComponent>()) { body = e; break; }
+        double fitErr = 0.0;
+        if (body != entt::null) {
+            const auto& mesh = reg.get<RenderableMeshComponent>(body);
+            const auto& brep = reg.get<BRepFaceComponent>(body);
+            double fitSum = 0.0; long fitN = 0;
+            for (size_t t = 0; t < mesh.triFace.size(); ++t) {
+                if (mesh.triFace[t] < 0 || brep.faces[mesh.triFace[t]].type != 1) continue;
+                const glm::vec3 p0 = mesh.vertices[mesh.indices[t * 3 + 0]].position;
+                const glm::vec3 p1 = mesh.vertices[mesh.indices[t * 3 + 1]].position;
+                const glm::vec3 p2 = mesh.vertices[mesh.indices[t * 3 + 2]].position;
+                const glm::vec3 c = (p0 + p1 + p2) / 3.0f;
+                fitSum += std::sqrt(double(c.x) * c.x + double(c.y) * c.y); ++fitN;
+            }
+            fitErr = fitN ? std::abs(fitSum / fitN - double(Rm)) : 0.0;
+        }
+
+        const double rate = total ? double(sel) / total : 0.0;
+        const bool selectOk = rate >= 0.99 && total > 100
+                           && maxRadErr < 1e-9 && maxAxisErr < 1e-9 && maxAxisPosErr < 1e-9
+                           && missOk && fitErr > 1e-6;
+        const bool indicatorOk = sel > 0 && maxRingErr < 1e-6;
+        printf("[subfeat]   SELECT: %d/%d rays -> cylinder (%.1f%%); radErr=%.3e axisDirErr=%.3e axisPosErr=%.3e (<1e-9); "
+               "miss->no-sel=%d; centroid-approx err=%.3e (>1e-6)  %s\n",
+               sel, total, rate * 100.0, maxRadErr, maxAxisErr, maxAxisPosErr, int(missOk), fitErr,
+               selectOk ? "PASS" : "FAIL");
+        printf("[subfeat]   INDICATOR-GEOMETRY: ring-on-cylinder max err=%.3e m (<1e-6)  %s\n",
+               maxRingErr, indicatorOk ? "PASS" : "FAIL");
+        allOk = allOk && selectOk && indicatorOk;
+    }
+
+    // ---------- SUBFEAT-HARD: a 5 mm bore on a 100 mm box ----------
+    {
+        const double Hmm = 100.0, rmm = 5.0;
+        TopoDS_Shape box  = BRepPrimAPI_MakeBox(Hmm, Hmm, Hmm).Shape();                 // (0..100)^3
+        TopoDS_Shape bore = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(50, 50, -10), gp_Dir(0, 0, 1)), rmm, 120.0).Shape();
+        TopoDS_Shape solid = BRepAlgoAPI_Cut(box, bore).Shape();
+        const std::string path = (std::filesystem::temp_directory_path(ec) / "krs_subfeat_bore.step").string();
+        { STEPControl_Writer w;
+          if (w.Transfer(solid, STEPControl_AsIs) != IFSelect_RetDone || w.Write(path.c_str()) != IFSelect_RetDone) {
+              printf("[subfeat] FAIL: STEP write (bore)\n"); return false; } }
+        Scene scene; const ImportResult ir = importStep(scene, path, sUnit);
+        std::filesystem::remove(path, ec);
+        if (ir.solids < 1) { printf("[subfeat] FAIL: import (bore)\n"); return false; }
+        auto& reg = scene.getRegistry();
+        const float rM = float(rmm) * sUnit;            // 0.005 m
+
+        // HARD-1: a ray from inside the hole, radially outward -> the SMALL bore wall.
+        krs::pick::Ray bRay; bRay.origin = glm::vec3(0.05f, 0.05f, 0.05f); bRay.dir = glm::vec3(1, 0, 0);
+        const krs::sel::Selection bs = krs::sel::pick(reg, bRay);
+        const bool boreOk = bs.valid && bs.type == krs::sel::FeatureType::Cylinder
+                         && std::abs(bs.radius - rM) < 1e-9 && bs.radius < 0.01f;   // 5mm, not the 100mm part
+        // HARD-2: a ray at a large planar face (away from the hole) -> Plane.
+        krs::pick::Ray pRay; pRay.origin = glm::vec3(0.02f, 0.02f, 0.2f); pRay.dir = glm::vec3(0, 0, -1);
+        const krs::sel::Selection ps = krs::sel::pick(reg, pRay);
+        const bool planeOk = ps.valid && ps.type == krs::sel::FeatureType::Plane;
+
+        const bool hardOk = boreOk && planeOk;
+        printf("[subfeat]   HARD: bore ray -> type=%d radius=%.6f m (want Cylinder, %.6f) %s; "
+               "face ray -> type=%d (want Plane) %s  %s\n",
+               int(bs.type), bs.radius, rM, boreOk ? "ok" : "BAD",
+               int(ps.type), planeOk ? "ok" : "BAD", hardOk ? "PASS" : "FAIL");
+        allOk = allOk && hardOk;
+    }
+
+    printf("[subfeat] %s\n", allOk ? "ALL PASS (analytic selection <1e-9; indicator on-surface; small-bore disambiguated)"
+                                   : "FAILURES PRESENT");
+    fflush(stdout);
+    return allOk;
+}
+
+// ===========================================================================
 // GATE J (Phase 3.3): joint/mate tooling. Select two cylindrical BORE features
 // (GATE F gives their EXACT analytic axes) and DERIVE a revolute joint frame
 // (krs::joint::deriveRevoluteFromBores, the SSOT the UI tool will call). J1: the
@@ -1210,6 +1353,7 @@ void inspectStep(const std::string&) {} // no OCCT -> no-op
 bool runSelfTest() { return true; } // no OCCT -> vacuous pass, keeps harnesses green
 bool runUvGateU() { return true; }  // no OCCT -> vacuous pass
 bool runBRepSelectorGateF() { return true; } // no OCCT -> vacuous pass
+bool runSubFeatSelectionGate() { return true; } // no OCCT -> vacuous pass
 bool runJointGateJ() { return true; }        // no OCCT -> vacuous pass
 bool runBRepDisambiguationGateF3() { return true; } // no OCCT -> vacuous pass
 bool runJointFuzzGateJ4() { return true; }   // no OCCT -> vacuous pass

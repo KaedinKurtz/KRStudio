@@ -2915,3 +2915,22 @@ margin (sphere R 0.25 -> plan against 0.35) so the achieved trajectory stays col
 - **EXECUTE-LIMITS PASS**: achieved posMargin 1.0017 (in bounds), velRatio **0.9982** (rides at vMax). NEG a
   3x-fast re-timing -> achieved velRatio **1.5850** (> 1, flagged; the arm can't reach 3x vMax but clearly
   exceeds the limit).
+
+### OMPL PHASE 3 RESULT (2026-06-17, KRS_SUBFEAT_SELFTEST + bench GATE SUBFEAT) — ALL PASS
+Sub-feature SELECTION BACKEND (krs::sel, SelectionService.hpp): a ray resolves to a SPECIFIC OCCT B-Rep face +
+its EXACT analytic parameters (read from BRepFaceComponent, NOT a mesh/RANSAC fit; transformed to world via the
+entity TransformComponent) + a selection-indicator GEOMETRY computed as DATA (a ring on the cylinder cross-
+section, a square outline on a plane). Rendering is DEFERRED to a supervised UI session -- this is the gateable
+backend only. The backend is OCCT-free (reads the ECS CadImporter populated) and reuses the production pick
+(krs::pick::pickMesh), so the gate exercises the real selection path.
+- **SUBFEAT-SELECT PASS**: 192/192 rays -> cylinder (100%); radius/axis-dir/axis-pos error all **0.000e+00**
+  (<1e-9 vs OCCT -- the analytic read is exact). A ray pointing away -> **no selection** (miss=1). The mesh
+  centroid-approximation radius is off by **1.296e-04** (>1e-6) -- the analytic B-Rep read is load-bearing.
+- **SUBFEAT-INDICATOR-GEOMETRY PASS**: every indicator ring point lies on the analytic cylinder surface to
+  **1.863e-09 m** (<1e-6).
+- **SUBFEAT-HARD PASS**: a 5 mm bore on a 100 mm box -> the bore ray resolves the **small Cylinder**
+  (radius 0.005000 m exactly, not the 0.1 m part), and a face ray resolves a **Plane** -- the small feature is
+  disambiguated from the large planar faces.
+- **DEFERRED**: edge selection (TopoDS_Edge endpoints) -- BRepFaceComponent is face-only today; faces
+  (plane/cylinder/cone/sphere) are fully gated. The interactive picking UI + 3D indicator rendering remain for
+  the supervised session (pixel gates verify geometry-of-elements, not usability).
