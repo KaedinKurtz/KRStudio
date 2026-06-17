@@ -98,7 +98,9 @@ bool graspSucceeded(const GraspResult& r) {
     const bool c1 = r.centerErrM < kLockedPhysics.successDistM;     // lifted to target pose
     const bool c2 = !r.groundContactAfterLiftoff;                   // never re-touched the ground
     const bool c3 = r.contactFrac >= kLockedPhysics.contactFrac;    // continuous jaw grip
-    return r.physicsLocked && c1 && c2 && c3;
+    const bool c4 = r.maxJawForceN <= kLockedPhysics.maxGripForceFactor * kLockedPhysics.gripForceN; // BOUNDED grip,
+                                                                   // not a kinematic phantom clamp (anti-cheat)
+    return r.physicsLocked && c1 && c2 && c3 && c4;
 }
 
 GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const GraspSpec& grasp, const WorldOverride& world) {
@@ -151,55 +153,77 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
     const glm::vec3 closeAxis = q * glm::vec3(1, 0, 0);
     const float half = grasp.jawSpanM * 0.5f;
 
-    // VISE gripper: a KINEMATIC palm carrying a rigid ANVIL pad (the fixed jaw) on one side; the object is
-    // squeezed against the anvil by a single DYNAMIC FINGER on the other side, force-driven with the locked
-    // gripForceN. The anvil pins the object on its side (no unphysical along-axis drift) while the finger's
-    // bounded force + friction is the ONLY thing holding it in the other directions -- so a poor contact lets
-    // the object rotate/slip out (honest), and the squeeze can never exceed the finger's force (no kinematic clamp).
+    // SYMMETRIC parallel-jaw gripper: a KINEMATIC palm (frame, no collision shape) holds TWO DYNAMIC FINGERS
+    // that slide only along the closing axis (D6, eX free) and press toward the grasp centre, EACH with the
+    // locked gripForceN. Because BOTH jaws are force-limited and the squeeze is balanced:
+    //   (a) neither jaw can impose an UNBOUNDED clamp -- the phantom-grip cheat is STRUCTURALLY impossible
+    //       (there is no kinematic surface the object is pressed against; contact force <= ~gripForceN);
+    //   (b) closing does NOT shove the grounded object sideways -- it is pinched in place at the grasp centre,
+    //       so a poor grasp SLIPS OUT (honest) instead of being tipped by a one-sided push.
+    // The palm raises kinematically during the lift, carrying both fingers (D6 locks Y/Z); the object is then
+    // held ONLY by the bounded friction of the two finite-force fingers -- exactly a real parallel-jaw grip.
     PxRigidDynamic* palm = phys->createRigidDynamic(PxTransform(toPx(graspC), toPxQ(q)));
-    palm->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
-    palm->userData = (void*)(intptr_t)TAG_JAW1;            // the anvil side
-    { PxShape* anvil = phys->createShape(PxBoxGeometry(0.006f, 0.045f, 0.045f), *mat, true);
-      anvil->setLocalPose(PxTransform(PxVec3(-half, 0.0f, 0.0f)));   // pad at -closing-axis side
-      palm->attachShape(*anvil); anvil->release(); }
+    palm->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);   // joint anchor + lift driver; carries no shape
     scene->addActor(*palm);
 
-    PxRigidDynamic* finger = phys->createRigidDynamic(PxTransform(toPx(graspC + closeAxis * half), toPxQ(q)));
-    { PxShape* s = phys->createShape(PxBoxGeometry(0.006f, 0.045f, 0.045f), *mat, true); finger->attachShape(*s); s->release(); }
-    PxRigidBodyExt::setMassAndUpdateInertia(*finger, 0.30f);
-    finger->setRigidBodyFlag(PxRigidBodyFlag::eENABLE_CCD, true);
-    finger->setMaxLinearVelocity(1.0f);                   // gentle close (no slam); above liftSpeed so it follows the lift
-    finger->userData = (void*)(intptr_t)TAG_JAW0;         // the moving-jaw side
-    scene->addActor(*finger);
-    PxD6Joint* d6 = PxD6JointCreate(*phys, palm, PxTransform(PxVec3(half, 0, 0)), finger, PxTransform(PxIdentity));
-    d6->setMotion(PxD6Axis::eX, PxD6Motion::eFREE);       // closing axis -- the finger slides under the squeeze force
-    d6->setMotion(PxD6Axis::eY, PxD6Motion::eLOCKED);
-    d6->setMotion(PxD6Axis::eZ, PxD6Motion::eLOCKED);
-    d6->setMotion(PxD6Axis::eTWIST, PxD6Motion::eLOCKED);
-    d6->setMotion(PxD6Axis::eSWING1, PxD6Motion::eLOCKED);
-    d6->setMotion(PxD6Axis::eSWING2, PxD6Motion::eLOCKED);
+    // The squeeze is a constant bounded force (addForce, gripForceN) -- a CLEAN finite grip with no clamp. To stop
+    // the grip assembly (fingerA-object-fingerB) from sliding freely along the closing axis (both fingers are X
+    // -free, so the chain has an unanchored X DOF), each finger carries a PURE DAMPER on its closing axis: it
+    // resists only RELATIVE X velocity vs the palm (stiffness 0), so it bleeds off any drift momentum but adds NO
+    // normal grip force at steady state (zero X-velocity -> zero damper force). It does not resist the object's
+    // Y-slip or rotation, so a bad grasp still fails honestly.
+    auto makeFinger = [&](float sideSign, int tag) -> PxRigidDynamic* {
+        PxRigidDynamic* f = phys->createRigidDynamic(PxTransform(toPx(graspC + closeAxis * (sideSign * half)), toPxQ(q)));
+        PxShape* s = phys->createShape(PxBoxGeometry(0.006f, 0.045f, 0.045f), *mat, true); f->attachShape(*s); s->release();
+        PxRigidBodyExt::setMassAndUpdateInertia(*f, 0.30f);
+        f->setRigidBodyFlag(PxRigidBodyFlag::eENABLE_CCD, true);
+        f->setMaxLinearVelocity(0.35f);                   // moderate close speed (gentle enough not to kick a
+                                                          // symmetrically-approached object); raised before LIFT.
+        f->userData = (void*)(intptr_t)tag;
+        scene->addActor(*f);
+        PxD6Joint* j = PxD6JointCreate(*phys, palm, PxTransform(PxVec3(sideSign * half, 0, 0)), f, PxTransform(PxIdentity));
+        j->setMotion(PxD6Axis::eX, PxD6Motion::eFREE);    // closing axis -- the finger slides under the squeeze force
+        j->setMotion(PxD6Axis::eY, PxD6Motion::eLOCKED);
+        j->setMotion(PxD6Axis::eZ, PxD6Motion::eLOCKED);
+        j->setMotion(PxD6Axis::eTWIST, PxD6Motion::eLOCKED);
+        j->setMotion(PxD6Axis::eSWING1, PxD6Motion::eLOCKED);
+        j->setMotion(PxD6Axis::eSWING2, PxD6Motion::eLOCKED);
+        j->setDrive(PxD6Drive::eX, PxD6JointDrive(0.0f, 1.5e2f, PX_MAX_F32, false));   // pure damper: kills X drift
+        return f;
+    };
+    PxRigidDynamic* fingerA = makeFinger(+1.0f, TAG_JAW0);   // +closeAxis side -> presses -closeAxis
+    PxRigidDynamic* fingerB = makeFinger(-1.0f, TAG_JAW1);   // -closeAxis side -> presses +closeAxis
 
-    auto squeeze = [&]() { finger->addForce(toPx(-closeAxis * Fgrip), PxForceMode::eFORCE); };   // press toward anvil
-    auto stepOnce = [&]() { scene->simulate(dt); scene->fetchResults(true); };
+    bool squeezeOn = false;
+    auto squeeze = [&]() {                                   // both jaws press toward the centre with the locked force
+        if (!squeezeOn) return;
+        fingerA->addForce(toPx(-closeAxis * Fgrip), PxForceMode::eFORCE);
+        fingerB->addForce(toPx( closeAxis * Fgrip), PxForceMode::eFORCE);
+    };
+    auto stepOnce = [&]() { squeeze(); scene->simulate(dt); scene->fetchResults(true); };
 
-    // SETTLE (no force): object rests, finger open.
+    // SETTLE (no squeeze): object rests, fingers open (held by the damper).
     for (int s = 0; s < 120; ++s) stepOnce();
-    // CLOSE (finger presses with gripForceN); early-exit on 24 consec both-pad contacts.
+    // CLOSE (fingers press with gripForceN); early-exit on 24 consec both-jaw contacts.
+    squeezeOn = true;
     int consec = 0;
     for (int s = 0; s < 480; ++s) {
-        squeeze(); stepOnce();
+        stepOnce();
         consec = (tracker.objJaw0 && tracker.objJaw1) ? consec + 1 : 0;
         if (consec >= 24) break;
     }
     // SQUEEZE settle: firm the grip before lifting.
-    for (int s = 0; s < 120; ++s) { squeeze(); stepOnce(); }
+    for (int s = 0; s < 120; ++s) stepOnce();
+    // raise the finger speed cap so they can follow the lift (palm rises at liftSpeed); the grip is already seated.
+    fingerA->setMaxLinearVelocity(1.0f);
+    fingerB->setMaxLinearVelocity(1.0f);
     R.grippedAtLiftoff = tracker.objJaw0 && tracker.objJaw1;
     const bool dbg = std::getenv("KRS_GRASP_DEBUG") != nullptr;
     if (dbg) {
         const glm::vec3 oc = worldCoM(obj);
-        const PxVec3 fp = finger->getGlobalPose().p;
-        std::printf("    [dbg] post-squeeze objCoM=(%.3f,%.3f,%.3f) finger=(%.3f,%.3f,%.3f) anvilT=%d fingerT=%d gnd=%d closeAx=(%.2f,%.2f,%.2f) graspC=(%.3f,%.3f,%.3f)\n",
-                    oc.x, oc.y, oc.z, fp.x, fp.y, fp.z, tracker.objJaw1, tracker.objJaw0, tracker.objGround,
+        const PxVec3 fa = fingerA->getGlobalPose().p, fb = fingerB->getGlobalPose().p;
+        std::printf("    [dbg] post-squeeze objCoM=(%.3f,%.3f,%.3f) jawA=(%.3f,%.3f,%.3f) jawB=(%.3f,%.3f,%.3f) jawAT=%d jawBT=%d gnd=%d closeAx=(%.2f,%.2f,%.2f) graspC=(%.3f,%.3f,%.3f)\n",
+                    oc.x, oc.y, oc.z, fa.x, fa.y, fa.z, fb.x, fb.y, fb.z, tracker.objJaw0, tracker.objJaw1, tracker.objGround,
                     closeAxis.x, closeAxis.y, closeAxis.z, graspC.x, graspC.y, graspC.z);
     }
 
@@ -215,7 +239,7 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
     for (int s = 0; s < liftSteps; ++s) {
         const float y = graspC.y + kLockedPhysics.liftSpeedMps * dt * float(s + 1);
         palm->setKinematicTarget(PxTransform(toPx(glm::vec3(graspC.x, y, graspC.z)), toPxQ(q)));
-        squeeze(); stepOnce();
+        stepOnce();
         if (s == 0) R.startCenter = worldCoM(obj);
         if (tracker.objJaw0 && tracker.objJaw1) ++R.contactSteps;
         if (!tracker.objGround) hasLiftedOff = true;
@@ -225,12 +249,12 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
             std::printf("    [dbg-lift s=%3d] palmY=%.3f objCoM=(%.3f,%.3f,%.3f) j0t=%d j1t=%d\n", s, y, oc.x, oc.y, oc.z, tracker.objJaw0, tracker.objJaw1);
         }
     }
-    // HOLD (force, palm frozen at apex). Force recording continues from LIFT (proves the squeeze is bounded by
-    // gripForceN across the whole high-force window -- the kinematic anvil cannot press harder than the finger).
+    // HOLD (palm frozen at apex). Force recording continues from LIFT (proves the squeeze is bounded by
+    // gripForceN across the whole high-force window -- both force-limited jaws cannot press harder than the grip).
     const float apexY = graspC.y + kLockedPhysics.liftHeightM;
     for (int s = 0; s < holdSteps; ++s) {
         palm->setKinematicTarget(PxTransform(toPx(glm::vec3(graspC.x, apexY, graspC.z)), toPxQ(q)));
-        squeeze(); stepOnce();
+        stepOnce();
         if (tracker.objJaw0 && tracker.objJaw1) ++R.contactSteps;
         if (!tracker.objGround) hasLiftedOff = true;
         if (hasLiftedOff && tracker.objGround) groundAfter = true;

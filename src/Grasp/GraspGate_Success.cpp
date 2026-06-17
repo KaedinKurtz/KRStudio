@@ -43,10 +43,11 @@ bool runGraspSuccessGate() {
 
     // GOOD: closing axis = world +X, perpendicular to the block's flat faces, through the CoM.
     GraspSpec good; good.centerOffset = glm::vec3(0.0f); good.approach = glm::quat(1, 0, 0, 0); good.jawSpanM = 0.13f;
-    // BAD: clamp near the block's end (off-centre by 0.085 m) AND tilt the closing axis 25 deg off-horizontal --
-    // an unstable, non-antipodal bite the friction cone cannot hold against gravity.
-    GraspSpec bad; bad.centerOffset = glm::vec3(0.0f, 0.0f, 0.085f);
-    bad.approach = glm::angleAxis(glm::radians(25.0f), glm::vec3(0, 0, 1)); bad.jawSpanM = 0.16f;
+    // BAD: grip the long block near one END (off-centre 0.08 m along its long axis). It DOES grip, but the long
+    // overhang's weight torques the block out of the grip during the lift -- the friction cone at mu=0.70 cannot
+    // hold the rotation, so it slips and re-touches the ground. Sticky friction (the softened world) CAN hold it.
+    GraspSpec bad; bad.centerOffset = glm::vec3(0.0f, 0.0f, 0.08f);
+    bad.approach = glm::quat(1, 0, 0, 0); bad.jawSpanM = 0.13f;
 
     const WorldOverride locked{};                       // kLockedPhysics verbatim
     // the cheat: STICKY friction (mu 5.0 vs locked 0.70). The locked grip is strong (mu*F*2 ~ 56 N), so a

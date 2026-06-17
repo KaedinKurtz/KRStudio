@@ -23,12 +23,19 @@ struct GraspPhysicsConfig {
     // --- the success test ---
     float successDistM = 0.030f;       // object center within this of (start + liftHeight up) at end of hold
     float contactFrac  = 0.90f;        // require continuous jaw<->object contact >= this fraction of lift+hold steps
+    float maxGripForceFactor = 3.0f;   // a success must be a BOUNDED friction grip: peak jaw<->object contact force
+                                       // <= this * gripForceN. The lift jaw is KINEMATIC and can otherwise impose
+                                       // UNBOUNDED reaction (a wedged object reads 1000-17000 N -> an unphysical
+                                       // rigid clamp that carries ANY object regardless of friction). Capping at
+                                       // 3x (120 N) admits real grips + dynamic transients (good grasp peaks ~41 N)
+                                       // and REJECTS the clamp. This is a TIGHTENING of the criterion (Phase 3):
+                                       // it removes phantom-clamp 'successes', it never makes a grasp pass.
     // --- determinism ---
     float fixedDt      = 1.0f / 240.0f;// fixed PhysX step (engine standard; bit-identical re-runs)
 };
 
 // All-float, no padding -> the byte hash covers every locked value with no indeterminate padding bytes.
-static_assert(sizeof(GraspPhysicsConfig) == 10 * sizeof(float), "GraspPhysicsConfig must stay packed floats so lockedConfigHash() is reproducible");
+static_assert(sizeof(GraspPhysicsConfig) == 11 * sizeof(float), "GraspPhysicsConfig must stay packed floats so lockedConfigHash() is reproducible");
 
 // The single source of truth. constexpr -> baked at compile time; an edit changes lockedConfigHash().
 inline constexpr GraspPhysicsConfig kLockedPhysics{};

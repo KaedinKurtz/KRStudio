@@ -1144,6 +1144,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Grasp pipeline Phase 3 GATE PLANNER: antipodal heuristic raises the success rate baseline->tuned; random neg-ctrl.
+    if (qEnvironmentVariableIntValue("KRS_GRASP_PLANNER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_GRASP_PLANNER_SELFTEST =================\n");
+        const bool ok = krs::grasp::runGraspPlannerGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1218,6 +1226,7 @@ void RenderingSystem::initializeSharedResources()
             { "GRASP GATE IMPORT (YCB load + real-meter scale + mass/inertia + NaN; x1000 mm-as-meters neg-ctrl)", krs::grasp::runGraspImportGate() },
             { "GRASP GATE COACD (bowl cavity survives: ball rests inside V-HACD/trimesh; convex-hull filler neg-ctrl FAILS)", krs::grasp::runGraspCoacdGate() },
             { "GRASP GATE SUCCESS-CRITERION (good grasp passes / bad fails under LOCKED physics; softened-world anti-cheat caught by guard)", krs::grasp::runGraspSuccessGate() },
+            { "GRASP GATE PLANNER (antipodal heuristic success rate random<baseline<tuned under LOCKED physics; random neg-ctrl)", krs::grasp::runGraspPlannerGate() },
             { "GATE H live SERIAL articulation (H1/H2 vs oracle)", krs::dyn::runArticulationLiveGate() },
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
