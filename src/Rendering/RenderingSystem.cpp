@@ -1214,6 +1214,11 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::fidelity::runFidelityContactGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    if (qEnvironmentVariableIntValue("KRS_FIDELITY_FRICTION_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FIDELITY_FRICTION_SELFTEST =================\n");
+        const bool ok = krs::fidelity::runFidelityFrictionGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
 
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");

@@ -126,8 +126,86 @@ bool runFidelityContactGate() {
 #endif
 }
 
-// the remaining rigid gates are implemented in subsequent steps.
-bool runFidelityFrictionGate()  { std::printf("[fidelity] FRICTION-INCLINE -- (pending)\n"); return true; }
+#if defined(KR_WITH_PHYSX)
+// the inclined-plane experiment in the rotated frame: a flat slab on flat ground, with GRAVITY tilted by theta
+// (|g| LOCKED at 9.81; theta is the incline angle). Physically identical to a block on a theta-incline. The
+// ground is RAISED to y=1 so the slab rests on MY controlled-friction box, not the sim's built-in y=0 ground
+// plane (friction 0.6). vx0 keeps a sliding block AWAKE (the engine sleeps a near-stationary body ~0.4 s in);
+// the acceleration is read from the vx slope in an EARLY window (before any sleep) so it is the true kinetic a.
+struct SlideResult { double xDisp; double accel; };
+static SlideResult slideTest(double mu, double thetaDeg, double vx0) {
+    constexpr double kPi = 3.14159265358979323846;
+    const double th = thetaDeg * kPi / 180.0;
+    const float gy = 1.0f, by = 0.03f;            // ground top at y=1 (above the built-in plane); flat slab
+    Scene scene; SimulationController sim(&scene); auto& reg = scene.getRegistry();
+
+    { const entt::entity g = reg.create();
+      reg.emplace<TransformComponent>(g, glm::vec3(0.0f, gy - 0.5f, 0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+      auto& grb = reg.emplace<RigidBodyComponent>(g); grb.bodyType = RigidBodyComponent::BodyType::Static;
+      auto& gb = reg.emplace<BoxCollider>(g); gb.halfExtents = glm::vec3(8.0f, 0.5f, 8.0f);
+      gb.material.staticFriction = float(mu); gb.material.dynamicFriction = float(mu); gb.material.restitution = 0.0f; }
+
+    const entt::entity s = reg.create();
+    reg.emplace<TransformComponent>(s, glm::vec3(0.0f, gy + by, 0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+    auto& rb = reg.emplace<RigidBodyComponent>(s); rb.bodyType = RigidBodyComponent::BodyType::Dynamic;
+    rb.mass = 1.0f; rb.linearVelocity = glm::vec3(float(vx0), 0.0f, 0.0f); rb.linearDamping = 0.0f; rb.angularDamping = 0.0f;
+    auto& bc = reg.emplace<BoxCollider>(s); bc.halfExtents = glm::vec3(0.15f, by, 0.15f);
+    bc.material.staticFriction = float(mu); bc.material.dynamicFriction = float(mu); bc.material.restitution = 0.0f;
+
+    sim.play();
+    sim.setSceneGravity(float(kG * std::sin(th)), -float(kG * std::cos(th)), 0);  // gravity at angle theta to the normal
+    const double x0 = double(reg.get<TransformComponent>(s).translation.x);
+    for (int i = 0; i < 12; ++i) sim.singleStep();                          // brief normal-contact settle
+    const double vxA = double(reg.get<RigidBodyComponent>(s).linearVelocity.x);
+    const int W = 48;                                                       // early window, well before the ~96-step sleep
+    for (int i = 0; i < W; ++i) sim.singleStep();
+    const double vxB = double(reg.get<RigidBodyComponent>(s).linearVelocity.x);
+    const double xEnd = double(reg.get<TransformComponent>(s).translation.x);
+    sim.stop();
+    return { xEnd - x0, (vxB - vxA) / (double(W) * kDt) };
+}
+#endif
+
+// ---------------------------------------------------------------------------------------------------------
+// FRICTION-INCLINE (Phase 2): the textbook friction gate. A block stays static iff theta <= atan(mu_s) and
+// slides at a = g(sin theta - mu_k cos theta) above. The static/sliding TRANSITION angle and the sliding
+// acceleration are both compared to the closed form. NEG-CTRL: frictionless slides at any angle (a = g sin).
+// ---------------------------------------------------------------------------------------------------------
+bool runFidelityFrictionGate() {
+    std::printf("[fidelity] FRICTION-INCLINE -- slides iff theta>atan(mu_s); a=g(sin-mu_k cos) above; frictionless slides\n");
+#if !defined(KR_WITH_PHYSX)
+    std::printf("[fidelity] vacuous pass (no PhysX)\n"); return true;
+#else
+    constexpr double kPi = 3.14159265358979323846;
+    const double mu = 0.5, thC = std::atan(mu) * 180.0 / kPi;               // critical angle = atan(0.5) = 26.57 deg
+    auto aFormula = [&](double th) { const double r = th * kPi / 180.0; return kG * (std::sin(r) - mu * std::cos(r)); };
+
+    const SlideResult below = slideTest(mu, 20.0, 0.0);                     // RESTING, < thC -> static (no slide)
+    const SlideResult above = slideTest(mu, 35.0, 0.0);                     // RESTING, > thC -> breaks static, slides
+    const SlideResult a40 = slideTest(mu, 40.0, 1.0);                       // MOVING: kinetic accel @ 40 deg
+    const SlideResult a50 = slideTest(mu, 50.0, 1.0);                       // MOVING: kinetic accel @ 50 deg
+    const SlideResult frictionless = slideTest(0.0, 10.0, 1.0);            // NEG-CTRL: frictionless slides at g sin
+
+    std::printf("  [rigid   ] critical angle = atan(mu_s=%.2f) = %.2f deg\n", mu, thC);
+    std::printf("  [rigid   ] RESTING theta=20<thC : x-disp=%.4f m (must be ~0, static)\n", below.xDisp);
+    std::printf("  [rigid   ] RESTING theta=35>thC : x-disp=%.4f m (must break static -> slide)\n", above.xDisp);
+    const FidelityResult r40{ "rigid", "incline accel @40deg g(sin-mu cos)", a40.accel, aFormula(40.0), 0.12 };
+    const FidelityResult r50{ "rigid", "incline accel @50deg g(sin-mu cos)", a50.accel, aFormula(50.0), 0.12 };
+    reportFidelity(r40); reportFidelity(r50);
+    const double aFricExpect = kG * std::sin(10.0 * kPi / 180.0);
+    std::printf("  [rigid   ] NEG-CTRL frictionless@10deg: a=%.3f vs g sin=%.3f m/s^2 (slides freely)\n", frictionless.accel, aFricExpect);
+
+    const bool staysBelow  = std::fabs(below.xDisp) < 0.01;                 // static below the critical angle
+    const bool slidesAbove = above.xDisp > 0.02;                            // breaks static above it -> transition ~atan(mu_s)
+    const bool accelOk     = r40.pass() && r50.pass();                      // kinetic acceleration matches the formula at 2 angles
+    const bool negSlides   = std::fabs(frictionless.accel - aFricExpect) / aFricExpect < 0.12;  // frictionless = g sin
+    const bool pass = staysBelow && slidesAbove && accelOk && negSlides;
+    std::printf("[fidelity] FRICTION-INCLINE %s  (static<thC=%d, slides>thC=%d, accel=%d, frictionless=%d)\n",
+                pass ? "PASS" : "FAIL", staysBelow, slidesAbove, accelOk, negSlides);
+    return pass;
+#endif
+}
+
 bool runFidelityUnboundedGate() { std::printf("[fidelity] UNBOUNDED-DIAGNOSIS -- (pending)\n"); return true; }
 
 } // namespace krs::fidelity
