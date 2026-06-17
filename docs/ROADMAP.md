@@ -2785,3 +2785,16 @@ DEFAULT, so the YCB HEURISTIC-V2 rate re-baselined (V1 48.3->55.0%, V2 51.7->56.
 to +1.7% as compliant jaws and the above-CoM term overlap -- gate now asserts V2 strictly beats V1). GRIP-
 REMEASURE re-runs the 251-object GSO generalized rate (same V2 heuristic, same hash) with the compliant gripper
 and reports the true rate vs 33.2% + UNBOUNDED before/after (honest in either direction).
+
+### GRIP-REMEASURE RESULT (2026-06-17, compliant gripper, same V2 heuristic + locked hash 868489ff8e07da5f + 251 GSO)
+GENERALIZED RATE = 24.0% (181/753), DOWN from the rigid gripper's 33.2%. The honest corrected number: the
+rigid rate was INFLATED by grasps that depended on the rigid hold -- with compliant jaws those objects
+correctly DRIFT out of pose (DRIFT_ROTATE 9.9% -> 23.1% of failures, the dominant rise). UNBOUNDED_GRIP
+dropped 27.2% -> 21.3%: the SUSTAINED over-squeeze is gone (wedge median 173 -> 31 N on YCB), but the locked
+criterion's force-bound clause reads the PEAK (maxJawForceN), and transient one-substep contact impulses
+during the jaw-SLIP still spike >120 N, so peak-classified UNBOUNDED only partially falls. random neg-control
+stays low (4.4%). The generalize gate PASSES (structural: random << tuned, 100% taxonomy coverage). This is
+the directive's anticipated "rate may go DOWN -- the honest corrected number, not an improvement to chase."
+A FUTURE refinement (not done here): score the grip on the SUSTAINED (median) jaw force, not the per-substep
+peak, so a clean compliant slip is not flagged UNBOUNDED by a transient impulse -- but that touches the locked
+criterion (hash), so it is deferred as a deliberate, separate decision.
