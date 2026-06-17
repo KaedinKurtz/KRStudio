@@ -75,3 +75,6 @@ verify/
 
 # YCB object meshes (downloaded via scripts/download_ycb.sh; ~117MB, not committed)
 assets/ycb/
+# GSO object library (downloaded via scripts/download_gso.py) + CoACD colliders + filter list -- all derived
+assets/gso/
+assets/**/coacd.bin

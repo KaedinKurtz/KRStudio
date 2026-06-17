@@ -1184,6 +1184,15 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Grasp pipeline Phase 2 GATE FILTER: GSO validity+graspability filter (standalone -- the large-dataset gates
+    // load hundreds of meshes, too slow for the overnight bench).
+    if (qEnvironmentVariableIntValue("KRS_GRASP_FILTER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_GRASP_FILTER_SELFTEST =================\n");
+        const bool ok = krs::grasp::runGraspFilterGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };

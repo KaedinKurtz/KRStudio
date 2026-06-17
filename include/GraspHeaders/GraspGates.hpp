@@ -12,5 +12,6 @@ bool runGraspFailureCatalogGate(); // GATE FAILURE-CATALOG: classify 100% of tun
 bool runGraspCoacdRealGate();  // GATE COACD-REAL: CoACD preserves grasp-relevant concavities V-HACD FILLS (discriminating)
 bool runGraspRemeasureGate();  // GATE REMEASURE: V-HACD vs CoACD success rate, same grasps + LOCKED criterion (apples-to-apples)
 bool runGraspHeuristicV2Gate();// GATE HEURISTIC-V2: improved planner (rim/snug/CoM) vs V1 on YCB; targeted failure modes drop
+bool runGraspFilterGate();     // GATE FILTER: GSO mesh validity+graspability filter; rejection breakdown; mis-scaled neg-ctrl
 
 } // namespace krs::grasp
