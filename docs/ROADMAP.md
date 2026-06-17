@@ -2582,3 +2582,63 @@ EMPIRICAL FINDING (drop a 1cm ball into 024_bowl, opening-up, settle 2s, measure
   convex hull    -> ball +0.0094 m (ball ON TOP -> cavity FILLED) -- so the SINGLE CONVEX HULL is the
                     cavity-filling FAILING neg-control, not V-HACD. Separation 0.0515 m.
 CoACD remains a one-function swap behind the decomposition backend (it must clear this identical drop test).
+
+### Phase 2 -- DONE (commits 0b1166a, 0484e29, 7d817e2). GATE SUCCESS-CRITERION green.
+The anti-cheat heart. 036_wood_block, three runs under the gripper + locked physics:
+  GOOD grasp (centre, identity approach, span 0.13) -> SUCCESS (centerErr 0.0008 m, peak jaw force 38.7 N).
+  BAD grasp (grip near the block's end, off-centre 0.08 m) -> FAIL: it grips, then the overhang torque slips it
+    out under mu=0.70 and it re-touches the ground.
+  BAD grasp in a SOFTENED world (sticky mu=5.0) -> the three success clauses FALSELY read PASS (the softening
+    rescues the slip), BUT the live-physics guard (assertPhysicsLocked re-reads gravity/friction/force) trips on
+    mu != 0.70 -> verdict FAIL. This proves the criterion is non-trivially passable AND softening is un-fakeable.
+FORCE-BOUNDEDNESS (the kinematic-clamp anti-cheat, added in Phase 3 review): the Tracker reads
+PxContactPairPoint.impulse on jaw<->object pairs (impulse/dt = normal force) across LIFT+HOLD; the good grasp's
+peak is 38.7 N ~ gripForceN -- proof the grip is a bounded friction grip, NOT an unbounded clamp.
+
+### Phase 3 -- DONE (commit 7d817e2). GATE PLANNER green. Two LOCKED-criterion corrections + a tuned planner.
+ARCHITECTURAL DECISION (user-approved): the original ONE-SIDED kinematic-vise gripper was replaced by a
+SYMMETRIC two-finger gripper. WHY: the vise's single moving finger SHOVED a grounded object sideways, so
+success tracked tip-resistance-under-one-sided-shove, not grasp QUALITY -- tuning could not honestly raise the
+rate (stuck ~45% regardless), and a wedged object made the KINEMATIC anvil impose an UNBOUNDED reaction
+(1000-17000 N -> a phantom rigid clamp that carried anything). The symmetric gripper: a kinematic palm (no
+collision shape) carries TWO force-limited fingers (addForce gripForceN each) that close toward the grasp
+centre; a pure-damper (stiffness 0) on the closing axis kills the free assembly's X-drift WITHOUT adding any
+steady-state holding force. Both jaws bounded => the phantom clamp is STRUCTURALLY impossible and the balanced
+close does not tip the object. CRITERION TIGHTENED (not loosened): a success now also requires the peak jaw
+force <= maxGripForceFactor*gripForceN (3x = 120 N) -- this ANDs in, only ever removes a success, and rejects
+any transient-spike grasp. locked-cfg e4615ee25c65d98f -> 868489ff8e07da5f (logged; the change is a tightening).
+SUCCESS gate RE-VALIDATED against the new gripper (good/bad/softened/force-bound all green).
+PLANNER (the only tuned thing): antipodal -- sample surface points, ray-cast the opposing face
+(krs::pick::rayTriangle), keep near-opposed normals, score by normal alignment + CoM proximity + a VERTICALITY
+penalty (a tabletop parallel-jaw gripper cannot slide its lower jaw UNDER a grounded object, so a top/bottom
+grasp never seats -- it must grip from the sides). The verticality term was the genuine refinement that made
+quality drive success. GATE PLANNER (20 objects x 3 grasps, fixed denominator; a planner that finds < 3 grasps
+fails the remainder), success-rate TRAJECTORY under the LOCKED criterion:
+  random   = 10.0% (6/60)   -- uniform-random grasp neg-control
+  baseline = 23.3% (14/60)  -- loose tolerance, table-blind
+  tuned    = 53.3% (32/60)  -- tight antipodal + CoM- and side-aware
+PASS = random<=30% AND beaten by >=10% AND (tuned-baseline)>=10% AND tuned<100% (a real library is NOT fully
+solvable). The improvement is grasp QUALITY, not a softened test. Adversarial review (a595b181): "no blocking
+issues -- the improvement is honest" (hash independently recomputed; damper adds zero holding force; c4 is a
+genuine tightening; verticality is a real reachability constraint; one identical locked world across variants).
+
+### Phase 4 -- DONE (commit pending). GATE FAILURE-CATALOG green. Bench 76/76.
+Classify 100% of the tuned planner's 28 failures (of 60 attempts) into an exhaustive taxonomy; an INCOMPLETE-
+taxonomy neg-control proves the coverage metric has teeth (67.9% vs 100%). Distribution:
+  GRIP_NOT_SEATED      11  jaws never both closed (tall/awkward objects; best face needs an unreachable axis)
+  NO_ANTIPODAL_GRASP    6  no antipodal pair found -- 024_bowl, 065_cups (thin shells below the min jaw span)
+  CONTACT_INTERMITTENT  4  gripped but jaw contact dropped below 90% -- 010_potted_meat_can
+  DRIFT_ROTATE          4  held to the end but the centre missed target -- 036_wood_block off-centre grasps
+  UNBOUNDED_GRIP        2  a transient spike exceeded the 120 N bound; the force-bound clause REJECTED it
+                          (anti-cheat working -- never a success, cannot inflate the rate)
+  SLIP_FELL             1  gripped + lifted, then slipped out and re-touched the ground
+These are REAL grasp failures (unreachable concavities, thin shells, awkward CoM, slippery cans), not artifacts.
+
+### Honesty boundary (final)
+PROVEN: a tuned antipodal heuristic raises the success rate 23.3% -> 53.3% over 20 real YCB objects, under a
+LOCKED, physically-justified, force-bounded criterion (configHash 868489ff8e07da5f asserted unchanged every
+run; softened worlds structurally un-passable; grip bounded by construction). The 53.3% is honest FOR THIS
+gripper + criterion -- NOT a claim about a specific real robot. PROXY/LIMIT: a representative rubber-jaw
+parallel gripper with STATED (not hardware-calibrated) friction/force/density; the convex-decomposition collider
+and the tabletop seating are sim choices. The number would differ for another gripper. Target met: a high HONEST
+rate (53.3%, not a suspicious 100%) with every failure characterized by physical root cause.
