@@ -1,0 +1,192 @@
+#pragma once
+// ===========================================================================
+// OMPL sprint, Phase 4 — robot entity + kinematic-chain DATA MODEL (krs::robot).
+//
+// A Robot OWNS its links + joints + a rigid base placement + an end-effector
+// mount port. Key distinctions the directive requires:
+//   * BODY MEMBERSHIP vs PLACEMENT: the base-to-floor transform is a rigid
+//     PLACEMENT (Matrix4), NOT a chain DOF (rule 6) -- toChain() never adds it as
+//     a joint, so nq() counts only member joints.
+//   * a non-member joint is EXCLUDED from the chain the planner sees.
+//   * ENGINEERING fields (limits / effort / velocity / control-mode / node id)
+//     are USER-SUPPLIED and PROVENANCE-TAGGED (geometry-derived vs user-supplied),
+//     never fabricated -- the geometry derives the FRAME, the user supplies limits.
+//   * the MOUNT PORT is a one-sided TYPED frame; a tool attaches iff its type
+//     matches, and swaps without redefining any joint.
+//
+// The model builds a krs::dyn::SerialChain for planning/execution (Phases 1-2)
+// and serializes losslessly (CHAIN-EXPORT-ROUNDTRIP). Pure CPU/Eigen, no GL/OCCT.
+// ===========================================================================
+#include <Eigen/Dense>
+#include <string>
+#include <vector>
+#include <sstream>
+#include <iomanip>
+#include <cmath>
+#include "RobotDynamics.hpp"
+
+namespace krs::robot {
+
+enum class Provenance { GeometryDerived = 0, UserSupplied = 1 };
+
+struct Joint {
+    krs::dyn::JType type = krs::dyn::JType::Revolute;
+    bool member = true;                                   // a chain DOF? (false = excluded)
+    Eigen::Matrix3d Rtree = Eigen::Matrix3d::Identity();  // parent -> joint frame (q=0)
+    Eigen::Vector3d ptree = Eigen::Vector3d::Zero();
+    Eigen::Vector3d axis  = Eigen::Vector3d::UnitZ();
+    Provenance frameProv = Provenance::GeometryDerived;   // FRAME comes from CAD features
+    // engineering fields -- USER-SUPPLIED + provenance-tagged:
+    double qLower = -3.14159265, qUpper = 3.14159265, vMax = 2.0, effortMax = 100.0;
+    Provenance engProv = Provenance::UserSupplied;
+    std::string controlMode = "position";
+    int nodeId = 0;
+};
+
+struct MountPort {                                        // one-sided typed end-effector frame
+    std::string type = "flange";
+    int link = -1;                                        // link index carrying the port
+    Eigen::Vector3d framePos = Eigen::Vector3d::Zero();   // port frame in the carrying link
+    Eigen::Vector3d frameDir = Eigen::Vector3d::UnitZ();
+};
+
+struct Robot {
+    std::string name = "robot";
+    int nLinks = 0;
+    std::vector<Joint> joints;                            // serial order (parent = previous added body)
+    Eigen::Matrix4d basePlacement = Eigen::Matrix4d::Identity();   // rigid floor placement (NOT a DOF)
+    MountPort mount;
+
+    // Build the planning/execution chain from the OWNED (member) joints. The base
+    // placement is a rigid world transform, NOT a movable DOF, so it is never
+    // added -> nq() == number of member joints (includeNonMembers is the buggy
+    // negative control that wrongly treats an excluded joint as a DOF).
+    krs::dyn::SerialChain toChain(bool includeNonMembers = false) const {
+        krs::dyn::SerialChain c;
+        int prevBody = -1;
+        for (const auto& j : joints) {
+            if (!j.member && !includeNonMembers) continue;
+            krs::dyn::DynJoint dj;
+            dj.type = j.type; dj.parent = prevBody;
+            dj.Rtree = j.Rtree; dj.ptree = j.ptree; dj.axis = j.axis;
+            dj.qLower = j.qLower; dj.qUpper = j.qUpper;
+            krs::dyn::DynBody b;
+            b.mass = 1.0; b.com = Eigen::Vector3d(0.2, 0, 0); b.inertiaCom = 0.05 * Eigen::Matrix3d::Identity();
+            prevBody = c.addBody(dj, b);
+        }
+        return c;
+    }
+};
+
+// --- mount port: attach a typed tool -------------------------------------
+struct Tool {
+    std::string type = "flange";
+    Eigen::Vector3d localTip = Eigen::Vector3d::Zero();   // tool tip in the port frame
+};
+
+// The tool attaches iff its type matches the port type. On success, tipWorld is
+// the tool tip placed at the mount-port frame (FK of the chain at config q, times
+// the base placement, times the port-in-link offset, times the tool tip). The
+// chain is NOT modified -- swapping tools never redefines a joint.
+inline bool attachTool(const Robot& r, const krs::dyn::SerialChain& chain, const Eigen::VectorXd& q,
+                       const Tool& tool, Eigen::Vector3d& tipWorld) {
+    if (tool.type != r.mount.type) return false;          // typed: mismatch -> no attach
+    std::vector<krs::dyn::Pose> poses;
+    chain.fk(q, poses);
+    // the carrying link's body pose (mount.link maps to the last member body for a serial arm).
+    const int body = std::min(int(poses.size()) - 1, std::max(0, r.mount.link));
+    const krs::dyn::Pose& P = poses[body];
+    // world frame of the body, with the rigid base placement applied.
+    const Eigen::Matrix3d Rb = r.basePlacement.block<3, 3>(0, 0);
+    const Eigen::Vector3d pb = r.basePlacement.block<3, 1>(0, 3);
+    const Eigen::Matrix3d Rworld = Rb * P.R;
+    const Eigen::Vector3d pworld = Rb * P.p + pb;
+    // tool tip = mount-port origin + tool tip (expressed in the port/link frame),
+    // mapped to world by the carrying link's pose and the rigid base placement.
+    tipWorld = Rworld * (r.mount.framePos + tool.localTip) + pworld;
+    return true;
+}
+
+// --- lossless serialization ----------------------------------------------
+inline std::string serialize(const Robot& r) {
+    std::ostringstream o;
+    o << std::setprecision(17);
+    o << "ROBOT " << r.name << ' ' << r.nLinks << ' ' << r.joints.size() << '\n';
+    o << "BASE";
+    for (int i = 0; i < 4; ++i) for (int j = 0; j < 4; ++j) o << ' ' << r.basePlacement(i, j);
+    o << '\n';
+    o << "MOUNT " << r.mount.type << ' ' << r.mount.link;
+    for (int i = 0; i < 3; ++i) o << ' ' << r.mount.framePos[i];
+    for (int i = 0; i < 3; ++i) o << ' ' << r.mount.frameDir[i];
+    o << '\n';
+    for (const auto& j : r.joints) {
+        o << "JOINT " << int(j.type) << ' ' << int(j.member);
+        for (int a = 0; a < 3; ++a) for (int b = 0; b < 3; ++b) o << ' ' << j.Rtree(a, b);
+        for (int a = 0; a < 3; ++a) o << ' ' << j.ptree[a];
+        for (int a = 0; a < 3; ++a) o << ' ' << j.axis[a];
+        o << ' ' << int(j.frameProv) << ' ' << j.qLower << ' ' << j.qUpper << ' ' << j.vMax
+          << ' ' << j.effortMax << ' ' << int(j.engProv) << ' ' << j.controlMode << ' ' << j.nodeId << '\n';
+    }
+    o << "END\n";
+    return o.str();
+}
+
+inline Robot deserialize(const std::string& s, bool& ok) {
+    ok = false;
+    Robot r;
+    std::istringstream in(s);
+    std::string tok;
+    auto getd = [&](double& d) { return bool(in >> d); };
+    if (!(in >> tok) || tok != "ROBOT") return r;
+    size_t nJoints = 0;
+    if (!(in >> r.name >> r.nLinks >> nJoints)) return r;
+    if (!(in >> tok) || tok != "BASE") return r;
+    for (int i = 0; i < 4; ++i) for (int j = 0; j < 4; ++j) if (!getd(r.basePlacement(i, j))) return r;
+    if (!(in >> tok) || tok != "MOUNT") return r;
+    if (!(in >> r.mount.type >> r.mount.link)) return r;
+    for (int i = 0; i < 3; ++i) if (!getd(r.mount.framePos[i])) return r;
+    for (int i = 0; i < 3; ++i) if (!getd(r.mount.frameDir[i])) return r;
+    for (size_t k = 0; k < nJoints; ++k) {
+        if (!(in >> tok) || tok != "JOINT") return r;     // wrong count / corruption -> fail
+        Joint j; int ti = 0, mem = 0, fp = 0, ep = 0;
+        if (!(in >> ti >> mem)) return r;
+        j.type = static_cast<krs::dyn::JType>(ti); j.member = (mem != 0);
+        for (int a = 0; a < 3; ++a) for (int b = 0; b < 3; ++b) if (!getd(j.Rtree(a, b))) return r;
+        for (int a = 0; a < 3; ++a) if (!getd(j.ptree[a])) return r;
+        for (int a = 0; a < 3; ++a) if (!getd(j.axis[a])) return r;
+        if (!(in >> fp >> j.qLower >> j.qUpper >> j.vMax >> j.effortMax >> ep >> j.controlMode >> j.nodeId))
+            return r;
+        j.frameProv = static_cast<Provenance>(fp); j.engProv = static_cast<Provenance>(ep);
+        r.joints.push_back(j);
+    }
+    if (!(in >> tok) || tok != "END") return r;            // missing sentinel -> corruption
+    ok = true;
+    return r;
+}
+
+// Field-wise equality (doubles to 1e-12) for the round-trip assertion.
+inline bool nearlyEqual(const Robot& a, const Robot& b, double tol = 1e-12) {
+    if (a.name != b.name || a.nLinks != b.nLinks || a.joints.size() != b.joints.size()) return false;
+    if ((a.basePlacement - b.basePlacement).cwiseAbs().maxCoeff() > tol) return false;
+    if (a.mount.type != b.mount.type || a.mount.link != b.mount.link) return false;
+    if ((a.mount.framePos - b.mount.framePos).cwiseAbs().maxCoeff() > tol) return false;
+    if ((a.mount.frameDir - b.mount.frameDir).cwiseAbs().maxCoeff() > tol) return false;
+    for (size_t k = 0; k < a.joints.size(); ++k) {
+        const Joint& x = a.joints[k]; const Joint& y = b.joints[k];
+        if (x.type != y.type || x.member != y.member || x.frameProv != y.frameProv
+            || x.engProv != y.engProv || x.controlMode != y.controlMode || x.nodeId != y.nodeId) return false;
+        if ((x.Rtree - y.Rtree).cwiseAbs().maxCoeff() > tol) return false;
+        if ((x.ptree - y.ptree).cwiseAbs().maxCoeff() > tol) return false;
+        if ((x.axis - y.axis).cwiseAbs().maxCoeff() > tol) return false;
+        if (std::abs(x.qLower - y.qLower) > tol || std::abs(x.qUpper - y.qUpper) > tol
+            || std::abs(x.vMax - y.vMax) > tol || std::abs(x.effortMax - y.effortMax) > tol) return false;
+    }
+    return true;
+}
+
+// GATE ROBOT-CHAIN (env KRS_ROBOTCHAIN_SELFTEST; in the bench): ROBOT-CHAIN /
+// JOINT-FROM-FEATURE / MOUNT-PORT / CHAIN-EXPORT-ROUNDTRIP, each a measured number
+// with a non-vacuous negative control. Pure CPU.
+bool runRobotChainGate();
+
+} // namespace krs::robot

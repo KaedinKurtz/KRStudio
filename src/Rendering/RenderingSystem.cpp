@@ -57,6 +57,7 @@
 #include "MqttNodes.hpp"          // Phase 2 GATE NODE-MQTT (krs::nodes auto-MQTT nodes)
 #include "ControllerGates.hpp"    // Phase 4 controller gates (krs::ctrl C-track/C-knob/C-glass)
 #include "MotionPlanner.hpp"      // OMPL sprint Phase 1 motion-planning gate (krs::plan)
+#include "RobotModel.hpp"         // OMPL sprint Phase 4 robot entity + kinematic chain (krs::robot)
 #include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE / TIME)
 #include "NodeEditQueue.hpp"      // force immediate UI-edit mode for the headless gates
 #include "ConnectControlGate.hpp" // node-editor GATE CONNECT-AND-CONTROL
@@ -1276,6 +1277,14 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
+    // OMPL sprint Phase 4: robot entity + kinematic chain data model (owned-DOF
+    // chain, joint-from-feature, typed mount port, lossless export). Pure CPU.
+    if (qEnvironmentVariableIntValue("KRS_ROBOTCHAIN_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ROBOTCHAIN_SELFTEST =================\n");
+        const bool ok = krs::robot::runRobotChainGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1319,6 +1328,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE NODE-MQTT (publish-node drives live robot over the bus, FK <1e-4)", krs::nodes::runMqttNodeGate() },
             { "GATE PLAN (OMPL RRTConnect/RRTstar over SerialChain: collision-free/limits/connectivity/determinism + straight-line & boxed-in neg-ctrls)", krs::plan::runPlanningGate() },
             { "GATE EXECUTE (planned path run through computed-torque under gravity: tracks/collision-free/limits; soft-PD lag + colliding-ref + 3x-fast neg-ctrls)", krs::plan::runExecuteGate() },
+            { "GATE ROBOT-CHAIN (entity owns links+joints+base+mount: owned-DOF chain/joint-from-feature/typed-mount-port/lossless-export; non-member & non-coaxial & mismatched-type & corrupt-export neg-ctrls)", krs::robot::runRobotChainGate() },
             { "GATE C-track (computed torque tracks moving setpoint; soft PD lags)", krs::ctrl::runControllerTrackGate() },
             { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },

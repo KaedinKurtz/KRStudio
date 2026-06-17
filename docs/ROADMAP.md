@@ -2934,3 +2934,21 @@ backend only. The backend is OCCT-free (reads the ECS CadImporter populated) and
 - **DEFERRED**: edge selection (TopoDS_Edge endpoints) -- BRepFaceComponent is face-only today; faces
   (plane/cylinder/cone/sphere) are fully gated. The interactive picking UI + 3D indicator rendering remain for
   the supervised session (pixel gates verify geometry-of-elements, not usability).
+
+### OMPL PHASE 4 RESULT (2026-06-17, KRS_ROBOTCHAIN_SELFTEST + bench GATE ROBOT-CHAIN) — ALL PASS
+Robot entity + kinematic-chain DATA MODEL (krs::robot, RobotModel.hpp): a Robot owns links + joints + a rigid
+base placement + a typed end-effector mount port. toChain() builds the krs::dyn::SerialChain the planner/executor
+use (Phases 1-2). UI deferred to a supervised session.
+- **ROBOT-CHAIN PASS**: nq=**3** == the 3 member joints; the base-to-floor transform is a rigid PLACEMENT, NOT a
+  DOF (rule 6). The buggy control that wrongly treats the non-member joint as a DOF yields nq=**4** -> proves the
+  chain EXCLUDES non-members. The Phase-1 planner plans over the owned DOFs (solved).
+- **JOINT-FROM-FEATURE PASS**: a revolute frame derived from two coaxial bores (krs::joint::deriveRevoluteFrom
+  Bores) matches the oracle to axis-dir err **0.0** / axis-pos err **0.0** (<1e-6). A non-coaxial pair (axis line
+  offset 0.1 m) is **REJECTED** (no fabricated joint). Engineering fields (limits/effort/velocity/control-mode/
+  node-id) are USER-SUPPLIED + provenance-tagged; the geometry derives only the FRAME.
+- **MOUNT-PORT PASS**: a type-"flange-A" tool lands at the port frame to err **0.0** (<1e-9); a same-type tool with
+  a different tip SWAPS (tip moves 0.10 m) WITHOUT redefining any joint (nq stays 3); a type-"flange-B" tool does
+  **NOT attach** (the port is a one-sided TYPED frame).
+- **CHAIN-EXPORT-ROUNDTRIP PASS**: serialize -> deserialize is lossless (4 joints, base placement, mount, and all
+  provenance + engineering fields preserved to 1e-12). A truncated/corrupted export is **REJECTED** (ok=false, no
+  fabricated robot); a flipped engineering field is **DETECTED** by the round-trip compare.
