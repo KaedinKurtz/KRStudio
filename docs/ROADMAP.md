@@ -2898,3 +2898,20 @@ unreachable goal exhausts the deterministic iteration cap and returns FAILURE.
   new code. Fix: invoke the build from PowerShell with absolute paths --
   `cmd /c 'C:\Users\kurtz\KRStudio\KRStudio\run_configure.bat > C:\...\build.log 2>&1'`. Also: new source files
   need a FRESH cmake configure (CONFIGURE_DEPENDS glob) to enter build.ninja.
+
+### OMPL PHASE 2 RESULT (2026-06-17, KRS_EXECUTE_SELFTEST + bench GATE EXECUTE) — ALL PASS
+Execute the Phase-1 planned path through the computed-torque controller (krs::ctrl::computedTorque) via pure-CPU
+forward dynamics (SerialChain::forwardDynamics + semi-implicit Euler) under gravity (0,0,-9.81). The arm carries
+realistic link mass + COM-at-midpoint so the pitch joints bear a genuine gravity load. Plan with a 0.10 m safety
+margin (sphere R 0.25 -> plan against 0.35) so the achieved trajectory stays collision-free despite tracking error.
+- **EXECUTE-TRACK PASS**: peak ||q_achieved - q_commanded|| DURING motion -- computed torque **0.0154 rad**
+  (after) vs OLD soft PD **0.6352 rad** (before). The soft PD (tau = Kp*e - Kd*qd, NO model/gravity feedforward)
+  sags+lags the moving setpoint and FAILS the 0.10 bound; computed torque feeds back M*a + biasForces(gravity)
+  and tracks -- a 41x improvement, matching the C-track class (recon soft-PD 0.61).
+- **EXECUTE-COLLISION-FREE PASS**: the achieved computed-torque trajectory has max penetration **0.0000** vs the
+  TRUE sphere (the 0.10 m plan margin absorbs the 0.015 rad tracking error). NEG executing a straight-line
+  reference that drives the arm THROUGH the sphere -> achieved penetration **0.2999** (the executed-trajectory
+  collision check is load-bearing).
+- **EXECUTE-LIMITS PASS**: achieved posMargin 1.0017 (in bounds), velRatio **0.9982** (rides at vMax). NEG a
+  3x-fast re-timing -> achieved velRatio **1.5850** (> 1, flagged; the arm can't reach 3x vMax but clearly
+  exceeds the limit).

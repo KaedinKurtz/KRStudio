@@ -1260,6 +1260,14 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
+    // OMPL sprint Phase 2: execute the planned path through the computed-torque
+    // controller; tracking/collision-free/limits, soft-PD lag neg-control. Pure CPU.
+    if (qEnvironmentVariableIntValue("KRS_EXECUTE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_EXECUTE_SELFTEST =================\n");
+        const bool ok = krs::plan::runExecuteGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1301,6 +1309,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE NODE-LIB (math/signal/time/logic nodes vs closed-form, <tol)", krs::nodes::runNodeLibraryGate() },
             { "GATE NODE-MQTT (publish-node drives live robot over the bus, FK <1e-4)", krs::nodes::runMqttNodeGate() },
             { "GATE PLAN (OMPL RRTConnect/RRTstar over SerialChain: collision-free/limits/connectivity/determinism + straight-line & boxed-in neg-ctrls)", krs::plan::runPlanningGate() },
+            { "GATE EXECUTE (planned path run through computed-torque under gravity: tracks/collision-free/limits; soft-PD lag + colliding-ref + 3x-fast neg-ctrls)", krs::plan::runExecuteGate() },
             { "GATE C-track (computed torque tracks moving setpoint; soft PD lags)", krs::ctrl::runControllerTrackGate() },
             { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },

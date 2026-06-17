@@ -58,4 +58,11 @@ private:
 // true iff every sub-gate passes.
 bool runPlanningGate();
 
+// EXECUTE gates (env KRS_EXECUTE_SELFTEST; folded into KRS_OVERNIGHT_BENCH):
+// execute a PLANNED path through the computed-torque controller (krs::ctrl) and
+// verify EXECUTE-TRACK (achieved follows commanded under gravity; soft PD lags),
+// EXECUTE-COLLISION-FREE (achieved trajectory collision-free; colliding ref
+// collides) and EXECUTE-LIMITS. Returns true iff every sub-gate passes.
+bool runExecuteGate();
+
 } // namespace krs::plan
