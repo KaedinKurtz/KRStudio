@@ -44,6 +44,9 @@ struct GraspResult {
     bool      physicsLocked = false;       // assertPhysicsLocked() verdict for this run's LIVE scene
     float     maxJawForceN = 0.0f;         // peak per-substep jaw->object contact force during HOLD (impulse/dt);
                                            // PROVES the squeeze is bounded by ~gripForceN (anvil is no infinite clamp)
+    float     medianJawForceN = 0.0f;      // MEDIAN per-substep jaw->object contact force over LIFT+HOLD. Peak>>median
+                                           // means an UNBOUNDED peak is a TRANSIENT solver spike, not a sustained wedge
+                                           // (the fidelity UNBOUNDED-DIAGNOSIS reads this to call real-vs-artifact).
 };
 
 // Run the full settle->close->lift->hold sequence for one grasp on one object mesh, under `world` (LOCKED

@@ -21,6 +21,7 @@ bool assertPhysicsLocked(physx::PxScene*, physx::PxMaterial*, float) { return fa
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 using namespace physx;
 
@@ -41,6 +42,7 @@ struct Tracker : PxSimulationEventCallback {
     bool objJaw0 = false, objJaw1 = false, objGround = false;
     bool recording = false;
     float maxJawForce = 0.0f;
+    std::vector<float> forceSeries;   // every recorded per-substep jaw force; its MEDIAN is the SUSTAINED grip level
     void onContact(const PxContactPairHeader& h, const PxContactPair* pairs, PxU32 n) override {
         const int ta = tagOf(h.actors[0]), tb = tagOf(h.actors[1]);
         int other = 0;
@@ -58,6 +60,8 @@ struct Tracker : PxSimulationEventCallback {
                 for (PxU32 k = 0; k < np; ++k) imp += pts[k].impulse;   // total contact impulse this substep
                 const float force = imp.magnitude() / kLockedPhysics.fixedDt;
                 if (force > maxJawForce) maxJawForce = force;
+                if (force > 0.0f) forceSeries.push_back(force);   // sample the sustained level for the median
+
             }
         }
     }
@@ -288,6 +292,11 @@ GraspResult runGripperSim(const RenderableMeshComponent& objectMesh, const Grasp
     }
     tracker.recording = false;
     R.maxJawForceN = tracker.maxJawForce;
+    if (!tracker.forceSeries.empty()) {                                    // MEDIAN = sustained grip; peak>>median => spike
+        std::vector<float>& fs = tracker.forceSeries;
+        std::nth_element(fs.begin(), fs.begin() + fs.size() / 2, fs.end());
+        R.medianJawForceN = fs[fs.size() / 2];
+    }
     R.endCenter = worldCoM(obj);
     R.targetCenter = R.startCenter + glm::vec3(0.0f, kLockedPhysics.liftHeightM, 0.0f);
     R.centerErrM = glm::length(R.endCenter - R.targetCenter);

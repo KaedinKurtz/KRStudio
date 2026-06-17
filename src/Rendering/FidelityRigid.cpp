@@ -206,6 +206,6 @@ bool runFidelityFrictionGate() {
 #endif
 }
 
-bool runFidelityUnboundedGate() { std::printf("[fidelity] UNBOUNDED-DIAGNOSIS -- (pending)\n"); return true; }
+// runFidelityUnboundedGate() lives in FidelityUnbounded.cpp (it drives the grasp gripper + the median readout).
 
 } // namespace krs::fidelity
