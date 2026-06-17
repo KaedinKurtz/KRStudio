@@ -93,7 +93,7 @@ bool runGraspCoacdRealGate() {
       guardOk = assertPhysicsLocked(gs, mat, kLockedPhysics.gripForceN);
       gs->release(); d->release(); }
 
-    constexpr int N = 22;            // grid resolution per axis
+    constexpr int N = 28;            // grid resolution per axis (finer -> tighter thin-wall coverage sampling)
     bool anyGraspRelevantDiscriminates = false, anyCoverageBad = false;
     int nConcaveTested = 0;
 
@@ -119,14 +119,16 @@ bool runGraspCoacdRealGate() {
         int solidPts = 0, coacdCover = 0;            // solid-coverage sanity: CoACD must FILL the true solid, not just preserve cavities
         for (int ix = 0; ix < N; ++ix) for (int iy = 0; iy < N; ++iy) for (int iz = 0; iz < N; ++iz) {
             const glm::vec3 p(lo.x + ext.x * (ix + 0.5f) / N, lo.y + ext.y * (iy + 0.5f) / N, lo.z + ext.z * (iz + 0.5f) / N);
-            if (insideTrueMesh(p, mesh)) {               // a SOLID point -> a faithful collider must contain it
+            // V-HACD (a fill-everything decomposition) contains BOTH the true solid and the cavities it bridges,
+            // so a point outside V-HACD is neither -> skip (cheap convex test first; ray-parity only inside V-HACD).
+            if (!insideAnyHull(p, vhacd)) continue;
+            if (insideTrueMesh(p, mesh)) {               // SOLID point -> a faithful collider must contain it
                 ++solidPts;
                 if (insideAnyHull(p, coacd)) ++coacdCover;
-                continue;
+            } else {                                     // empty space V-HACD FILLS -> a filled cavity point
+                ++cavityPts;
+                if (!insideAnyHull(p, coacd)) ++coacdEmpty;  // CoACD leaves it empty -> preserved
             }
-            if (!insideAnyHull(p, vhacd)) continue;      // empty AND V-HACD does not fill it -> irrelevant
-            ++cavityPts;                                 // empty space V-HACD FILLS -> a filled cavity point
-            if (!insideAnyHull(p, coacd)) ++coacdEmpty;  // CoACD leaves it empty -> preserved
         }
         const float coacdPreserve = cavityPts ? float(coacdEmpty) / float(cavityPts) : 0.0f;
         const float coacdCoverage = solidPts ? float(coacdCover) / float(solidPts) : 0.0f;
