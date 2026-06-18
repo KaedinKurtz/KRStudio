@@ -3302,3 +3302,31 @@ the falloff was hardcoded Linear, so the field size/shape were not controllable.
 GATE EMITTER extended (RADIUS-FALLOFF subtest): R=2 -> |f|@1=5.0, ~0 past the edge; at d=2 inside R=5 the falloff
 rates 0/1/2 give 10.0 / 6.0 / 3.6 (flat / linear / steeper, strictly monotone). Bench 94/94; emitter node UI
 screenshot confirms the Amplitude/Radius(5)/Falloff(1)/Rate spinboxes.
+
+## NODE INPUT FOUNDATION + TRIGGER + IK TARGET + OMPL NODE SPRINT
+### PHASE 1 — IN-WIDGET INPUT PATH (the foundation; everything below needs it)
+RECON (4-agent workflow, high confidence): a node's own in-widget value does NOT reach its compute when the
+port is UNCONNECTED. (a) SPINBOX: NodeDelegate::populateEmbeddedWidget builds the spinbox and calls
+sb->setValue(literalD(...)) BEFORE the valueChanged connect, so the initial value fires into no handler and the
+port LITERAL is never seeded; literalValue stays nullopt; getInput returns nullopt for an untouched port; binary
+nodes (Add: "if (a && b)") then emit nothing -> "ignores its spin box". A wire works because getInput prefers
+port.packet. (b) COMBO: enum input ports fall into the `else { delete row; continue; }` -- NO widget is mounted
+for them, so an enum/combo selection can never reach compute. ExecutionControlWidget's policy/edge combos work
+but via direct node-state setters (setUpdatePolicy/setTriggerEdge), not the per-port path.
+FIX:
+1.1 NodeDelegate::populateEmbeddedWidget: SEED the port literal from the widget's value at MOUNT (synchronous,
+    so it sidesteps the deferred NodeEditQueue and is live before the first drain) for float/int/bool/vec3; a
+    wire still overrides (getInput checks packet first). The displayed default value is now the unconnected
+    input. (Add a blank now outputs 0+0=0, intended.)
+1.2 Generic ENUM-COMBO input: Port gains enumOptions + Node::addEnumInputPort(name, options); NodeDelegate
+    builds a QComboBox (tagged krs_input_port) for type.name=="enum", seeds the literal (int index) at mount,
+    and on currentIndexChanged sets the port literal -> compute reads getInput<int>(port). New demo node
+    "math_op" (A,B + Op enum Add/Sub/Mul/Div) exercises it (also a useful node).
+GATES (KRS_WIDGETINPUT_SELFTEST + bench), each with the OLD broken behavior as a REAL failing neg-control:
+- GATE WIDGET-INPUT: mount math_add, type A=3 B=4 (unconnected) -> Result 7; an UNTOUCHED mount -> literal
+  seeded, Result 0 (0+0) with inputs NOT nullopt; wire 10 into B (packet) -> A(3)+10 = 13 (wire overrides
+  widget). NEG-CTRL: a RAW math_add (no delegate mount -> no seeded literal = the OLD behavior) -> no output
+  (nan), which DIFFERS from the fixed 0 -> the gate catches a regression to spin-box-ignored.
+- GATE COMBO-INPUT: mount math_op, the Op combo is a mounted QComboBox; selecting Add vs Multiply changes the
+  Result (selection reaches compute via getInput<int>). NEG-CTRL: an UNBOUND bare combo / unset enum literal
+  leaves the op on its default -> selection ignored, differs from the driven case.

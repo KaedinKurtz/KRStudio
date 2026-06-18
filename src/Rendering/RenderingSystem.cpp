@@ -897,6 +897,20 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Phase 1 FOUNDATION GATE WIDGET-INPUT: a node's own spin-box value feeds compute when unconnected.
+    if (qEnvironmentVariableIntValue("KRS_WIDGETINPUT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_WIDGETINPUT_SELFTEST =================\n");
+        const bool ok = krs::nodes::runWidgetInputGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // Phase 1 FOUNDATION GATE COMBO-INPUT: a node's enum combo selection is read by compute.
+    if (qEnvironmentVariableIntValue("KRS_COMBOINPUT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_COMBOINPUT_SELFTEST =================\n");
+        const bool ok = krs::nodes::runComboInputGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
     // Node-editor GATE TYPE: port type compatibility.
     if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
         std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
@@ -1426,6 +1440,8 @@ void RenderingSystem::initializeSharedResources()
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },
             { "GATE NODE-E2E (canvas program drives live robot; severing localizes)", krs::nodes::runNodeE2EGate() },
             { "GATE INPUT-BIND (mounted per-input widget drives node output, N-of-M)", krs::nodes::runInputBindGate() },
+            { "GATE WIDGET-INPUT (typed spin-box value feeds compute when unconnected: 3+4->7, wire 10->13; old spin-box-ignored neg-ctrl)", krs::nodes::runWidgetInputGate() },
+            { "GATE COMBO-INPUT (enum combo selection read by compute: Add/Sub/Mul switches math_op; old combo-ignored neg-ctrl)", krs::nodes::runComboInputGate() },
             { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },

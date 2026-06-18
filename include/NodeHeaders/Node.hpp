@@ -52,6 +52,7 @@ struct Port {
     bool isFresh = false;
     std::optional<PortDataPacket> packet;        // value delivered by an upstream CONNECTION
     std::optional<PortDataPacket> literalValue;  // value typed into the in-node input widget (used when unconnected)
+    std::vector<std::string> enumOptions;        // for an "enum" input: the combo labels (selection = int index)
 };
 
 class Node {
@@ -233,6 +234,18 @@ public:
                 return;
             }
         }
+    }
+
+    // Declare an ENUM input port: an in-node combo of `options`; the selection is stored as the port's
+    // int-index literal and read by compute via getInput<int>(name). A wire still overrides the combo.
+    void addEnumInputPort(const std::string& name, const std::vector<std::string>& options) {
+        Port p;
+        p.name = name;
+        p.type = { "enum", "unitless" };
+        p.direction = Port::Direction::Input;
+        p.parentNode = this;
+        p.enumOptions = options;
+        m_ports.push_back(std::move(p));
     }
 
     const std::string& getId() const { return m_id; }

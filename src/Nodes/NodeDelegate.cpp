@@ -17,6 +17,7 @@
 #include <QLineEdit>
 #include <QCheckBox>
 #include <QComboBox>
+#include <algorithm>
 #include <QSpinBox>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
@@ -310,10 +311,14 @@ void NodeDelegate::populateEmbeddedWidget() const
         auto* rl = new QHBoxLayout(row); rl->setContentsMargins(0, 0, 0, 0); rl->setSpacing(4);
         auto* lab = new QLabel(QString::fromStdString(portName)); lab->setMinimumWidth(40); rl->addWidget(lab);
 
+        // NOTE: each control SEEDS the port's literal from its displayed/default value at MOUNT (synchronous,
+        // so it works in the live app's deferred-queue mode before the first drain). That makes the in-widget
+        // value the UNCONNECTED input the compute reads; a wire still overrides (getInput prefers port.packet).
         if (tn == "double" || tn == "float") {
             auto* sb = new QDoubleSpinBox(); sb->setRange(-1.0e6, 1.0e6); sb->setDecimals(4); sb->setSingleStep(0.1);
             sb->setProperty("krs_input_port", tag);
-            sb->setValue(node->literalD(portName, 0.0));   // show the node's default literal, not 0 (set before connecting)
+            sb->setValue(node->literalD(portName, 0.0));
+            node->setPortLiteral<float>(portName, float(sb->value()));   // SEED the default value as the input
             QObject::connect(sb, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
                 [self, portName](double v) { krs::nodes::NodeEditQueue::instance().post(self, portName,
                     [self, portName, v]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<float>(portName, float(v)); self->recomputeAndPropagate(); }); });
@@ -321,7 +326,8 @@ void NodeDelegate::populateEmbeddedWidget() const
         } else if (tn == "int") {
             auto* sb = new QSpinBox(); sb->setRange(-1000000, 1000000);
             sb->setProperty("krs_input_port", tag);
-            sb->setValue(int(node->literalD(portName, 0.0)));   // show the node's default literal, not 0
+            sb->setValue(int(node->literalD(portName, 0.0)));
+            node->setPortLiteral<int>(portName, sb->value());           // SEED
             QObject::connect(sb, QOverload<int>::of(&QSpinBox::valueChanged),
                 [self, portName](int v) { krs::nodes::NodeEditQueue::instance().post(self, portName,
                     [self, portName, v]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<int>(portName, v); self->recomputeAndPropagate(); }); });
@@ -329,12 +335,15 @@ void NodeDelegate::populateEmbeddedWidget() const
         } else if (tn == "bool") {
             auto* cb = new QCheckBox();
             cb->setProperty("krs_input_port", tag);
+            cb->setChecked(node->literalD(portName, 0.0) != 0.0);
+            node->setPortLiteral<bool>(portName, cb->isChecked());      // SEED
             QObject::connect(cb, &QCheckBox::toggled,
                 [self, portName](bool v) { krs::nodes::NodeEditQueue::instance().post(self, portName,
                     [self, portName, v]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<bool>(portName, v); self->recomputeAndPropagate(); }); });
             rl->addWidget(cb);
         } else if (tn == "glm::vec3") {
             auto vec = std::make_shared<glm::vec3>(0.0f);
+            node->setPortLiteral<glm::vec3>(portName, *vec);           // SEED (0,0,0)
             for (int k = 0; k < 3; ++k) {
                 auto* sb = new QDoubleSpinBox(); sb->setRange(-1.0e6, 1.0e6); sb->setDecimals(3);
                 if (k == 0) sb->setProperty("krs_input_port", tag);
@@ -344,6 +353,20 @@ void NodeDelegate::populateEmbeddedWidget() const
                             [self, portName, vec]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<glm::vec3>(portName, *vec); self->recomputeAndPropagate(); }); });
                 rl->addWidget(sb);
             }
+        } else if (tn == "enum") {
+            // an in-node combo of the port's options; the SELECTION (int index) is the unconnected input,
+            // read by compute via getInput<int>(port). Tagged krs_input_port so it is gate-verifiable.
+            auto* combo = new QComboBox();
+            combo->setProperty("krs_input_port", tag);
+            for (const auto& opt : port.enumOptions) combo->addItem(QString::fromStdString(opt));
+            int initIdx = int(node->literalD(portName, 0.0));
+            if (combo->count() > 0) initIdx = std::min(std::max(initIdx, 0), combo->count() - 1); else initIdx = 0;
+            combo->setCurrentIndex(initIdx);
+            node->setPortLiteral<int>(portName, initIdx);              // SEED the selected index
+            QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                [self, portName](int idx) { krs::nodes::NodeEditQueue::instance().post(self, portName,
+                    [self, portName, idx]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<int>(portName, idx); self->recomputeAndPropagate(); }); });
+            rl->addWidget(combo);
         } else {
             delete row; continue;   // handle/data ports (registry*, ProfiledData, ...) -> set via connection only
         }

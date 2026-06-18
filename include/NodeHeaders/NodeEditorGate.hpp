@@ -27,6 +27,15 @@ int portIndexByName(Node* n, Port::Direction dir, const char* name);
 // body, and driving that widget changes the node's evaluated output (N-of-M coverage). Needs QApplication.
 bool runInputBindGate();
 
+// GATE WIDGET-INPUT (KRS_WIDGETINPUT_SELFTEST): a node's own spin-box value is the input its compute reads
+// when the port is UNCONNECTED (type 3+4 -> 7); a wire overrides the widget (-> 13); an untouched mount seeds
+// the default. NEG-CTRL = the OLD un-seeded behavior (spin box ignored -> no output). Needs QApplication.
+bool runWidgetInputGate();
+
+// GATE COMBO-INPUT (KRS_COMBOINPUT_SELFTEST): a node's enum combo selection is read by its compute (math_op's
+// Op combo switches Add/Sub/Mul/Div). NEG-CTRL = OLD behavior (no enum widget -> selection ignored). Needs QApplication.
+bool runComboInputGate();
+
 // GATE TYPE (KRS_TYPE_SELFTEST): the unified port type ids let compatible ports connect and keep
 // incompatible ones unconnectable (mirrors QtNodes connectionPossible). Needs QApplication.
 bool runTypeGate();

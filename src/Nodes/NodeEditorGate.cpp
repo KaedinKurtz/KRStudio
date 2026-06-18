@@ -9,6 +9,7 @@
 #include "NodeFactory.hpp"
 #include "Node.hpp"
 #include "NodeEditorGate.hpp"
+#include "NodeEditQueue.hpp"
 
 #include <QtNodes/Definitions>
 #include <QtNodes/DataFlowGraphModel>
@@ -18,6 +19,7 @@
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QAbstractSpinBox>
 
 #include <cstdio>
@@ -31,7 +33,7 @@ namespace krs::nodes {
 
 namespace {
 bool isEditableType(const std::string& tn) {
-    return tn == "double" || tn == "float" || tn == "int" || tn == "bool" || tn == "glm::vec3";
+    return tn == "double" || tn == "float" || tn == "int" || tn == "bool" || tn == "glm::vec3" || tn == "enum";
 }
 int editableInputCount(Node* n) {
     int c = 0; for (const auto& p : n->getPorts())
@@ -49,6 +51,7 @@ void driveControl(QWidget* ctl, double v) {
     if (auto* d = qobject_cast<QDoubleSpinBox*>(ctl)) d->setValue(v);
     else if (auto* s = qobject_cast<QSpinBox*>(ctl)) s->setValue(int(v));
     else if (auto* c = qobject_cast<QCheckBox*>(ctl)) c->setChecked(v != 0.0);
+    else if (auto* cb = qobject_cast<QComboBox*>(ctl)) cb->setCurrentIndex(int(v));
 }
 double anyToD(const std::any& a) {
     try { return std::any_cast<double>(a); } catch (...) {}
@@ -177,6 +180,109 @@ bool runInputBindGate()
     printf("[input-bind] %s\n", pass ? "ALL PASS (every input-bearing node mounts a bound input widget; values reach compute; unbound inert)"
                                      : "FAILURES PRESENT");
     fflush(stdout);
+    return pass;
+}
+
+namespace {
+double readOutResult(Node* n, const char* port) {
+    for (const auto& p : n->getPorts())
+        if (p.direction == Port::Direction::Output && p.name == port && p.packet.has_value()) return anyToD(p.packet->data);
+    return std::nan("");
+}
+} // namespace
+
+bool runWidgetInputGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[widget-input] GATE WIDGET-INPUT -- a node's own spin-box value is the unconnected input (wire overrides)\n");
+    if (!QApplication::instance()) { printf("[widget-input] FAIL: needs QApplication\n"); return false; }
+    const bool wasDeferred = NodeEditQueue::instance().deferred();
+    NodeEditQueue::instance().setDeferred(false);    // apply driveControl edits synchronously in this gate
+
+    // STEP 1 -- type 3 + 4 into the UNCONNECTED spin boxes -> Result 7 (the headline can't-fake number).
+    NodeDelegate d1("math_add"); Node* n1 = d1.backendNode(); QWidget* b1 = d1.embeddedWidget();
+    if (auto* a = findInputControl(b1, "A")) driveControl(a, 3.0);
+    if (auto* b = findInputControl(b1, "B")) driveControl(b, 4.0);
+    const double typed = readOutResult(n1, "Result");
+    const bool typedOk = std::isfinite(typed) && std::abs(typed - 7.0) < 1e-6;
+
+    // STEP 2 -- an UNTOUCHED mount: the literal is SEEDED from the default widget value, so compute READS it
+    // (inputs not nullopt) and outputs 0 (0+0). The OLD behavior left the literal nullopt -> no output.
+    NodeDelegate d2("math_add"); Node* n2 = d2.backendNode(); d2.embeddedWidget();
+    n2->process();
+    const bool seeded = n2->getInput<float>("A").has_value() && n2->getInput<float>("B").has_value();
+    const double untouched = readOutResult(n2, "Result");
+    const bool defaultOk = seeded && std::isfinite(untouched) && std::abs(untouched) < 1e-9;
+
+    // STEP 3 -- a WIRE into B overrides the widget: A=3 (widget), B=4 (widget) then deliver a packet 10 to B.
+    NodeDelegate d3("math_add"); Node* n3 = d3.backendNode(); QWidget* b3 = d3.embeddedWidget();
+    if (auto* a = findInputControl(b3, "A")) driveControl(a, 3.0);
+    if (auto* b = findInputControl(b3, "B")) driveControl(b, 4.0);
+    PortDataPacket wire; wire.data = 10.0f; wire.type = { "float", "unitless" };
+    n3->setInput("B", wire); n3->process();
+    const double wired = readOutResult(n3, "Result");
+    const bool wireOk = std::isfinite(wired) && std::abs(wired - 13.0) < 1e-6;   // A(3 widget) + B(10 wire)
+
+    // NEG-CTRL -- the OLD behavior as a REAL failing model: a RAW math_add (no delegate mount -> no seeded
+    // literal) gets getInput()==nullopt -> "if (a && b)" emits nothing -> Result unset (nan). It DIFFERS from
+    // the fixed untouched output (0), so a regression to "spin box ignored" would flip this gate red.
+    auto raw = NodeFactory::instance().createNode("math_add");
+    raw->process();
+    const double rawOut = readOutResult(raw.get(), "Result");
+    const bool negOk = std::isnan(rawOut) && std::isfinite(untouched);
+
+    NodeEditQueue::instance().setDeferred(wasDeferred);
+    const bool pass = typedOk && defaultOk && wireOk && negOk;
+    printf("[widget-input]   typed 3+4 (unconnected) -> %.3f (want 7, ok:%d); untouched mount seeded -> %.3f (want 0, inputs-read:%d); "
+           "wire 10->B overrides -> %.3f (want 13, ok:%d); NEG raw(old) Result=%.3f (no-output:%d, differs from fixed 0)  %s\n",
+           typed, int(typedOk), untouched, int(defaultOk), wired, int(wireOk), rawOut, int(negOk), pass ? "PASS" : "FAIL");
+    printf("[widget-input] %s\n", pass ? "ALL PASS (typed spin-box value feeds compute; wire overrides; old spin-box-ignored fails)"
+                                       : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+bool runComboInputGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[combo-input] GATE COMBO-INPUT -- a node's enum combo selection is read by its compute\n");
+    if (!QApplication::instance()) { printf("[combo-input] FAIL: needs QApplication\n"); return false; }
+    const bool wasDeferred = NodeEditQueue::instance().deferred();
+    NodeEditQueue::instance().setDeferred(false);
+
+    // math_op: A,B spin boxes + an "Op" enum combo (Add/Subtract/Multiply/Divide).
+    NodeDelegate d("math_op"); Node* n = d.backendNode(); QWidget* body = d.embeddedWidget();
+    QWidget* opCtl = findInputControl(body, "Op");
+    const bool comboMounted = qobject_cast<QComboBox*>(opCtl) != nullptr;   // the enum input mounts a real combo
+    if (auto* a = findInputControl(body, "A")) driveControl(a, 6.0);
+    if (auto* b = findInputControl(body, "B")) driveControl(b, 2.0);
+
+    double add = std::nan(""), mul = std::nan(""), sub = std::nan("");
+    if (opCtl) { driveControl(opCtl, 0.0); add = readOutResult(n, "Result"); }   // Add     -> 8
+    if (opCtl) { driveControl(opCtl, 2.0); mul = readOutResult(n, "Result"); }   // Multiply-> 12
+    if (opCtl) { driveControl(opCtl, 1.0); sub = readOutResult(n, "Result"); }   // Subtract-> 4
+    const bool changes = comboMounted && std::abs(add - 8.0) < 1e-6 && std::abs(mul - 12.0) < 1e-6
+                      && std::abs(sub - 4.0) < 1e-6 && add != mul && mul != sub;
+
+    // NEG-CTRL -- the OLD behavior: a RAW math_op (no combo mounted -> Op literal never seeded) reads
+    // getInput<int>("Op")==nullopt -> value_or(0) = ALWAYS Add. The selection cannot reach compute; it is
+    // stuck on Add (8) and CANNOT become Multiply (12) -> differs from the driven case, a real failing model.
+    auto raw = NodeFactory::instance().createNode("math_op");
+    raw->setPortLiteral<float>("A", 6.0f); raw->setPortLiteral<float>("B", 2.0f);
+    raw->process();
+    const double rawOut = readOutResult(raw.get(), "Result");
+    const bool negOk = std::abs(rawOut - 8.0) < 1e-6 && std::abs(rawOut - mul) > 1e-6;   // stuck on Add, != Multiply
+
+    NodeEditQueue::instance().setDeferred(wasDeferred);
+    const bool pass = comboMounted && changes && negOk;
+    printf("[combo-input]   Op combo mounted:%d; A=6,B=2 -> Add=%.1f Multiply=%.1f Subtract=%.1f (want 8/12/4, selection-read:%d); "
+           "NEG raw(no enum binding) stuck=%.1f (Add, != Multiply:%d)  %s\n",
+           int(comboMounted), add, mul, sub, int(changes), rawOut, int(negOk), pass ? "PASS" : "FAIL");
+    printf("[combo-input] %s\n", pass ? "ALL PASS (combo selection drives compute; old combo-ignored fails)"
+                                      : "FAILURES PRESENT");
+    std::fflush(stdout);
     return pass;
 }
 

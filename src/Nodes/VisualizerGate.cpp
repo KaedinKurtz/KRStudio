@@ -55,7 +55,7 @@ bool runVisGate()
 {
     using std::printf;
     setvbuf(stdout, nullptr, _IONBF, 0);
-    printf("[vis] GATE VIS -- a visualizer's DISPLAYED value matches its input (digits/decimals respected; disconnected -> no update)\n");
+    printf("[vis] GATE VIS -- a visualizer's DISPLAYED value matches its input (digits/decimals respected; widget value is the default input, a wire overrides)\n");
     if (!QApplication::instance()) { printf("[vis] FAIL: needs QApplication\n"); return false; }
 
     bool readoutOk = false, gaugeOk = false, negOk = false;
@@ -92,23 +92,26 @@ bool runVisGate()
             }
             readoutOk = (rdPass == rdChecks && rdChecks > 0);
 
-            // NEG-CTRL: a readout with NO Value input does not invent a display; connecting one updates it.
+            // NEG-CTRL: the display TRACKS its Value input (foundation: the in-widget value is the input when
+            // unconnected, a WIRE overrides it). Seeded default 0 -> "0.00"; widget 5 -> "5.00"; a wire of 9
+            // overrides the widget -> "9.00". A readout that ignored the wire (showed the widget's 5) FAILS.
             NodeDelegate dn("viz_numeric_readout"); Node* nn = dn.backendNode();
             QWidget* bn = nn ? dn.embeddedWidget() : nullptr;
             QLCDNumber* ln = bn ? bn->findChild<QLCDNumber*>() : nullptr;
             if (nn && ln) {
-                dn.recomputeAndPropagate(); nn->refreshUi();       // no Value set -> refreshUi pushes nothing
-                const std::string d0 = outStr(*nn, "Display");
-                const double before = ln->value();
                 if (auto* cdcn = findCtl(bn, "Decimals")) drive(cdcn, 2);
+                dn.recomputeAndPropagate(); nn->refreshUi();       // seeded default Value 0 -> "0.00"
+                const std::string dDefault = outStr(*nn, "Display");
                 if (auto* cvn = findCtl(bn, "Value")) drive(cvn, 5.0);
-                dn.recomputeAndPropagate(); nn->refreshUi();
-                const double after = ln->value();
-                const std::string dAfter = outStr(*nn, "Display");
-                // disconnected -> empty display + LCD at default 0; connected -> exactly 5.00 (tight).
-                negOk = d0.empty() && std::abs(before) < 1e-9 && std::abs(after - 5.0) < 1e-3 && dAfter == "5.00";
-                printf("[vis]   NEG-CTRL readout: no-input display=\"%s\" lcd=%.3f -> Value=5 -> lcd=%.3f display=\"%s\"  %s\n",
-                       d0.c_str(), before, after, dAfter.c_str(), negOk ? "PASS" : "FAIL!");
+                dn.recomputeAndPropagate(); nn->refreshUi();       // widget Value 5 -> "5.00"
+                const std::string dWidget = outStr(*nn, "Display");
+                PortDataPacket w; w.data = 9.0; w.type = { "double", "unitless" };   // a connection delivers 9
+                nn->setInput("Value", w);
+                dn.recomputeAndPropagate(); nn->refreshUi();       // WIRE overrides the widget -> "9.00"
+                const std::string dWire = outStr(*nn, "Display");
+                negOk = dDefault == "0.00" && dWidget == "5.00" && dWire == "9.00";
+                printf("[vis]   NEG-CTRL readout (input-tracks + wire-overrides): default seeded=\"%s\" (0.00); widget 5=\"%s\"; WIRE 9 overrides=\"%s\"  %s\n",
+                       dDefault.c_str(), dWidget.c_str(), dWire.c_str(), negOk ? "PASS" : "FAIL!");
             }
         } else {
             printf("[vis]   readout: missing widgets (lcd=%p value=%p digits=%p dec=%p)  FAIL\n",
@@ -152,7 +155,7 @@ bool runVisGate()
     const bool pass = readoutOk && gaugeOk && negOk;
     printf("[vis]   readout %d/%d, gauge %d/%d, neg-ctrl %s\n", rdPass, rdChecks, ggPass, ggChecks, negOk ? "ok" : "FAIL");
     printf("[vis] %s (pixel styling = OPERATOR VISUAL-CONFIRM)\n",
-           pass ? "ALL PASS (displayed value tracks input; digits/decimals respected; disconnected inert)"
+           pass ? "ALL PASS (displayed value tracks input; digits/decimals respected; widget default + wire-overrides)"
                 : "FAILURES PRESENT");
     fflush(stdout);
     return pass;
