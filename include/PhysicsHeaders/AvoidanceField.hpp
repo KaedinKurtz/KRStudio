@@ -11,8 +11,33 @@
 // ===========================================================================
 #include <glm/glm.hpp>
 #include <vector>
+#include <algorithm>
+#include <cmath>
 
 namespace krs::field {
+
+// --- Phase 3: dynamics-driven field-amplitude law (RL-free) ----------------
+// amplitude = base + wV*max(0,vApproach) + wA*aApproach, clamped to >= 0.
+// vApproach / aApproach are the velocity / acceleration components TOWARD the
+// protected point (closing). At the SAME geometry + speed, a fast-ACCELERATING-
+// toward object (aApproach>0) is scarier than a fast-DECELERATING one
+// (aApproach<0): what matters is where it is GOING, not where it IS. wV/wA are
+// author-tunable weights (node inputs).
+inline double dynamicAmplitude(double vApproach, double aApproach,
+                               double wV, double wA, double base = 1.0) {
+    const double amp = base + wV * std::max(0.0, vApproach) + wA * aApproach;
+    return amp > 0.0 ? amp : 0.0;
+}
+
+// the WRONG model: it sees geometry + velocity but IGNORES acceleration (drops the
+// wA*aApproach term). So a fast-accelerating and a fast-decelerating object at the
+// same speed get the IDENTICAL amplitude -> accel == const == decel -> it FAILS the
+// strict ordering the real law passes. A genuine failing control (NOT base==base).
+inline double geometryOnlyAmplitude(double vApproach, double /*aApproach*/,
+                                    double wV, double /*wA*/, double base = 1.0) {
+    const double amp = base + wV * std::max(0.0, vApproach);
+    return amp > 0.0 ? amp : 0.0;
+}
 
 // --- Phase 2: substance emission MODEL ------------------------------------
 // Water/fire emitted FROM an object: particles originate at the emitter object
@@ -44,5 +69,10 @@ private:
 // GATE EMITTER (env KRS_EMITTER_SELFTEST; in the bench): EMITTER-FIELD /
 // EMITTER-SUBSTANCE / EMITTER-TYPE-SWITCH. Returns true iff all pass.
 bool runEmitterGate();
+
+// GATE FIELD-LAW (env KRS_FIELDLAW_SELFTEST; in the bench): FIELD-DYNAMICS (the
+// amplitude ordering accel>const>decel>static; geometry-only fails it) +
+// FIELD-AUTHORABLE (weighting changes amplitude) + the law->emitter pipe.
+bool runFieldLawGate();
 
 } // namespace krs::field

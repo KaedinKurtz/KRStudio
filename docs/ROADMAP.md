@@ -3044,3 +3044,24 @@ emits a particle stream FROM the object (krs::field::SubstanceEmitter) at a node
 - **ADVERSARIAL REVIEW (2 skeptics): no real-bugs, no vacuous gates ("SOLID")**; applied the hardening it
   suggested (second field sample for slope, signed-amplitude test, literal zero-amp teardown, explicit
   field->invalid transition, rate-0 guard).
+
+### AVOIDANCE PHASE 3 RESULT (2026-06-17, KRS_FIELDLAW_SELFTEST + bench GATE FIELD-LAW) — ALL PASS
+Dynamics-driven field-amplitude law (RL-free): amplitude = base + wV*max(0,vApproach) + wA*aApproach, clamped
+>=0, where vApproach/aApproach are the velocity/acceleration components TOWARD the protected point. DynamicsField
+node (src/Nodes/DynamicsFieldNodes.cpp) reads the object's velocity+acceleration from the Phase-1 catalog and
+outputs the amplitude, which pipes into the Phase-2 emitter.
+- **FIELD-DYNAMICS PASS (the can't-fake ordering)**: amplitude ordering accel=**3.5** > const=**3.0** >
+  decel=**2.5** > static=**1.0** for the SAME geometry+speed (only acceleration sign differs); static ==
+  baseline. The full chain runs THROUGH THE NODE (5 catalog bodies published together: accel/const/decel/static
+  + receding). A RECEDING object reads ~baseline (1.0) < const -- "where it's GOING, not where it IS". Two
+  genuine failing neg-controls: the geometry-only model (ignores acceleration) gives accel==const==decel (loses
+  the ordering), and the NODE with AccelWeight=0 also gives accel==decel.
+- **FIELD-AUTHORABLE PASS**: increasing wA 0.5->1.0 raises the amplitude 3.5->4.0 (predictable, by exactly
+  dwA*aApp); a CONNECTED AccelWeight (0.2->2.0) drives the amplitude (3.2->5.0); an UNCONNECTED weight uses the
+  default (no effect from an unwired value).
+- **PIPE law->emitter PASS**: the dynamic amplitude (3.5) flows through a real wire into the Phase-2 emitter and
+  becomes the PointEffector field strength (match <1e-4).
+- **ADVERSARIAL REVIEW (2 skeptics) caught a GATE-VACUOUS tautology**: the original geometry-only neg-control
+  compared base==base (always true, zero discriminating power). FIXED: geometryOnlyAmplitude now takes the
+  dynamics but drops the acceleration term, so it genuinely loses the ordering; also added the full node chain,
+  the receding case, and the node-level wA=0 control (closing the minor "only accel>decel proven" gaps).
