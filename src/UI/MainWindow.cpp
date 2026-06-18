@@ -366,6 +366,45 @@ MainWindow::MainWindow(QWidget* parent)
         gridComp.levels.emplace_back(10.0f, glm::vec3(0.28f, 0.56f, 0.86f), 25.0f, 200.0f);
     }
 
+    // --- Phase 3: REVIVE the field visualizer ---------------------------------------------------
+    // The FieldVisualizerPass overlay has shipped DORMANT: it runs every frame but no
+    // FieldVisualizerComponent has ever existed for it to act on (its view was always empty).
+    // Emplace one so the arrow field actually renders over any field source -- the avoidance-
+    // emitter node the operator drops places PointEffectors (+FieldSourceTag) that this now
+    // traces direction + magnitude. The VISUALIZER-DATA gate proves the arrows ARE that field.
+    // KRS_FIELD_DEMO adds a standalone point source so the starburst is visible at boot without
+    // building a node graph (OPERATOR VISUAL-CONFIRM: a radial fan of blue->green->red arrows).
+    {
+        auto visEntity = registry.create();
+        registry.emplace<TagComponent>(visEntity, "Field Visualizer");
+        registry.emplace<TransformComponent>(visEntity);
+        auto& vis = registry.emplace<FieldVisualizerComponent>(visEntity);
+        vis.isEnabled = true;
+        vis.displayMode = FieldVisualizerComponent::DisplayMode::Arrows;
+        vis.bounds = { glm::vec3(-3.0f), glm::vec3(3.0f) };
+        vis.arrowSettings.density = glm::ivec3(16, 16, 16);
+        vis.arrowSettings.vectorScale = 0.2f;
+        vis.arrowSettings.headScale = 0.5f;
+        vis.arrowSettings.cullingThreshold = 0.01f;
+        vis.arrowSettings.coloringMode = FieldVisualizerComponent::ColoringMode::Intensity;
+        vis.arrowSettings.intensityGradient = {
+            { 0.0f, glm::vec4(0.10f, 0.20f, 0.90f, 1.0f) },   // low  -> blue
+            { 0.5f, glm::vec4(0.20f, 0.90f, 0.40f, 1.0f) },   // mid  -> green
+            { 1.0f, glm::vec4(0.95f, 0.25f, 0.10f, 1.0f) },   // high -> red
+        };
+        vis.isGpuDataDirty = true;
+
+        if (qEnvironmentVariableIsSet("KRS_FIELD_DEMO")) {
+            auto src = registry.create();
+            registry.emplace<TagComponent>(src, "Field Demo Source");
+            auto& xf = registry.emplace<TransformComponent>(src);
+            xf.translation = glm::vec3(0.0f, 0.8f, 0.0f);
+            auto& pe = registry.emplace<PointEffectorComponent>(src);
+            pe.strength = 2.0f; pe.radius = 2.5f; pe.falloff = PointEffectorComponent::FalloffType::Linear;
+            registry.emplace<FieldSourceTag>(src);
+        }
+    }
+
     {
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/assets/");
 

@@ -187,6 +187,12 @@ public:
     // Gated by KRS_LIVETRACK_SELFTEST + bench. (LiveTrackGate.cpp)
     bool runLiveTrackGate();
 
+    // Live-fluid SDF sprint Phase 3 GATE VISUALIZER-DATA: the revived FieldVisualizerPass arrow field is
+    // DATA not decoration -- the REAL arrow_field_compute shader's per-arrow vectors (decoded from the
+    // instance model matrix) match the analytic effector field at each arrow's position; a stale (not
+    // recomputed) visualizer mismatches a moved field. Gated by KRS_FIELDVIS_SELFTEST + bench. (FieldVisualizerGate.cpp)
+    bool runFieldVisualizerGate();
+
     // Phase 1 GATE 1.2: FLUID<->RIGID two-way coupling (Newton's 3rd law across the boundary). The
     // GPU fluid falls onto a dynamic box (scene gravity off, so the box only moves from the fluid
     // impulse); the per-collider impulse the fluid SSBO delivers must equal the rigid momentum the

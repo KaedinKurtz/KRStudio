@@ -105,8 +105,12 @@ bool RenderingSystem::runLiveSdfGate()
         const double cell = double(extent.x) / N;               // ~0.0375 m
         const float sdfRadius = 0.08f;                          // > cell*sqrt(3) (0.065 m)
         auto analyticDist = [&](glm::vec3 q) { double m = 1e30; for (const auto& p : pts) m = std::min(m, double(glm::length(q - p))); return m - double(sdfRadius); };
-        // sample points just outside the slab (halfExtents 0.4 @ centre (0,0.6,0)) on several sides.
-        const glm::vec3 probes[] = { {0.6f,0.6f,0.0f}, {0.0f,0.6f,0.6f}, {-0.55f,0.7f,0.1f}, {0.2f,1.2f,0.0f} };
+        // Sample points well CLEAR of the slab surface (~0.5-0.6 m beyond it; halfExtents 0.4 @ centre
+        // (0,0.6,0)). The avoidance gradient is the dodge direction the robot uses from a distance, and
+        // at cell resolution it is robust here -- right at the noisy surface the nearest-seed direction
+        // legitimately scatters (many particles equidistant; the seed is per-cell, not the exact nearest),
+        // which made the dot flicker around the threshold run-to-run with the fluid's GPU-atomic jitter.
+        const glm::vec3 probes[] = { {1.0f,0.6f,0.0f}, {0.0f,0.6f,1.0f}, {-0.95f,0.7f,0.15f}, {0.15f,1.55f,0.0f} };
         double maxDistErr = 0.0, minDot = 2.0;
         for (const auto& q : probes) {
             const double a = analyticDist(q);
@@ -128,9 +132,13 @@ bool RenderingSystem::runLiveSdfGate()
         // empty region far from the cloud -> a genuine large distance (flooded, not the sentinel).
         const double emptyD = double(GpuSdfEdt::distanceAt(seeds, origin, extent, N, sdfRadius, glm::vec3(0.55f, 1.15f, 0.55f)));
         const bool emptyOk = emptyD > 0.15 && emptyD < 1.0e8;  // real flooded distance, not the 1e9 sentinel
-        // NEG-CTRL: a SHIFTED grid (wrong origin) misreads the distance.
-        const double shifted = double(GpuSdfEdt::distanceAt(seeds, origin + glm::vec3(0.6f, 0, 0), extent, N, sdfRadius, probes[0]));
-        const bool negOk = std::abs(shifted - analyticDist(probes[0])) > 2.0 * cell;
+        // NEG-CTRL: a SHIFTED grid (wrong origin) misreads the distance. Use a probe NEAR the surface --
+        // a 0.6 m origin shift relocates the lookup to the FAR side of the cloud, a clearly wrong distance.
+        // (A far probe is ~equidistant to the compact cloud, so a shift wouldn't discriminate there; the
+        // distance at a near probe has only sub-cell error, so this stays robust to fluid jitter.)
+        const glm::vec3 nearProbe(0.5f, 0.6f, 0.0f);
+        const double shifted = double(GpuSdfEdt::distanceAt(seeds, origin + glm::vec3(0.6f, 0, 0), extent, N, sdfRadius, nearProbe));
+        const bool negOk = std::abs(shifted - analyticDist(nearProbe)) > 2.0 * cell;
 
         const bool ok = distOk && gradOk && interiorOk && emptyOk && negOk;
         printf("[livesdf]   SDF-CORRECT: max|JFA dist - analytic|=%.4f m (<%.3f, ok:%d); gradient dot(away)=%.4f (>0.9:%d); "

@@ -3173,3 +3173,25 @@ GATES (measured + non-vacuous neg-ctrl):
   water and FAILED to follow (a real lagging model, not base==base).
 - LIVE-PERF: the full per-frame path on the REAL moving fluid = GPU SDF gen + 64^3 grid readback, glFinish-timed
   (warm-up first), holds < 15 ms; gen-only reported alongside.
+
+### PHASE 3 — REVIVE the field visualizer (arrows are DATA, not decoration)
+The FieldVisualizerPass overlay shipped DORMANT: it executes every frame but no FieldVisualizerComponent
+was ever emplaced, so its view was always empty. REVIVAL: emplace a FieldVisualizerComponent (Arrows) at
+scene boot (MainWindow ctor, after the default grid) with an initialized blue->green->red intensity gradient
+and bounds [-3,3]^3, so the arrow field renders over any field source -- the avoidance-emitter node the
+operator drops places PointEffectors(+FieldSourceTag) the visualizer now traces. KRS_FIELD_DEMO adds a
+standalone point source for a boot-time starburst (OPERATOR VISUAL-CONFIRM).
+GATE VISUALIZER-DATA (KRS_FIELDVIS_SELFTEST + bench), measured + non-vacuous neg-ctrl: dispatch the REAL
+arrow_field_compute shader over a sample grid with a known effector field (1 linear-falloff point + 1
+directional), read back the InstanceData, and DECODE each arrow's field straight out of its model matrix
+(modelMatrix = T(worldPos)*R(+Z->dir)*S(hs,hs,|f|*vs) => worldPos = col 3, field = col 2 / vectorScale).
+- VISUALIZER-DATA: the decoded arrow vectors match the analytic effector field at each arrow's own position
+  -- direction (dot > 0.99) AND magnitude (<2% relErr) AND intensity -- and the arrow COUNT equals the grid
+  points above the cull threshold (the visualizer culls exactly, not decoratively).
+- NEG-CTRL (STALE): the SAME arrows compared against a MOVED field mismatch (max dir err > 0.1) while freshly
+  recomputed arrows track the moved field -- a real stale-visualizer model, not base==base.
+DELIVERED: 125/125 arrows, max dir err 0.0000, max |mag| relErr 0.0000, intensity err 0.0000 (the GPU shader
+and the independent CPU field formula agree to float precision); STALE-A-vs-moved-B max dir err = 1.8086
+(dot ~= -0.81, near-reversed) while fresh-B tracks at 0.0000. OPERATOR VISUAL-CONFIRM: run an avoidance
+emitter (or boot with KRS_FIELD_DEMO=1) and confirm a fan of arrows points along the field, blue (weak) ->
+red (strong), longer where the field is stronger.

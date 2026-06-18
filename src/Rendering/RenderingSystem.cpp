@@ -738,6 +738,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Live-fluid SDF sprint Phase 3: the revived field visualizer arrow field encodes the REAL effector field.
+    if (qEnvironmentVariableIntValue("KRS_FIELDVIS_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FIELDVIS_SELFTEST =================\n");
+        const bool ok = runFieldVisualizerGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase 1 GATE 1.2: FLUID<->RIGID Newton's 3rd law (delivered impulse == rigid momentum gained).
     if (qEnvironmentVariableIntValue("KRS_FLUIDRIGID_SELFTEST") != 0) {
         std::printf("\n================= KRS_FLUIDRIGID_SELFTEST =================\n");
@@ -1375,6 +1383,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 0c GPU fluid vs moving SDF (no-penetration + ghost neg-ctrl)", runGpuFluidSdfGate() },
             { "GATE LIVE-SDF (GPU Jump-Flooding EDT on the REAL live fluid: <15ms vs brute-force baseline + distance/gradient vs analytic; shifted-grid neg-ctrl)", runLiveSdfGate() },
             { "GATE LIVE-TRACK (JFA SDF follows live falling water frame-to-frame: zero-crossing tracks vs baked-once ghost neg-ctrl; full gen+readback path <15ms)", runLiveTrackGate() },
+            { "GATE VISUALIZER-DATA (revived arrow field: real arrow_field_compute vectors == analytic effector field at each arrow; stale-field neg-ctrl mismatches)", runFieldVisualizerGate() },
             { "GATE 1.2 fluid<->rigid Newton 3rd (impulse==momentum + inert-box neg-ctrl)", runFluidRigidImpulseGate() },
             { "GATE 1.3 artic<->collision (collision xform tracks live FK + stale neg-ctrl)", krs::dyn::runArticCollisionGate1_3() },
             { "GATE 1.4 MPM<->thermal energy conservation (Fourier + energy-leak neg-ctrl)", m_mpm ? m_mpm->runThermalGate1_4(*this, m_gl) : true },
