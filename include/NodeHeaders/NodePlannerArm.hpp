@@ -31,7 +31,9 @@ inline int buildDefaultArm(krs::dyn::SerialChain& chain, krs::plan::JointLimits&
     world.capsules.push_back({ b1, Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0.5, 0, 0), 0.05 });
     world.capsules.push_back({ b2, Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0.5, 0, 0), 0.05 });
     world.obstacles.clear();
-    world.obstacles.push_back(krs::plan::Obstacle::halfSpace(Eigen::Vector3d(0, 0, 1), Eigen::Vector3d(0, 0, -0.05)));  // floor
+    // floor BELOW the base-post foot: the post capsule (radius 0.06) bottoms at world z=0 -> its surface reaches
+    // z=-0.06, so the plane must sit at z<=-0.06 or EVERY config penetrates it. -0.2 gives a clean 0.14 m margin.
+    world.obstacles.push_back(krs::plan::Obstacle::halfSpace(Eigen::Vector3d(0, 0, 1), Eigen::Vector3d(0, 0, -0.2)));  // floor
     // a box obstacle in front of the arm at +Y so a direct joint-line through it collides (OMPL-PLAN-VALID).
     world.obstacles.push_back(krs::plan::Obstacle::box(Eigen::Vector3d(0.55, 0.0, 0.30),
                                                        Eigen::Vector3d(0.12, 0.18, 0.30)));

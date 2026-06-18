@@ -46,6 +46,12 @@ bool runTriggerEdgeGate();
 // graceful, wrong-soln neg-ctrl. Headless.
 bool runIkSampleGate();
 
+// GATE OMPL (KRS_OMPL_SELFTEST): the OMPL Planner node's TWO stages are distinct -- PLAN freezes a path WITHOUT
+// moving the robot (single-trigger plan-and-execute neg-ctrl), EXECUTE then drives the Command to the goal, and
+// EXECUTE with no plan is a graceful no-op; the in-node Planner/MaxIters/Waypoints widgets each change the plan
+// (ignored-value neg-ctrl); the planned path is collision-free while a straight line through the box collides. Headless.
+bool runOmplPlannerGate();
+
 // GATE TYPE (KRS_TYPE_SELFTEST): the unified port type ids let compatible ports connect and keep
 // incompatible ones unconnectable (mirrors QtNodes connectionPossible). Needs QApplication.
 bool runTypeGate();

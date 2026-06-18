@@ -925,6 +925,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Phase 4 GATE OMPL: the OMPL Planner node's two-stage PLAN/EXECUTE + in-node params + plan validity.
+    if (qEnvironmentVariableIntValue("KRS_OMPL_SELFTEST") != 0) {
+        std::printf("\n================= KRS_OMPL_SELFTEST =================\n");
+        const bool ok = krs::nodes::runOmplPlannerGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
     // Node-editor GATE TYPE: port type compatibility.
     if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
         std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
@@ -1458,6 +1465,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE COMBO-INPUT (enum combo selection read by compute: Add/Sub/Mul switches math_op; old combo-ignored neg-ctrl)", krs::nodes::runComboInputGate() },
             { "GATE TRIGGER-EDGE (Button brief pulse: rising-on-press/falling-on-release/dual; level + wrong-edge neg-ctrl)", krs::nodes::runTriggerEdgeGate() },
             { "GATE IK-SAMPLE (IK Target samples-on-trigger + holds; FK(goal)==target, unreachable graceful; continuous-track + wrong-soln neg-ctrls)", krs::nodes::runIkSampleGate() },
+            { "GATE OMPL (two-stage PLAN freezes path w/o moving + EXECUTE drives to goal + no-plan graceful; in-node planner/iters/waypoints params change the plan; planned path collision-free, straight-line-through-box collides)", krs::nodes::runOmplPlannerGate() },
             { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },

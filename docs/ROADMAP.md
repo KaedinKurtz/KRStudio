@@ -3343,3 +3343,58 @@ once at the RELEASE tick, Dual at both. NEG-CTRL: a fires-continuously-while-hel
 held tick (2) != the 1 edge fire; rising vs falling fire at different ticks (wrong-edge timing fails).
 OPERATOR VISUAL-CONFIRM REQUIRED: instance the Button node -> a large red button that lightens when pressed +
 an Edge combo; clicking it pulses downstream (e.g. drives the IK sample / OMPL plan trigger).
+
+### PHASE 3 — IK TARGET NODE (sample a target pose on a trigger edge, solve IK, freeze)
+New ik_target node (src/Nodes/IKTargetNode.cpp). Inputs Position (vec3) + Orientation (vec3 rpy, ZYX) + the
+base Trigger. Outputs TargetX/Y/Z (double), Reachable (bool), Goal (joint_config = Eigen::VectorXd through
+std::any). RECON: the obvious "detect the edge inside compute()" approach FAILS because the base process()
+treats the inherited "Trigger" port as a HOLD in the default Async policy (Trigger high -> process() returns
+WITHOUT calling compute()), so a high trigger SKIPS the sample. FIX (architectural): drive the node with the
+framework's TRIGGERED update policy (setUpdatePolicy(Triggered) + setTriggerEdge(Rising)) so process() fires
+compute() ONLY on the Trigger rising edge -- that IS sample-and-hold: each edge SAMPLES the live inputs and
+solves DLS IK (SerialChain::ik) against the shared default arm; between edges compute() is not called so the
+outputs HOLD the last sample. needsExecutionControls=false (policy is fixed to Triggered). The default arm is a
+shared builder NodePlannerArm.hpp (buildDefaultArm: 3R arm + capsules + floor/box collision world + limits) so
+the IK + OMPL nodes are functional/gateable now; wiring the live FANUC chain is a later integration step.
+GATE IK-SAMPLE + IK-VALID (KRS_IKSAMPLE_SELFTEST + bench), measured + real failing neg-ctrls:
+- SAMPLE-ON-TRIGGER: target = FK of a real config (so IK must converge). trig -> sample matches to <1e-6; move
+  the Position input with NO trigger edge -> output UNCHANGED (held); a continuous-tracking model would output
+  the live input here (differs) = the neg-ctrl; trig again -> output SNAPS to the new input.
+- IK-VALID: Reachable true and FK(Goal) == target to <1e-3; an unreachable target (5,5,5) -> Reachable false
+  (graceful, not a garbage config). NEG-CTRL: a WRONG solution (Goal + a joint offset) has FK far from target.
+OPERATOR VISUAL-CONFIRM REQUIRED: wire Button.Trigger -> IK.Trigger; the IK Target output freezes and only
+updates on each button press (snaps to the current Position/Orientation), holding between presses.
+
+### PHASE 4 — OMPL PLANNER NODE (two-stage PLAN / EXECUTE, in-node planner params)
+New ompl_planner node (src/Nodes/OMPLPlannerNode.cpp): a physically LARGE node wrapping krs::plan::MotionPlanner
+with TWO DISTINCT trigger stages. Inputs Start + Goal (joint_config; Goal from the IK node), Plan + Execute
+(bool triggers), and IN-NODE param widgets via the Phase-1 literal path: a Planner enum combo (RRT-Connect /
+RRT*), a Max Iters spin (planning budget) and a Waypoints spin (path resolution) -- each also a wireable port.
+Outputs Command (joint_config, drives the robot) + Planned/Executing/Progress/PathLen/Iterations. It needs TWO
+triggers so the single-Trigger Triggered policy can't carry it -> it stays on Async (base Trigger left low so
+compute() runs every tick) and detects the Plan/Execute rising edges itself. PLAN runs the planner from Start to
+Goal and FREEZES the collision-checked path WITHOUT moving the robot (Command holds at Start). EXECUTE steps the
+Command along the frozen path one slice per tick to the Goal. With no successful plan yet the Command tracks the
+live Start config; a no-plan EXECUTE is a graceful no-op. Big blue PLAN + green EXECUTE buttons post one-shot
+param pulses folded into the same edges.
+RECON CATCH (gate-found): NodePlannerArm's floor half-space was at z=-0.05, but the base-post capsule (radius
+0.06, foot at world z=0) reaches z=-0.06, so EVERY config penetrated the floor by 0.01 m -> nothing was ever
+valid and the planner solved nothing. Fix: floor to z=-0.2 (0.14 m margin). (No effect on the IK gate, which is
+collision-free FK/IK.)
+GATE OMPL (KRS_OMPL_SELFTEST + bench), three sub-gates with real failing neg-ctrls:
+- OMPL-TWO-STAGE: after PLAN (no Execute) the path advances ~2.9 rad yet Command == Start (robot did NOT move) ->
+  a single-trigger plan-and-immediately-execute model would have moved (the path is non-vacuous); EXECUTE then
+  drives Command to the Goal (Progress -> 1); EXECUTE with no prior plan leaves Command at Start (graceful).
+- OMPL-PARAMS-IN-NODE: RRT-Connect vs RRT* give different path length (len 7.78 vs 3.30); Waypoints 24 vs 160
+  change the path size; Max Iters (RRT*) 1500 vs 9000 refine the length -- a model ignoring the widgets returns
+  identical plans (every "differ" check fails) = the neg-ctrl.
+- OMPL-PLAN-VALID: the planned path is collision-free (independent re-check, pen 0) + respects position limits;
+  the naive straight line Start->Goal collides with the box obstacle (pen 0.05) = the neg-ctrl.
+OPERATOR VISUAL-CONFIRM REQUIRED: instance the OMPL node (large, PLAN+EXECUTE buttons + planner/iters/waypoints
+widgets); press PLAN -> a path is computed and the robot stays put; press EXECUTE -> the robot drives along it.
+
+### SPRINT RESULT (2026-06-18, branch avoidance-field) — ALL PASS, bench 99/99 gate groups
+Phases 1-4 each built via PowerShell (freshly relinked, exe timestamp verified) and gated green:
+KRS_WIDGETINPUT / KRS_COMBOINPUT / KRS_TRIGGEREDGE / KRS_IKSAMPLE / KRS_OMPL all ALL PASS; folded into
+KRS_OVERNIGHT_BENCH -> 99/99 gate groups PASS (97 prior + IK-SAMPLE + OMPL). Commits: Phase 1 ea1893b, Phase 2
+33ace7c, Phase 3 bf98feb, Phase 4 (this).
