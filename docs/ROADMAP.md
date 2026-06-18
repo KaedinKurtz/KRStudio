@@ -3150,3 +3150,26 @@ GATES (KRS_LIVESDF_SELFTEST + bench), measured + non-vacuous neg-ctrl:
 - SDF-CORRECT: the JFA SDF distance at sample points matches the analytic |point - nearest live particle| - r
   to <tol (~1-2 cells, JFA sub-cell error); gradient points away (dot ~1.0); empty region -> large/no-collision.
   NEG-CTRL: a wrong SDF (pre-JFA seed grid / shifted grid) mismatches the analytic.
+
+PHASE 1 DELIVERED (KRS_LIVESDF_SELFTEST + bench, 90/90): SDF-SPEED = **1.19 ms/frame** JFA over **32768
+live PBF particles @ 64^3** (<15ms); NEG brute-force GridSdf on an 800-particle SUBSET, same grid -> **722.9 ms**
+(>>15ms, real failing baseline). SDF-CORRECT: max|JFA - analytic| = **0.024 m** (<0.075); gradient dot(away) =
+**0.988**; interior (slab centre) d = **-0.038 < 0** (the <0-inside sign convention, at avoidance-margin radius
+0.08 m > cell diagonal 0.065 m); empty region floods to a real distance; NEG shifted-grid origin misreads.
+Committed + pushed to master (159494f).
+
+### PHASE 2 — LIVE WATER: the SDF FOLLOWS the moving fluid (temporal tracking)
+Prove the JFA SDF is rebuilt from the LIVE particle SSBO every frame so its zero-crossing TRACKS the water as it
+moves -- and that a baked-once SDF does NOT (the C2 ghost discipline). New gate src/Rendering/LiveTrackGate.cpp
+(RenderingSystem::runLiveTrackGate, KRS_LIVETRACK_SELFTEST + bench). Method: seed a THIN fluid slab high in the
+domain (centre (0,1.2,0), halfExtents (0.22,0.12,0.22)), real downward gravity so it falls COHERENTLY; build the
+SDF at t0 and READBACK a baked copy (the ghost); advance ~30 frames; rebuild the SDF LIVE at t1. Read the ACTUAL
+water centroid from the particle buffer at t0 (C0) and t1 (C1).
+GATES (measured + non-vacuous neg-ctrl):
+- LIVE-SDF (tracking): the water fell |C0-C1| > 0.15 m (real motion); the LIVE SDF reads INSIDE at the new
+  centroid (d(C1) < 0) and OUTSIDE at the vacated old centroid (d(C0) > 0) -- the zero-crossing followed the
+  water; cross-checked |live - analytic|@C1 < ~tol. NEG-CTRL (GHOST): the baked-once t0 SDF reads inside at the
+  OLD centroid (d(C0) < 0) and outside at the NEW (d(C1) > 0) -- exactly backwards, i.e. it stayed on the stale
+  water and FAILED to follow (a real lagging model, not base==base).
+- LIVE-PERF: the full per-frame path on the REAL moving fluid = GPU SDF gen + 64^3 grid readback, glFinish-timed
+  (warm-up first), holds < 15 ms; gen-only reported alongside.

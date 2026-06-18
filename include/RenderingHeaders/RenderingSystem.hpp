@@ -181,6 +181,12 @@ public:
     // gradient vs analytic distance to the live cloud). Gated by KRS_LIVESDF_SELFTEST + bench. (LiveSdfGate.cpp)
     bool runLiveSdfGate();
 
+    // Live-fluid SDF sprint Phase 2 GATE LIVE-TRACK: the JFA SDF, rebuilt from the LIVE particle SSBO
+    // every frame, FOLLOWS the moving water -- its zero-crossing tracks a falling slab (LIVE-SDF) while
+    // a baked-once t0 SDF lags (the ghost neg-ctrl); LIVE-PERF holds the full gen+readback path <15ms.
+    // Gated by KRS_LIVETRACK_SELFTEST + bench. (LiveTrackGate.cpp)
+    bool runLiveTrackGate();
+
     // Phase 1 GATE 1.2: FLUID<->RIGID two-way coupling (Newton's 3rd law across the boundary). The
     // GPU fluid falls onto a dynamic box (scene gravity off, so the box only moves from the fluid
     // impulse); the per-collider impulse the fluid SSBO delivers must equal the rigid momentum the
