@@ -918,6 +918,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Phase 3 GATE IK-SAMPLE/IK-VALID: the IK Target node samples on trigger + solves IK.
+    if (qEnvironmentVariableIntValue("KRS_IKSAMPLE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_IKSAMPLE_SELFTEST =================\n");
+        const bool ok = krs::nodes::runIkSampleGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
     // Node-editor GATE TYPE: port type compatibility.
     if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
         std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
@@ -1450,6 +1457,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE WIDGET-INPUT (typed spin-box value feeds compute when unconnected: 3+4->7, wire 10->13; old spin-box-ignored neg-ctrl)", krs::nodes::runWidgetInputGate() },
             { "GATE COMBO-INPUT (enum combo selection read by compute: Add/Sub/Mul switches math_op; old combo-ignored neg-ctrl)", krs::nodes::runComboInputGate() },
             { "GATE TRIGGER-EDGE (Button brief pulse: rising-on-press/falling-on-release/dual; level + wrong-edge neg-ctrl)", krs::nodes::runTriggerEdgeGate() },
+            { "GATE IK-SAMPLE (IK Target samples-on-trigger + holds; FK(goal)==target, unreachable graceful; continuous-track + wrong-soln neg-ctrls)", krs::nodes::runIkSampleGate() },
             { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },

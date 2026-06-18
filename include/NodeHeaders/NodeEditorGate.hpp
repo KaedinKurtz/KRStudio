@@ -41,6 +41,11 @@ bool runComboInputGate();
 // (level) model + wrong-edge timing. Headless (no QApplication needed).
 bool runTriggerEdgeGate();
 
+// GATE IK-SAMPLE (KRS_IKSAMPLE_SELFTEST): the IK Target node samples a frozen target pose ONLY on the trigger
+// edge and HOLDS it (continuous-tracking neg-ctrl); IK-VALID: FK of the joint goal == target, unreachable ->
+// graceful, wrong-soln neg-ctrl. Headless.
+bool runIkSampleGate();
+
 // GATE TYPE (KRS_TYPE_SELFTEST): the unified port type ids let compatible ports connect and keep
 // incompatible ones unconnectable (mirrors QtNodes connectionPossible). Needs QApplication.
 bool runTypeGate();
