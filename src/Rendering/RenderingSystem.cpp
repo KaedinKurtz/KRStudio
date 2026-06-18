@@ -58,6 +58,7 @@
 #include "ControllerGates.hpp"    // Phase 4 controller gates (krs::ctrl C-track/C-knob/C-glass)
 #include "MotionPlanner.hpp"      // OMPL sprint Phase 1 motion-planning gate (krs::plan)
 #include "RobotModel.hpp"         // OMPL sprint Phase 4 robot entity + kinematic chain (krs::robot)
+#include "PropertyCatalog.hpp"    // avoidance-field Phase 1 ECS->catalog + Object/Property nodes (krs::twin)
 #include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE / TIME)
 #include "NodeEditQueue.hpp"      // force immediate UI-edit mode for the headless gates
 #include "ConnectControlGate.hpp" // node-editor GATE CONNECT-AND-CONTROL
@@ -1293,6 +1294,14 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
+    // Avoidance-field Phase 1: ECS->catalog publishing + Object/Property nodes +
+    // stale-aware frequency. Pure CPU, no broker.
+    if (qEnvironmentVariableIntValue("KRS_TWIN_SELFTEST") != 0) {
+        std::printf("\n================= KRS_TWIN_SELFTEST =================\n");
+        const bool ok = krs::twin::runTwinGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1338,6 +1347,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE EXECUTE (planned path run through computed-torque under gravity: tracks/collision-free/limits; soft-PD lag + colliding-ref + 3x-fast neg-ctrls)", krs::plan::runExecuteGate() },
             { "GATE ROBOT-CHAIN (entity owns links+joints+base+mount: owned-DOF chain/joint-from-feature/typed-mount-port/lossless-export; non-member & non-coaxial & mismatched-type & corrupt-export neg-ctrls)", krs::robot::runRobotChainGate() },
             { "GATE E2E (robot defined-via-chain -> planned -> executed; every stage asserted; severing define/plan/execute localizes the break)", krs::plan::runE2EGate() },
+            { "GATE TWIN (ECS->catalog introspection + Object/Property nodes value-fidelity + stale-aware frequency; non-existent-obj & phantom-prop & disconnected & frozen-Hz neg-ctrls)", krs::twin::runTwinGate() },
             { "GATE C-track (computed torque tracks moving setpoint; soft PD lags)", krs::ctrl::runControllerTrackGate() },
             { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },

@@ -2971,3 +2971,58 @@ KRS_OVERNIGHT_BENCH now includes GATE PLAN / EXECUTE / SUBFEAT / ROBOT-CHAIN / E
 license ships. INTERACTIVE UI (selection picking, 3D indicator rendering, joint-property HUD) DEFERRED to a
 supervised session per the directive -- the backends (planning, execution, selection, chain, mount port) are
 proven; the pixel-level UI needs the operator's eyes.
+
+## DYNAMICS-DRIVEN AVOIDANCE FIELD SPRINT (2026-06-17, branch avoidance-field)
+Builds the gateable FIELD foundation; the VISUALIZER (revive FieldVisualizerPass arrow field) and the MPC
+CONTROLLER are DEFERRED. Recon mapped the substrate: an existing effector vector field (FieldSolver CPU
+sampler + PointEffector/DirectionalEffector components + FieldSourceTag + FieldVisualizerPass) is the
+canonical field (rule 6) -- the avoidance field places effectors and is sampled by FieldSolver. There is NO
+runtime ECS->MQTT publisher and NO property catalog; acceleration is not stored (finite-diff velocity, the
+FidelityRigid pattern); no particle->SDF path exists (net-new min|x-p|-r splat reusing SdfColliderView /
+sdfDistanceWorld trilinear + sign<0=inside). Nodes: combo->param is the headless-gateable SSOT; entt::entity
+handle ports already wire; node gates drive setParam+process (no GUI).
+
+ARCHITECTURE: new `krs::twin::PropertyCatalog` (introspection + value + stale-aware frequency, broker-free
+gateable); Object/Property/Emitter NODES (src/Nodes/) reading the catalog + placing effectors; new
+`krs::field` module (dynamics amplitude law + particle grid-SDF + uncertainty/temporal) in src/Physics +
+include/PhysicsHeaders. All gates headless/CPU, folded into KRS_OVERNIGHT_BENCH; no-broker by design.
+
+### PHASE 1 — ECS->catalog publishing + generalized Object/Property nodes
+PropertyCatalog (include/UtilityHeaders/PropertyCatalog.hpp, krs::twin): a singleton introspectable registry
+keyed by object id -> {name, list of PropertyEntry{name,type,value[4],stamp-ring}}. `publishSceneState(cat,
+registry, simTime, accelTracker)` populates it from reg.view<RigidBodyComponent,TransformComponent>(): per
+body publishes position/orientation/linearVelocity/angularVelocity/linearAcceleration/angularAcceleration/
+mass (acceleration = (v - prevV)/dt via the AccelTracker prev-velocity map -- accel is NOT a stored field).
+Object name via the debugNameFor 3-tier (TagComponent.tag). Introspection: propertiesOf(objId) = the catalog
+query. Frequency: stale-aware Hz = min(measured_from_stamp_ring, 1/(now - lastStamp)) so a stalled stream's
+reported Hz DROPS as now advances past lastStamp (the naive measured-only value freezes -> the neg-control).
+Object node (combo of scene bodies via TagComponent -> entt::entity handle output), Property node (entt::
+entity input -> combo of THAT object's catalog properties -> live value output + publish-frequency output).
+Combo selection is a node PARAM (the SSOT the gate drives via setParam; no GUI). Nodes in src/Nodes/TwinNodes.cpp.
+GATES (KRS_TWIN_SELFTEST + bench), each measured number + non-vacuous neg-control:
+- PUBLISH-CATALOG: querying object X returns its exact published-property list (7 props); a non-existent
+  object -> empty (not garbage); an unpublished property name is NOT listed.
+- OBJECT-PROPERTY-NODES: wired Object+Property nodes read the selected property's live value to <1e-6 of the
+  ECS value; changing the Object param re-populates the Property node's property list for the new object;
+  disconnected Object input -> no valid property / no output.
+- FREQUENCY-OUTPUT (stale guard): the reported Hz matches a known publish rate to <tol; after the stream
+  STALLS, the reported Hz drops toward 0 (assert it falls below a fraction of nominal); the naive
+  measured-only Hz FREEZES at nominal (the neg-control proving staleness is detected).
+
+### AVOIDANCE PHASE 1 RESULT (2026-06-17, KRS_TWIN_SELFTEST + bench GATE TWIN) — ALL PASS
+PropertyCatalog (krs::twin) + Object/Property nodes (src/Nodes/TwinNodes.cpp), broker-free, headless.
+- **PUBLISH-CATALOG PASS**: 'alpha' lists exactly 7 canonical props; ALL 7 VALUES match the live ECS (not just
+  names -- position/orientation(w,x,y,z)/linearVelocity/angularVelocity/mass + acceleration=0 on first
+  observation); the two-step acceleration finite-diff reads dv/dt=480.0 (want 480.0); a non-existent object ->
+  empty; a phantom property name -> absent; objects=3.
+- **OBJECT-PROPERTY-NODES PASS**: wired Object+Property nodes read mass=4.0 (exact), position and
+  linearVelocity vec3 to <1e-6 of the ECS; changing the Object re-populates the property list for the new
+  object (identity + distinguishing value pinned); a disconnected Object input -> no output.
+- **FREQUENCY-OUTPUT PASS**: catalog reportedHz fresh=200, after 1s stall=1.00 (-> 0), while the naive
+  measuredHz freezes at 200 (the neg-control); AND the NODE path: PropertyNode Frequency output fresh=60,
+  stalled=1.00 (drops) -- the live node reads frequency at the catalog's real now().
+- **ADVERSARIAL REVIEW (3 skeptics) caught + fixed 3 real bugs + 1 vacuous spot**: (1) value-fidelity covered
+  only 2/7 properties -> added all-7 value coverage + two-step accel; (2) the live PropertyNode frequency was
+  stale-BLIND (m_now hardwired 0) -> the node now reads catalog.now() + a NODE-level stall test that would have
+  failed the old code; (3) reportedHz froze when now<=lastStamp (clock skew) -> clamp since>=0; (4) stale output
+  packet could mask a non-firing compute -> PropertyNode resets its output packets on entry.
