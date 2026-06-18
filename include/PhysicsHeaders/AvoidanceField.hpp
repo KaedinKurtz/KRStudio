@@ -148,6 +148,47 @@ inline double substanceFieldMagnitude(const GridSdf& sdf, const glm::vec3& point
 // SDF-DYNAMICS / SDF-PERF. Returns true iff all pass.
 bool runSdfGate();
 
+// --- Phase 4.5: SDF uncertainty + reaction tempering + temporal coherence ---
+// A region's UNCERTAINTY drops as it is observed (fresh = high variance). A 1-D
+// Kalman fusion: each measurement shrinks the variance.
+struct UncertainValue {
+    double mean = 0.0;
+    double variance = 1.0;      // prior -- HIGH when freshly seen
+    int observations = 0;
+    void observe(double z, double measVar) {
+        const double k = variance / (variance + measVar);   // Kalman gain
+        mean += k * (z - mean);
+        variance *= (1.0 - k);                               // shrinks each observation
+        ++observations;
+    }
+};
+
+// REACTION GAIN scales INVERSELY with uncertainty: gentle (low gain) when unsure,
+// sharp (high gain) when confident -- a SEPARATE coupling from dynamics->magnitude.
+// Don't violently dodge something you are not sure about (the violent reaction to
+// noise is itself dangerous).
+inline double reactionGain(double baseGain, double variance, double k = 4.0) {
+    return baseGain / (1.0 + k * variance);
+}
+// the neg-control: a model whose gain IGNORES uncertainty (constant).
+inline double uncertaintyBlindGain(double baseGain, double /*variance*/, double /*k*/ = 4.0) { return baseGain; }
+
+// TEMPORAL coherence: an EMA filter on the field gradient so the dodge DIRECTION is
+// stable frame-to-frame (no flickering avoidance that makes the robot chatter).
+struct TemporalVec3 {
+    glm::vec3 value{ 0.0f };
+    bool init = false;
+    glm::vec3 update(const glm::vec3& sample, float alpha) {
+        value = init ? glm::mix(value, sample, alpha) : sample;
+        init = true;
+        return value;
+    }
+};
+
+// GATE UNCERTAINTY (env KRS_UNCERTAINTY_SELFTEST; in the bench): UNCERTAINTY /
+// REACTION-TEMPER / TEMPORAL-STABLE. Returns true iff all pass.
+bool runUncertaintyGate();
+
 // GATE FIELD-LAW (env KRS_FIELDLAW_SELFTEST; in the bench): FIELD-DYNAMICS (the
 // amplitude ordering accel>const>decel>static; geometry-only fails it) +
 // FIELD-AUTHORABLE (weighting changes amplitude) + the law->emitter pipe.

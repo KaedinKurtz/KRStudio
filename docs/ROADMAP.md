@@ -3087,3 +3087,33 @@ dynamics scaling applied to a substance stream.
   actual inputs; (2) the original perf gate timed a band=4 field that was 92% empty and NEVER sampled, while
   the validated (band=big) field actually cost ~235 ms -> fixed: perf now times the CONSUMED band-8 near-field,
   asserts it is correct in-band, and proves graceful sentinel degradation beyond; added the interior <0 probe.
+
+### AVOIDANCE PHASE 4.5 RESULT (2026-06-17, KRS_UNCERTAINTY_SELFTEST + bench GATE UNCERTAINTY) — ALL PASS
+SDF uncertainty + reaction tempering + temporal coherence (krs::field, AvoidanceField.hpp + UncertaintyGate.cpp).
+- **UNCERTAINTY PASS**: a fresh region is high-variance (1.0); after 10 Kalman observations the variance drops to
+  **0.029** monotonically. NEG a no-update model (observed the same 10 times but variance never fuses) stays at
+  the prior 1.0 -> fails the drop contrast.
+- **REACTION-TEMPER PASS**: for the SAME magnitude, a high-uncertainty region gets a GENTLER reaction (gain 0.200,
+  react 1.00) than a low-uncertainty one (gain 0.833, react 4.17). The TWO COUPLINGS are demonstrated ORTHOGONAL:
+  a fast+unsure object has react **0.70** < a slow+sure object's **1.08** DESPITE a higher magnitude (3.5>1.3) --
+  dynamics drives magnitude, uncertainty drives reaction-sharpness, independently. NEG an uncertainty-blind gain
+  model can't temper.
+- **TEMPORAL-STABLE PASS**: with a noisy obstacle the raw gradient frame-delta is **0.257** (chatter) while the
+  EMA-filtered is **0.044** (5.8x smoother); the filtered direction tracks away-from-M0 (+X); and after a
+  PERSISTENT maneuver (mean shifts to M1) the filtered direction FOLLOWS (dot=1.000) -- so a FROZEN filter (stable
+  but stale/wrong) FAILS. The filter is proven stable-yet-responsive-yet-correct.
+- **ADVERSARIAL REVIEW (2 skeptics) caught a REAL-BUG + 2 vacuous sub-controls**: (1) the original TEMPORAL gate
+  was one-sided -- a FROZEN filter (maxFiltDelta=0) passed while giving a stale 18.6-deg-wrong direction; FIXED by
+  adding the M0-tracking + maneuver-following (M1) requirements a frozen filter cannot meet; (2)+(3) the UNCERTAINTY
+  and REACTION-TEMPER neg-controls were prior==prior / baseGain==baseGain tautologies -> replaced with real failing
+  models that LOSE the property; demonstrated the orthogonal cross-coupling instead of asserting it.
+
+### AVOIDANCE FIELD SPRINT COMPLETE (2026-06-17) — all phases 1-4.5 gated green, branch avoidance-field
+KRS_OVERNIGHT_BENCH now includes GATE TWIN / EMITTER / FIELD-LAW / SDF / UNCERTAINTY (89/89 gate groups PASS).
+The gateable FIELD FOUNDATION is built and trustworthy: ECS->catalog introspection + Object/Property/Emitter/
+DynamicsField nodes, the dynamics-driven amplitude law, the particle grid-SDF (distance+gradient), and the
+uncertainty/reaction-tempering/temporal-coherence safety layer. DEFERRED (as directed): the field VISUALIZER
+(revive FieldVisualizerPass arrow field, a supervised/visual session) and the MPC/reactive CONTROLLER that
+consumes this field. Every gate carries a measured number + a non-vacuous negative control; adversarial review
+per phase caught + fixed 2 gate-vacuous tautologies and 2 real-bugs (the node frequency stale-freeze, the perf
+phantom-field, the temporal frozen-filter) that would otherwise have passed-while-broken.
