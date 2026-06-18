@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cmath>
 #include <memory>
+#include <algorithm>
 #include <QComboBox>
 #include <QString>
 #include <QMenu>
@@ -99,21 +100,53 @@ QWidget* ObjectNode::createCustomWidget() {
     return combo;
 }
 
-// ---- PROPERTY node: entity handle + property combo -> value + frequency ----
+// ---- PROPERTY node: entity handle + property combo. The OUTPUT ports ADAPT to the selected property's
+//      component type -- X/Y/Z for a vector quantity (position, linear/angular velocity + acceleration),
+//      Roll/Pitch/Yaw (deg) for orientation, a single Value for a scalar (mass) -- always plus the
+//      stale-aware publish Frequency. (Per-component scalars are what a numeric readout/gauge can consume:
+//      the old single "Value" only carried v[0]=X, which is ~0 for a body falling along -Y.)
 class PropertyNode : public Node {
 public:
     PropertyNode() {
-        m_id = "twin_property";
-        m_ports.push_back({ "Object",    { "entt::entity", "handle" }, Port::Direction::Input,  this });
-        m_ports.push_back({ "Value",     { "double", "unitless" },     Port::Direction::Output, this });
-        m_ports.push_back({ "Vector",    { "glm::vec3", "unitless" },  Port::Direction::Output, this });
-        m_ports.push_back({ "Frequency", { "double", "Hz" },           Port::Direction::Output, this });
+        m_id = "twin_property";                // base ctor already added the "Trigger" input
+        m_ports.push_back({ "Object", { "entt::entity", "handle" }, Port::Direction::Input, this });
+        setOutputPorts(PropType::Vec3);        // default layout until a property is chosen (most props are vec3)
     }
     QWidget* createCustomWidget() override;
 
+    // a property's component layout (the catalog is the SSOT: mass=Scalar, orientation=Quat, else Vec3).
+    static PropType typeOfProperty(const std::string& p) {
+        if (p == "mass") return PropType::Scalar;
+        if (p == "orientation") return PropType::Quat;
+        return PropType::Vec3;
+    }
+
+    // (re)build only the OUTPUT ports for a component type, leaving the inputs (Trigger, Object) AND their
+    // live packets/connections intact -- so changing the property does not drop the wired object.
+    void setOutputPorts(PropType t) {
+        m_ports.erase(std::remove_if(m_ports.begin(), m_ports.end(),
+            [](const Port& p) { return p.direction == Port::Direction::Output; }), m_ports.end());
+        auto out = [&](const char* n, const char* u) { m_ports.push_back({ n, { "double", u }, Port::Direction::Output, this }); };
+        switch (t) {
+        case PropType::Scalar: out("Value", "unitless"); break;
+        case PropType::Quat:   out("Roll", "deg"); out("Pitch", "deg"); out("Yaw", "deg"); break;
+        default:               out("X", "unitless"); out("Y", "unitless"); out("Z", "unitless"); break;
+        }
+        out("Frequency", "Hz");
+        m_outType = t;
+    }
+
+    // Select a property: store it + reconfigure the output ports IF the layout changed. changePorts brackets
+    // the mutation in the QtNodes port signals (live) or applies it directly (headless gate).
+    void selectProperty(const std::string& prop) {
+        setParam<std::string>("prop", prop);
+        const PropType t = typeOfProperty(prop);
+        if (t != m_outType) changePorts([this, t] { setOutputPorts(t); });
+    }
+    bool selectNamedOption(const std::string& opt) override { selectProperty(opt); return true; }
+
     void compute() override {
-        // reset outputs first: an early-return must leave NO stale output packet
-        // (so a non-firing compute cannot pass on a previous value).
+        // reset outputs first: an early-return must leave NO stale output packet.
         for (auto& p : m_ports) if (p.direction == Port::Direction::Output) p.packet.reset();
         m_props.clear(); m_hasValue = false; m_objId = 0; m_haveObj = false;
         const auto objOpt = getInput<entt::entity>("Object");
@@ -125,10 +158,17 @@ public:
         const std::string prop = getParam<std::string>("prop", m_props.empty() ? std::string() : m_props.front());
         const PropertyEntry* e = cat.get(m_objId, prop);
         if (!e) return;                                       // invalid property for this object -> no output
-        setOutput<double>("Value", e->v[0]);
-        setOutput<glm::vec3>("Vector", glm::vec3(float(e->v[0]), float(e->v[1]), float(e->v[2])));
-        // stale-aware publish frequency, read at the catalog's real current time
-        // (NOT a frozen 0) so the output falls toward 0 when this stream stalls.
+        // emit the outputs matching the CURRENT port layout (kept in sync with the selection via selectProperty).
+        if (m_outType == PropType::Scalar) {
+            setOutput<double>("Value", e->v[0]);
+        } else if (m_outType == PropType::Quat) {
+            double r, p, y; quatToRPY(e->v[0], e->v[1], e->v[2], e->v[3], r, p, y);
+            const double k = 180.0 / 3.14159265358979323846;
+            setOutput<double>("Roll", r * k); setOutput<double>("Pitch", p * k); setOutput<double>("Yaw", y * k);
+        } else {
+            setOutput<double>("X", e->v[0]); setOutput<double>("Y", e->v[1]); setOutput<double>("Z", e->v[2]);
+        }
+        // stale-aware publish frequency, read at the catalog's real current time (falls toward 0 on a stall).
         setOutput<double>("Frequency", cat.frequency(m_objId, prop, cat.now()));
         m_hasValue = true;
     }
@@ -136,10 +176,21 @@ public:
     bool hasValue() const { return m_hasValue; }
     bool haveObject() const { return m_haveObj; }
     std::uint32_t objectId() const { return m_objId; }
+    PropType outType() const { return m_outType; }
 private:
+    // quaternion (w,x,y,z) -> roll(x)/pitch(y)/yaw(z) radians, the standard Tait-Bryan ZYX extraction.
+    static void quatToRPY(double w, double x, double y, double z, double& roll, double& pitch, double& yaw) {
+        const double sr = 2.0 * (w * x + y * z), cr = 1.0 - 2.0 * (x * x + y * y);
+        roll = std::atan2(sr, cr);
+        const double sp = 2.0 * (w * y - z * x);
+        pitch = (std::abs(sp) >= 1.0) ? std::copysign(1.57079632679489661923, sp) : std::asin(sp);
+        const double sy = 2.0 * (w * z + x * y), cy = 1.0 - 2.0 * (y * y + z * z);
+        yaw = std::atan2(sy, cy);
+    }
     std::vector<std::string> m_props;
     bool m_hasValue = false, m_haveObj = false;
     std::uint32_t m_objId = 0;
+    PropType m_outType = PropType::Vec3;
 };
 
 class PropertyCombo : public QComboBox {
@@ -175,7 +226,7 @@ QWidget* PropertyNode::createCustomWidget() {
     combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     combo->repopulate();
     QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this, combo](int) {
-        if (!combo->currentText().isEmpty()) setParam<std::string>("prop", combo->currentText().toStdString());
+        if (!combo->currentText().isEmpty()) selectProperty(combo->currentText().toStdString());  // reconfigures output ports
     });
     return combo;
 }
@@ -204,6 +255,10 @@ glm::vec3 readOutV(Node& n, const std::string& port) {
         if (p.name == port && p.direction == Port::Direction::Output && p.packet)
             try { return std::any_cast<glm::vec3>(p.packet->data); } catch (...) {}
     return glm::vec3(1e9f);
+}
+// the Property node now exposes vector quantities as X/Y/Z scalar gates -- reassemble them.
+glm::vec3 readOutXYZ(Node& n) {
+    return glm::vec3(float(readOutD(n, "X")), float(readOutD(n, "Y")), float(readOutD(n, "Z")));
 }
 void wireObject(Node& src, Node& dst) {
     for (const auto& p : src.getPorts())
@@ -287,36 +342,49 @@ bool runTwinGate() {
     {
         ObjectNode obj; obj.setScene(&scene); obj.setParam<int>("objId", int(idA)); obj.process();
         PropertyNode prop; wireObject(obj, prop);
-        prop.setParam<std::string>("prop", std::string("mass")); prop.process();
+        // mass is a SCALAR property -> exactly one "Value" output gate (and no X/Y/Z).
+        prop.selectProperty("mass"); prop.process();
         const double valMass = readOutD(prop, "Value");
         const float ecsMass = reg.get<RigidBodyComponent>(A).mass;
-        const bool massOk = prop.hasValue() && std::abs(valMass - double(ecsMass)) < 1e-6;
+        const bool scalarPorts = prop.outType() == PropType::Scalar
+                              && std::isnan(readOutD(prop, "X")) && std::isnan(readOutD(prop, "Y"));   // no xyz for a scalar
+        const bool massOk = prop.hasValue() && std::abs(valMass - double(ecsMass)) < 1e-6 && scalarPorts;
 
-        prop.setParam<std::string>("prop", std::string("position")); prop.process();
-        const glm::vec3 valPos = readOutV(prop, "Vector");
+        // position is a VECTOR property -> X/Y/Z scalar gates that reassemble to the ECS vec3.
+        prop.selectProperty("position"); prop.process();
+        const glm::vec3 valPos = readOutXYZ(prop);
         const glm::vec3 ecsPos = reg.get<TransformComponent>(A).translation;
-        const bool posOk = prop.hasValue() && glm::length(valPos - ecsPos) < 1e-6f;
+        const bool posOk = prop.hasValue() && prop.outType() == PropType::Vec3 && glm::length(valPos - ecsPos) < 1e-6f;
 
-        // a vec3 dynamics property through the node (Vector output) vs the ECS.
-        prop.setParam<std::string>("prop", std::string("linearVelocity")); prop.process();
-        const glm::vec3 valVel = readOutV(prop, "Vector");
-        const bool velOk = prop.hasValue() && glm::length(valVel - reg.get<RigidBodyComponent>(A).linearVelocity) < 1e-6f;
+        // linearVelocity -> X/Y/Z; critically each component (esp. Y) is exposed, so a body falling along
+        // -Y drives a NONZERO scalar gate (the operator bug: the old single "Value" only carried X ~= 0).
+        prop.selectProperty("linearVelocity"); prop.process();
+        const glm::vec3 valVel = readOutXYZ(prop);
+        const glm::vec3 ecsVel = reg.get<RigidBodyComponent>(A).linearVelocity;
+        const bool velOk = prop.hasValue() && glm::length(valVel - ecsVel) < 1e-6f
+                        && std::abs(readOutD(prop, "Y") - double(ecsVel.y)) < 1e-6;   // Y gate carries vy exactly
+
+        // orientation is a QUAT property -> Roll/Pitch/Yaw gates (no X/Y/Z, no scalar Value).
+        prop.selectProperty("orientation"); prop.process();
+        const bool rpyPorts = prop.outType() == PropType::Quat
+                           && !std::isnan(readOutD(prop, "Roll")) && !std::isnan(readOutD(prop, "Pitch"))
+                           && !std::isnan(readOutD(prop, "Yaw")) && std::isnan(readOutD(prop, "X"));
 
         // changing the Object re-populates the Property list for the NEW object.
         ObjectNode obj2; obj2.setScene(&scene); obj2.setParam<int>("objId", int(std::uint32_t(entt::to_integral(B)))); obj2.process();
-        PropertyNode prop2; wireObject(obj2, prop2); prop2.setParam<std::string>("prop", std::string("mass")); prop2.process();
+        PropertyNode prop2; wireObject(obj2, prop2); prop2.selectProperty("mass"); prop2.process();
         const bool repopOk = prop2.hasValue() && prop2.properties().size() == 7
                           && std::abs(readOutD(prop2, "Value") - double(reg.get<RigidBodyComponent>(B).mass)) < 1e-6
                           && prop2.objectId() == std::uint32_t(entt::to_integral(B));
 
         // NEG-CTRL: disconnected Object input -> no output.
-        PropertyNode prop3; prop3.setParam<std::string>("prop", std::string("mass")); prop3.process();
+        PropertyNode prop3; prop3.selectProperty("mass"); prop3.process();
         const bool discOk = !prop3.hasValue();
 
-        const bool ok = massOk && posOk && velOk && repopOk && discOk;
-        printf("[twin]   OBJECT-PROPERTY-NODES: mass=%.6f (ecs %.6f, ok:%d); position ok:%d; linearVelocity ok:%d; "
-               "re-populate-on-new-object:%d; disconnected->no-output:%d  %s\n",
-               valMass, double(ecsMass), int(massOk), int(posOk), int(velOk), int(repopOk), int(discOk), ok ? "PASS" : "FAIL");
+        const bool ok = massOk && posOk && velOk && rpyPorts && repopOk && discOk;
+        printf("[twin]   OBJECT-PROPERTY-NODES: mass=%.6f (ecs %.6f, scalar-port-only:%d); position xyz ok:%d; "
+               "linearVelocity xyz ok (Y gate carries vy):%d; orientation rpy-ports:%d; re-populate:%d; disconnected->no-output:%d  %s\n",
+               valMass, double(ecsMass), int(massOk), int(posOk), int(velOk), int(rpyPorts), int(repopOk), int(discOk), ok ? "PASS" : "FAIL");
         allOk = allOk && ok;
     }
 
@@ -342,7 +410,7 @@ bool runTwinGate() {
         rf.emplace<TransformComponent>(X); rf.emplace<RigidBodyComponent>(X).mass = 1.0f;
         ObjectNode on; on.setScene(&sf); on.setParam<int>("objId", int(std::uint32_t(entt::to_integral(X))));
         for (int k = 0; k < 8; ++k) on.process();                            // publishes at the node's cadence
-        PropertyNode pn; wireObject(on, pn); pn.setParam<std::string>("prop", std::string("mass")); pn.process();
+        PropertyNode pn; wireObject(on, pn); pn.selectProperty("mass"); pn.process();
         const double nodeFreshHz = readOutD(pn, "Frequency");
         catalog().setNow(catalog().now() + 1.0);                             // 1 s passes, X not re-published
         pn.process();

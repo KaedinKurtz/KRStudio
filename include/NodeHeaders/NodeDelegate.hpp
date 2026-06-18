@@ -36,6 +36,10 @@ public:
     Node* backendNode() const { ensureBackend(); return m_backendNode.get(); }
     // re-run the backend node + notify QtNodes downstream (called when an in-node input widget is edited).
     void recomputeAndPropagate();
+    // Install Node::reconfigurePorts so a backend that changes its OUTPUT port set at runtime (e.g. the
+    // Property node) is bracketed by the QtNodes portsAboutToBeDeleted/Inserted signals -- stale connections
+    // are cleaned up and the visual node + geometry rebuild.
+    void installPortReconfig() const;
 
 
 Q_SIGNALS:

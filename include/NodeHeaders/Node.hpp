@@ -7,6 +7,7 @@
 #include <map>
 #include <optional>
 #include <chrono>
+#include <functional>
 #include "components.hpp"
 #include <QWidget>
 #include <glm/glm.hpp> // For glm::vec3, etc.
@@ -229,6 +230,22 @@ public:
     //     the registry pointer the Physics nodes consume). Injected, never owned. ---
     void setScene(Scene* s) { m_scene = s; }
     Scene* scene() const { return m_scene; }
+
+    // --- Runtime PORT reconfiguration. A node whose port SET depends on runtime state (e.g. the Property
+    //     node, whose outputs are X/Y/Z for a vector property, Roll/Pitch/Yaw for orientation, or a single
+    //     Value for mass) changes its ports by passing the mutation to changePorts(). The NodeDelegate
+    //     installs reconfigurePorts so the change is bracketed by the QtNodes portsAboutToBeDeleted/
+    //     portsDeleted/portsAboutToBeInserted/portsInserted signals (which clean up stale connections and
+    //     rebuild the visual node + geometry). Headless (gates) it is null -> the mutation applies directly.
+    std::function<void(const std::function<void()>& applyMutation)> reconfigurePorts;
+    void changePorts(const std::function<void()>& applyMutation) {
+        if (reconfigurePorts) reconfigurePorts(applyMutation);
+        else if (applyMutation) applyMutation();
+    }
+
+    // Drive the node's primary named selection (e.g. the Property node's property) -- the same path the
+    // in-node combo uses, so it may reconfigure ports. Default no-op; lets tests + a restored param re-apply.
+    virtual bool selectNamedOption(const std::string& /*option*/) { return false; }
 
     // --- Phase 1 node PARAMETERS: tunable internal state that is NOT a wired input port. An in-node
     //     widget (slider/dial/spinbox) binds to a param by name and writes it via setParam(); compute()

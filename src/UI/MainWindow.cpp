@@ -979,7 +979,7 @@ MainWindow::MainWindow(QWidget* parent)
     evalRateLayout->setContentsMargins(6, 2, 6, 2);
     evalRateLayout->addWidget(new QLabel(QStringLiteral("Eval Hz:")));
     auto* evalRateSpin = new QDoubleSpinBox(evalRateRow);
-    evalRateSpin->setRange(1.0, 20000.0); evalRateSpin->setDecimals(0); evalRateSpin->setValue(30.0);
+    evalRateSpin->setRange(1.0, 20000.0); evalRateSpin->setDecimals(0); evalRateSpin->setValue(60.0);
     evalRateLayout->addWidget(evalRateSpin);
     evalRateLayout->addWidget(new QLabel(QStringLiteral("(UI repaint capped at 30 Hz)")));
     evalRateLayout->addStretch(1);
@@ -1081,7 +1081,7 @@ MainWindow::MainWindow(QWidget* parent)
         if (hz <= 250.0) { evalTimer->setInterval(int(std::round(1000.0 / hz))); *evalIterPerFire = 1; }
         else { evalTimer->setInterval(4); *evalIterPerFire = std::max(1, int(std::round(hz / 250.0))); }  // >1kHz: iterate per fire
     };
-    setEvalRate(30.0);
+    setEvalRate(60.0);   // poll the node graph per frame so live property streams (velocity etc.) stay fresh
     evalTimer->start();
     connect(evalRateSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
             [setEvalRate](double hz) { setEvalRate(hz); });

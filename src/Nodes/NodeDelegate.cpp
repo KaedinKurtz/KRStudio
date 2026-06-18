@@ -86,9 +86,31 @@ void NodeDelegate::ensureBackend() const
     if (m_backendNode || m_typeId.empty()) return;
     m_backendNode = NodeFactory::instance().createNode(m_typeId);
     if (m_backendNode) {
+        installPortReconfig();
         populateEmbeddedWidget();
         m_backendNode->process();
     }
+}
+
+void NodeDelegate::installPortReconfig() const
+{
+    if (!m_backendNode) return;
+    NodeDelegate* self = const_cast<NodeDelegate*>(this);
+    m_backendNode->reconfigurePorts = [self](const std::function<void()>& apply) {
+        // Correct QtNodes ordering: nodeData(OutPortCount) reads nPorts() LIVE, so we must announce the
+        // deletion of the OLD output ports BEFORE mutating the backend, then mutate, then announce the new
+        // set. portsAboutToBeDeleted drops connections to the removed ports; portsInserted rebuilds them.
+        const unsigned oldN = self->nPorts(QtNodes::PortType::Out);   // backend still has the old ports
+        if (oldN > 0) Q_EMIT self->portsAboutToBeDeleted(QtNodes::PortType::Out, 0, oldN - 1);
+        if (apply) apply();                                           // backend now has the new ports
+        if (oldN > 0) Q_EMIT self->portsDeleted();
+        const unsigned newN = self->nPorts(QtNodes::PortType::Out);
+        if (newN > 0) {
+            Q_EMIT self->portsAboutToBeInserted(QtNodes::PortType::Out, 0, newN - 1);
+            Q_EMIT self->portsInserted();
+        }
+        Q_EMIT self->embeddedWidgetSizeUpdated();
+    };
 }
 
 // ... name(), caption(), portCaptionVisible(), portCaption() remain the same ...
@@ -211,6 +233,7 @@ void NodeDelegate::setBackendNode(std::unique_ptr<Node> backendNode)
     m_backendNode = std::move(backendNode);
     if (!m_backendNode) return;
 
+    installPortReconfig();
     // The backend is now attached. It's safe to create the widget.
     populateEmbeddedWidget();
 

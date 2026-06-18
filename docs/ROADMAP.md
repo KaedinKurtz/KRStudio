@@ -3257,3 +3257,28 @@ Operator-reported issues fixed (verified on-screen with pixel measurement, not j
 - VERIFIED ON SCREEN: with a field source present, the FieldVisualizerPass arrow field renders -- a live viewport
   grab with the visualizer ON vs OFF (scene frozen) differs by 274,280 pixels (21% of a 2049x635 viewport); the
   OFF frame shows zero arrows (clean negative control). Bench stays 94/94.
+
+### UI/NODE BUGFIX — falling-object velocity readout + property-aware output gates
+Operator report: a numeric readout wired to a Property node shows NO linear velocity for an object dropped from
+a height, and the field-visualizer arrows read a constant 1.0; operator suspected the "physics->node poller is
+not running every frame". A 5-agent workflow traced the whole chain and (high confidence) found the poller was
+NOT the cause: writeBackTransforms() writes rb.linearVelocity every tick, ObjectNode (indeg 0) republishes the
+catalog every eval, PropertyNode recomputes every compute. The real defect: the Property node's single scalar
+"Value" output = e->v[0] = only the X component, which is ~0 the entire fall (a dropped body moves along -Y);
+the same scalar fed the field emitter's Amplitude (~0 -> static field -> the shader's normalized colour ceiling
+shows 1.0). FIX = the operator's own follow-up: make the Property node's OUTPUT gates adapt to the selected
+property's component type --
+  - vector quantity (position / linear|angular velocity / linear|angular acceleration) -> X, Y, Z scalar gates
+  - orientation (quaternion) -> Roll, Pitch, Yaw (deg) gates
+  - mass (scalar) -> a single Value gate
+  - always plus the stale-aware Frequency gate.
+Wiring the Y gate to the readout now shows the fall velocity; driving the emitter Amplitude from a live component
+makes the arrows track. Implemented as DYNAMIC QtNodes ports: Node::reconfigurePorts (installed by NodeDelegate)
+brackets the output-port mutation in portsAboutToBeDeleted/portsDeleted/portsAboutToBeInserted/portsInserted
+(correct ordering: announce-before-mutate, since DataFlowGraphModel reads nPorts() live) so stale connections
+are cleaned and the visual node rebuilds; INPUT ports (Trigger, Object) + their connections are preserved across
+a property change. Node::selectNamedOption drives the selection (combo + future param-restore). Also bumped the
+node eval rate 30 -> 60 Hz so the poll runs per frame (the operator's explicit ask; minor freshness win for the
+live emitter/visualizer -- NOT the readout fix). GATE TWIN updated + green (mass=scalar-only, position/velocity
+xyz with the Y gate carrying vy exactly, orientation rpy); live QtNodes rebuild verified by screenshot for all
+three layouts (no crash); bench 94/94.
