@@ -3195,3 +3195,28 @@ and the independent CPU field formula agree to float precision); STALE-A-vs-move
 (dot ~= -0.81, near-reversed) while fresh-B tracks at 0.0000. OPERATOR VISUAL-CONFIRM: run an avoidance
 emitter (or boot with KRS_FIELD_DEMO=1) and confirm a fan of arrows points along the field, blue (weak) ->
 red (strong), longer where the field is stronger.
+
+### PHASE 4 — VELOCITY-PROBE ORB NODE (glass sphere, volume velocity query, bidirectional lifecycle)
+A transparent glass SPHERE probe (NOT a rigid body -- a measurement VOLUME), scalable + translatable, bound
+1:1 to a VelocityProbeOrb graph node, reporting the AVERAGE VELOCITY of the dynamic particles inside its
+volume (a containment query, NOT flux-through-plane). Shared headless-testable core: krs::orb (OrbProbe.hpp/.cpp)
+-- averageVelocityInSphere (the volume query) + decorateProbeOrb / findOrbForNode / removeOrbForNode / orbCount
+(the orb<->node binding on an entt::registry). New OrbBindingComponent{nodeId,color,radius,measuredVelocity,
+containedCount}. Glass sphere spawned via SceneBuilder::spawnPrimitive(IcoSphere) with AutoCollisionComponent
+REMOVED (probe volume) + GlassComponent tinted by the node colour. Because the particle SSBO is only readable
+where GL is current, the GL-side orb-probe step computes each orb's velocity each frame and writes it into the
+component; the node's compute() relays it to its output ports.
+GATES (KRS_ORB_SELFTEST + bench), measured + non-vacuous neg-ctrl:
+- ORB-VELOCITY: (synthetic, exact) 125 particles inside a sphere all moving at vIn=(1,2,3) + 60 outside at
+  (9,-9,9) -> the query returns EXACTLY vIn over exactly 125 contained, while the GLOBAL average (the real
+  "average everything" neg-ctrl model) is off by 4.82; off-stream sphere -> count 0, |v| 0; empty -> 0.
+  (REAL fluid) 21952 live PBF particles under gravity: an orb at the centroid contains 2080 and reports avg
+  velocity (0,-0.736,0) (the falling stream), consistent with an independent manual contained-average to
+  <1e-5; an orb moved 3 m off-stream contains 0 -> proves a VOLUME query on real data, not a global average.
+- ORB-LIFECYCLE: 5 nodes -> 5 orbs with 5 DISTINCT colours each matching its node, each glass + NO collider;
+  delete-node 20 removes its orb (others remain); delete-orb 30 recovers the bound node id (==30) so the
+  reverse hook can remove the node; NEG-CTRL: a non-propagating delete leaves an ORPHAN (the real failing
+  model the assertion catches) while the correct removal clears it.
+OPERATOR VISUAL-CONFIRM: instancing a VelocityProbeOrb node spawns one transparent glass sphere tinted the
+node's colour; scaling/moving it changes the measured volume; deleting the node removes the sphere and vice
+versa; N nodes -> N spheres in N colours; moving a sphere off the fluid stream drops its reported speed to ~0.

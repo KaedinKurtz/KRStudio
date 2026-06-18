@@ -193,6 +193,14 @@ public:
     // recomputed) visualizer mismatches a moved field. Gated by KRS_FIELDVIS_SELFTEST + bench. (FieldVisualizerGate.cpp)
     bool runFieldVisualizerGate();
 
+    // Live-fluid SDF sprint Phase 4 GATE ORB-VELOCITY / ORB-LIFECYCLE: the velocity-probe orb. ORB-VELOCITY
+    // verifies the VOLUME containment velocity query (avg velocity of particles inside the sphere, NOT a
+    // global average / flux) on a synthetic exact set + the REAL live fluid (off-stream -> 0). ORB-LIFECYCLE
+    // verifies the orb<->node binding (N orbs N colours; node-delete removes the orb; orb-delete exposes the
+    // node; non-propagating delete leaves a caught orphan). Gated by KRS_ORB_SELFTEST + bench. (OrbProbeGate.cpp)
+    bool runOrbVelocityGate();
+    bool runOrbLifecycleGate();
+
     // Phase 1 GATE 1.2: FLUID<->RIGID two-way coupling (Newton's 3rd law across the boundary). The
     // GPU fluid falls onto a dynamic box (scene gravity off, so the box only moves from the fluid
     // impulse); the per-collider impulse the fluid SSBO delivers must equal the rigid momentum the

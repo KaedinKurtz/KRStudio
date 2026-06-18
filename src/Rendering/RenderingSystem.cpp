@@ -746,6 +746,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Live-fluid SDF sprint Phase 4: the velocity-probe orb (volume velocity query + orb<->node lifecycle).
+    if (qEnvironmentVariableIntValue("KRS_ORB_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ORB_SELFTEST =================\n");
+        const bool ok = runOrbVelocityGate() && runOrbLifecycleGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase 1 GATE 1.2: FLUID<->RIGID Newton's 3rd law (delivered impulse == rigid momentum gained).
     if (qEnvironmentVariableIntValue("KRS_FLUIDRIGID_SELFTEST") != 0) {
         std::printf("\n================= KRS_FLUIDRIGID_SELFTEST =================\n");
@@ -1384,6 +1392,8 @@ void RenderingSystem::initializeSharedResources()
             { "GATE LIVE-SDF (GPU Jump-Flooding EDT on the REAL live fluid: <15ms vs brute-force baseline + distance/gradient vs analytic; shifted-grid neg-ctrl)", runLiveSdfGate() },
             { "GATE LIVE-TRACK (JFA SDF follows live falling water frame-to-frame: zero-crossing tracks vs baked-once ghost neg-ctrl; full gen+readback path <15ms)", runLiveTrackGate() },
             { "GATE VISUALIZER-DATA (revived arrow field: real arrow_field_compute vectors == analytic effector field at each arrow; stale-field neg-ctrl mismatches)", runFieldVisualizerGate() },
+            { "GATE ORB-VELOCITY (volume containment velocity query: synthetic exact + global-avg neg-ctrl + REAL fluid off-stream->0)", runOrbVelocityGate() },
+            { "GATE ORB-LIFECYCLE (orb<->node binding: N orbs N colours; node-delete removes orb; orb-delete exposes node; leak neg-ctrl)", runOrbLifecycleGate() },
             { "GATE 1.2 fluid<->rigid Newton 3rd (impulse==momentum + inert-box neg-ctrl)", runFluidRigidImpulseGate() },
             { "GATE 1.3 artic<->collision (collision xform tracks live FK + stale neg-ctrl)", krs::dyn::runArticCollisionGate1_3() },
             { "GATE 1.4 MPM<->thermal energy conservation (Fourier + energy-leak neg-ctrl)", m_mpm ? m_mpm->runThermalGate1_4(*this, m_gl) : true },

@@ -12,6 +12,7 @@
 #include <Eigen/Dense> 
 #include <any>
 #include <memory>
+#include <cstdint>
 
 #include "GridLevel.hpp"
 #include "Camera.hpp"
@@ -93,6 +94,20 @@ struct GlassComponent {
     glm::vec3 tint{ 0.94f, 0.98f, 0.96f };     // transmission colour
     float thickness = 0.08f;                   // virtual path length (m)
     float dispersion = 0.012f;                 // per-channel IOR spread (0 = off)
+};
+
+// A velocity-probe orb: a transparent glass SPHERE bound 1:1 to a VelocityProbeOrb graph node.
+// It is a measurement VOLUME (NOT a rigid body -- carries no AutoCollisionComponent), reporting the
+// average velocity of the dynamic particles inside its sphere. The binding is bidirectional: deleting
+// the node removes this orb (nodeDeleted hook), and deleting this orb removes the node (reverse hook).
+// measuredVelocity/containedCount are written each frame by the GL-side orb-probe system (where the
+// particle SSBO is readable) and relayed by the node's compute().
+struct OrbBindingComponent {
+    std::uint64_t nodeId = 0;             // the owning graph node (QtNodes NodeId), the binding key
+    glm::vec3 color{ 1.0f, 1.0f, 1.0f };  // unique per-node colour (matches the node's colour field)
+    float radius = 0.25f;                 // probe sphere radius in world units (= transform scale)
+    glm::vec3 measuredVelocity{ 0.0f };   // avg velocity of contained particles (written GL-side each frame)
+    int containedCount = 0;               // # particles inside the sphere last frame
 };
 
 struct MaterialComponent
