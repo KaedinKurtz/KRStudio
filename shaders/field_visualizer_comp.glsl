@@ -9,7 +9,7 @@ struct PointEffectorGpu {
     float strength;
     float radius;
     int falloffType;
-    float padding;
+    float falloffExponent;   // Linear-mode falloff rate (matches PointEffectorComponent/FieldSolver)
 };
 
 struct DirectionalEffectorGpu {
@@ -144,9 +144,12 @@ void main()
         if (dist < pointEffectors[i].radius && dist > 0.001) {
             float strength = pointEffectors[i].strength;
             vec3 forceDir;
-            if (pointEffectors[i].falloffType == 1) {
-                strength *= (1.0 - dist / pointEffectors[i].radius);
-            }
+            if (pointEffectors[i].falloffType == 1) {          // Linear, raised to the falloff RATE
+                float t = max(0.0, 1.0 - dist / pointEffectors[i].radius);
+                strength *= pow(t, max(0.0, pointEffectors[i].falloffExponent));
+            } else if (pointEffectors[i].falloffType == 2) {   // InverseSquare == 1/d (match FieldSolver)
+                strength /= dist;
+            }                                                  // falloffType 0 (None): constant strength
             if (length(pointEffectors[i].normal.xyz) > 0.1) {
                 forceDir = normalize(pointEffectors[i].normal.xyz);
             } else {

@@ -208,6 +208,7 @@ void FieldVisualizerPass::gatherEffectorData(const RenderFrameContext& context) 
         effector.strength = comp.strength;
         effector.radius = comp.radius;
         effector.falloffType = static_cast<int>(comp.falloff);
+        effector.falloffExponent = comp.falloffExponent;   // Linear falloff RATE
         m_pointEffectors.push_back(effector); // Use member variable
     }
 
@@ -229,6 +230,7 @@ void FieldVisualizerPass::gatherEffectorData(const RenderFrameContext& context) 
             effector.strength = comp.strength;
             effector.radius = comp.radius;
             effector.falloffType = 1;
+            effector.falloffExponent = 1.0f;   // linear along the spline
             m_pointEffectors.push_back(effector); // Use member variable
         }
     }

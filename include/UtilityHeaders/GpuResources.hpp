@@ -11,7 +11,7 @@ struct PointEffectorGpu {
     float strength;
     float radius;
     int falloffType;
-    float padding;
+    float falloffExponent;   // Linear-mode falloff rate (see PointEffectorComponent); was padding.
 };
 
 struct DirectionalEffectorGpu {

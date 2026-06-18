@@ -398,6 +398,10 @@ struct PointEffectorComponent {
     float strength = 1.0f;
     float radius = 10.0f;
     FalloffType falloff = FalloffType::Linear;
+    // Falloff RATE for the Linear mode: magnitude = strength * (1 - d/radius)^falloffExponent.
+    // 0 = no falloff (constant strength to the edge), 1 = linear (default), >1 = steeper / more
+    // concentrated near the source -> a "smaller but still strong" field at a small radius.
+    float falloffExponent = 1.0f;
 };
 
 struct SplineEffectorComponent {

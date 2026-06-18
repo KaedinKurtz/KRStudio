@@ -313,6 +313,7 @@ void NodeDelegate::populateEmbeddedWidget() const
         if (tn == "double" || tn == "float") {
             auto* sb = new QDoubleSpinBox(); sb->setRange(-1.0e6, 1.0e6); sb->setDecimals(4); sb->setSingleStep(0.1);
             sb->setProperty("krs_input_port", tag);
+            sb->setValue(node->literalD(portName, 0.0));   // show the node's default literal, not 0 (set before connecting)
             QObject::connect(sb, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
                 [self, portName](double v) { krs::nodes::NodeEditQueue::instance().post(self, portName,
                     [self, portName, v]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<float>(portName, float(v)); self->recomputeAndPropagate(); }); });
@@ -320,6 +321,7 @@ void NodeDelegate::populateEmbeddedWidget() const
         } else if (tn == "int") {
             auto* sb = new QSpinBox(); sb->setRange(-1000000, 1000000);
             sb->setProperty("krs_input_port", tag);
+            sb->setValue(int(node->literalD(portName, 0.0)));   // show the node's default literal, not 0
             QObject::connect(sb, QOverload<int>::of(&QSpinBox::valueChanged),
                 [self, portName](int v) { krs::nodes::NodeEditQueue::instance().post(self, portName,
                     [self, portName, v]{ if (self->m_backendNode) self->m_backendNode->setPortLiteral<int>(portName, v); self->recomputeAndPropagate(); }); });

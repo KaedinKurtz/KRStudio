@@ -2,6 +2,7 @@
 #include "components.hpp"
 #include <entt/entt.hpp>
 #include <glm/gtx/norm.hpp>
+#include <cmath>
 
 // --- Helper Functions for Geometric Calculations ---
 
@@ -100,7 +101,10 @@ glm::vec3 FieldSolver::getVectorAt(entt::registry& registry, glm::vec3 worldPos,
 
                 float strength = point->strength;
                 if (point->falloff == PointEffectorComponent::FalloffType::Linear) {
-                    strength *= (1.0f - (distance / point->radius));
+                    // (1 - d/R) raised to the falloff RATE: exponent 0 = no falloff (constant to the
+                    // edge), 1 = linear, >1 = steeper / more concentrated near the source.
+                    const float t = glm::max(0.0f, 1.0f - (distance / point->radius));
+                    strength *= std::pow(t, glm::max(0.0f, point->falloffExponent));
                 }
                 else if (point->falloff == PointEffectorComponent::FalloffType::InverseSquare) {
                     strength /= distance; // Using 1/d for a more visually intuitive falloff

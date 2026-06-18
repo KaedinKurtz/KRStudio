@@ -94,7 +94,7 @@ bool RenderingSystem::runFieldVisualizerGate()
     auto dispatch = [&](const PointCfg& pe, std::vector<Arrow>& out) {
         // upload the effector UBO (1 point + 1 directional), matching uploadEffectorData's layout.
         PointEffectorGpu p{}; p.position = glm::vec4(pe.pos, 1.0f); p.normal = glm::vec4(0.0f);
-        p.strength = pe.strength; p.radius = pe.radius; p.falloffType = 1; p.padding = 0.0f;
+        p.strength = pe.strength; p.radius = pe.radius; p.falloffType = 1; p.falloffExponent = 1.0f;  // linear
         DirectionalEffectorGpu d{}; d.direction = glm::vec4(dirN, 0.0f); d.strength = dirStrength;
         gl->glBindBuffer(GL_UNIFORM_BUFFER, effUBO);
         gl->glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(PointEffectorGpu), &p);

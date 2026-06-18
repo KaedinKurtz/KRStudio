@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cmath>
 #include <memory>
+#include <algorithm>
 
 namespace krs::field {
 
@@ -28,8 +29,13 @@ public:
     EmitterNode() {
         m_id = "field_emitter";
         m_ports.push_back({ "Object",    { "entt::entity", "handle" }, Port::Direction::Input, this });
-        m_ports.push_back({ "Amplitude", { "double", "unitless" },     Port::Direction::Input, this });  // field magnitude
-        m_ports.push_back({ "Rate",      { "double", "1/s" },          Port::Direction::Input, this });  // substance rate
+        m_ports.push_back({ "Amplitude", { "double", "unitless" },     Port::Direction::Input, this });  // field magnitude (strength)
+        m_ports.push_back({ "Radius",    { "double", "m" },            Port::Direction::Input, this });  // field reach (overall size)
+        m_ports.push_back({ "Falloff",   { "double", "unitless" },     Port::Direction::Input, this });  // falloff RATE: 0=flat,1=linear,>1=steeper
+        m_ports.push_back({ "Rate",      { "double", "1/s" },          Port::Direction::Input, this });  // substance spawn rate
+        // sensible literal defaults so the in-node spinboxes show real values (radius 5 m, linear falloff).
+        setPortLiteral<float>("Radius", 5.0f);
+        setPortLiteral<float>("Falloff", 1.0f);
     }
     void compute() override {
         if (!m_scene) return;
@@ -51,8 +57,10 @@ public:
             } else {
                 auto& pe = reg.get_or_emplace<PointEffectorComponent>(e);
                 pe.strength = float(strength);
-                pe.radius = float(getParam<double>("radius", 5.0));
+                // Radius input wins; the legacy "radius" param is the fallback (so old graphs/gates still work).
+                pe.radius = float(getInputD("Radius", getParam<double>("radius", 5.0)));
                 pe.falloff = PointEffectorComponent::FalloffType::Linear;
+                pe.falloffExponent = float(std::max(0.0, getInputD("Falloff", getParam<double>("falloff", 1.0))));
                 if (!reg.all_of<FieldSourceTag>(e)) reg.emplace<FieldSourceTag>(e);
             }
         } else if (e != entt::null) {
@@ -153,6 +161,34 @@ bool runEmitterGate() {
         printf("[emitter]   EMITTER-FIELD: |field|@d2=%.4f @d4=%.4f (want 6.0/2.0, ok:%d); repulsive-away:%d; attractive-toward:%d; "
                "signed-amp:%d; zero-amp->source-removed:%d; disconnected->no-emission:%d  %s\n",
                mag, mag2, int(magOk), int(repOk), int(attrOk), int(signedOk), int(zeroOk), int(discOk), ok ? "PASS" : "FAIL");
+        allOk = allOk && ok;
+    }
+
+    // ---- RADIUS + FALLOFF-RATE: the new UI-exposed emitter controls ----
+    {
+        Scene scene; auto& reg = scene.getRegistry();
+        const entt::entity e = mkObj(scene, "src", glm::vec3(0, 0, 0));
+        EmitterNode em; em.setScene(&scene); em.setParam<int>("type", 0);
+        feedObject(em, e); feedD(em, "Amplitude", 10.0);
+
+        // RADIUS shrinks the reach: with R=2 the field is present inside and ~0 at/after the edge.
+        feedD(em, "Radius", 2.0); feedD(em, "Falloff", 1.0); em.process();
+        const float in1  = glm::length(fs.getVectorAt(reg, glm::vec3(1.0f, 0, 0)));        // 10*(1-1/2)=5
+        const float edge = glm::length(fs.getVectorAt(reg, glm::vec3(2.0001f, 0, 0)));     // beyond R -> 0
+        const bool radiusOk = std::abs(in1 - 5.0f) < 1e-3f && edge < 1e-4f;
+
+        // FALLOFF RATE at a fixed point inside R=5: 10*(1-2/5)^p -> p=0:10 (flat), p=1:6 (linear), p=2:3.6 (steeper).
+        feedD(em, "Radius", 5.0);
+        feedD(em, "Falloff", 0.0); em.process(); const float p0 = glm::length(fs.getVectorAt(reg, glm::vec3(2, 0, 0)));
+        feedD(em, "Falloff", 1.0); em.process(); const float p1 = glm::length(fs.getVectorAt(reg, glm::vec3(2, 0, 0)));
+        feedD(em, "Falloff", 2.0); em.process(); const float p2 = glm::length(fs.getVectorAt(reg, glm::vec3(2, 0, 0)));
+        const bool falloffOk = std::abs(p0 - 10.0f) < 1e-3f && std::abs(p1 - 6.0f) < 1e-3f
+                            && std::abs(p2 - 3.6f) < 1e-3f && p0 > p1 && p1 > p2;   // higher rate => steeper
+
+        const bool ok = radiusOk && falloffOk;
+        printf("[emitter]   RADIUS-FALLOFF: R=2 -> |f|@1=%.3f (want 5), edge~0:%d; falloff-rate p0/p1/p2 @d2=%.3f/%.3f/%.3f "
+               "(want 10/6/3.6, monotone-steeper:%d)  %s\n",
+               in1, int(radiusOk), p0, p1, p2, int(falloffOk), ok ? "PASS" : "FAIL");
         allOk = allOk && ok;
     }
 

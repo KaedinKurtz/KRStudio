@@ -3282,3 +3282,23 @@ node eval rate 30 -> 60 Hz so the poll runs per frame (the operator's explicit a
 live emitter/visualizer -- NOT the readout fix). GATE TWIN updated + green (mass=scalar-only, position/velocity
 xyz with the Y gate carrying vy exactly, orientation rpy); live QtNodes rebuild verified by screenshot for all
 three layouts (no crash); bench 94/94.
+
+### EMITTER FIELD CONTROLS — Radius + Falloff-rate exposed on the node UI
+Operator wanted "smaller but still strong" fields and asked how the emitter's radius/falloff work. Previously
+the field_emitter node only exposed Amplitude (strength); the field RADIUS was a fixed param (5.0 m, no UI) and
+the falloff was hardcoded Linear, so the field size/shape were not controllable. Now:
+- field_emitter has two new INPUT ports (auto-widget spinboxes, also wireable): **Radius** (m, default 5.0) and
+  **Falloff** (the falloff RATE, default 1.0). Per-input spinboxes now initialize from the port literal (added
+  Node::literalD + NodeDelegate init) so they show 5.0 / 1.0 instead of 0.
+- Falloff is a continuous EXPONENT generalizing the linear law: magnitude = strength * (1 - d/R)^falloff.
+  falloff 0 = no falloff (constant strength to the edge, hard cutoff), 1 = linear (the old behavior, backward
+  compatible), >1 = steeper / more concentrated near the source. So a small Radius + high Amplitude + falloff>1
+  = a small but strong, concentrated field; falloff 0 = strong everywhere inside then a sharp edge.
+- PointEffectorComponent gained float falloffExponent (default 1.0); FieldSolver applies it in the Linear
+  branch; the visualizer shader (field_visualizer_comp.glsl) applies the IDENTICAL formula and also now honours
+  InverseSquare (1/d) + None (constant) so the arrows match the physics for every falloff type (PointEffectorGpu
+  'padding' repurposed as falloffExponent -- same std140 slot). The "Rate" port is unchanged: it is the SUBSTANCE
+  particle spawn rate (type 1), NOT the field radius.
+GATE EMITTER extended (RADIUS-FALLOFF subtest): R=2 -> |f|@1=5.0, ~0 past the edge; at d=2 inside R=5 the falloff
+rates 0/1/2 give 10.0 / 6.0 / 3.6 (flat / linear / steeper, strictly monotone). Bench 94/94; emitter node UI
+screenshot confirms the Amplitude/Radius(5)/Falloff(1)/Rate spinboxes.

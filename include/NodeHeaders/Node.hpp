@@ -196,6 +196,21 @@ public:
         return def;
     }
 
+    // Read an input port's LITERAL value (the in-node widget's stored value) as a double -- used to
+    // INITIALIZE that widget so it shows the node's default instead of 0. Ignores live connections.
+    double literalD(const std::string& portName, double def = 0.0) const {
+        for (const auto& port : m_ports) {
+            if (port.direction == Port::Direction::Input && port.name == portName && port.literalValue.has_value()) {
+                const std::any& d = port.literalValue->data;
+                try { return std::any_cast<double>(d); } catch (...) {}
+                try { return double(std::any_cast<float>(d)); } catch (...) {}
+                try { return double(std::any_cast<int>(d)); } catch (...) {}
+                try { return std::any_cast<bool>(d) ? 1.0 : 0.0; } catch (...) {}
+            }
+        }
+        return def;
+    }
+
     template<typename T>
     void setOutput(const std::string& portName, const T& value) {
         for (auto& port : m_ports) {
