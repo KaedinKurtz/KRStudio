@@ -46,4 +46,10 @@ bool removeOrbForNode(entt::registry& reg, std::uint64_t nodeId);
 // Number of probe orbs currently in the registry.
 int orbCount(entt::registry& reg);
 
+// GATE ORB-OWNERSHIP (KRS_ORBOWN_SELFTEST; folded into the bench): the VelocityProbeOrb node's compute()
+// reconciles the probe radius (== TransformComponent.scale.x) across a wired Radius, the in-node widget, and the
+// transform gizmo, so a gizmo resize PERSISTS instead of being clobbered every eval tick. Neg-control = the old
+// unconditional scale write. Headless (drives the real compute() on an entt registry).
+bool runOrbOwnershipGate();
+
 } // namespace krs::orb

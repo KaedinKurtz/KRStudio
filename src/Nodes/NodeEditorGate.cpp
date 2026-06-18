@@ -21,6 +21,9 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QAbstractSpinBox>
+#include <QMenu>
+#include <QAction>
+#include "ProxyComboBox.hpp"
 
 #include <cstdio>
 #include <cmath>
@@ -303,6 +306,56 @@ int portIndexByName(Node* n, Port::Direction dir, const char* name) {
     if (!n) return -1; int idx = 0;
     for (const auto& p : n->getPorts()) if (p.direction == dir) { if (p.name == name) return idx; ++idx; }
     return -1;
+}
+
+// GATE COMBO-POPUP (KRS_COMBOPOPUP_SELFTEST): a node's enum combo, MOUNTED through the real NodeDelegate path,
+// opens a routable QMenu on showPopup() (the native QComboBox dropdown mis-routes inside the single
+// QGraphicsProxyWidget -> the "flat hand, no menu" bug) and a menu selection drives the combo index (so the
+// existing currentIndexChanged -> setPortLiteral binding still fires). NEG-CTRL: the OLD generic mount was a
+// bare QComboBox (not a ProxyComboBox) whose showPopup() builds no QMenu -- this gate FAILS on that code.
+bool runComboPopupGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[combopop] GATE COMBO-POPUP -- node enum combos open a routable QMenu (native dropdown mis-routes in the proxy)\n");
+    if (!qApp) { printf("[combopop] no QApplication -- cannot mount widgets  FAIL\n"); return false; }
+
+    // Mount the REAL math_op body via NodeDelegate (the exact path the rendered node body uses).
+    NodeDelegate d("math_op");
+    QWidget* body = d.embeddedWidget();
+    QWidget* ctl  = body ? findInputControl(body, "Op") : nullptr;
+    auto* combo = qobject_cast<QComboBox*>(ctl);
+    const bool mounted = (combo != nullptr) && combo->count() >= 2;
+    const bool isProxy = (dynamic_cast<ProxyComboBox*>(ctl) != nullptr);   // NodeDelegate now mounts ProxyComboBox
+
+    bool menuShown = false, selectDrives = false; int nActions = 0, nItems = combo ? combo->count() : 0;
+    if (combo) {
+        combo->showPopup();
+        QMenu* menu = combo->findChild<QMenu*>();
+        nActions = menu ? int(menu->actions().size()) : 0;
+        menuShown = (menu != nullptr) && (nActions == nItems) && (menu->parent() == combo);  // a real child popup
+        if (menu && menu->actions().size() >= 2) {
+            const int before = combo->currentIndex();
+            const int target = combo->count() - 1;                  // pick the LAST option (!= default 0)
+            menu->actions().at(target)->trigger();                  // a QMenu selection must drive currentIndex
+            selectDrives = (combo->currentIndex() == target) && (target != before);
+        }
+        if (menu) menu->close();                                    // WA_DeleteOnClose -> no lingering popup
+    }
+
+    // NEG-CTRL: a bare QComboBox (the OLD generic mount) is NOT a ProxyComboBox -- its showPopup builds no QMenu.
+    QComboBox bare; bare.addItem("a"); bare.addItem("b");
+    const bool bareIsNotProxy = (dynamic_cast<ProxyComboBox*>(&bare) == nullptr);
+
+    const bool pass = mounted && isProxy && menuShown && selectDrives && bareIsNotProxy;
+    printf("[combopop]   mounted Op combo:%d isProxyCombo:%d; showPopup->QMenu(child,actions=%d==items=%d):%d; "
+           "menu-select drives index:%d; NEG bare-combo-not-proxy:%d  %s\n",
+           int(mounted), int(isProxy), nActions, nItems, int(menuShown), int(selectDrives),
+           int(bareIsNotProxy), pass ? "PASS" : "FAIL");
+    printf("[combopop] %s\n", pass ? "ALL PASS (node enum combos build a routable QMenu + a selection drives the binding; the old bare combo had none)"
+                                   : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
 }
 
 bool runFrameGate()

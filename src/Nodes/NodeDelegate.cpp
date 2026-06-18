@@ -3,6 +3,7 @@
 #include "NodeFactory.hpp"
 #include "ExecutionControlWidget.hpp"
 #include "NodeEditQueue.hpp"
+#include "ProxyComboBox.hpp"   // node-body combo with a QMenu popup (native dropdown mis-routes in the proxy)
 #include <string>
 
 #include <QtNodes/NodeData>
@@ -356,7 +357,8 @@ void NodeDelegate::populateEmbeddedWidget() const
         } else if (tn == "enum") {
             // an in-node combo of the port's options; the SELECTION (int index) is the unconnected input,
             // read by compute via getInput<int>(port). Tagged krs_input_port so it is gate-verifiable.
-            auto* combo = new QComboBox();
+            // ProxyComboBox (not a bare QComboBox) so the dropdown opens via a QMenu under the view transform.
+            auto* combo = new ProxyComboBox();
             combo->setProperty("krs_input_port", tag);
             for (const auto& opt : port.enumOptions) combo->addItem(QString::fromStdString(opt));
             int initIdx = int(node->literalD(portName, 0.0));

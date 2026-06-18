@@ -36,6 +36,12 @@ bool runWidgetInputGate();
 // Op combo switches Add/Sub/Mul/Div). NEG-CTRL = OLD behavior (no enum widget -> selection ignored). Needs QApplication.
 bool runComboInputGate();
 
+// GATE COMBO-POPUP (KRS_COMBOPOPUP_SELFTEST): a node's enum combo, mounted via the real NodeDelegate, opens a
+// routable QMenu on showPopup() (the native dropdown mis-routes inside the node's QGraphicsProxyWidget = the
+// "flat hand, no menu" bug) and a menu selection drives the combo index. NEG-CTRL: the old bare QComboBox mount
+// builds no QMenu (this gate fails on it). Needs QApplication.
+bool runComboPopupGate();
+
 // GATE TRIGGER-EDGE (KRS_TRIGGEREDGE_SELFTEST): the Button node emits a BRIEF trigger pulse with correct edge
 // semantics (Rising on press, Falling on release, Dual on both); NEG-CTRL = a fires-continuously-while-held
 // (level) model + wrong-edge timing. Headless (no QApplication needed).

@@ -41,11 +41,13 @@ void RenderingSystem::updateOrbProbes(entt::registry& registry)
         }
     }
 
-    // per orb: average velocity of the particles inside its sphere (radius = transform scale).
+    // per orb: average velocity of the particles inside its sphere. The visible glass IcoSphere has world
+    // radius = base-mesh-radius(0.5) * scale.x, so the query radius must be 0.5*scale.x for the sampled volume
+    // to MATCH the sphere the operator sees (and resizes with the gizmo) -- not scale.x, which sampled 2x larger.
     for (auto e : view) {
         auto& ob = view.get<OrbBindingComponent>(e);
         const auto& xf = view.get<TransformComponent>(e);
-        const float radius = std::max(xf.scale.x, 1e-4f);
+        const float radius = std::max(0.5f * xf.scale.x, 1e-4f);
         ob.radius = radius;
         const krs::orb::OrbVelocity r = krs::orb::averageVelocityInSphere(pos, vel, xf.translation, radius);
         ob.measuredVelocity = r.avg;

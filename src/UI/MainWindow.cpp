@@ -1021,12 +1021,13 @@ MainWindow::MainWindow(QWidget* parent)
                         case 4: color = { t, p, v }; break; default: color = { v, p, q }; break;
                     }
                     const glm::vec3 center(0.0f, 0.8f, 0.0f);
-                    const float radius = 0.25f;
+                    const float radius = 0.5f;     // scale 0.5 * base-mesh radius 0.5 = 0.25 m world radius (grabbable)
                     entt::entity orb = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::IcoSphere),
                                                                     center, glm::vec3(radius), "Velocity Probe Orb");
                     krs::orb::decorateProbeOrb(m_scene->getRegistry(), orb, id, color, center, radius);
                     n->setParam<long long>("orbNodeId", (long long)id);
                     n->setParam<double>("radius", double(radius));
+                    n->setPortLiteral<double>("Radius", double(radius));   // so the in-node Radius widget shows the live size
                     qInfo() << "[orb] spawned velocity-probe orb for node" << id;
                 }
             }

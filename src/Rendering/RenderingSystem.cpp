@@ -63,6 +63,7 @@
 #include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE / TIME)
 #include "NodeEditQueue.hpp"      // force immediate UI-edit mode for the headless gates
 #include "ConnectControlGate.hpp" // node-editor GATE CONNECT-AND-CONTROL
+#include "OrbProbe.hpp"           // krs::orb::runOrbOwnershipGate (GATE ORB-OWNERSHIP)
 #include "SensorGates.hpp"        // synthetic-sensor pipeline gates (krs::sensor GATE 0 ...)
 #include "GraspGates.hpp"         // rigid-body grasp-planning gates (krs::grasp GATE IMPORT ...)
 #include "FidelityGates.hpp"      // physics-fidelity validation gates (krs::fidelity HARNESS-SELFTEST ...)
@@ -932,6 +933,20 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // GATE ORB-OWNERSHIP: the velocity-probe orb node reconciles wire/gizmo/widget radius (no gizmo clobber).
+    if (qEnvironmentVariableIntValue("KRS_ORBOWN_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ORBOWN_SELFTEST =================\n");
+        const bool ok = krs::orb::runOrbOwnershipGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // GATE COMBO-POPUP: a node enum combo (mounted via NodeDelegate) opens a routable QMenu on showPopup().
+    if (qEnvironmentVariableIntValue("KRS_COMBOPOPUP_SELFTEST") != 0) {
+        std::printf("\n================= KRS_COMBOPOPUP_SELFTEST =================\n");
+        const bool ok = krs::nodes::runComboPopupGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
     // Node-editor GATE TYPE: port type compatibility.
     if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
         std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
@@ -1429,6 +1444,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE VISUALIZER-DATA (revived arrow field: real arrow_field_compute vectors == analytic effector field at each arrow; stale-field neg-ctrl mismatches)", runFieldVisualizerGate() },
             { "GATE ORB-VELOCITY (volume containment velocity query: synthetic exact + global-avg neg-ctrl + REAL fluid off-stream->0)", runOrbVelocityGate() },
             { "GATE ORB-LIFECYCLE (orb<->node binding: N orbs N colours; node-delete removes orb; orb-delete exposes node; leak neg-ctrl)", runOrbLifecycleGate() },
+            { "GATE ORB-OWNERSHIP (probe radius reconciles wire/gizmo/widget; gizmo resize persists; old clobber-every-tick neg-ctrl)", krs::orb::runOrbOwnershipGate() },
             { "GATE 1.2 fluid<->rigid Newton 3rd (impulse==momentum + inert-box neg-ctrl)", runFluidRigidImpulseGate() },
             { "GATE 1.3 artic<->collision (collision xform tracks live FK + stale neg-ctrl)", krs::dyn::runArticCollisionGate1_3() },
             { "GATE 1.4 MPM<->thermal energy conservation (Fourier + energy-leak neg-ctrl)", m_mpm ? m_mpm->runThermalGate1_4(*this, m_gl) : true },
@@ -1463,6 +1479,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE INPUT-BIND (mounted per-input widget drives node output, N-of-M)", krs::nodes::runInputBindGate() },
             { "GATE WIDGET-INPUT (typed spin-box value feeds compute when unconnected: 3+4->7, wire 10->13; old spin-box-ignored neg-ctrl)", krs::nodes::runWidgetInputGate() },
             { "GATE COMBO-INPUT (enum combo selection read by compute: Add/Sub/Mul switches math_op; old combo-ignored neg-ctrl)", krs::nodes::runComboInputGate() },
+            { "GATE COMBO-POPUP (node enum combo mounts a ProxyComboBox -> showPopup opens a routable QMenu + selection drives the index; old bare-combo neg-ctrl)", krs::nodes::runComboPopupGate() },
             { "GATE TRIGGER-EDGE (Button brief pulse: rising-on-press/falling-on-release/dual; level + wrong-edge neg-ctrl)", krs::nodes::runTriggerEdgeGate() },
             { "GATE IK-SAMPLE (IK Target samples-on-trigger + holds; FK(goal)==target, unreachable graceful; continuous-track + wrong-soln neg-ctrls)", krs::nodes::runIkSampleGate() },
             { "GATE OMPL (two-stage PLAN freezes path w/o moving + EXECUTE drives to goal + no-plan graceful; in-node planner/iters/waypoints params change the plan; planned path collision-free, straight-line-through-box collides)", krs::nodes::runOmplPlannerGate() },

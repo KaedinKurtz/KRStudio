@@ -3398,3 +3398,47 @@ Phases 1-4 each built via PowerShell (freshly relinked, exe timestamp verified) 
 KRS_WIDGETINPUT / KRS_COMBOINPUT / KRS_TRIGGEREDGE / KRS_IKSAMPLE / KRS_OMPL all ALL PASS; folded into
 KRS_OVERNIGHT_BENCH -> 99/99 gate groups PASS (97 prior + IK-SAMPLE + OMPL). Commits: Phase 1 ea1893b, Phase 2
 33ace7c, Phase 3 bf98feb, Phase 4 (this).
+
+### UI BUGFIX — node combo popups + velocity-probe orb gizmo-scaling (2026-06-18)
+Two operator-reported bugs, diagnosed by a 4-agent parallel recon workflow (each root cause cross-checked against
+independent inline reads), then fixed + gated.
+
+(1) NODE COMBO BOXES DEAD (the OMPL planner-mode combo, the Button edge combo, and the exec-mode
+"Continuous/Triggered" + edge combos): clicking showed the flat-hand pan cursor and no menu, while spin boxes
+worked. ROOT CAUSE: a node's body is one QGraphicsProxyWidget; the default QComboBox::showPopup() spawns its
+dropdown as a separate top-level QWidget whose geometry is computed from the (meaningless) native screen rect
+under the QGraphicsView transform, so it mis-positions / closes instantly. (The prior task-#82 fix applied the
+QMenu workaround ONLY to the special Object/Property combos in TwinNodes.cpp; the generic combos never got it.)
+Proof it is the popup, not the pan: the prior probe logs show the proxy WAS detected and the pan WAS suppressed
+(dragMode 1->0) yet the native popup still failed. FIX: a shared ProxyComboBox (include/NodeHeaders/
+ProxyComboBox.hpp) that overrides showPopup() to run a QMenu at mapToGlobal(0,height()) -- the proven
+ObjectCombo/PropertyCombo idiom -- used in NodeDelegate's enum-input branch AND ExecutionControlWidget's
+policy/edge combos. A QMenu action calls setCurrentIndex(i), so the existing currentIndexChanged ->
+setPortLiteral<int> binding is untouched. No vendored-QtNodes edit, no DroppableGraphicsView change.
+GATE COMBO-POPUP (KRS_COMBOPOPUP_SELFTEST + bench): the math_op Op combo, MOUNTED via the real NodeDelegate, is a
+ProxyComboBox (dynamic_cast); showPopup() builds a QMenu child whose action count == item count; triggering an
+action drives currentIndex. NEG-CTRL: a bare QComboBox (the old mount) is not a ProxyComboBox and builds no QMenu
+(the gate fails on the old code). OPERATOR VISUAL-CONFIRM: click any node combo -> a menu drops under the box and
+a selection takes, at 1.0 and zoomed.
+
+(2) VELOCITY-PROBE ORB itty-bitty + ignores the scale gizmo. The gizmo is FINE (it writes t.scale = t0.scale*s
+and the orb is pickable via cpuPickAABB with no collider). ROOT CAUSE: VelocityProbeOrbNode::compute() wrote
+xf->scale = vec3(radius) EVERY eval tick, clobbering any gizmo scale on the next tick; the spawn radius 0.25 *
+the IcoSphere base-mesh radius 0.5 = 0.125 m world radius (tiny); and the GL query used radius = scale.x while the
+visible sphere is 0.5*scale.x (a 2x sampled-vs-seen mismatch). FIX: (a) compute() OWNERSHIP RECONCILIATION --
+write scale only when Radius is WIRED (graph wins) or the in-node widget literal changed (operator typed);
+otherwise READ xf->scale.x back so a gizmo resize PERSISTS and feeds the outputs (tracks m_lastWidgetRadius to
+tell a widget edit from a gizmo edit; first tick reads the scale so a 0-seeded literal can't shrink it). (b) spawn
+default 0.25->0.5 (world radius 0.25 m) + seed the Radius port literal so the widget shows the live size. (c)
+OrbProbeSystem query radius = 0.5*scale.x so the sampled volume matches the visible glass sphere -- RUNTIME ONLY,
+NOT krs::orb::averageVelocityInSphere (the ORB-VELOCITY gate asserts exact counts against the unscaled core).
+GATE ORB-OWNERSHIP (KRS_ORBOWN_SELFTEST + bench, headless on a real entt registry, drives the real compute()):
+a settled scale holds; a simulated gizmo write of 2.0 PERSISTS (param tracks it) [NEG-CTRL: the old clobber would
+reset it to the 0.5 param -> differs]; a widget literal of 0.75 applies; a wired 1.25 overrides; releasing the
+wire returns control to the gizmo (1.8 read back). OPERATOR VISUAL-CONFIRM: spawn a probe (~0.5 m glass sphere,
+not itty-bitty); press Y/Space -> Scale, drag a handle -> the sphere resizes and STAYS resized across ticks, and
+the contained Count tracks the visible volume; wiring Radius overrides the gizmo.
+
+RESULT: KRS_ORBOWN + KRS_COMBOPOPUP ALL PASS; standalone re-runs green. Bench 101 gate groups, 100 PASS with the
+sole red = GATE PERF, a pre-existing small-N (N=5) eval-timing flake (8.0x vs the >=10x threshold under multi-gate
+load) that passes 3/3 standalone and is untouched by these UI/orb changes.

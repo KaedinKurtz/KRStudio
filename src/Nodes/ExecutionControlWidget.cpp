@@ -1,4 +1,5 @@
 #include "ExecutionControlWidget.hpp"
+#include "ProxyComboBox.hpp"   // QMenu-popup combo: the native dropdown mis-routes inside the node's proxy widget
 #include <QComboBox>
 #include <QVBoxLayout>
 #include <QLabel>
@@ -16,14 +17,14 @@ ExecutionControlWidget::ExecutionControlWidget(QWidget* parent)
     // The node's geometry will be calculated based on this size.
     setFixedSize(180, 120);
 
-    m_policyComboBox = new QComboBox(this);
+    m_policyComboBox = new ProxyComboBox(this);
     m_policyComboBox->addItem("Continuous", QVariant::fromValue(Node::UpdatePolicy::Asynchronous));
     m_policyComboBox->addItem("Synchronous", QVariant::fromValue(Node::UpdatePolicy::Synchronous));
     m_policyComboBox->addItem("Triggered", QVariant::fromValue(Node::UpdatePolicy::Triggered));
 
     m_edgeLabel = new QLabel("Trigger On:", this);
 
-    m_edgeComboBox = new QComboBox(this);
+    m_edgeComboBox = new ProxyComboBox(this);
     m_edgeComboBox->addItem("Rising Edge", QVariant::fromValue(Node::TriggerEdge::Rising));
     m_edgeComboBox->addItem("Falling Edge", QVariant::fromValue(Node::TriggerEdge::Falling));
     m_edgeComboBox->addItem("Both Edges", QVariant::fromValue(Node::TriggerEdge::Both));
