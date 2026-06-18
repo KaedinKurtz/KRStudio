@@ -3065,3 +3065,25 @@ outputs the amplitude, which pipes into the Phase-2 emitter.
   compared base==base (always true, zero discriminating power). FIXED: geometryOnlyAmplitude now takes the
   dynamics but drops the acceleration term, so it genuinely loses the ordering; also added the full node chain,
   the receding case, and the node-level wA=0 control (closing the minor "only accel>decel proven" gaps).
+
+### AVOIDANCE PHASE 4 RESULT (2026-06-17, KRS_SDF_SELFTEST + bench GATE SDF) — ALL PASS
+Particle grid-SDF (krs::field::GridSdf, AvoidanceField.hpp): splats particles to a signed-distance grid
+(d = min|node-p|-r, <0 inside, engine SdfColliderView convention) with a configurable band (band>=grid = exact
+brute force; small band = fast near-field). Provides trilinear distance + central-diff gradient. NOT a per-
+frame mesh. substanceFieldMagnitude = dynamicAmplitude(streamSpeed,...) * falloff(SDF distance) -- the Phase-3
+dynamics scaling applied to a substance stream.
+- **SDF-DISTANCE PASS**: trilinear sample vs analytic |x-cloud|-r, max err **0.00106 m** (<0.02); an INTERIOR
+  point reads d<0 (the <0-inside convention, err 0.0); an empty SDF reads 1e9 (neg-ctrl).
+- **SDF-GRADIENT PASS**: the gradient points AWAY from the nearest substance, dot(grad, analytic-away)=**1.0000**
+  (>0.99), |grad|~0.99; an empty (flat) SDF gives |grad|=0 (no dodge direction, neg-ctrl).
+- **SDF-DYNAMICS PASS**: a fast-moving stream field=**2.940** vs a still pool=**0.840** of the SAME geometry
+  (the dynamics scaling applies to the substance); a geometry-only model (wV=wA=0, fed the same moving/still
+  inputs) gives identical 0.840 (a real failing model, not base==base).
+- **SDF-PERF PASS**: the BANDED splat (band=8 ~0.51 m, the avoidance-relevant near field that is actually
+  CONSUMED) runs at **18.2 ms/frame** at 48^3 / 1000 particles (<33 ms interactive); it is CORRECT within the
+  band (err 0.0068 m) and degrades GRACEFULLY to 0 beyond (sentinel -> falloff 0, no avoidance far away).
+- **ADVERSARIAL REVIEW (2 skeptics) caught a GATE-VACUOUS tautology + a REAL-BUG**: (1) the geometry-only
+  neg-control was again base*falloff==base*falloff (tautology) -> fixed to a real zero-weight model fed the
+  actual inputs; (2) the original perf gate timed a band=4 field that was 92% empty and NEVER sampled, while
+  the validated (band=big) field actually cost ~235 ms -> fixed: perf now times the CONSUMED band-8 near-field,
+  asserts it is correct in-band, and proves graceful sentinel degradation beyond; added the interior <0 probe.

@@ -70,6 +70,84 @@ private:
 // EMITTER-SUBSTANCE / EMITTER-TYPE-SWITCH. Returns true iff all pass.
 bool runEmitterGate();
 
+// --- Phase 4: particle grid-SDF (distance + gradient) ----------------------
+// Splat particles to a grid signed-distance field each frame: per node,
+// d = min_i |node - p_i| - radius (<0 inside the union of particle spheres, the
+// engine's SdfColliderView sign convention). The avoidance layer reads distance
+// AND gradient (the gradient is the away-from-substance dodge direction). NOT a
+// per-frame mesh. `band` caps each particle's update radius in cells: band >=
+// grid -> exact min (brute force); a small band -> a fast near-field splat.
+struct GridSdf {
+    glm::vec3 origin{ 0.0f }, extent{ 1.0f };
+    glm::ivec3 dims{ 8, 8, 8 };
+    std::vector<float> field;     // dims.x*dims.y*dims.z, signed distance (<0 inside)
+    float radius = 0.05f;
+
+    int idx(int i, int j, int k) const { return (k * dims.y + j) * dims.x + i; }
+    glm::vec3 nodePos(int i, int j, int k) const {
+        return origin + extent * (glm::vec3(float(i), float(j), float(k)) / glm::vec3(dims - glm::ivec3(1)));
+    }
+
+    void build(const std::vector<glm::vec3>& parts, float r, int band = 1 << 20) {
+        radius = r;
+        field.assign(size_t(dims.x) * dims.y * dims.z, 1.0e9f);
+        const glm::vec3 span = glm::vec3(dims - glm::ivec3(1));
+        for (const auto& p : parts) {
+            const glm::vec3 t = (p - origin) / extent * span;        // particle node-index
+            const glm::ivec3 c = glm::ivec3(glm::round(t));
+            const glm::ivec3 lo = glm::max(c - glm::ivec3(band), glm::ivec3(0));
+            const glm::ivec3 hi = glm::min(c + glm::ivec3(band), dims - glm::ivec3(1));
+            for (int k = lo.z; k <= hi.z; ++k)
+                for (int j = lo.y; j <= hi.y; ++j)
+                    for (int i = lo.x; i <= hi.x; ++i) {
+                        const float d = glm::length(nodePos(i, j, k) - p) - r;
+                        float& cell = field[idx(i, j, k)];
+                        if (d < cell) cell = d;
+                    }
+        }
+    }
+    float nodeValue(int i, int j, int k) const { return field[idx(i, j, k)]; }
+
+    // trilinear sample at a world point (node-centred grid; clamped to the grid).
+    float sample(const glm::vec3& w) const {
+        const glm::vec3 t = (w - origin) / extent * glm::vec3(dims - glm::ivec3(1));
+        const glm::ivec3 i0 = glm::clamp(glm::ivec3(glm::floor(t)), glm::ivec3(0), dims - glm::ivec3(2));
+        const glm::vec3 f = glm::clamp(t - glm::vec3(i0), glm::vec3(0.0f), glm::vec3(1.0f));
+        auto V = [&](int di, int dj, int dk) { return field[idx(i0.x + di, i0.y + dj, i0.z + dk)]; };
+        const float x00 = glm::mix(V(0,0,0), V(1,0,0), f.x), x10 = glm::mix(V(0,1,0), V(1,1,0), f.x);
+        const float x01 = glm::mix(V(0,0,1), V(1,0,1), f.x), x11 = glm::mix(V(0,1,1), V(1,1,1), f.x);
+        return glm::mix(glm::mix(x00, x10, f.y), glm::mix(x01, x11, f.y), f.z);
+    }
+    // central-difference gradient (the avoidance direction; points away from the substance).
+    glm::vec3 gradient(const glm::vec3& w) const {
+        const glm::vec3 h = extent / glm::vec3(dims - glm::ivec3(1));
+        return glm::vec3(
+            (sample(w + glm::vec3(h.x, 0, 0)) - sample(w - glm::vec3(h.x, 0, 0))) / (2.0f * h.x),
+            (sample(w + glm::vec3(0, h.y, 0)) - sample(w - glm::vec3(0, h.y, 0))) / (2.0f * h.y),
+            (sample(w + glm::vec3(0, 0, h.z)) - sample(w - glm::vec3(0, 0, h.z))) / (2.0f * h.z));
+    }
+};
+
+// the avoidance field a SUBSTANCE produces at a point: distance falloff (from the
+// SDF) scaled by the stream's DYNAMICS (Phase-3 law) -- a fast-moving stream is
+// scarier than a still pool of the same geometry.
+// SENTINEL/BAND note: a band-limited build leaves cells beyond band*cell at the
+// 1e9 sentinel; that is intentional -- with range <= band*cell, a sentinel sample
+// gives falloff = max(0, 1 - 1e9/range) = 0, so the substance field degrades
+// GRACEFULLY to 0 outside the avoidance-relevant near field (no avoidance far away,
+// which is correct), while the in-band field is exact.
+inline double substanceFieldMagnitude(const GridSdf& sdf, const glm::vec3& point,
+                                      double streamSpeed, double streamAccel,
+                                      double wV, double wA, double base, double range) {
+    const double dist = double(sdf.sample(point));
+    const double falloff = std::max(0.0, 1.0 - std::max(0.0, dist) / range);   // 1 at surface, 0 at range
+    return dynamicAmplitude(streamSpeed, streamAccel, wV, wA, base) * falloff;
+}
+
+// GATE SDF (env KRS_SDF_SELFTEST; in the bench): SDF-DISTANCE / SDF-GRADIENT /
+// SDF-DYNAMICS / SDF-PERF. Returns true iff all pass.
+bool runSdfGate();
+
 // GATE FIELD-LAW (env KRS_FIELDLAW_SELFTEST; in the bench): FIELD-DYNAMICS (the
 // amplitude ordering accel>const>decel>static; geometry-only fails it) +
 // FIELD-AUTHORABLE (weighting changes amplitude) + the law->emitter pipe.

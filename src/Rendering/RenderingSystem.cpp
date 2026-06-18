@@ -1317,6 +1317,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
+    // Avoidance-field Phase 4: particle grid-SDF (distance + gradient + dynamics scaling + perf). Pure CPU.
+    if (qEnvironmentVariableIntValue("KRS_SDF_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SDF_SELFTEST =================\n");
+        const bool ok = krs::field::runSdfGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1365,6 +1372,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE TWIN (ECS->catalog introspection + Object/Property nodes value-fidelity + stale-aware frequency; non-existent-obj & phantom-prop & disconnected & frozen-Hz neg-ctrls)", krs::twin::runTwinGate() },
             { "GATE EMITTER (avoidance-field emission magnitude/sign via FieldSolver + substance origin/rate/follow + type-switch; zero-amp & disconnected & invalid-type neg-ctrls)", krs::field::runEmitterGate() },
             { "GATE FIELD-LAW (dynamics-driven amplitude ordering accel>const>decel>static + authorable + law->emitter pipe; geometry-only-fails-ordering & unconnected-weight neg-ctrls)", krs::field::runFieldLawGate() },
+            { "GATE SDF (particle grid-SDF distance vs analytic + away-gradient + dynamics-scaling + interactive-perf; empty-SDF & flat-gradient & geometry-only neg-ctrls)", krs::field::runSdfGate() },
             { "GATE C-track (computed torque tracks moving setpoint; soft PD lags)", krs::ctrl::runControllerTrackGate() },
             { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },
