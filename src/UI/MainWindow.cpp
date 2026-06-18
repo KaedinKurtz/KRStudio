@@ -74,6 +74,7 @@
 #include "NodeCatalogWidget.hpp"   // ADD THIS if you haven't already
 #include "DroppableGraphicsView.hpp" // ADD THIS if you haven't already
 #include "NodeFactory.hpp" // ADD THIS if you haven't already
+#include "OrbProbe.hpp"     // Phase 4: velocity-probe orb<->node binding
 #include "RobotGraph.hpp"  // default boot node graph (spawnDefaultRobotGraph / tickRobotGraph)
 #include "NodeEditQueue.hpp" // decouple UI edits from the physics thread
 #include "EvalEngine.hpp"  // quiet eval + capped UI refresh (decouple eval from UI-update)
@@ -305,6 +306,19 @@ void MainWindow::disableFloatingForAllDockWidgets()
     for (auto* dw : docks)
         makeNonFloatable(dw);
 }
+
+namespace {
+// Phase 4: reverse orb->node lifecycle plumbing. entt's on_destroy needs a FREE function (C++17 -- no
+// lambda as a non-type template argument); it records the bound node id of a just-destroyed orb into a
+// registry-context queue that the UI tick drains to delete the matching graph node.
+struct OrbReverseQueue { std::vector<std::uint64_t> ids; };
+void onOrbBindingDestroyed(entt::registry& r, entt::entity e) {
+    const std::uint64_t id = r.get<OrbBindingComponent>(e).nodeId;
+    OrbReverseQueue* q = r.ctx().find<OrbReverseQueue>();
+    if (!q) q = &r.ctx().emplace<OrbReverseQueue>();
+    q->ids.push_back(id);
+}
+} // namespace
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
@@ -986,9 +1000,64 @@ MainWindow::MainWindow(QWidget* parent)
             // The delegate self-creates its backend node + widget lazily (the MOUNT FIX) during
             // NodeGraphicsObject construction, so the widget is already embedded. Here we just inject the
             // live Scene (Phase 5 backend bridge) and ask QtNodes to recompute the node's geometry.
-            if (Node* n = delegate->backendNode()) n->setScene(m_scene.get());
+            Node* n = delegate->backendNode();
+            if (n) {
+                n->setScene(m_scene.get());
+
+                // Phase 4: a VelocityProbeOrb node spawns its bound glass-sphere probe. Distinct colour
+                // per node (golden-ratio hue) so N nodes -> N orbs in N colours; the orb is a measurement
+                // VOLUME (spawnPrimitive's auto-collider is stripped by decorateProbeOrb), tinted the
+                // node's colour. The binding key is the QtNodes NodeId (param "orbNodeId").
+                if (n->getId() == "velocity_probe_orb") {
+                    const std::uint64_t id = std::uint64_t(nodeId);
+                    const float h = std::fmod(float(id) * 0.61803398875f + 0.12f, 1.0f);  // distinct hue
+                    const float s = 0.72f, v = 0.96f;
+                    const float hh = h * 6.0f; const int hi = int(hh) % 6; const float fr = hh - std::floor(hh);
+                    const float p = v * (1 - s), q = v * (1 - s * fr), t = v * (1 - s * (1 - fr));
+                    glm::vec3 color;
+                    switch (hi) {
+                        case 0: color = { v, t, p }; break; case 1: color = { q, v, p }; break;
+                        case 2: color = { p, v, t }; break; case 3: color = { p, q, v }; break;
+                        case 4: color = { t, p, v }; break; default: color = { v, p, q }; break;
+                    }
+                    const glm::vec3 center(0.0f, 0.8f, 0.0f);
+                    const float radius = 0.25f;
+                    entt::entity orb = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::IcoSphere),
+                                                                    center, glm::vec3(radius), "Velocity Probe Orb");
+                    krs::orb::decorateProbeOrb(m_scene->getRegistry(), orb, id, color, center, radius);
+                    n->setParam<long long>("orbNodeId", (long long)id);
+                    n->setParam<double>("radius", double(radius));
+                    qInfo() << "[orb] spawned velocity-probe orb for node" << id;
+                }
+            }
             Q_EMIT graphModel->nodeUpdated(nodeId);
         });
+
+    // Phase 4: deleting the NODE removes its bound orb (forward lifecycle).
+    connect(graphModel.get(), &QtNodes::AbstractGraphModel::nodeDeleted,
+        this, [this](QtNodes::NodeId nodeId) {
+            if (m_scene) krs::orb::removeOrbForNode(m_scene->getRegistry(), std::uint64_t(nodeId));
+        });
+
+    // Phase 4: deleting the ORB removes its node (reverse lifecycle). An entt on_destroy observer on
+    // OrbBindingComponent records the bound node id; the UI tick deletes that graph node IF it still
+    // exists (when the node was the one deleted, it is already gone -> the guard breaks the cycle, so a
+    // node-side delete does not loop back through here). This closes the bidirectional binding.
+    {
+        m_scene->getRegistry().on_destroy<OrbBindingComponent>().connect<&onOrbBindingDestroyed>();
+        auto* orbReverseTimer = new QTimer(this);
+        connect(orbReverseTimer, &QTimer::timeout, this, [this, graphModel]() {
+            if (!m_scene) return;
+            auto& reg = m_scene->getRegistry();
+            OrbReverseQueue* pending = reg.ctx().find<OrbReverseQueue>();
+            if (!pending || pending->ids.empty()) return;
+            std::vector<std::uint64_t> ids; ids.swap(pending->ids);
+            for (std::uint64_t id : ids)
+                if (graphModel->nodeExists(QtNodes::NodeId(id)))     // skip ids whose node is already gone
+                    graphModel->deleteNode(QtNodes::NodeId(id));
+        });
+        orbReverseTimer->start(50);
+    }
 
     // LIVE GRAPH TICK: re-evaluate time-source nodes every frame so downstream time-parametric nodes
     // (sine/ramp/oscillator) actually move over wall-clock instead of emitting a constant.
@@ -1032,6 +1101,24 @@ MainWindow::MainWindow(QWidget* parent)
                                                                              /*joint*/ 0, /*freqHz*/ 0.2, /*ampRad*/ 0.5);
         if (bg.ok) qInfo() << "[FANUC] default robot graph spawned (time->sine->drive J1) -- the node editor drives the arm";
         else       qWarning() << "[FANUC] default robot graph spawn FAILED";
+    }
+
+    // Phase 4 demo (KRS_ORB_DEMO): instance a velocity_probe_orb node, which (via the nodeCreated hook)
+    // spawns its bound glass-sphere probe. Pair with KRS_FLUID_DEMO to watch the probe report the fluid's
+    // speed -- and drop to ~0 when dragged off the stream. KRS_ORB_DEMO=N spawns N orbs in N colours.
+    if (qEnvironmentVariableIsSet("KRS_ORB_DEMO")) {
+        const int nOrbs = std::max(1, qEnvironmentVariableIntValue("KRS_ORB_DEMO"));
+        for (int i = 0; i < nOrbs; ++i) {
+            const QtNodes::NodeId id = graphModel->addNode(QStringLiteral("velocity_probe_orb"));
+            // spread the demo orbs along x and drop them into the basin water (y in 0.08..0.52 under
+            // KRS_FLUID_DEMO) so they immediately sample the moving fluid; they do not overlap.
+            if (entt::entity orb = krs::orb::findOrbForNode(m_scene->getRegistry(), std::uint64_t(id)); orb != entt::null)
+                if (auto* xf = m_scene->getRegistry().try_get<TransformComponent>(orb))
+                    xf->translation = glm::vec3(-0.6f + 0.6f * float(i), 0.18f, 0.0f);
+            qInfo() << "[orb] KRS_ORB_DEMO instanced velocity_probe_orb node" << id;
+        }
+        // auto-start so the probes immediately sample the moving fluid (else the sim is paused at boot).
+        if (m_simulation) m_simulation->play();
     }
 
     connect(m_dockManager, &ads::CDockManager::dockWidgetRemoved, this, &MainWindow::syncViewportManagerPopup);

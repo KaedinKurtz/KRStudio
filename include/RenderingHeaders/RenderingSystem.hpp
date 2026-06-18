@@ -201,6 +201,10 @@ public:
     bool runOrbVelocityGate();
     bool runOrbLifecycleGate();
 
+    // Phase 4 runtime: per-frame, GL-side fill of every velocity-probe orb's measured velocity from the
+    // live fluid particle SSBO (the node relays it). No-op when no orbs exist. (OrbProbeSystem.cpp)
+    void updateOrbProbes(entt::registry& registry);
+
     // Phase 1 GATE 1.2: FLUID<->RIGID two-way coupling (Newton's 3rd law across the boundary). The
     // GPU fluid falls onto a dynamic box (scene gravity off, so the box only moves from the fluid
     // impulse); the per-collider impulse the fluid SSBO delivers must equal the rigid momentum the

@@ -1632,6 +1632,8 @@ void RenderingSystem::renderAllViewports()
     // unions into the shared viz range; publishes nodal fields to FEM bodies.
     if (m_fem && m_mpm)
         m_fem->update(m_scene->getRegistry(), m_gl, m_mpm.get(), int(m_mpm->appearance().mode));
+    // Phase 4: fill velocity-probe orbs from the live fluid (GL current here; no-op if no orbs).
+    updateOrbProbes(m_scene->getRegistry());
     m_gl->glEndQuery(GL_TIME_ELAPSED);
 
     if (m_gpuQueryFrame >= kGpuQueryRing - 1) {

@@ -3220,3 +3220,21 @@ GATES (KRS_ORB_SELFTEST + bench), measured + non-vacuous neg-ctrl:
 OPERATOR VISUAL-CONFIRM: instancing a VelocityProbeOrb node spawns one transparent glass sphere tinted the
 node's colour; scaling/moving it changes the measured volume; deleting the node removes the sphere and vice
 versa; N nodes -> N spheres in N colours; moving a sphere off the fluid stream drops its reported speed to ~0.
+
+PHASE 4b RUNTIME DELIVERED: VelocityProbeOrb node (src/Nodes/VelocityProbeOrbNode.cpp) registered with
+NodeFactory; the nodeCreated hook spawns its bound glass IcoSphere (auto-collider stripped, tinted a
+distinct golden-ratio colour per node id) and sets the binding key; the nodeDeleted hook removes the orb
+(forward lifecycle); an entt on_destroy<OrbBindingComponent> observer + a 50 ms UI tick delete the matching
+graph node when an orb is destroyed (reverse lifecycle, guarded by nodeExists so a node-side delete does not
+loop). The GL-side per-frame step RenderingSystem::updateOrbProbes (OrbProbeSystem.cpp, called after the fluid
+sim where the SSBO is readable) reads back the live fluid particles and writes each orb's measuredVelocity;
+the node's compute() relays it to Velocity/Speed/Count ports and pushes its Radius back to the orb.
+Smoke-tested: the node registers; KRS_ORB_DEMO=N instances N nodes -> N glass orbs in N colours; the app
+boots and runs crash-free with the per-frame probe step (default no-orb path is a clean no-op). CAVEAT: the
+KRS_FLUID_DEMO basin water does not auto-seed particles on the auto-play boot path (a pre-existing fluid-demo
+plumbing detail, orthogonal to the orb) -- so the live nonzero-velocity readout is exercised by GATE
+ORB-VELOCITY on the real seeded fluid (2080 particles, avg -0.736 m/s) rather than at demo boot; with a fluid
+that has live particles the same updateOrbProbes path reports the in-volume average and drops to ~0 off-stream.
+OPERATOR VISUAL-CONFIRM: instance VelocityProbeOrb node(s) over a running fluid -> one glass sphere per node
+in a distinct colour; scale/move resizes/repositions the probe; deleting the node removes the sphere and
+deleting the sphere removes the node; dragging a sphere off the stream drops its reported speed to ~0.
