@@ -110,7 +110,7 @@ private:
 
     void syncViewportManagerPopup();
 
-    FlowVisualizerMenu* m_flowVisualizerMenu;
+    FlowVisualizerMenu* m_flowVisualizerMenu = nullptr;  // set when the menu opens; null when closed
     QTimer* m_rsPollTimer;
     std::unique_ptr<RealSenseManager> m_realSenseManager;
     std::unique_ptr<rs2::pointcloud> m_pointCloud;

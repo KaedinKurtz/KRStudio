@@ -6,6 +6,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QMouseEvent>
 
 class DroppableGraphicsView : public QtNodes::GraphicsView
 {
@@ -30,4 +31,15 @@ protected:
     }
 
     void dropEvent(QDropEvent* event) override;
+
+    // The base GraphicsView pans the canvas on left-drag (ScrollHandDrag). That silently swallowed
+    // clicks on embedded node controls -- combo boxes especially looked "dead". When a left-press lands
+    // on an embedded control (a QGraphicsProxyWidget hosting the combo/spinbox), suppress the pan for
+    // that interaction so the click reaches the widget; restore panning on release. Empty-canvas drags
+    // still pan; node bodies still drag-move.
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+
+private:
+    bool m_panSuppressed = false;
 };

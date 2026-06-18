@@ -20,11 +20,14 @@ PreviewViewport::PreviewViewport(QWidget* parent)
     auto& registry = m_previewScene->getRegistry();
     registry.ctx().emplace<SceneProperties>();
 
-    m_cameraEntity = SceneBuilder::createCamera(*m_scene, { 0, 1, 3 }, {1, 1, 1});
-    m_previewScene->setPrimaryCamera(m_cameraEntity);
-
+    // NOTE: the base ViewportWidget was constructed with a null scene, so point at our OWN preview
+    // scene FIRST -- the old code did createCamera(*m_scene) before this assignment, dereferencing the
+    // null base m_scene and crashing the moment the FlowVisualizer menu (which embeds 3 of these) opened.
     m_scene = m_previewScene.get();
     m_renderingSystem = m_previewRenderSystem.get();
+
+    m_cameraEntity = SceneBuilder::createCamera(*m_previewScene, { 0, 1, 3 }, { 1, 1, 1 });
+    m_previewScene->setPrimaryCamera(m_cameraEntity);
 }
 
 // The destructor ensures a clean shutdown of its own RenderingSystem.

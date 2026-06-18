@@ -3238,3 +3238,22 @@ that has live particles the same updateOrbProbes path reports the in-volume aver
 OPERATOR VISUAL-CONFIRM: instance VelocityProbeOrb node(s) over a running fluid -> one glass sphere per node
 in a distinct colour; scale/move resizes/repositions the probe; deleting the node removes the sphere and
 deleting the sphere removes the node; dragging a sphere off the stream drops its reported speed to ~0.
+
+### UI BUGFIX — field-visualizer toggle crash + node combo interactivity + menu wiring
+Operator-reported issues fixed (verified on-screen with pixel measurement, not just headlessly):
+- CRASH on the field-visualizer toggle: PreviewViewport's constructor called SceneBuilder::createCamera(*m_scene)
+  before assigning m_scene = m_previewScene.get(), dereferencing the null base-class scene -- the FlowVisualizer
+  menu embeds 3 PreviewViewports, so opening it segfaulted. Fixed by pointing m_scene at the preview scene first.
+- Node COMBO boxes not interactable: the node GraphicsView pans on left-drag (ScrollHandDrag), which swallowed
+  clicks on embedded controls. DroppableGraphicsView now suppresses the pan when a left-press lands on an
+  embedded proxy widget (verified: dragMode 1->0 on a body-centre press), and the Object/Property combos show a
+  QMenu dropdown at the box (mapToGlobal through the proxy) instead of the mis-positioned native popup. The Object
+  combo was widened (170 px, was clipping body names).
+- Field-visualizer menu was UNWIRED: m_flowVisualizerMenu was never assigned and settingsChanged never connected,
+  so the menu could not control the visualizer. showMenu now assigns it, connects settingsChanged/transformChanged
+  to the handlers, syncs the menu from the live FieldVisualizerComponent, and applies the initial state; the
+  handlers are null-guarded and the pointer cleared on close. Verified: opening the menu logs "[SETTINGS APPLIED]
+  Mode: Arrows, Density 16x16x16" + "successfully applied to component", no crash.
+- VERIFIED ON SCREEN: with a field source present, the FieldVisualizerPass arrow field renders -- a live viewport
+  grab with the visualizer ON vs OFF (scene frozen) differs by 274,280 pixels (21% of a 2049x635 viewport); the
+  OFF frame shows zero arrows (clean negative control). Bench stays 94/94.

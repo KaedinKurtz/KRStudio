@@ -1552,6 +1552,7 @@ void MainWindow::onLoadRobotClicked()
 
 void MainWindow::onFlowVisualizerSettingsChanged()
 {
+    if (!m_flowVisualizerMenu) return;          // menu closed -> nothing to read from (avoid dangling deref)
     auto& registry = m_scene->getRegistry();
     auto view = registry.view<FieldVisualizerComponent, TransformComponent>();
 
@@ -1681,6 +1682,7 @@ void MainWindow::updateVisualizerUI()
 
 void MainWindow::onFlowVisualizerTransformChanged()
 {
+    if (!m_flowVisualizerMenu) return;
     auto& reg = m_scene->getRegistry();
     auto view = reg.view<TransformComponent, FieldVisualizerComponent>();
     if (view.size_hint() == 0) return;
@@ -2065,12 +2067,29 @@ void MainWindow::showMenu(MenuType type)
                 m_fixedTopToolbar->uncheckButtonForMenu(type);
                 m_menus.remove(type);
             }
+            if (type == MenuType::FlowVisualizer) m_flowVisualizerMenu = nullptr;  // avoid a dangling deref
             });
 
         if (db::DatabaseManager::instance().menuConfigExists(title))
             entry.menu->initializeFromDatabase();
         else
             entry.menu->initializeFresh();
+
+        // WIRE the flow-visualizer menu to the live FieldVisualizerComponent. Previously the menu opened
+        // but its master-visibility / arrow settings never reached the component (m_flowVisualizerMenu was
+        // never assigned and settingsChanged was never connected) -- so there was no way to actually turn
+        // the field visualizer on from the UI. Done AFTER initialize* so the getters read real control state.
+        if (type == MenuType::FlowVisualizer) {
+            if (auto* fvm = dynamic_cast<FlowVisualizerMenu*>(entry.menu->widget())) {
+                m_flowVisualizerMenu = fvm;
+                connect(fvm, &FlowVisualizerMenu::settingsChanged, this,
+                        &MainWindow::onFlowVisualizerSettingsChanged, Qt::UniqueConnection);
+                connect(fvm, &FlowVisualizerMenu::transformChanged, this,
+                        &MainWindow::onFlowVisualizerTransformChanged, Qt::UniqueConnection);
+                updateVisualizerUI();               // menu controls  <- live component state
+                onFlowVisualizerSettingsChanged();  // live component <- menu state (incl. master visibility)
+            }
+        }
     }
 
     if (m_fixedTopToolbar) m_fixedTopToolbar->checkButtonForMenu(type);

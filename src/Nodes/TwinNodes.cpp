@@ -16,6 +16,8 @@
 #include <memory>
 #include <QComboBox>
 #include <QString>
+#include <QMenu>
+#include <QAction>
 
 namespace krs::twin {
 
@@ -53,7 +55,21 @@ private:
 class ObjectCombo : public QComboBox {
 public:
     explicit ObjectCombo(ObjectNode* n) : m_node(n) {}
-    void showPopup() override { repopulate(); QComboBox::showPopup(); }
+    // Embedded in a QGraphicsProxyWidget, the native combo dropdown mis-positions / is unclickable under
+    // the node view's transform. Show a QMenu at the combo's screen position instead -- mapToGlobal goes
+    // through the proxy + view, so it lands right under the box, and QMenu runs its own robust popup.
+    void showPopup() override {
+        repopulate();
+        if (count() == 0) return;
+        auto* menu = new QMenu(this);
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        menu->setMinimumWidth(width());
+        for (int i = 0; i < count(); ++i) {
+            QAction* a = menu->addAction(itemText(i));
+            QObject::connect(a, &QAction::triggered, this, [this, i] { setCurrentIndex(i); });
+        }
+        menu->popup(mapToGlobal(QPoint(0, height())));   // non-blocking; appears beneath the combo
+    }
     void repopulate() {
         const int keep = currentData().isValid() ? currentData().toInt() : -1;
         clear();
@@ -71,6 +87,11 @@ private:
 
 QWidget* ObjectNode::createCustomWidget() {
     auto* combo = new ObjectCombo(this);
+    // body tags ("Velocity Probe Orb", "Basin.Wall+X", ...) are long -- give the combo room so the
+    // name is not clipped, and let it size to its longest entry.
+    combo->setMinimumWidth(170);
+    combo->setMinimumContentsLength(22);
+    combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     combo->repopulate();
     QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this, combo](int) {
         if (combo->currentData().isValid()) setParam<int>("objId", combo->currentData().toInt());
@@ -124,7 +145,18 @@ private:
 class PropertyCombo : public QComboBox {
 public:
     explicit PropertyCombo(PropertyNode* n) : m_node(n) {}
-    void showPopup() override { repopulate(); QComboBox::showPopup(); }
+    void showPopup() override {                          // QMenu popup (see ObjectCombo for the why)
+        repopulate();
+        if (count() == 0) return;
+        auto* menu = new QMenu(this);
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        menu->setMinimumWidth(width());
+        for (int i = 0; i < count(); ++i) {
+            QAction* a = menu->addAction(itemText(i));
+            QObject::connect(a, &QAction::triggered, this, [this, i] { setCurrentIndex(i); });
+        }
+        menu->popup(mapToGlobal(QPoint(0, height())));
+    }
     void repopulate() {
         const QString keep = currentText();
         clear();
@@ -138,6 +170,9 @@ private:
 
 QWidget* PropertyNode::createCustomWidget() {
     auto* combo = new PropertyCombo(this);
+    combo->setMinimumWidth(150);
+    combo->setMinimumContentsLength(18);
+    combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     combo->repopulate();
     QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this, combo](int) {
         if (!combo->currentText().isEmpty()) setParam<std::string>("prop", combo->currentText().toStdString());
