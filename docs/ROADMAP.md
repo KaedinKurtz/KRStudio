@@ -3117,3 +3117,36 @@ uncertainty/reaction-tempering/temporal-coherence safety layer. DEFERRED (as dir
 consumes this field. Every gate carries a measured number + a non-vacuous negative control; adversarial review
 per phase caught + fixed 2 gate-vacuous tautologies and 2 real-bugs (the node frequency stale-freeze, the perf
 phantom-field, the temporal frozen-filter) that would otherwise have passed-while-broken.
+
+## LIVE FLUID SDF + VISUALIZER + ORB SPRINT (2026-06-18, default branch)
+### GATE SDF-LICENSE (Phase 0 -- reporting/decision gate) — nvblox license OK, but HARDWARE pivot to GPU EDT
+nvblox license: **Apache-2.0** (permissive, ships fine license-wise -- confirmed by the operator). HOWEVER
+nvblox is a **CUDA library** (its ESDF/TSDF core is CUDA kernels compiled by nvcc, run on an NVIDIA GPU). This
+build machine is an **AMD Radeon 780M iGPU** with **NO NVIDIA GPU and NO CUDA toolkit** (nvidia-smi absent,
+nvcc absent, CUDA_PATH unset, no toolkit dir). nvblox therefore **cannot build** (no nvcc) and **cannot run**
+(no CUDA runtime / NVIDIA GPU) here -- a hardware/toolchain blocker, NOT a license one. Surfaced as a genuine
+architectural decision; the operator chose to **PIVOT to the GPU EDT** (Felzenszwalb-Huttenlocher separable
+Euclidean Distance Transform) on the engine's existing GL-4.3 compute pipeline: no CUDA, no license, exact
+Euclidean SDF, single-digit ms, AMD-compatible -- meeting the same SUCCESS METRICS (SDF-SPEED/CORRECT/LIVE-
+SDF/LIVE-PERF). nvblox remains the intended backend on NVIDIA hardware; the EDT is the portable equivalent.
+PATH TAKEN: **GPU EDT (FH separable)** over a particle occupancy grid. NEG-CTRL: n/a (decision/report gate).
+
+### PHASE 1 — GPU EDT SDF (Jump Flooding), gated on the REAL live fluid
+GPU distance transform via JUMP FLOODING (Rong&Tan 2006 -- the GL-feasible GPU EDT; exact FH separable needs
+per-thread size-N arrays impractical in GLSL). Three compute shaders (shaders/edt_*_comp.glsl, GL 4.3): (a)
+edt_seed -- one thread/particle reads the live fluid SSBO, writes the particle world-pos into a vec4 seed grid
+at its cell (seed.w=1 valid; grid pre-cleared via glClearBufferData); (b) edt_jfa -- one thread/cell, for step
+= N/2..1 (log2 N passes) adopts the nearest valid seed among 26 neighbours at +/-step (ping-pong two grids);
+result: seed.xyz = nearest particle world-pos per cell. Distance = |cellPos - seed| - radius (<0 inside,
+engine convention); gradient = normalize(cellPos - seed) (the away-from-water dodge direction). Particle-count-
+INDEPENDENT (O(N^3 log N), N=64). Narrow-band at consumption (clamp used distance to the avoidance radius).
+New: include/RenderingHeaders/GpuSdfEdt.hpp + src/Rendering/GpuSdfEdt.cpp (SSBO mgmt + dispatch), the 3 shaders,
+gate src/Rendering/LiveSdfGate.cpp (RenderingSystem member, runs the live FluidSystem).
+GATES (KRS_LIVESDF_SELFTEST + bench), measured + non-vacuous neg-ctrl:
+- SDF-SPEED (HARD, LIVE fluid): seed a FluidVolume, update() the real PBF solver, dispatch JFA over the LIVE
+  particle SSBO, **glFinish()** (warm-up first) then time -> <15ms/frame; report particle count + grid res.
+  NEG-CTRL: the old O(cells*particles) brute force (krs::field::GridSdf band=big) on the same read-back
+  particles reproduces ~235ms and FAILS the 15ms bound.
+- SDF-CORRECT: the JFA SDF distance at sample points matches the analytic |point - nearest live particle| - r
+  to <tol (~1-2 cells, JFA sub-cell error); gradient points away (dot ~1.0); empty region -> large/no-collision.
+  NEG-CTRL: a wrong SDF (pre-JFA seed grid / shifted grid) mismatches the analytic.

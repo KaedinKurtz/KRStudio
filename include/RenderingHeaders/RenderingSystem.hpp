@@ -176,6 +176,11 @@ public:
     // Gated by KRS_GPUFLUIDSDF_SELFTEST + KRS_OVERNIGHT_BENCH. Implemented in GpuFluidSdfGate.cpp.
     bool runGpuFluidSdfGate();
 
+    // Live-fluid SDF sprint Phase 1 GATE LIVE-SDF: the GPU Jump-Flooding EDT SDF measured on the REAL
+    // live fluid particle set. SDF-SPEED (<15ms vs the old ~235ms brute force), SDF-CORRECT (distance/
+    // gradient vs analytic distance to the live cloud). Gated by KRS_LIVESDF_SELFTEST + bench. (LiveSdfGate.cpp)
+    bool runLiveSdfGate();
+
     // Phase 1 GATE 1.2: FLUID<->RIGID two-way coupling (Newton's 3rd law across the boundary). The
     // GPU fluid falls onto a dynamic box (scene gravity off, so the box only moves from the fluid
     // impulse); the per-collider impulse the fluid SSBO delivers must equal the rigid momentum the

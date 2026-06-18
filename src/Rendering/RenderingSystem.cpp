@@ -412,6 +412,9 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("mpm_grid", std::vector<std::string>{ (shaderDir + "mpm_grid_comp.glsl").toStdString() });
         loadAndStoreShader("mpm_g2p", std::vector<std::string>{ (shaderDir + "mpm_g2p_comp.glsl").toStdString() });
         loadAndStoreShader("mpm_render", (shaderDir + "mpm_render_vert.glsl").toStdString(), (shaderDir + "mpm_render_frag.glsl").toStdString());
+        // Live-fluid SDF (GPU Jump-Flooding EDT): seed particles -> grid, then JFA flood.
+        loadAndStoreShader("edt_seed", std::vector<std::string>{ (shaderDir + "edt_seed_comp.glsl").toStdString() });
+        loadAndStoreShader("edt_jfa", std::vector<std::string>{ (shaderDir + "edt_jfa_comp.glsl").toStdString() });
         // Phase 5: FEM body surface recolour (shares the MPM viz ramp + range).
         loadAndStoreShader("fem_viz", (shaderDir + "fem_viz_vert.glsl").toStdString(), (shaderDir + "fem_viz_frag.glsl").toStdString());
         // MLS-MPM thermodynamics: heat scatter -> normalize -> diffuse -> gather.
@@ -715,6 +718,14 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_GPUFLUIDSDF_SELFTEST") != 0) {
         std::printf("\n================= KRS_GPUFLUIDSDF_SELFTEST =================\n");
         const bool ok = runGpuFluidSdfGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Live-fluid SDF sprint Phase 1: GPU Jump-Flooding EDT SDF on the REAL live fluid (speed + correct).
+    if (qEnvironmentVariableIntValue("KRS_LIVESDF_SELFTEST") != 0) {
+        std::printf("\n================= KRS_LIVESDF_SELFTEST =================\n");
+        const bool ok = runLiveSdfGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
@@ -1354,6 +1365,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 0a conservation instrument (2-body momentum + leak neg-ctrl)", krs::integ::runConservationGate0() },
             { "GATE 0b causal-chain instrument (severed-stage localization)", krs::integ::runCausalChainGate0() },
             { "GATE 0c GPU fluid vs moving SDF (no-penetration + ghost neg-ctrl)", runGpuFluidSdfGate() },
+            { "GATE LIVE-SDF (GPU Jump-Flooding EDT on the REAL live fluid: <15ms vs brute-force baseline + distance/gradient vs analytic; shifted-grid neg-ctrl)", runLiveSdfGate() },
             { "GATE 1.2 fluid<->rigid Newton 3rd (impulse==momentum + inert-box neg-ctrl)", runFluidRigidImpulseGate() },
             { "GATE 1.3 artic<->collision (collision xform tracks live FK + stale neg-ctrl)", krs::dyn::runArticCollisionGate1_3() },
             { "GATE 1.4 MPM<->thermal energy conservation (Fourier + energy-leak neg-ctrl)", m_mpm ? m_mpm->runThermalGate1_4(*this, m_gl) : true },
