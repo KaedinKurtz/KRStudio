@@ -911,6 +911,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Phase 2 GATE TRIGGER-EDGE: the Button node's brief trigger pulse + edge semantics.
+    if (qEnvironmentVariableIntValue("KRS_TRIGGEREDGE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_TRIGGEREDGE_SELFTEST =================\n");
+        const bool ok = krs::nodes::runTriggerEdgeGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
     // Node-editor GATE TYPE: port type compatibility.
     if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
         std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
@@ -1442,6 +1449,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE INPUT-BIND (mounted per-input widget drives node output, N-of-M)", krs::nodes::runInputBindGate() },
             { "GATE WIDGET-INPUT (typed spin-box value feeds compute when unconnected: 3+4->7, wire 10->13; old spin-box-ignored neg-ctrl)", krs::nodes::runWidgetInputGate() },
             { "GATE COMBO-INPUT (enum combo selection read by compute: Add/Sub/Mul switches math_op; old combo-ignored neg-ctrl)", krs::nodes::runComboInputGate() },
+            { "GATE TRIGGER-EDGE (Button brief pulse: rising-on-press/falling-on-release/dual; level + wrong-edge neg-ctrl)", krs::nodes::runTriggerEdgeGate() },
             { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },

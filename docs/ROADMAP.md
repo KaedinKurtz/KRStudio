@@ -3330,3 +3330,16 @@ GATES (KRS_WIDGETINPUT_SELFTEST + bench), each with the OLD broken behavior as a
 - GATE COMBO-INPUT: mount math_op, the Op combo is a mounted QComboBox; selecting Add vs Multiply changes the
   Result (selection reaches compute via getInput<int>). NEG-CTRL: an UNBOUND bare combo / unset enum literal
   leaves the op on its default -> selection ignored, differs from the driven case.
+
+### PHASE 2 — BUTTON / TRIGGER NODE (the event source)
+New button_trigger node (src/Nodes/ButtonNode.cpp): a large colored clickable QPushButton that emits a BRIEF
+Trigger pulse (bool true for exactly one eval tick) on the selected edge. Edge mode is an in-node ENUM combo
+(the Phase-1 combo path): Rising fires on press, Falling on release, Dual on both. The button press/release set
+the "pressed" param; compute() detects the edge vs the previous tick (m_lastPressed) and emits the momentary
+Trigger; the eval timer (per frame) drives the polling. needsExecutionControls=false (it IS the trigger source).
+GATE TRIGGER-EDGE (KRS_TRIGGEREDGE_SELFTEST + bench), measured + real failing neg-ctrl: over the sequence
+idle/PRESS/hold/RELEASE/idle, Rising fires exactly once at the PRESS tick (and NOT while held -> brief), Falling
+once at the RELEASE tick, Dual at both. NEG-CTRL: a fires-continuously-while-held (level) model fires on every
+held tick (2) != the 1 edge fire; rising vs falling fire at different ticks (wrong-edge timing fails).
+OPERATOR VISUAL-CONFIRM REQUIRED: instance the Button node -> a large red button that lightens when pressed +
+an Edge combo; clicking it pulses downstream (e.g. drives the IK sample / OMPL plan trigger).

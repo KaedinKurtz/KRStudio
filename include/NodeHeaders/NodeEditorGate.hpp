@@ -36,6 +36,11 @@ bool runWidgetInputGate();
 // Op combo switches Add/Sub/Mul/Div). NEG-CTRL = OLD behavior (no enum widget -> selection ignored). Needs QApplication.
 bool runComboInputGate();
 
+// GATE TRIGGER-EDGE (KRS_TRIGGEREDGE_SELFTEST): the Button node emits a BRIEF trigger pulse with correct edge
+// semantics (Rising on press, Falling on release, Dual on both); NEG-CTRL = a fires-continuously-while-held
+// (level) model + wrong-edge timing. Headless (no QApplication needed).
+bool runTriggerEdgeGate();
+
 // GATE TYPE (KRS_TYPE_SELFTEST): the unified port type ids let compatible ports connect and keep
 // incompatible ones unconnectable (mirrors QtNodes connectionPossible). Needs QApplication.
 bool runTypeGate();

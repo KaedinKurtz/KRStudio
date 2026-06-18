@@ -135,6 +135,12 @@ public:
 
     virtual bool needsExecutionControls() const { return true; }
 
+    // True if the node's output is a PURE function of its editable inputs (drive an input -> output changes).
+    // Event/stateful sources (a Button whose output is a momentary pulse gated by a press, an IK node that
+    // samples only on a trigger edge) override to false so the INPUT-BIND gate does not require driving an
+    // input to change the output -- they still must MOUNT their input widgets.
+    virtual bool isPureInputFunction() const { return true; }
+
     // --- Port Data Management ---
 
     void setInput(const std::string& portName, const PortDataPacket& newPacket) {

@@ -67,6 +67,7 @@ bool snapshottable(const std::string& tn) {
 // a node is drive-provable iff its output depends ONLY on editable inputs (no handle/connection-only
 // inputs) AND it has a snapshottable output we can observe.
 bool driveProvable(Node* n) {
+    if (!n->isPureInputFunction()) return false;   // event/stateful sources: output isn't f(inputs) alone
     bool snapOut = false;
     for (const auto& p : n->getPorts()) {
         if (p.direction == Port::Direction::Input && p.name != "Trigger" && !isEditableType(p.type.name)) return false;
