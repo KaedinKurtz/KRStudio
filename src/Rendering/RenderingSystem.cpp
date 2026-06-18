@@ -59,6 +59,7 @@
 #include "MotionPlanner.hpp"      // OMPL sprint Phase 1 motion-planning gate (krs::plan)
 #include "RobotModel.hpp"         // OMPL sprint Phase 4 robot entity + kinematic chain (krs::robot)
 #include "PropertyCatalog.hpp"    // avoidance-field Phase 1 ECS->catalog + Object/Property nodes (krs::twin)
+#include "AvoidanceField.hpp"     // avoidance-field Phase 2+ emitter / field law / SDF (krs::field)
 #include "NodeEditorGate.hpp"     // node-editor front-end gates (krs::nodes INPUT-BIND / TYPE / TIME)
 #include "NodeEditQueue.hpp"      // force immediate UI-edit mode for the headless gates
 #include "ConnectControlGate.hpp" // node-editor GATE CONNECT-AND-CONTROL
@@ -1302,6 +1303,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
+    // Avoidance-field Phase 2: emitter node (avoidance-field + substance emission by type). Pure CPU.
+    if (qEnvironmentVariableIntValue("KRS_EMITTER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_EMITTER_SELFTEST =================\n");
+        const bool ok = krs::field::runEmitterGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
         struct GateRes { const char* name; bool ok; };
@@ -1348,6 +1356,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE ROBOT-CHAIN (entity owns links+joints+base+mount: owned-DOF chain/joint-from-feature/typed-mount-port/lossless-export; non-member & non-coaxial & mismatched-type & corrupt-export neg-ctrls)", krs::robot::runRobotChainGate() },
             { "GATE E2E (robot defined-via-chain -> planned -> executed; every stage asserted; severing define/plan/execute localizes the break)", krs::plan::runE2EGate() },
             { "GATE TWIN (ECS->catalog introspection + Object/Property nodes value-fidelity + stale-aware frequency; non-existent-obj & phantom-prop & disconnected & frozen-Hz neg-ctrls)", krs::twin::runTwinGate() },
+            { "GATE EMITTER (avoidance-field emission magnitude/sign via FieldSolver + substance origin/rate/follow + type-switch; zero-amp & disconnected & invalid-type neg-ctrls)", krs::field::runEmitterGate() },
             { "GATE C-track (computed torque tracks moving setpoint; soft PD lags)", krs::ctrl::runControllerTrackGate() },
             { "GATE C-knob (goal-knob node drives live joint, FK <1e-4)", krs::ctrl::runControllerKnobGate() },
             { "GATE C-glass (glass robot tracks planned config, not live)", krs::ctrl::runControllerGlassGate() },

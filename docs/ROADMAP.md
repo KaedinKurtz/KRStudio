@@ -3026,3 +3026,21 @@ PropertyCatalog (krs::twin) + Object/Property nodes (src/Nodes/TwinNodes.cpp), b
   stale-BLIND (m_now hardwired 0) -> the node now reads catalog.now() + a NODE-level stall test that would have
   failed the old code; (3) reportedHz froze when now<=lastStamp (clock skew) -> clamp since>=0; (4) stale output
   packet could mask a non-firing compute -> PropertyNode resets its output packets on entry.
+
+### AVOIDANCE PHASE 2 RESULT (2026-06-17, KRS_EMITTER_SELFTEST + bench GATE EMITTER) — ALL PASS
+Emitter node (krs::field, src/Nodes/EmitterNodes.cpp): one node, two emitted TYPES by combo param. AVOIDANCE-
+FIELD places/updates an engine PointEffectorComponent (+FieldSourceTag) on the object, sampled by FieldSolver
+(rule 6 -- one field); strength = amplitude(INPUT, so Phase 3 can drive it) * sign; Linear falloff. SUBSTANCE
+emits a particle stream FROM the object (krs::field::SubstanceEmitter) at a node-driven rate.
+- **EMITTER-FIELD PASS**: |field| at d=2 is **6.0** and at d=4 is **2.0** (two samples pin the Linear slope +
+  radius, not one point); repulsive points away (+X), attractive points toward (-X); a NEGATIVE wired
+  amplitude (sign +1) also gives attractive (signed amplitude works for Phase 3); zero amplitude REMOVES the
+  source (no field, no ghost effector); a disconnected object emits nothing.
+- **EMITTER-SUBSTANCE PASS**: 50 particles in 0.5 s (= rate 100 * T 0.5); every particle originates AT the
+  object; moving the object -> 50 NEW particles at the new position (proves it's a MODIFIER on the object, not
+  a pre-placed body); rate<=0 -> no spawn.
+- **EMITTER-TYPE-SWITCH PASS**: field type -> effector present, no substance; field->INVALID directly tears
+  down the field source (not pre-satisfied); field->substance tears down the field + emits.
+- **ADVERSARIAL REVIEW (2 skeptics): no real-bugs, no vacuous gates ("SOLID")**; applied the hardening it
+  suggested (second field sample for slope, signed-amplitude test, literal zero-amp teardown, explicit
+  field->invalid transition, rate-0 guard).
