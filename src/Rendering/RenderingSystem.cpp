@@ -947,6 +947,25 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Sprint A control-flow gates: WHEN (condition edge -> trigger), IF (route), WHILE (bounded iteration + cap).
+    if (qEnvironmentVariableIntValue("KRS_WHEN_SELFTEST") != 0) {
+        std::printf("\n================= KRS_WHEN_SELFTEST =================\n");
+        const bool ok = krs::nodes::runWhenGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_IF_SELFTEST") != 0) {
+        std::printf("\n================= KRS_IF_SELFTEST =================\n");
+        const bool ok = krs::nodes::runIfGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_WHILE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_WHILE_SELFTEST =================\n");
+        const bool ok = krs::nodes::runWhileGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
     // Node-editor GATE TYPE: port type compatibility.
     if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
         std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
@@ -1483,6 +1502,9 @@ void RenderingSystem::initializeSharedResources()
             { "GATE TRIGGER-EDGE (Button brief pulse: rising-on-press/falling-on-release/dual; level + wrong-edge neg-ctrl)", krs::nodes::runTriggerEdgeGate() },
             { "GATE IK-SAMPLE (IK Target samples-on-trigger + holds; FK(goal)==target, unreachable graceful; continuous-track + wrong-soln neg-ctrls)", krs::nodes::runIkSampleGate() },
             { "GATE OMPL (two-stage PLAN freezes path w/o moving + EXECUTE drives to goal + no-plan graceful; in-node planner/iters/waypoints params change the plan; planned path collision-free, straight-line-through-box collides)", krs::nodes::runOmplPlannerGate() },
+            { "GATE WHEN-FIRES-ON-CONDITION-EDGE (When fires once on the condition's false->true edge; level + always-fire neg-ctrls; Compare drives the condition)", krs::nodes::runWhenGate() },
+            { "GATE IF-ROUTES (If routes a trigger to True/False by the condition, exactly one branch; both-fire + inverted-condition neg-ctrls)", krs::nodes::runIfGate() },
+            { "GATE WHILE-ITERATES-AND-TERMINATES (While fires the exact count then terminates; for-N exact; the mandatory max-iter cap catches an infinite loop; no-cap + wrong-count neg-ctrls)", krs::nodes::runWhileGate() },
             { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },

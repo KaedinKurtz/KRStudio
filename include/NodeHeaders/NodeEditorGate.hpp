@@ -58,6 +58,19 @@ bool runIkSampleGate();
 // (ignored-value neg-ctrl); the planned path is collision-free while a straight line through the box collides. Headless.
 bool runOmplPlannerGate();
 
+// Sprint A control-flow gates (headless; folded into the bench). These extend the trigger model: triggers ->
+// conditional triggers -> gated execution -> bounded iteration.
+// GATE WHEN-FIRES-ON-CONDITION-EDGE (KRS_WHEN_SELFTEST): the When node fires a trigger pulse exactly once on the
+//   condition's false->true edge (not while held, not when false); NEG-CTRL = a level model + an always-fire model.
+bool runWhenGate();
+// GATE IF-ROUTES (KRS_IF_SELFTEST): the If node routes a trigger to True/False by the condition; exactly one branch
+//   per trigger; NEG-CTRL = a both-branches model + an inverted-condition model.
+bool runIfGate();
+// GATE WHILE-ITERATES-AND-TERMINATES (KRS_WHILE_SELFTEST): the While node fires its body the exact number of times
+//   for a condition that goes false after K (and a for-N variant), and its MANDATORY max-iteration cap catches a
+//   non-terminating condition (Done+Capped, no hang); NEG-CTRL = a no-cap runaway + a wrong-count model.
+bool runWhileGate();
+
 // GATE TYPE (KRS_TYPE_SELFTEST): the unified port type ids let compatible ports connect and keep
 // incompatible ones unconnectable (mirrors QtNodes connectionPossible). Needs QApplication.
 bool runTypeGate();

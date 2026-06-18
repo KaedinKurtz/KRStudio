@@ -3442,3 +3442,53 @@ the contained Count tracks the visible volume; wiring Radius overrides the gizmo
 RESULT: KRS_ORBOWN + KRS_COMBOPOPUP ALL PASS; standalone re-runs green. Bench 101 gate groups, 100 PASS with the
 sole red = GATE PERF, a pre-existing small-N (N=5) eval-timing flake (8.0x vs the >=10x threshold under multi-gate
 load) that passes 3/3 standalone and is untouched by these UI/orb changes.
+
+## SPRINT A — CONDITIONAL / CONTROL-FLOW NODES (2026-06-18, branch avoidance-field)
+Control flow built as EXTENSIONS of the trigger model (the Button node), NOT a separate imperative layer.
+ARCHITECTURE (the deliberate point): this is a DATAFLOW graph -- no instruction pointer, no call stack. A
+TRIGGER is a momentary bool PULSE (true for one eval tick); a CONDITION is a bool. Control flow = edge-detecting
+conditions, routing pulses, and gating re-execution -- all event-driven, evaluated by the per-tick graph eval,
+staying entirely within the reactive model. New file src/Nodes/ControlFlowNodes.cpp (Compare/When/If/While).
+
+PHASE 1 -- CONDITION + WHEN.
+- Compare node (logic_compare): A,B (in-widget spin boxes) + Op (enum combo: > >= < <= == !=) -> Result (bool).
+  The canonical CONDITION source; reads the Phase-1 in-widget input path; == / != use a 1e-6 tolerance.
+- When node (flow_when): emits a Trigger PULSE on its Condition's false->true EDGE -- the Button's edge-detect
+  with the "press" being a condition becoming true. isPureInputFunction=false (depends on the prior tick).
+GATE WHEN-FIRES-ON-CONDITION-EDGE (KRS_WHEN_SELFTEST + bench): over a condition that rises/holds/falls
+  (F,T,T,T,F,F), When fires EXACTLY ONCE on the rising tick (not while held, not when false). NEG-CTRLS (real
+  failing models): a LEVEL model fires every true tick (3 != 1); an always-fire model fires every tick (6 != 1).
+  Plus Compare correctness (a>b / == / a wrong-op giving a different result) and a Compare->When wiring (A rising
+  across B fires once on the crossing).
+
+PHASE 2 -- IF / ELSE (conditional routing / gated execution).
+- If node (flow_if): inputs Pulse (the trigger to route -- NOT named "Trigger", which the base class reserves as
+  a HOLD) + Condition; outputs True + False. Stateless: True = Pulse && Condition, False = Pulse && !Condition --
+  exactly ONE branch fires per trigger, none when there is no pulse (gated off). isPureInputFunction=false.
+GATE IF-ROUTES (KRS_IF_SELFTEST + bench): a true-condition trigger fires True (not False); a false-condition
+  trigger fires False (not True); no trigger -> neither. Exactly one branch per trigger. NEG-CTRLS: a both-branches
+  model gives True+False==2 (!=1); an inverted-condition model would flip True<->False (caught by requiring
+  True-on-true AND False-on-false).
+
+PHASE 3 -- WHILE / ITERATION (the hard one: dataflow-vs-control-flow tension).
+- While node (flow_while): inputs Start (begin trigger) + Condition (re-read each pass) + Max Iterations (the
+  MANDATORY safety cap, default 1000); outputs Body (pulse per pass) + Done (pulse on terminate) + Iteration
+  (count) + Capped (hit the cap). DELIBERATE MODEL: iteration spans successive eval TICKS -- one Body pulse per
+  tick while active -- re-reading the Condition each pass (the body's effect feeds back through the graph). It
+  terminates when the Condition goes false OR when Iteration reaches Max Iterations (checked FIRST, so a runaway
+  is caught). Because each tick does bounded work, a loop can NEVER hang the graph eval; the cap is a hard
+  backstop against a non-terminating condition. (NOT an imperative in-tick loop -- the node cannot re-run the
+  upstream condition subgraph within one tick, so single-tick iteration would break the dataflow model.)
+GATE WHILE-ITERATES-AND-TERMINATES (KRS_WHILE_SELFTEST + bench): a condition that goes false after K=3 passes ->
+  Body fires exactly 3 then Done (not capped); a for-N variant (Condition = Iteration < 5, re-read from the node's
+  own counter) fires exactly 5. NEG-CTRL / safety cap: an always-true condition with cap=10 over a 50-tick budget
+  fires Body exactly 10 then Done+CAPPED -- the infinite loop is CAUGHT, not hung; a no-cap (hang) model would
+  have fired 50. Wrong counts are caught by the exact assertions.
+
+RESULT (2026-06-18): KRS_WHEN / KRS_IF / KRS_WHILE all ALL PASS; folded into KRS_OVERNIGHT_BENCH -> 104/104 gate
+groups PASS (101 prior + WHEN + IF + WHILE; the 4 new nodes also pass FRAME/FRAME-GFX/INPUT-BIND/HOVER/COMBO-POPUP
+coverage; GATE PERF green this run too). Built via PowerShell, exe timestamp verified fresh.
+OPERATOR VISUAL-CONFIRM REQUIRED: wire Compare(A>B) -> When.Condition -> a downstream Button-style consumer: the
+When output pulses once as A crosses B. Wire a trigger + a Compare -> If: only the matching branch's downstream
+runs. Wire Button -> While.Start with a Compare(Iteration < N) -> While.Condition feedback: the Body pulses N
+times then Done; set an always-true condition and confirm Capped lights at Max Iterations (no hang).
