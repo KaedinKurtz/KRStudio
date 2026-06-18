@@ -219,11 +219,20 @@ bool runWhenGate()
     }
     const bool crossOk = crossFires == 1;
 
-    const bool pass = cmpOk && edgeOk && negLevel && negAlways && crossOk;
+    // FUZZ: an OSCILLATING condition -> exactly one fire per false->true edge (many edges, each counted once;
+    // catches "fires once then stops detecting" and "level"). Expected = an independent rising-edge count.
+    auto risingEdges = [](const std::vector<bool>& s) { int n = 0; bool prev = false; for (bool c : s) { if (c && !prev) ++n; prev = c; } return n; };
+    const std::vector<bool> osc = { false, true, false, true, true, false, true, false, true };
+    const auto oscFires = runSeq(osc);
+    const int oscExpected = risingEdges(osc);            // 4 false->true edges
+    const bool oscOk = countTrue(oscFires) == oscExpected && oscExpected >= 3;
+
+    const bool pass = cmpOk && edgeOk && negLevel && negAlways && crossOk && oscOk;
     printf("[when]   Compare a>b/==/wrong-op correct:%d; EDGE fires=%d (==1 on rise, none held/false):%d; "
-           "NEG level=%d!=edge / always=%d!=edge:%d; Compare->When crossing fires=%d (==1):%d  %s\n",
+           "NEG level=%d!=edge / always=%d!=edge:%d; Compare->When crossing fires=%d (==1):%d; "
+           "FUZZ oscillating fires=%d (==%d edges):%d  %s\n",
            int(cmpOk), countTrue(fires), int(edgeOk), levelFires, alwaysFires, int(negLevel && negAlways),
-           crossFires, int(crossOk), pass ? "PASS" : "FAIL");
+           crossFires, int(crossOk), countTrue(oscFires), oscExpected, int(oscOk), pass ? "PASS" : "FAIL");
     printf("[when] %s\n", pass ? "ALL PASS (fires once on the rising condition edge; level/always-fire models fail; Compare drives the condition)"
                                : "FAILURES PRESENT");
     std::fflush(stdout);
@@ -306,11 +315,29 @@ bool runWhileGate()
     const bool capOk = infFires == cap && infDone >= 0 && infCap;       // fired exactly the cap, flagged, terminated
     const bool negNoCap = infFires != budget;                           // a no-cap (hang) model would have fired 50
 
-    const bool pass = whileOk && forNOk && capOk && negNoCap;
+    // FUZZ: a condition that goes false (terminating the loop) then FLIPS back true must NOT restart without a new
+    // Start edge -- guards against a node that re-arms on the condition alone. Body fires only the pre-fall passes.
+    auto runFlip = [](const std::vector<bool>& condSeq, int maxIter) {
+        WhileNode w; w.setPortLiteral<int>("Max Iterations", maxIter);
+        setBoolIn(w, "Start", false); setBoolIn(w, "Condition", true); w.process();
+        int body = 0; bool done = false;
+        for (size_t t = 0; t < condSeq.size(); ++t) {
+            setBoolIn(w, "Start", t == 0); setBoolIn(w, "Condition", condSeq[t]); w.process();
+            if (rOutB(w, "Body")) ++body;
+            if (rOutB(w, "Done")) done = true;
+        }
+        return std::make_pair(body, done);
+    };
+    auto [flipBody, flipDone] = runFlip({ true, true, false, true, true }, 1000);   // falls at idx2; later trues ignored
+    const bool flipOk = flipBody == 2 && flipDone;                      // only the 2 pre-fall passes; no spurious restart
+
+    const bool pass = whileOk && forNOk && capOk && negNoCap && flipOk;
     printf("[while]   while(cond false after 3): body=%d(==3) done:%d cap:%d; for-N(=5): body=%d(==5) done:%d; "
-           "runaway(maxIter=%d,budget=%d): body=%d(==cap) DONE:%d CAPPED:%d (no-cap would be %d:%d)  %s\n",
+           "runaway(maxIter=%d,budget=%d): body=%d(==cap) DONE:%d CAPPED:%d (no-cap would be %d:%d); "
+           "FUZZ flip-after-terminate: body=%d(==2 no-restart):%d  %s\n",
            k3Fires, int(k3Done >= 0), int(k3Cap), n5Fires, int(n5Done >= 0),
-           cap, budget, infFires, int(infDone >= 0), int(infCap), budget, int(negNoCap), pass ? "PASS" : "FAIL");
+           cap, budget, infFires, int(infDone >= 0), int(infCap), budget, int(negNoCap),
+           flipBody, int(flipOk), pass ? "PASS" : "FAIL");
     printf("[while] %s\n", pass ? "ALL PASS (fires the exact count then terminates; for-N exact; the max-iter cap catches an infinite loop, no hang)"
                                 : "FAILURES PRESENT");
     std::fflush(stdout);
