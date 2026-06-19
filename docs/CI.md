@@ -100,12 +100,28 @@ Applied, in order, each verified against the live Actions API:
    Replaced it with the runner's **pre-installed vcpkg** (`VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT`) — fewer moving
    parts, no third-party action. *Observed:* the run then advanced past setup into the Configure step.
 
-3. **Dependency build caching.** ~22 heavy libs (Qt, OpenCV, OpenVDB, PhysX, OCCT, OMPL, …) build from source in
-   manifest mode at configure time. Added a transparent `files` binary cache
-   (`VCPKG_BINARY_SOURCES=clear;files,<ws>/vcpkg-bincache,readwrite`) persisted by `actions/cache` keyed on
-   `vcpkg.json`. The first run pays the full multi-hour build and primes the cache; later runs restore prebuilt
-   binaries. (Note: a partial cache still persists when a job FAILS — only a *cancellation* skips the cache upload,
-   so `concurrency.cancel-in-progress` must not fire mid-prime.)
+3. **Dependency build caching (rolling).** ~22 heavy libs (Qt, OpenCV, OpenVDB, PhysX, OCCT, OMPL, …) build from
+   source in manifest mode at configure time. A transparent `files` binary cache
+   (`VCPKG_BINARY_SOURCES=clear;files,<ws>/vcpkg-bincache,readwrite`) is persisted by `actions/cache`. The key is
+   now **rolling** — `vcpkg-<os>-${hashFiles(vcpkg.json)}-${run_id}` with layered `restore-keys`
+   (`vcpkg-<os>-${hash}-`, then `vcpkg-<os>-`). Every **successful** run saves a fresh, complete cache under a
+   unique key and restores the most recent prior one, so the cache never gets stuck on a single immutable seed and
+   self-heals if a prior cache was ever partial; GitHub's LRU eviction keeps the newest, which the prefix restore
+   then picks.
+
+   **Empirical reality (2026-06-19):** the `ci-win` run on commit `7768377` completed a **cold** from-source build
+   (no prior `ci-win` run had succeeded to seed the cache) in **~4 h 39 m** — comfortably under GitHub's 6 h job
+   limit — and went green, which then primed the cache for subsequent runs. So the earlier "the cold build can't
+   finish in 6 h" worry did **not** hold: the binary cache is a *speedup*, not a prerequisite for a green build.
+   That is also why CI keeps the **single build job** rather than splitting dependency-install into a separate
+   cached job — on a 2-core runner a job-split would run deps + build *sequentially* (two 6 h budgets, a redundant
+   second configure), making every run slower for no benefit now that cold builds already fit the limit. If a quiet
+   period ever lets the cache age out (GitHub evicts caches after ~7 days idle), the next run simply pays one cold
+   ~4.6 h rebuild and re-primes — re-running `ci-win` (or `workflow_dispatch`) is the prewarm.
+
+   (Caveat preserved: a *cancellation* skips the cache upload — only a clean success/failure runs the post-step —
+   so `concurrency.cancel-in-progress` must not fire mid-prime; don't push the same ref again while a run is still
+   building.)
 
 4. **Linux workflow — CREATED.** `.github/workflows/ci-linux` (`ubuntu-22.04`): apt-installs the GL/X11/Wayland/
    xcb + build-tool system packages vcpkg's qtbase and the windowing/GL link need, then the same vcpkg + preset
@@ -141,11 +157,33 @@ GitHub → the repo → **Actions** → pick the latest green **ci-win** or **ci
 download `KRStudio-Windows` / `KRStudio-Linux`. (Artifacts are downloadable zips; no build-from-source needed.)
 
 ### Windows
-1. Download `KRStudio-Windows` and unzip it.
-2. Run `RoboticsSoftware.exe`.
-3. If Windows prompts about the **Visual C++ runtime**, install the latest *Microsoft Visual C++ 2015-2022
-   Redistributable (x64)*. (CI currently zips the build tree; the Phase-4 follow-up is a `windeployqt` dist that
-   bundles the Qt DLLs + plugins so no separate Qt install is needed — noted as a refinement.)
+The `KRStudio-Windows` artifact is a **self-contained `windeployqt` bundle**: the `.exe`, all runtime DLLs
+(Qt + OCCT/OpenCV/PhysX/...), the Qt plugin folders (`platforms/`, `imageformats/`, `styles/`, ...), and the
+app's `shaders/` / `icons/` / `assets/`. No separate Qt install is needed.
+
+1. Download `KRStudio-Windows` and **unzip it to a folder** (e.g. `C:\KRStudio`).
+2. **Run `RoboticsSoftware.exe` from WITHIN that extracted folder.** Do **not** move or copy the `.exe` out on
+   its own — it loads its sibling DLLs and, critically, the **`platforms\qwindows.dll`** Qt platform plugin from
+   the `platforms\` subfolder right next to it. If you move just the exe (or your unzip tool flattens the
+   `platforms\` subfolder), the app dies at launch with **"Could not find the Qt platform plugin 'windows'"**.
+   The whole folder is the program; the `.exe` is just its entry point. (To make a shortcut, right-click the exe →
+   *Send to → Desktop (create shortcut)* — a shortcut keeps the working directory, unlike a copy.)
+3. **Prerequisite — Visual C++ runtime.** The exe and its DLLs are built against the dynamic MSVC runtime (`/MD`),
+   and that runtime (`vcruntime140.dll` / `msvcp140.dll`) is **not** bundled (windeployqt does not deploy the
+   compiler runtime). It is present on virtually all Windows machines, but if launch fails with a missing
+   `vcruntime140.dll`/`msvcp140.dll` — or Windows prompts about the VC++ runtime — install the latest
+   *Microsoft Visual C++ 2015-2022 Redistributable (x64)* from Microsoft.
+
+> **How the bundle is built (so a green run can't ship a broken artifact):** CMake's POST_BUILD step runs
+> `windeployqt --dir <exe dir>` during the build, producing a complete runnable tree in `build/release/`. The
+> `Package` step in `win.yml` lifts that runnable subset into a clean `dist/` (the exe + all runtime DLLs + every
+> deployed plugin/data subfolder, excluding deep build-internal paths that exceed Windows MAX_PATH), then
+> **asserts `platforms/qwindows.dll` is present in `dist/`**, failing the job otherwise. The `dist/` folder is then
+> uploaded *as a directory* by `actions/upload-artifact@v4`, which preserves the tree with forward-slash entries —
+> so the `platforms/` subfolder stays next to the exe and you extract once to a runnable folder. (A prior version
+> looked for `windeployqt` under `$VCPKG_ROOT/installed/...`, the classic-mode path; in manifest mode Qt lives under
+> `build/release/vcpkg_installed/...`, so windeployqt silently never ran and the platform plugin was missing while
+> CI stayed green — that hole is now closed by the fail-loud check.)
 
 ### Linux
 1. Download `KRStudio-Linux` and unzip it.
@@ -159,6 +197,9 @@ macOS. A Mac build cannot run the compute pipeline — supporting it means **por
 MoltenVK**, a large separate project, not a CI fix. `ci-mac` is parked on manual dispatch until then.
 
 ### GATE PACKAGING
-The per-platform download → run steps and the GL-4.3 hardware requirement are documented above. The clean-bundle
-refinement (windeployqt on Windows; an AppImage/`linuxdeployqt` on Linux) is the remaining polish once the builds
-are reliably green.
+The per-platform download → run steps and the GL-4.3 hardware requirement are documented above. **Windows now
+ships a verified self-contained `windeployqt` bundle**: the `Package` step lifts the runnable tree out of
+`build/release/` and *fails the job* unless `platforms/qwindows.dll` is present in `dist/` and nested in the zip,
+so a green `ci-win` run guarantees a launchable folder (no more silent windeployqt-skip shipping a broken artifact).
+Remaining polish: an AppImage / `linuxdeployqt` bundle on Linux (the Linux artifact is still binary + assets and
+relies on the host's Qt platform plugin / GL driver).

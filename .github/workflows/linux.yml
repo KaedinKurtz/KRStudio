@@ -49,8 +49,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/vcpkg-bincache
-          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
+          # Rolling key: every run saves a fresh, complete cache under a unique key (run_id + run_attempt, since
+          # run_id alone repeats across re-run attempts) and restores the most recent prior one (same manifest first,
+          # then any vcpkg-linux-*). Keeps the binary cache from sticking on a single immutable seed and self-heals a
+          # partial cache; LRU eviction keeps the newest, which the restore-keys prefix then picks up.
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            vcpkg-linux-${{ hashFiles('vcpkg.json') }}-
             vcpkg-linux-
 
       - name: Point VCPKG_ROOT at the runner's vcpkg

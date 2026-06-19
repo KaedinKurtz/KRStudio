@@ -33,8 +33,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/vcpkg-bincache
-          key: vcpkg-win-${{ hashFiles('vcpkg.json') }}
+          # Rolling key: every run saves a FRESH, COMPLETE cache under a unique key (run_id + run_attempt -- run_id
+          # alone is stable across re-run attempts, so the attempt suffix lets a re-run save its own progress too) and
+          # restores the most recent prior one (same manifest first, then any vcpkg-win-*). This keeps the binary
+          # cache from getting stuck on a single immutable seed and self-heals if a prior cache was ever partial.
+          # GitHub's LRU eviction keeps the newest entries, which restore-keys then picks. (A cold from-source build of
+          # the ~22 deps completes in ~4.6 h on this 2-core runner -- under the 6 h job limit -- so the cache is a
+          # speedup, not a prerequisite for a green build.)
+          key: vcpkg-win-${{ hashFiles('vcpkg.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            vcpkg-win-${{ hashFiles('vcpkg.json') }}-
             vcpkg-win-
 
       # Use the vcpkg pre-installed on the GitHub runner image (VCPKG_INSTALLATION_ROOT) -- no extra action.
@@ -52,25 +60,65 @@ jobs:
       - name: Build
         run: cmake --build --preset release --parallel
 
-      # Clean redistributable dist: the .exe + the Qt runtime (windeployqt) + the non-Qt vcpkg DLLs + assets.
-      # (The old "zip the whole build/release tree" failed -- deep CMakeFiles paths blow past Windows MAX_PATH.)
-      - name: Package (clean dist)
+      # Clean, self-contained redistributable dist.
+      #
+      # The build already produced a COMPLETE runnable tree in build/release: CMake's POST_BUILD step runs
+      # windeployqt (--dir into the exe folder, so platforms/qwindows.dll + the other Qt plugins land NEXT TO the
+      # exe), vcpkg applocal-deploys the non-Qt runtime DLLs (OCCT/OpenCV/PhysX/...), and shaders/icons/assets are
+      # copied in. We just lift that runnable SUBSET into a clean dist, deliberately EXCLUDING build internals
+      # (CMakeFiles/_deps/vcpkg_installed/*_autogen/...) whose deep paths blow past Windows MAX_PATH if zipped whole.
+      #
+      # The OLD step hard-coded windeployqt at $VCPKG_ROOT/installed/... -- that is the CLASSIC-mode layout, but this
+      # project builds in vcpkg MANIFEST mode where Qt installs under build/release/vcpkg_installed/... . So the
+      # Test-Path was always false, windeployqt SILENTLY never ran, and the platforms/ plugin folder was never
+      # bundled -- the job stayed green while shipping an artifact that dies at launch with
+      # "Could not find the Qt platform plugin 'windows'". This step lifts the already-deployed tree and then FAILS
+      # LOUD if the runnable set is incomplete, so a green run guarantees a launchable folder.
+      - name: Package (clean self-contained dist)
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $src  = "build/release"
           $dist = "dist"
+          Remove-Item $dist -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
-          Copy-Item build/release/RoboticsSoftware.exe $dist/ -Force
-          $windeploy = Join-Path $env:VCPKG_ROOT "installed/x64-windows/tools/Qt6/bin/windeployqt.exe"
-          if (Test-Path $windeploy) { & $windeploy "$dist/RoboticsSoftware.exe" --release --no-translations --no-compiler-runtime }
-          $vcpkgbin = Join-Path $env:VCPKG_ROOT "installed/x64-windows/bin"
-          if (Test-Path $vcpkgbin) { Copy-Item "$vcpkgbin/*.dll" $dist/ -Force -ErrorAction SilentlyContinue }
-          Copy-Item build/release/*.dll $dist/ -Force -ErrorAction SilentlyContinue
-          if (Test-Path build/release/assets) { Copy-Item build/release/assets (Join-Path $dist 'assets') -Recurse -Force }
-          Compress-Archive -Path "$dist/*" -DestinationPath KRStudio-Windows.zip -Force
-          Write-Host "dist contents:"; Get-ChildItem $dist | Select-Object -First 20 Name, Length
 
+          # Top-level runtime files: exe + every DLL sitting next to it (Qt + OCCT/OpenCV/PhysX/... applocal +
+          # ads/qtnodes + sqlite3) + the URDF data file + qt.conf if windeployqt wrote one.
+          Copy-Item "$src/RoboticsSoftware.exe" $dist/ -Force
+          Copy-Item "$src/*.dll"                $dist/ -Force
+          foreach ($f in 'simple_arm.urdf','qt.conf') { if (Test-Path "$src/$f") { Copy-Item "$src/$f" $dist/ -Force } }
+
+          # Copy EVERY runtime subfolder the build deployed -- the Qt plugin dirs (platforms/styles/imageformats/...,
+          # THE piece the old step dropped) AND the app data dirs (shaders/icons/assets). Driven by an EXCLUDE-list of
+          # build internals, NOT an allow-list of plugin names: if a future Qt/windeployqt adds a new runtime plugin
+          # dir it is carried automatically -- worst case is harmless bloat, never a silent drop of a plugin the app
+          # needs (a silent drop is exactly the failure class this whole fix exists to kill).
+          $junk = '.qt','CMakeFiles','RoboticsSoftware_autogen','sqlite3_autogen','_deps','vcpkg_installed',
+                  'splishsplash-build','splishsplash-prefix','x64','lib','bin','grabs','fluidcache'
+          foreach ($d in (Get-ChildItem $src -Directory)) {
+            if ($junk -notcontains $d.Name) { Copy-Item $d.FullName (Join-Path $dist $d.Name) -Recurse -Force }
+          }
+
+          # FAIL LOUD: a green job MUST mean a launchable folder (the old silent-skip is exactly what we're killing).
+          $required = 'RoboticsSoftware.exe','platforms/qwindows.dll'
+          $missing  = $required | Where-Object { -not (Test-Path (Join-Path $dist $_)) }
+          if ($missing) { throw "PACKAGING INCOMPLETE -- missing in dist: $($missing -join ', ')" }
+          if (-not (Get-ChildItem "$dist/shaders" -File -Recurse -ErrorAction SilentlyContinue)) {
+            throw "PACKAGING INCOMPLETE -- shaders/ is empty (the renderer loads .glsl from here at runtime)"
+          }
+
+          Write-Host "=== dist top level ==="; Get-ChildItem $dist | Select-Object Mode, Name, Length
+          $dllCount = (Get-ChildItem $dist -Filter *.dll).Count
+          Write-Host ("top-level DLLs: {0} ; platforms/qwindows.dll present: {1}" -f $dllCount, (Test-Path "$dist/platforms/qwindows.dll"))
+
+      # Upload the dist DIRECTORY itself -- NOT a hand-rolled zip. actions/upload-artifact@v4 packages the tree
+      # structure-preserving with forward-slash entries, so platforms/ stays nested next to the exe and the colleague
+      # extracts ONCE to a runnable folder. (Hand-rolling Compress-Archive is fragile here: the runner's in-box
+      # Microsoft.PowerShell.Archive module writes BACKSLASH zip entries -- spec-noncompliant -- which some extractors
+      # flatten into a literal "platforms\qwindows.dll" filename, reproducing the exact launch failure we're fixing.)
       - uses: actions/upload-artifact@v4
         with:
           name: KRStudio-Windows
-          path: KRStudio-Windows.zip
-          if-no-files-found: warn
+          path: dist
+          if-no-files-found: error
