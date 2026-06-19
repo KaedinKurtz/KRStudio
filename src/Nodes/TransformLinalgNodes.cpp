@@ -24,6 +24,8 @@
 #include <cstdio>
 #include <cmath>
 #include <memory>
+#include <random>
+#include <vector>
 
 namespace krs::nodes {
 namespace {
@@ -246,11 +248,25 @@ bool runTransformComposeGate()
     const bool orderMatters = glm::length(wrongOrder - expected) > 1e-2f          // the two orders really differ
                            && glm::length(got - wrongOrder) > 1e-2f;              // the node did NOT use the wrong order
 
-    const bool pass = composeOk && inverseOk && orderMatters;
+    // FUZZ: a chain of N pseudo-random rigid transforms composed via the node, applied to a point, equals the
+    // INDEPENDENT sequential application T0(T1(...T_{N-1}(p))) (R*p+t per transform, right to left).
+    std::mt19937 rng(20260619u);
+    std::uniform_real_distribution<float> d(-1.5f, 1.5f);
+    auto randT = [&] { krs::RigidTransform t; t.rotation = glm::normalize(glm::quat(d(rng), d(rng), d(rng), d(rng))); t.position = glm::vec3(d(rng), d(rng), d(rng)); return t; };
+    const int N = 8; const glm::vec3 fp(0.3f, -0.5f, 0.7f);
+    std::vector<krs::RigidTransform> ts; for (int i = 0; i < N; ++i) ts.push_back(randT());
+    krs::RigidTransform accNode = ts[0];
+    for (int i = 1; i < N; ++i) { TransformComposeNode cn; setTf(cn, "A", accNode); setTf(cn, "B", ts[i]); cn.process(); accNode = outTf(cn, "Result"); }
+    glm::vec3 seqRef = fp;
+    for (int i = N - 1; i >= 0; --i) seqRef = ts[i].rotation * seqRef + ts[i].position;   // independent ground truth
+    const double fuzzErr = double(glm::length(accNode.apply(fp) - seqRef));
+    const bool fuzzOk = fuzzErr < 1e-3;
+
+    const bool pass = composeOk && inverseOk && orderMatters && fuzzOk;
     printf("[tform]   A.B(p) err=%.2e (<1e-5:%d); inverse->identity err=%.2e (ok:%d); "
-           "NEG wrong-order B.A differs by %.3f (order matters + correct used:%d)  %s\n",
+           "NEG wrong-order B.A differs by %.3f (order matters + correct used:%d); FUZZ %d-chain vs sequential err=%.2e(<1e-3:%d)  %s\n",
            double(glm::length(got - expected)), int(composeOk), double(glm::length(idP - p)), int(inverseOk),
-           double(glm::length(wrongOrder - expected)), int(orderMatters), pass ? "PASS" : "FAIL");
+           double(glm::length(wrongOrder - expected)), int(orderMatters), N, fuzzErr, int(fuzzOk), pass ? "PASS" : "FAIL");
     printf("[tform] %s\n", pass ? "ALL PASS (compose matches closed form; inverse cancels; wrong compose order is a different wrong result)"
                                 : "FAILURES PRESENT");
     std::fflush(stdout);

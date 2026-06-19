@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cmath>
 #include <memory>
+#include <random>
 
 namespace krs::nodes {
 namespace {
@@ -239,10 +240,25 @@ bool runIkSolvesGate()
     const double wrongErr = (wrong.size() == rr.dof) ? glm::length(fkWorld(rr, wrong).position - targetW.position) : 0.0;
     const bool wrongNeg = wrongErr > fkErr + 0.1;
 
-    const bool pass = solveOk && unreachOk && wrongNeg;
+    // FUZZ: random REACHABLE targets (FK of random in-range configs) all solve to <tol via the Robot ref + base.
+    std::mt19937 rng(20260619u);
+    std::uniform_real_distribution<double> da(-1.0, 1.0);
+    int fz = 0, fSolved = 0; double fWorst = 0.0;
+    for (int k = 0; k < 6; ++k) {
+        Eigen::VectorXd qr(3); qr << da(rng), 0.6 * da(rng), 0.8 * da(rng);
+        const krs::RigidTransform tgt = fkWorld(rr, qr);
+        IKTargetNode f; setRobotIn(f, rr); setFrameIn(f, krs::FrameRef{ rr.ee, "ee" }); setTformIn(f, "Target", tgt);
+        setTrigIn(f, false); f.process(); setTrigIn(f, true); f.process();
+        const Eigen::VectorXd g = rOutGoal(f);
+        if (rOutB(f, "Reachable") && g.size() == rr.dof) { ++fz; const double e = glm::length(fkWorld(rr, g).position - tgt.position); fWorst = std::max(fWorst, e); if (e < 1e-3) ++fSolved; }
+    }
+    const bool fuzzOk = fz >= 4 && fSolved == fz && fWorst < 1e-3;
+
+    const bool pass = solveOk && unreachOk && wrongNeg && fuzzOk;
     printf("[iksolve]   reachable:%d FK(goal)_world - target=%.2e (<1e-3:%d); unreachable->not-reachable:%d; "
-           "NEG wrong-soln FK=%.3f (> %.3f:%d)  %s\n",
-           int(reachable), fkErr, int(solveOk), int(unreachOk), wrongErr, fkErr + 0.1, int(wrongNeg), pass ? "PASS" : "FAIL");
+           "NEG wrong-soln FK=%.3f (> %.3f:%d); FUZZ %d/%d random targets solve, worst=%.2e:%d  %s\n",
+           int(reachable), fkErr, int(solveOk), int(unreachOk), wrongErr, fkErr + 0.1, int(wrongNeg),
+           fSolved, fz, fWorst, int(fuzzOk), pass ? "PASS" : "FAIL");
     printf("[iksolve] %s\n", pass ? "ALL PASS (IK over the Robot ref + Target Transform reaches the target; unreachable graceful; wrong soln fails)"
                                   : "FAILURES PRESENT");
     std::fflush(stdout);
