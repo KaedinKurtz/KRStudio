@@ -3,7 +3,8 @@
 #include "PropertiesPanel.hpp"
 #include "Scene.hpp"
 #include "ViewportWidget.hpp"
-#include "components.hpp" 
+#include "components.hpp"
+#include "SelectionService.hpp"   // krs::sel::SelectionState (ctx singleton) 
 #include "Camera.hpp"
 #include "SceneBuilder.hpp"
 #include "GridLevel.hpp"
@@ -366,6 +367,10 @@ MainWindow::MainWindow(QWidget* parent)
     sceneProps.fogEndDistance = 100.0f;
     // Test hook: boot with the collision wireframe overlay on.
     sceneProps.showCollisionShapes = qEnvironmentVariableIsSet("KRS_SHOW_COLLISION");
+
+    // Sub-feature selection highlight state (hover + accumulating selected set),
+    // rendered by SelectionHighlightPass; written by ViewportWidget hover/click.
+    registry.ctx().emplace<krs::sel::SelectionState>();
 
     // --- Create a default grid ---
     {
@@ -2450,6 +2455,19 @@ void MainWindow::buildMenuBar()
     connect(showCollision, &QAction::toggled, this, [this](bool on) {
         if (!m_scene) return;
         m_scene->getRegistry().ctx().get<SceneProperties>().showCollisionShapes = on;
+    });
+
+    QAction* showFeatureSel = viewMenu->addAction(QStringLiteral("Show Feature Selection Highlights"));
+    showFeatureSel->setCheckable(true);
+    if (m_scene)
+        if (auto* st = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>())
+            showFeatureSel->setChecked(st->enabled);
+    showFeatureSel->setToolTip(QStringLiteral(
+        "Hover a CAD face to preview-highlight it (yellow); click to select (orange disk + axis arrow).\n"
+        "Indicators are derived from the exact B-Rep feature the ray resolves to."));
+    connect(showFeatureSel, &QAction::toggled, this, [this](bool on) {
+        if (!m_scene) return;
+        if (auto* st = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>()) st->enabled = on;
     });
 
     // --- Physics visualization (Phase 3): recolour MPM particles by a field ---

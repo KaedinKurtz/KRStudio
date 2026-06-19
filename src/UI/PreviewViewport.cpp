@@ -3,6 +3,7 @@
 #include "Scene.hpp"
 #include "Camera.hpp"
 #include "components.hpp"
+#include "SelectionService.hpp"   // krs::sel::SelectionState (ctx singleton)
 #include "SceneBuilder.hpp"
 
 #include <QOpenGLVersionFunctionsFactory>
@@ -19,6 +20,7 @@ PreviewViewport::PreviewViewport(QWidget* parent)
 
     auto& registry = m_previewScene->getRegistry();
     registry.ctx().emplace<SceneProperties>();
+    registry.ctx().emplace<krs::sel::SelectionState>();
 
     // NOTE: the base ViewportWidget was constructed with a null scene, so point at our OWN preview
     // scene FIRST -- the old code did createCamera(*m_scene) before this assignment, dereferencing the

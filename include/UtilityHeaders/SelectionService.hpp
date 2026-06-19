@@ -19,6 +19,7 @@
 #include <entt/entt.hpp>
 #include <vector>
 #include <cmath>
+#include <algorithm>
 
 #include "components.hpp"     // TransformComponent, RenderableMeshComponent, BRepFace(Component)
 #include "RayPick.hpp"        // krs::pick::Ray / pickMesh
@@ -117,5 +118,161 @@ inline IndicatorGeometry indicator(const Selection& sel, int segments = 32, floa
     }
     return g;
 }
+
+// ===========================================================================
+// SELECTION-HIGHLIGHTS sprint -- the VISUAL half (state + render geometry).
+//
+// Two feature Selections refer to the SAME sub-feature iff they share the
+// resolving identity (entity, faceId). The highlight/selection is REQUIRED to
+// track the TRUE feature the ray resolved -- never a neighbour or the dominant
+// face -- so identity equality IS the gateable contract (HIGHLIGHT-MATCHES).
+// ===========================================================================
+inline bool sameFeature(const Selection& a, const Selection& b) {
+    return a.valid && b.valid && a.entity == b.entity && a.faceId == b.faceId;
+}
+
+// Per-scene selection state held in registry.ctx() (the SceneProperties pattern).
+// `hover` is what a HOVER ray currently resolves to (highlight preview); `selected`
+// is the accumulating SET a CLICK commits (the multi-feature selection the robot-
+// builder needs). Both store the EXACT krs::sel::pick result -- no re-derivation.
+struct SelectionState {
+    bool enabled = true;                 // feature-selection mode (View toggle)
+    Selection hover;                     // current hovered feature (valid==false => none)
+    std::vector<Selection> selected;     // committed set (accumulates across clicks)
+};
+
+// HOVER: resolve the ray and store it as the hovered feature (replaces prior hover).
+// A miss stores an invalid hover (highlight disappears). The stored hover IS pick().
+inline void updateHover(SelectionState& st, entt::registry& reg, const krs::pick::Ray& ray) {
+    st.hover = pick(reg, ray);
+}
+
+// CLICK / COMMIT: resolve the ray; on a hit ADD the feature to the selected SET
+// (it ACCUMULATES -- a second pick does NOT clear the first). Re-picking an already-
+// selected feature TOGGLES it off. A miss leaves the set untouched (does not clear).
+// `additive=false` replaces the set with just this feature (single-select mode).
+// Returns the resolved Selection (the exact pick result -- the highlight tracks THIS).
+inline Selection commitSelection(SelectionState& st, entt::registry& reg,
+                                 const krs::pick::Ray& ray, bool additive = true) {
+    const Selection s = pick(reg, ray);
+    if (!s.valid) return s;                              // miss -> no change to the set
+    for (std::size_t i = 0; i < st.selected.size(); ++i) {
+        if (sameFeature(st.selected[i], s)) {            // toggle off if re-picked
+            st.selected.erase(st.selected.begin() + std::ptrdiff_t(i));
+            return s;
+        }
+    }
+    if (!additive) st.selected.clear();
+    st.selected.push_back(s);
+    return s;
+}
+
+inline void clearSelection(SelectionState& st) { st.selected.clear(); }
+
+// ---------------------------------------------------------------------------
+// RENDER GEOMETRY -- the SINGLE builder the SelectionHighlightPass draws AND the
+// INDICATOR-GEOMETRY gate checks. The ring vertices ARE the backend indicator()
+// points (no parallel hardcoded ring); the axis/normal arrow is derived from the
+// analytic centre+normal. Because the gate asserts THIS function's output against
+// the analytic Selection, "the rendered indicator == the true feature" is gated.
+// ---------------------------------------------------------------------------
+struct IndicatorLines {
+    FeatureType type = FeatureType::None;
+    std::vector<glm::vec3> ring;         // GL_LINES pairs: closed disk rim / plane outline
+    std::vector<glm::vec3> arrow;        // GL_LINES pairs: shaft + 2 head barbs along the normal
+    glm::vec3 diskCenter{ 0.0f };        // == IndicatorGeometry.center
+    glm::vec3 diskNormal{ 0,0,1 };       // == cyl axis (cyl/cone) or surface normal (plane)
+    float     diskRadius = 0.0f;         // == feature radius (cyl/cone)
+};
+
+inline IndicatorLines buildIndicatorLines(const IndicatorGeometry& g, float arrowLen = 0.0f) {
+    IndicatorLines out;
+    out.type = g.type;
+    out.diskCenter = g.center;
+    out.diskNormal = g.normal;
+    out.diskRadius = g.radius;
+
+    const std::size_t n = g.points.size();
+    if ((g.type == FeatureType::Cylinder || g.type == FeatureType::Cone
+         || g.type == FeatureType::Plane) && n >= 2) {
+        for (std::size_t i = 0; i < n; ++i) {            // close the loop: rim / outline
+            out.ring.push_back(g.points[i]);
+            out.ring.push_back(g.points[(i + 1) % n]);
+        }
+        // basis in the plane perpendicular to the normal, for the arrow head barbs.
+        glm::vec3 u = glm::cross(g.normal, glm::vec3(0, 0, 1));
+        if (glm::dot(u, u) < 1e-8f) u = glm::cross(g.normal, glm::vec3(0, 1, 0));
+        u = glm::normalize(u);
+        const float L = arrowLen > 0.0f ? arrowLen
+                        : (g.radius > 1e-5f ? g.radius * 1.6f : 0.03f);
+        const glm::vec3 nrm = glm::normalize(g.normal);
+        const glm::vec3 tip = g.center + nrm * L;
+        out.arrow.push_back(g.center); out.arrow.push_back(tip);     // shaft
+        const float hb = L * 0.18f;
+        out.arrow.push_back(tip); out.arrow.push_back(tip - nrm * hb * 1.6f + u * hb);
+        out.arrow.push_back(tip); out.arrow.push_back(tip - nrm * hb * 1.6f - u * hb);
+    } else if (n >= 1) {                                  // point feature: crosshair
+        glm::vec3 u = glm::cross(g.normal, glm::vec3(0, 0, 1));
+        if (glm::dot(u, u) < 1e-8f) u = glm::cross(g.normal, glm::vec3(0, 1, 0));
+        u = glm::normalize(u);
+        const glm::vec3 v = glm::normalize(glm::cross(g.normal, u));
+        const float s = 0.01f;
+        out.ring.push_back(g.center - u * s); out.ring.push_back(g.center + u * s);
+        out.ring.push_back(g.center - v * s); out.ring.push_back(g.center + v * s);
+    }
+    return out;
+}
+
+// Analytic verdict used by the INDICATOR-GEOMETRY gate: does the BUILT render
+// geometry match the TRUE feature's analytic params? (disk normal==axis/normal,
+// radius==feature radius, centre on the axis line, every rim vertex at the radius
+// in the cross-section plane). Returns ok + the worst residuals so the gate can
+// PRINT a measured number and reject a corrupted indicator (real failing model).
+struct IndicatorCheck {
+    bool  ok = true;
+    float axisAlign = 1.0f;   // |dot(diskNormal, axis/normal)|  (want ~1)
+    float radErr = 0.0f;      // |diskRadius - feature radius|
+    float centerOffAxis = 0.0f;
+    float maxRimRadErr = 0.0f;
+    float maxRimPlaneErr = 0.0f;
+};
+
+inline IndicatorCheck checkIndicator(const IndicatorLines& L, const Selection& sel, float tol) {
+    IndicatorCheck c;
+    if (sel.type == FeatureType::Cylinder || sel.type == FeatureType::Cone) {
+        const glm::vec3 axis = glm::normalize(sel.axisDir);
+        c.axisAlign = std::abs(glm::dot(glm::normalize(L.diskNormal), axis));
+        c.radErr = std::abs(L.diskRadius - sel.radius);
+        const glm::vec3 w = L.diskCenter - sel.axisPos;
+        c.centerOffAxis = glm::length(w - glm::dot(w, axis) * axis);
+        for (const auto& p : L.ring) {
+            c.maxRimRadErr = std::max(c.maxRimRadErr, std::abs(glm::length(p - L.diskCenter) - sel.radius));
+            c.maxRimPlaneErr = std::max(c.maxRimPlaneErr, std::abs(glm::dot(p - L.diskCenter, axis)));
+        }
+        c.ok = (c.axisAlign > 1.0f - tol) && (c.radErr < tol) && (c.centerOffAxis < tol)
+               && (c.maxRimRadErr < tol) && (c.maxRimPlaneErr < tol);
+    } else if (sel.type == FeatureType::Plane) {
+        const glm::vec3 nrm = glm::normalize(sel.normal);
+        c.axisAlign = std::abs(glm::dot(glm::normalize(L.diskNormal), nrm));
+        for (const auto& p : L.ring)
+            c.maxRimPlaneErr = std::max(c.maxRimPlaneErr, std::abs(glm::dot(p - L.diskCenter, nrm)));
+        c.ok = (c.axisAlign > 1.0f - tol) && (c.maxRimPlaneErr < tol);
+    } else {
+        c.ok = !L.ring.empty();
+    }
+    return c;
+}
+
+// ---- SELECTION-HIGHLIGHTS gates (defined in SelectionHighlightGate.cpp) -----
+// HIGHLIGHT-MATCHES : hover/selected identity == the ray-resolved feature; a
+//                     neighbour/dominant-face highlight (real failing model) FAILS.
+// INDICATOR-GEOMETRY: buildIndicatorLines() matches the analytic feature <tol;
+//                     a wrong-feature / axis-radius-mismatched indicator FAILS.
+// MULTI-SELECT      : selecting feature N resolves to N (incl. small-bore-on-large-
+//                     part); the set accumulates; dominant-resolver & non-
+//                     accumulating-commit neg-ctrls FAIL.
+bool runHighlightMatchesGate();
+bool runIndicatorGeometryGate();
+bool runMultiSelectGate();
 
 } // namespace krs::sel

@@ -28,6 +28,8 @@
 #include "MpmPass.hpp"
 #include "FluidSurfacePass.hpp"
 #include "CollisionDebugPass.hpp"
+#include "SelectionHighlightPass.hpp"
+#include "SelectionService.hpp"   // krs::sel selection-highlight gates
 #include "TonemapPass.hpp"
 #include "GlassPass.hpp"
 #include "SmokeSystem.hpp"
@@ -580,6 +582,10 @@ void RenderingSystem::initializeSharedResources()
     m_overlayPasses.push_back(std::make_unique<FieldVisualizerPass>());
     m_overlayPasses.push_back(std::make_unique<PointCloudPass>());
     m_overlayPasses.push_back(std::make_unique<CollisionDebugPass>());
+    // Sub-feature selection highlight (hover/selected disk+arrow indicators,
+    // derived from the gated krs::sel backend). Same HDR/color space as the
+    // collision overlay (runs before the tonemap).
+    m_overlayPasses.push_back(std::make_unique<SelectionHighlightPass>());
     // MLS-MPM particles: opaque, depth-tested against the scene so water and
     // glass composite over them correctly.
     m_overlayPasses.push_back(std::make_unique<MpmPass>());
@@ -807,6 +813,17 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_BREPSEL_SELFTEST") != 0) {
         std::printf("\n================= KRS_BREPSEL_SELFTEST =================\n");
         const bool ok = krs::cad::runBRepSelectorGateF();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // SELECTION-HIGHLIGHTS sprint: the VISUAL half (hover/select highlight + indicator
+    // render geometry + multi-select), inspectable-at-rest identity/geometry gated.
+    if (qEnvironmentVariableIntValue("KRS_SELHL_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SELHL_SELFTEST =================\n");
+        const bool ok = krs::sel::runHighlightMatchesGate()
+                      & krs::sel::runIndicatorGeometryGate()
+                      & krs::sel::runMultiSelectGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
@@ -1523,6 +1540,9 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 3.1 raycast ray-triangle pick >=99% (AABB-only neg-ctrl)", krs::pick::runRaycastGate3_1() },
             { "GATE F B-Rep selector (ray-pick -> analytic axis/radius <1e-9 + mesh-fit neg-ctrl)", krs::cad::runBRepSelectorGateF() },
             { "GATE SUBFEAT (selection backend: ray->exact B-Rep params <1e-9 + indicator-geometry on-surface + small-bore disambiguation; miss & centroid neg-ctrls)", krs::cad::runSubFeatSelectionGate() },
+            { "GATE HIGHLIGHT-MATCHES (stored hover/selected feature == ray-resolved feature; neighbour & dominant-face highlight neg-ctrls)", krs::sel::runHighlightMatchesGate() },
+            { "GATE INDICATOR-GEOMETRY (rendered disk/arrow == analytic feature <1e-4, derived from backend; wrong-feature & axis/radius-mismatch neg-ctrls)", krs::sel::runIndicatorGeometryGate() },
+            { "GATE MULTI-SELECT (small-bore-on-large-part resolves to bore; set accumulates; dominant-resolver & non-accumulating-commit neg-ctrls)", krs::sel::runMultiSelectGate() },
             { "GATE J joint tooling (derive revolute frame <1e-6 vs oracle -> RobotArticSpec + reject neg-ctrl)", krs::cad::runJointGateJ() },
             { "GATE M MQTT (real broker; joint cmd->FK->state round-trip <1e-4; broadcast duality)", krs::mqtt::runMqttGateM() },
             { "GATE ND node graph (scene->node->ECS effect + graph->robot + disconnected/type neg-ctrls)", krs::nodes::runNodeGraphGateND() },

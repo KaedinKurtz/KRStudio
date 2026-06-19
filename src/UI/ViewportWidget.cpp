@@ -26,6 +26,7 @@
 #include "Scene.hpp"
 #include "Camera.hpp"
 #include "RayPick.hpp"   // GATE 3.1: hardened ray-triangle pick (krs::pick)
+#include "SelectionService.hpp"   // SELECTION-HIGHLIGHTS: face-level hover/commit (krs::sel)
 #include "Shader.hpp"
 #include "components.hpp"
 #include "IntersectionSystem.hpp"
@@ -153,6 +154,34 @@ cpuPickAABB(Scene& scene, const Camera& cam, int px, int py, int vpW, int vpH)
     CpuPickHit best;
     best.entity = hit->entity; best.worldPos = hit->worldPos; best.worldT = hit->t;
     return best;
+}
+
+// SELECTION-HIGHLIGHTS: resolve the pixel to a sub-feature (krs::sel::pick, the gated
+// backend) and update the ctx SelectionState the SelectionHighlightPass renders from.
+// HOVER on free mouse-move; COMMIT (accumulating set) on a left-click. The on-screen
+// highlight is OPERATOR-VISUAL-CONFIRM; the resolved identity is gated.
+static void featureHover(Scene& scene, const Camera& cam, int px, int py, int vpW, int vpH)
+{
+    auto& reg = scene.getRegistry();
+    auto* st = reg.ctx().find<krs::sel::SelectionState>();
+    if (!st || !st->enabled) return;
+    const glm::mat4 P = cam.getProjectionMatrix(float(vpW) / float(vpH));
+    const glm::mat4 V = cam.getViewMatrix();
+    const krs::pick::Ray ray = krs::pick::makeRayFromScreen(P, V, px, py, vpW, vpH);
+    if (!std::isfinite(ray.dir.x)) return;
+    krs::sel::updateHover(*st, reg, ray);
+}
+
+static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int vpW, int vpH, bool additive)
+{
+    auto& reg = scene.getRegistry();
+    auto* st = reg.ctx().find<krs::sel::SelectionState>();
+    if (!st || !st->enabled) return;
+    const glm::mat4 P = cam.getProjectionMatrix(float(vpW) / float(vpH));
+    const glm::mat4 V = cam.getViewMatrix();
+    const krs::pick::Ray ray = krs::pick::makeRayFromScreen(P, V, px, py, vpW, vpH);
+    if (!std::isfinite(ray.dir.x)) return;
+    krs::sel::commitSelection(*st, reg, ray, additive);
 }
 
 void ViewportWidget::propagateTransforms(entt::registry& r)
@@ -481,6 +510,12 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
                 }
             }
 
+            // SUB-FEATURE SELECT: commit the clicked face into the accumulating set
+            // (Shift = additive multi-select; plain click replaces). The highlight is
+            // OPERATOR-VISUAL-CONFIRM; the resolved identity is gated.
+            featureCommit(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(),
+                          width(), height(), isShiftPressed);
+
             QVector<entt::entity> currentSelection;
             for (auto eSel : reg.view<SelectedComponent>()) currentSelection.push_back(eSel);
             emit selectionChanged(currentSelection, getCamera());
@@ -526,6 +561,10 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* ev)
             m_gizmo->setHoveredHandle(m_hoverGizmo);
         }
     }
+
+    // ----- SUB-FEATURE HOVER HIGHLIGHT (free mouse-move only) -----
+    if (m_scene && ev->buttons() == Qt::NoButton)
+        featureHover(*m_scene, cam, ev->pos().x(), ev->pos().y(), width(), height());
 
     // ----- CAMERA NAV -----
     if (cam.navMode() == Camera::NavMode::FLY)            cam.freeLook(dx, dy);

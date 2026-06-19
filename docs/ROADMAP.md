@@ -3589,3 +3589,65 @@ KRS_IKFEEDS all ALL PASS; folded into KRS_OVERNIGHT_BENCH -> 112/112 gate groups
 push when the in-progress ci-win finishes so its cache-prime is not cancelled).
 OPERATOR VISUAL-CONFIRM: wire Robot -> IK.Robot + a Bake-Transform target -> IK.Target -> the IK Goal -> OMPL;
 on the trigger the arm's goal config solves to the target pose and OMPL plans a path to it.
+
+## SUB-FEATURE SELECTION HIGHLIGHTS SPRINT (2026-06-19, branch avoidance-field)
+The deferred VISUAL half of feature selection (OMPL Phase 3 shipped the gated ray->TopoDS_Face->analytic-params
+backend to 1e-9 but DEFERRED rendering). This sprint renders the feedback so a user can SEE what they pick --
+the prerequisite for the robot-builder (you cannot mate links by selecting features if selection is invisible).
+Everything is DERIVED from the gated backend (krs::sel::pick + krs::sel::indicator); nothing is a parallel
+hardcoded geometry that could drift. Heavily OPERATOR-VISUAL-CONFIRM (a headless runner cannot see a highlight),
+so the gates assert the inspectable IDENTITY and GEOMETRY the renderer is driven from, and every on-screen item
+is marked for the operator's eyes.
+
+### ARCHITECTURE
+- **krs::sel::SelectionState** (ctx singleton, SelectionService.hpp) -- `hover` (the feature a HOVER ray
+  resolves to) + `selected` (the accumulating SET a CLICK commits). `updateHover`/`commitSelection` store the
+  EXACT krs::sel::pick result (entity,faceId); commit ACCUMULATES (2nd pick does not clear the 1st), toggles off
+  a re-picked feature, and a miss leaves the set untouched. Emplaced in MainWindow + PreviewViewport ctx.
+- **buildIndicatorLines()** (SelectionService.hpp) -- the SINGLE render-geometry builder: the disk RIM is the
+  backend indicator()'s ring points (not re-synthesized), plus an axis/normal ARROW from the analytic
+  centre+normal. The SelectionHighlightPass DRAWS this and the INDICATOR-GEOMETRY gate CHECKS this same function,
+  so "what renders == the true analytic feature" is gated, not asserted.
+- **SelectionHighlightPass** (overlay, mirrors CollisionDebugPass, reuses collision_debug shader) -- draws the
+  hovered feature (yellow, single ring) and each selected feature (orange, double ring + arrow) from the ctx
+  SelectionState. ViewportWidget: featureHover on free mouse-move, featureCommit on left-click (Shift=additive).
+  View menu: "Show Feature Selection Highlights" toggles SelectionState.enabled.
+
+### GATES (KRS_SELHL_SELFTEST + bench; OCCT-free synthetic parts driven through the REAL krs::sel backend)
+- **HIGHLIGHT-MATCHES PASS**: across a 3-part scene + fuzz, the stored hover == krs::sel::pick (entity,faceId)
+  for **182/182** valid rays (100%); misses clean (no phantom highlight). NEG-CTRLs (REAL failing models): an
+  off-by-one **neighbour-face** highlight matches truth **0/182**, and a **dominant-face** highlight matches only
+  **120/182** (< 182 -- it mismatches on every ray whose feature is not the body's largest face). The highlight
+  tracks the TRUE resolved feature, never a neighbour or the dominating face.
+- **INDICATOR-GEOMETRY PASS**: the rendered disk/arrow matches the analytic feature for **40/40** cylinders
+  (worst residual **8.941e-08** << 1e-4: disk normal==axis, radius==feature radius, centre on the axis line, rim
+  perpendicular-to-axis at the radius) AND **40/40** planes (normal arrow + coplanar outline). NEG-CTRLs: an
+  indicator built from the WRONG feature, with axis/radius MISMATCHED, or with a TILTED plane normal all FAIL the
+  analytic check (40/40 each) -- the indicator cannot drift from the true feature undetected.
+- **MULTI-SELECT PASS** (SUBFEAT-HARD): on a big box (six ~1.0-area planar faces, the dominating geometry) with
+  three small bores (r=0.05/0.07), all **3/3** bore rays resolve to the SMALL Cylinder bore, not the dominant
+  PLANE (confirmed dominant face IS a plane). The selected SET accumulates (A then B -> 2; re-pick A toggles ->
+  1; miss keeps the set). NEG-CTRLs: a **dominant-face resolver** misses the bore 3/3, and a **non-accumulating
+  commit** holds only 1 of 2 -- both real failing models rejected.
+
+### ADVERSARIAL REVIEW (18 agents, 4 failure-mode lenses + skeptic verify) -- 2 confirmed, 12 dismissed
+- Confirmed MAJOR (gate-only, FIXED): a 1-face part let the off-by-one neighbour neg-control wrap `(0+1)%1==0`
+  back to truth (vacuous) -- gave cylinder #2 an end cap (2 faces) + guarded pickNeighbourFace for nFaces<2. The
+  gate self-reported "VACUOUS!" before the fix; 0/182 after.
+- Confirmed MINOR (gate-only, FIXED): INDICATOR-GEOMETRY only positively gated the Cylinder branch; the renderer
+  also draws Plane indicators -> added a positive Plane case + a tilted-normal plane neg-control (40/40).
+
+### RESULT (2026-06-19): KRS_SELHL_SELFTEST ALL PASS; folded into KRS_OVERNIGHT_BENCH -> **115/115 gate groups
+PASS** (was 112; +3). Built + freshly relinked via PowerShell (exe timestamp verified each build). NOTE: a stale
+RoboticsSoftware.exe held the output file -> LNK1104; kill the process before relinking.
+
+### OPERATOR-VISUAL-CONFIRM REQUIRED (the agent CANNOT verify on-screen rendering -- the user must look):
+1. HOVER a CAD part's face -> the hovered face shows a yellow disk (cylinder) / outline+normal-arrow (plane);
+   moving to another face MOVES the highlight; hovering empty space clears it.
+2. CLICK a face -> it stays SELECTED with a distinct orange double-ring (different from the yellow hover).
+3. Select a CYLINDRICAL face -> a disk sits ON the cylinder's axis at the correct radius with an arrow along the
+   axis; it looks correctly placed and sized.
+4. Select a PLANAR face -> a normal arrow points out of the face.
+5. On a part with multiple bores, Shift-click each in sequence -> BOTH show indicators (the set accumulates);
+   the SMALL bore on a big part is hoverable/clickable (not lost to the dominating face); re-clicking deselects.
+6. View > "Show Feature Selection Highlights" toggles the whole overlay off/on.
