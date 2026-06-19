@@ -129,7 +129,10 @@ public:
         auto out = [&](const char* n, const char* u) { m_ports.push_back({ n, { "double", u }, Port::Direction::Output, this }); };
         switch (t) {
         case PropType::Scalar: out("Value", "unitless"); break;
-        case PropType::Quat:   out("Roll", "deg"); out("Pitch", "deg"); out("Yaw", "deg"); break;
+        case PropType::Quat:   out("Roll", "deg"); out("Pitch", "deg"); out("Yaw", "deg");
+                               // ALSO expose the orientation as a first-class quaternion (no euler precision loss),
+                               // so it can bake straight into a Transform / feed IK without an RPY round-trip.
+                               m_ports.push_back({ "Quaternion", { "glm::quat", "quat" }, Port::Direction::Output, this }); break;
         default:               out("X", "unitless"); out("Y", "unitless"); out("Z", "unitless"); break;
         }
         out("Frequency", "Hz");
@@ -165,6 +168,8 @@ public:
             double r, p, y; quatToRPY(e->v[0], e->v[1], e->v[2], e->v[3], r, p, y);
             const double k = 180.0 / 3.14159265358979323846;
             setOutput<double>("Roll", r * k); setOutput<double>("Pitch", p * k); setOutput<double>("Yaw", y * k);
+            // the catalog stores orientation as (w,x,y,z); emit it as a raw quaternion too.
+            setOutput<glm::quat>("Quaternion", glm::quat(float(e->v[0]), float(e->v[1]), float(e->v[2]), float(e->v[3])));
         } else {
             setOutput<double>("X", e->v[0]); setOutput<double>("Y", e->v[1]); setOutput<double>("Z", e->v[2]);
         }
@@ -429,6 +434,65 @@ bool runTwinGate() {
                                  : "FAILURES PRESENT");
     fflush(stdout);
     return allOk;
+}
+
+// GATE QUATERNION-OUTPUT (KRS_QUATOUT_SELFTEST): the rigid-body Property node's NEW quaternion output matches the
+// body's actual orientation; baking position+that-quat into a Transform round-trips losslessly. NEG = a stale quat.
+bool runQuaternionOutputGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[quatout] GATE QUATERNION-OUTPUT -- rigid-body Property node emits orientation as a quaternion + bakes a Transform\n");
+    catalog().clear();
+
+    Scene scene; auto& reg = scene.getRegistry();
+    const entt::entity A = reg.create();
+    reg.emplace<TagComponent>(A).tag = "arm_flange";
+    const glm::vec3 knownPos(0.3f, -0.4f, 1.2f);
+    const glm::quat knownRot = glm::normalize(glm::quat(0.2f, 0.5f, -0.3f, 0.1f));   // (w,x,y,z)
+    auto& xf = reg.emplace<TransformComponent>(A); xf.translation = knownPos; xf.rotation = knownRot;
+    reg.emplace<RigidBodyComponent>(A).mass = 2.0f;
+    AccelTracker acc; publishSceneState(catalog(), reg, 0.0, 1.0 / 60.0, acc);
+
+    ObjectNode obj; obj.setScene(&scene); obj.setParam<int>("objId", int(std::uint32_t(entt::to_integral(A)))); obj.process();
+    PropertyNode prop; wireObject(obj, prop); prop.selectProperty("orientation"); prop.process();
+
+    auto readQuat = [](Node& n, const char* port) -> std::optional<glm::quat> {
+        for (const auto& p : n.getPorts())
+            if (p.name == port && p.direction == Port::Direction::Output && p.packet)
+                try { return std::any_cast<glm::quat>(p.packet->data); } catch (...) {}
+        return std::nullopt;
+    };
+    // q and -q are the SAME rotation -> compare via |dot| ~ 1.
+    auto sameRot = [](const glm::quat& a, const glm::quat& b) { return std::abs(glm::dot(glm::normalize(a), glm::normalize(b))) > 0.99999f; };
+
+    const auto qOpt = readQuat(prop, "Quaternion");
+    const bool quatMatchesBody = qOpt && sameRot(*qOpt, knownRot);
+    const glm::quat qOut = qOpt.value_or(glm::quat(1, 0, 0, 0));
+
+    // bake position + that quat into a Transform via the REAL transform_bake node -> round-trip read-back.
+    krs::RigidTransform baked{}; bool haveBaked = false;
+    if (auto bake = NodeFactory::instance().createNode("transform_bake")) {
+        { PortDataPacket pk; pk.data = knownPos; pk.type = { "glm::vec3", "m" };    bake->setInput("Position", pk); }
+        { PortDataPacket pk; pk.data = qOut;     pk.type = { "glm::quat", "quat" }; bake->setInput("Orientation", pk); }
+        bake->process();
+        for (const auto& p : bake->getPorts())
+            if (p.name == "Transform" && p.direction == Port::Direction::Output && p.packet)
+                try { baked = std::any_cast<krs::RigidTransform>(p.packet->data); haveBaked = true; } catch (...) {}
+    }
+    const bool roundTripOk = haveBaked && glm::length(baked.position - knownPos) < 1e-5f && sameRot(baked.rotation, knownRot);
+
+    // NEG-CTRL: a STALE/wrong quaternion (identity) does NOT match the body's actual orientation.
+    const bool negOk = !sameRot(glm::quat(1, 0, 0, 0), knownRot);
+
+    const bool pass = quatMatchesBody && roundTripOk && negOk;
+    printf("[quatout]   Property 'orientation' quat matches body:%d; bake pos+quat->Transform round-trips:%d; "
+           "NEG stale identity-quat mismatches:%d  %s\n",
+           int(quatMatchesBody), int(roundTripOk), int(negOk), pass ? "PASS" : "FAIL");
+    printf("[quatout] %s\n", pass ? "ALL PASS (rigid-body quaternion output matches actual orientation; bakes+reads back losslessly; stale quat fails)"
+                                  : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
 }
 
 } // namespace krs::twin

@@ -81,6 +81,14 @@ bool runTypeGate();
 // still REJECTED (real type safety preserved). Needs QApplication.
 bool runTypeConnectGate();
 
+// Part B math-backbone gates (headless; folded into the bench).
+// GATE TRANSFORM-COMPOSE (KRS_TFORM_SELFTEST): the quat-native Transform compose matches the closed-form result,
+//   inverse . transform == identity; NEG-CTRL = the wrong compose order is a different wrong result.
+bool runTransformComposeGate();
+// GATE LINALG-CORRECT (KRS_LINALG_SELFTEST): each linear-algebra node matches its closed form (dot=32,
+//   cross/scale/magnitude/transpose/inverse); NEG-CTRL = a sum-not-multiply-accumulate dot fails.
+bool runLinalgCorrectGate();
+
 // GATE TIME (KRS_TIME_SELFTEST): a sine driven by the LIVE time source oscillates over wall-clock;
 // disconnected from the time source it is constant.
 bool runTimeGate();

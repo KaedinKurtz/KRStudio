@@ -12,6 +12,7 @@
 #include <QWidget>
 #include <glm/glm.hpp> // For glm::vec3, etc.
 #include <Eigen/Core>  // For the unified vector data coercion (Vector3f/3d, VectorXf/Xd <-> glm::vec3)
+#include "RigidTransform.hpp"  // the quat-native Transform type (coerces with glm::mat4)
 
 
 // Forward declaration
@@ -210,6 +211,13 @@ public:
                     std::vector<double> f;
                     if (krs::detail::anyToVector(src->data, f))
                         if (auto v = krs::detail::vectorTo<T>(f)) return v;
+                }
+                // TRANSFORM COERCION: the quat-native RigidTransform and a raw glm::mat4 share the "transform" id.
+                if constexpr (std::is_same_v<T, krs::RigidTransform>) {
+                    if (auto* m = std::any_cast<glm::mat4>(&src->data)) return krs::RigidTransform::fromMatrix(*m);
+                }
+                if constexpr (std::is_same_v<T, glm::mat4>) {
+                    if (auto* t = std::any_cast<krs::RigidTransform>(&src->data)) return t->matrix();
                 }
                 return std::nullopt;
             }

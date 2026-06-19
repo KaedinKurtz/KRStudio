@@ -190,4 +190,8 @@ inline void publishSceneState(PropertyCatalog& cat, entt::registry& reg, double 
 // OBJECT-PROPERTY-NODES / FREQUENCY-OUTPUT. Returns true iff all pass.
 bool runTwinGate();
 
+// GATE QUATERNION-OUTPUT (env KRS_QUATOUT_SELFTEST; in the bench): the rigid-body Property node's quaternion
+// output matches the body's actual orientation + bakes into a Transform losslessly; NEG = a stale quat.
+bool runQuaternionOutputGate();
+
 } // namespace krs::twin

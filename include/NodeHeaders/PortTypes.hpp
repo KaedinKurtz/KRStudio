@@ -20,21 +20,23 @@ inline std::string canonicalTypeId(const std::string& tn) {
     if (tn == "bool") return "bool";
     if (tn == "glm::vec3" || tn == "Eigen::Vector3f" || tn == "Eigen::Vector3d"
         || tn == "Eigen::VectorXf" || tn == "Eigen::VectorXd") return "vector";   // unified real vectors
+    // a rigid pose: the quat-native RigidTransform and a raw glm::mat4 transform interoperate (getInput coerces).
+    if (tn == "RigidTransform" || tn == "krs::RigidTransform" || tn == "glm::mat4") return "transform";
     return tn;   // genuinely-distinct: complex vectors, matrices, quat, point clouds, handles, joint_config, ...
 }
 
 // The human-readable TYPE LABEL (grey text next to the port). DERIVED from the real type, never hardcoded.
 inline std::string canonicalTypeLabel(const std::string& tn) {
     const std::string id = canonicalTypeId(tn);
-    if (id == "number") return "Scalar";
-    if (id == "bool")   return "Boolean";
-    if (id == "vector") return "Vector";
-    if (id == "enum")   return "Option";
+    if (id == "number")    return "Scalar";
+    if (id == "bool")      return "Boolean";
+    if (id == "vector")    return "Vector";
+    if (id == "enum")      return "Option";
+    if (id == "transform") return "Transform";   // RigidTransform / glm::mat4 (a rigid pose)
     // genuinely-distinct types: a readable label per family.
     if (tn == "Eigen::VectorXcf" || tn == "Eigen::VectorXcd") return "Complex Vector";
     if (tn == "Eigen::MatrixXf"  || tn == "Eigen::MatrixXd")  return "Matrix";
     if (tn == "Eigen::MatrixXcf")                             return "Complex Matrix";
-    if (tn == "glm::mat4")                                    return "Transform";
     if (tn == "glm::quat")                                    return "Quaternion";
     if (tn == "std::vector<glm::vec3>")                       return "Point Cloud";
     if (tn == "joint_config")                                return "Joint Config";

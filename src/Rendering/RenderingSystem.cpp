@@ -973,6 +973,19 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Part B math backbone: Transform compose + linear-algebra correctness.
+    if (qEnvironmentVariableIntValue("KRS_TFORM_SELFTEST") != 0) {
+        std::printf("\n================= KRS_TFORM_SELFTEST =================\n");
+        const bool ok = krs::nodes::runTransformComposeGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_LINALG_SELFTEST") != 0) {
+        std::printf("\n================= KRS_LINALG_SELFTEST =================\n");
+        const bool ok = krs::nodes::runLinalgCorrectGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
     // Node-editor GATE TYPE: port type compatibility.
     if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
         std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
@@ -1408,6 +1421,11 @@ void RenderingSystem::initializeSharedResources()
 
     // Avoidance-field Phase 1: ECS->catalog publishing + Object/Property nodes +
     // stale-aware frequency. Pure CPU, no broker.
+    if (qEnvironmentVariableIntValue("KRS_QUATOUT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_QUATOUT_SELFTEST =================\n");
+        const bool ok = krs::twin::runQuaternionOutputGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     if (qEnvironmentVariableIntValue("KRS_TWIN_SELFTEST") != 0) {
         std::printf("\n================= KRS_TWIN_SELFTEST =================\n");
         const bool ok = krs::twin::runTwinGate();
@@ -1494,6 +1512,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE ROBOT-CHAIN (entity owns links+joints+base+mount: owned-DOF chain/joint-from-feature/typed-mount-port/lossless-export; non-member & non-coaxial & mismatched-type & corrupt-export neg-ctrls)", krs::robot::runRobotChainGate() },
             { "GATE E2E (robot defined-via-chain -> planned -> executed; every stage asserted; severing define/plan/execute localizes the break)", krs::plan::runE2EGate() },
             { "GATE TWIN (ECS->catalog introspection + Object/Property nodes value-fidelity + stale-aware frequency; non-existent-obj & phantom-prop & disconnected & frozen-Hz neg-ctrls)", krs::twin::runTwinGate() },
+            { "GATE QUATERNION-OUTPUT (rigid-body Property node quaternion output matches orientation; bakes into a Transform losslessly; stale-quat neg-ctrl)", krs::twin::runQuaternionOutputGate() },
             { "GATE EMITTER (avoidance-field emission magnitude/sign via FieldSolver + substance origin/rate/follow + type-switch; zero-amp & disconnected & invalid-type neg-ctrls)", krs::field::runEmitterGate() },
             { "GATE FIELD-LAW (dynamics-driven amplitude ordering accel>const>decel>static + authorable + law->emitter pipe; geometry-only-fails-ordering & unconnected-weight neg-ctrls)", krs::field::runFieldLawGate() },
             { "GATE SDF (particle grid-SDF distance vs analytic + away-gradient + dynamics-scaling + interactive-perf; empty-SDF & flat-gradient & geometry-only neg-ctrls)", krs::field::runSdfGate() },
@@ -1514,6 +1533,8 @@ void RenderingSystem::initializeSharedResources()
             { "GATE WHILE-ITERATES-AND-TERMINATES (While fires the exact count then terminates; for-N exact; the mandatory max-iter cap catches an infinite loop; no-cap + wrong-count neg-ctrls)", krs::nodes::runWhileGate() },
             { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
             { "GATE TYPE-CONNECT (consolidated vectors connect+compute: Compose(Vec3f)->Dot(glm::vec3)=32; old ids rejected; vector->Scalar/Boolean still rejected)", krs::nodes::runTypeConnectGate() },
+            { "GATE TRANSFORM-COMPOSE (quat-native compose matches closed form; inverse==identity; wrong-order neg-ctrl)", krs::nodes::runTransformComposeGate() },
+            { "GATE LINALG-CORRECT (dot=32/cross/scale/magnitude/transpose/inverse vs closed form; sum-not-MAC dot neg-ctrl)", krs::nodes::runLinalgCorrectGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },
             { "GATE FRAME (every registered node type exposes ports via the real QtNodes model, N of M)", krs::nodes::runFrameGate() },
