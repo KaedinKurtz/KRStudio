@@ -226,6 +226,9 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
     qDebug() << "[LIFECYCLE] Constructing ViewportWidget instance:" << m_instanceId;
     setFocusPolicy(Qt::StrongFocus);
     setAcceptDrops(true); // asset-browser drag-and-drop spawning
+    // Deliver mouseMoveEvent on FREE movement (no button held) -- required for the
+    // sub-feature hover highlight (and gizmo hover) to track the cursor live.
+    setMouseTracking(true);
 
     // Smooth fly-camera integration (60 Hz, eased velocity).
     m_flyTimer = new QTimer(this);

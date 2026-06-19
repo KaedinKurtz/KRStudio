@@ -11,6 +11,9 @@ namespace {
 
 constexpr glm::vec3 kHoverColor{ 1.00f, 0.95f, 0.20f };   // bright yellow = "about to select"
 constexpr glm::vec3 kSelectColor{ 1.00f, 0.55f, 0.10f };  // orange = committed selection
+constexpr float kHoverWidth = 2.5f;                       // px (driver-clamped on some GL profiles)
+constexpr float kSelectWidth = 4.0f;                      // a couple px thicker than hover
+constexpr float kPlaneHalf = 0.03f;                       // planar-face outline half-size (was 0.01 -- too small to read)
 
 // Append an IndicatorLines (rim + arrow) into a flat GL_LINES vertex list.
 void appendIndicator(std::vector<glm::vec3>& out, const krs::sel::IndicatorLines& L)
@@ -85,24 +88,27 @@ void SelectionHighlightPass::execute(const RenderFrameContext& context)
     auto* gl = context.gl;
     gl->glEnable(GL_DEPTH_TEST);
     gl->glDepthMask(GL_FALSE);   // overlay: don't occlude later passes
-    gl->glLineWidth(2.0f);
 
-    // SELECTED features (committed): orange, double ring for a "locked" look.
+    // SELECTED features (committed): orange, double ring + thicker line for a "locked" look.
     if (!st->selected.empty()) {
         std::vector<glm::vec3> selLines;
         for (const auto& sel : st->selected) {
             if (!sel.valid) continue;
-            const krs::sel::IndicatorLines L = krs::sel::buildIndicatorLines(krs::sel::indicator(sel));
+            const krs::sel::IndicatorLines L =
+                krs::sel::buildIndicatorLines(krs::sel::indicator(sel, 32, kPlaneHalf));
             appendIndicator(selLines, L);
             appendOuterRing(selLines, L, 1.12f);     // concentric accent
         }
+        gl->glLineWidth(kSelectWidth);
         drawLines(context, selLines, kSelectColor);
     }
 
     // HOVERED feature (preview): yellow, single ring. Drawn last so it sits on top.
     if (st->hover.valid) {
         std::vector<glm::vec3> hovLines;
-        appendIndicator(hovLines, krs::sel::buildIndicatorLines(krs::sel::indicator(st->hover)));
+        appendIndicator(hovLines,
+            krs::sel::buildIndicatorLines(krs::sel::indicator(st->hover, 32, kPlaneHalf)));
+        gl->glLineWidth(kHoverWidth);
         drawLines(context, hovLines, kHoverColor);
     }
 
