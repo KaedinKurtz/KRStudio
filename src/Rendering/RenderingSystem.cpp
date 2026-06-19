@@ -986,6 +986,32 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Part C Robot definer: publishes Tier-1 props + the chain is plannable.
+    if (qEnvironmentVariableIntValue("KRS_ROBOTPUB_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ROBOTPUB_SELFTEST =================\n");
+        const bool ok = krs::nodes::runRobotPublishesGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_ROBOTPLAN_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ROBOTPLAN_SELFTEST =================\n");
+        const bool ok = krs::nodes::runRobotChainPlannableGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    // Part D IK: solves over a Robot+Transform, and feeds the OMPL goal.
+    if (qEnvironmentVariableIntValue("KRS_IKSOLVE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_IKSOLVE_SELFTEST =================\n");
+        const bool ok = krs::nodes::runIkSolvesGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_IKFEEDS_SELFTEST") != 0) {
+        std::printf("\n================= KRS_IKFEEDS_SELFTEST =================\n");
+        const bool ok = krs::nodes::runIkFeedsOmplGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
     // Node-editor GATE TYPE: port type compatibility.
     if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
         std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
@@ -1535,6 +1561,10 @@ void RenderingSystem::initializeSharedResources()
             { "GATE TYPE-CONNECT (consolidated vectors connect+compute: Compose(Vec3f)->Dot(glm::vec3)=32; old ids rejected; vector->Scalar/Boolean still rejected)", krs::nodes::runTypeConnectGate() },
             { "GATE TRANSFORM-COMPOSE (quat-native compose matches closed form; inverse==identity; wrong-order neg-ctrl)", krs::nodes::runTransformComposeGate() },
             { "GATE LINALG-CORRECT (dot=32/cross/scale/magnitude/transpose/inverse vs closed form; sum-not-MAC dot neg-ctrl)", krs::nodes::runLinalgCorrectGate() },
+            { "GATE ROBOT-PUBLISHES (Robot node Tier-1 kinematic props match state, readable via Object->Property; base not a DOF; phantom-prop & sensed-Tier-2 neg-ctrls)", krs::nodes::runRobotPublishesGate() },
+            { "GATE ROBOT-CHAIN-IS-PLANNABLE (OMPL plans over the Robot ref's owned joints; base + non-member excluded; buggy-include neg-ctrl)", krs::nodes::runRobotChainPlannableGate() },
+            { "GATE IK-SOLVES (IK over Robot ref + Target Transform reaches the EE target; unreachable graceful; wrong-soln neg-ctrl)", krs::nodes::runIkSolvesGate() },
+            { "GATE IK-FEEDS-OMPL (Transform->IK->goal->OMPL path; joint_config connects, type-mismatch rejected)", krs::nodes::runIkFeedsOmplGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },
             { "GATE FRAME (every registered node type exposes ports via the real QtNodes model, N of M)", krs::nodes::runFrameGate() },

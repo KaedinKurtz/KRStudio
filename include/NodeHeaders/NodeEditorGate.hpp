@@ -89,6 +89,23 @@ bool runTransformComposeGate();
 //   cross/scale/magnitude/transpose/inverse); NEG-CTRL = a sum-not-multiply-accumulate dot fails.
 bool runLinalgCorrectGate();
 
+// Part C Robot-definer gates (headless; folded into the bench).
+// GATE ROBOT-PUBLISHES (KRS_ROBOTPUB_SELFTEST): the Robot node publishes Tier-1 kinematic props (q, limits,
+//   end-effector pose, DOF) matching actual state, readable via Object->Property; the base is NOT a DOF; a
+//   sensed Tier-2 property is absent. NEG-CTRL = a wrong include-non-member DOF count.
+bool runRobotPublishesGate();
+// GATE ROBOT-CHAIN-IS-PLANNABLE (KRS_ROBOTPLAN_SELFTEST): OMPL plans over the Robot reference's owned joints
+//   (correct DOF, base + non-member excluded). NEG-CTRL = the buggy include-non-member config space.
+bool runRobotChainPlannableGate();
+
+// Part D IK gates (headless; folded into the bench).
+// GATE IK-SOLVES (KRS_IKSOLVE_SELFTEST): IK over a wired Robot + Target Transform places the end-effector frame
+//   at the target (FK of the solution == target, world frame); unreachable -> failure; wrong-soln neg-ctrl.
+bool runIkSolvesGate();
+// GATE IK-FEEDS-OMPL (KRS_IKFEEDS_SELFTEST): the IK joint-config output connects to + drives the OMPL goal input
+//   (Transform -> IK -> goal -> OMPL path); a type-mismatched wire (joint_config -> bool) is rejected. Needs QApplication.
+bool runIkFeedsOmplGate();
+
 // GATE TIME (KRS_TIME_SELFTEST): a sine driven by the LIVE time source oscillates over wall-clock;
 // disconnected from the time source it is constant.
 bool runTimeGate();

@@ -40,6 +40,8 @@ inline std::string canonicalTypeLabel(const std::string& tn) {
     if (tn == "glm::quat")                                    return "Quaternion";
     if (tn == "std::vector<glm::vec3>")                       return "Point Cloud";
     if (tn == "joint_config")                                return "Joint Config";
+    if (tn == "robot_ref")                                   return "Robot";
+    if (tn == "frame_ref")                                   return "Frame";
     if (tn == "entt::entity")                                return "Entity";
     if (tn == "entt::registry*" || tn == "registry")         return "Registry";
     if (tn == "std::string")                                 return "Text";

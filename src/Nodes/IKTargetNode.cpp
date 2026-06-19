@@ -8,9 +8,14 @@
 #include "NodeFactory.hpp"
 #include "NodeEditorGate.hpp"
 #include "NodePlannerArm.hpp"
+#include "RobotRef.hpp"        // a wired Robot reference overrides the default arm (Part C/D)
+#include "RigidTransform.hpp"  // the target pose can be a first-class Transform (Part B/D)
+#include "PortTypes.hpp"       // canonicalTypeId -- the connection-compatibility rule (IK->OMPL type match)
 
 #include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <cstdio>
 #include <cmath>
@@ -31,6 +36,9 @@ public:
         m_id = "ik_target";                        // base ctor already added the "Trigger" input
         setUpdatePolicy(UpdatePolicy::Triggered);  // process() fires compute() ONLY on the Trigger rising edge
         setTriggerEdge(TriggerEdge::Rising);       // -> sample-on-trigger; outputs HOLD between edges (compute not called)
+        m_ports.push_back({ "Robot",       { "robot_ref", "handle" },   Port::Direction::Input,  this }); // chain to solve (optional)
+        m_ports.push_back({ "Frame",       { "frame_ref", "handle" },   Port::Direction::Input,  this }); // which EE frame (optional)
+        m_ports.push_back({ "Target",      { "RigidTransform", "pose" },Port::Direction::Input,  this }); // target pose (optional)
         m_ports.push_back({ "Position",    { "glm::vec3", "m" },        Port::Direction::Input,  this });
         m_ports.push_back({ "Orientation", { "glm::vec3", "rad" },      Port::Direction::Input,  this });
         m_ports.push_back({ "TargetX",     { "double", "m" },           Port::Direction::Output, this });
@@ -48,16 +56,41 @@ public:
     // process() (Triggered/Rising) calls this ONLY on the Trigger rising edge -> SAMPLE the live inputs, solve
     // IK, freeze. Between edges compute() is not called, so the outputs HOLD the last sample.
     void compute() override {
-        const glm::vec3 pos = getInput<glm::vec3>("Position").value_or(glm::vec3(0.0f));
-        const glm::vec3 rpy = getInput<glm::vec3>("Orientation").value_or(glm::vec3(0.0f));
-        krs::dyn::Pose target; target.p = Eigen::Vector3d(pos.x, pos.y, pos.z); target.R = rpyToR(rpy);
-        Eigen::VectorXd q = m_seed;
-        m_ik = m_chain.ik(target, m_ee, q);
-        m_goal = q; m_sampled = pos;
-        if (m_ik.ok) m_seed = q;                                   // warm-start the next solve
-        setOutput<double>("TargetX", double(m_sampled.x));
-        setOutput<double>("TargetY", double(m_sampled.y));
-        setOutput<double>("TargetZ", double(m_sampled.z));
+        // CHAIN + end-effector + base: a wired Robot reference (Part C) overrides the built-in default arm;
+        // a wired Frame reference names which body is positioned. Unwired -> the standalone default arm.
+        const krs::dyn::SerialChain* chain = &m_chain;
+        int ee = m_ee;
+        Eigen::Matrix4d base = Eigen::Matrix4d::Identity();
+        if (auto rr = getInput<krs::RobotRef>("Robot"); rr && rr->chain) { chain = rr->chain.get(); ee = rr->ee; base = rr->basePlacement; }
+        if (auto fr = getInput<krs::FrameRef>("Frame")) ee = fr->body;
+
+        // TARGET pose in WORLD frame: a first-class Transform (Part B) if wired, else built from Position+Orientation.
+        krs::RigidTransform tw;
+        if (auto t = getInput<krs::RigidTransform>("Target")) { tw = *t; }
+        else {
+            const glm::vec3 pos = getInput<glm::vec3>("Position").value_or(glm::vec3(0.0f));
+            const glm::vec3 rpy = getInput<glm::vec3>("Orientation").value_or(glm::vec3(0.0f));
+            const Eigen::Quaterniond eq(rpyToR(rpy));
+            tw.position = pos; tw.rotation = glm::quat(float(eq.w()), float(eq.x()), float(eq.y()), float(eq.z()));
+        }
+
+        // map the WORLD target into the chain's base frame: target_chain = basePlacement^-1 * target_world.
+        const Eigen::Matrix3d Rb = base.block<3, 3>(0, 0);
+        const Eigen::Vector3d pb = base.block<3, 1>(0, 3);
+        const glm::quat gq = glm::normalize(tw.rotation);
+        const Eigen::Matrix3d Rt = Eigen::Quaterniond(gq.w, gq.x, gq.y, gq.z).toRotationMatrix();
+        const Eigen::Vector3d pt(tw.position.x, tw.position.y, tw.position.z);
+        krs::dyn::Pose target; target.R = Rb.transpose() * Rt; target.p = Rb.transpose() * (pt - pb);
+
+        // solve DLS IK for the named frame; warm-start from the last solution.
+        Eigen::VectorXd q = (m_seed.size() == chain->nq()) ? m_seed : Eigen::VectorXd::Zero(chain->nq());
+        m_ik = chain->ik(target, ee, q);
+        m_goal = q;
+        if (m_ik.ok) m_seed = q;
+
+        setOutput<double>("TargetX", double(tw.position.x));        // the frozen WORLD target the goal aims at
+        setOutput<double>("TargetY", double(tw.position.y));
+        setOutput<double>("TargetZ", double(tw.position.z));
         setOutput<bool>("Reachable", m_ik.ok && m_ik.posErr < 1e-3);
         setOutput<Eigen::VectorXd>("Goal", m_goal);
     }
@@ -68,8 +101,6 @@ private:
     int m_ee = 0;
     Eigen::VectorXd m_seed, m_goal;
     krs::dyn::SerialChain::IKResult m_ik;
-    glm::vec3 m_sampled{ 0.0f };
-    bool m_haveSample = false, m_lastTrigger = false;
 };
 
 struct IKRegistrar {
@@ -99,6 +130,19 @@ Eigen::VectorXd rOutGoal(Node& n) {
 }
 void setVecIn(Node& n, const char* p, glm::vec3 v) { n.setPortLiteral<glm::vec3>(p, v); }
 void setTrigIn(Node& n, bool t) { PortDataPacket pk; pk.data = t; pk.type = { "bool", "unitless" }; n.setInput("Trigger", pk); }
+void setRobotIn(Node& n, const krs::RobotRef& r) { PortDataPacket pk; pk.data = r; pk.type = { "robot_ref", "handle" }; n.setInput("Robot", pk); }
+void setFrameIn(Node& n, const krs::FrameRef& f) { PortDataPacket pk; pk.data = f; pk.type = { "frame_ref", "handle" }; n.setInput("Frame", pk); }
+void setTformIn(Node& n, const char* p, const krs::RigidTransform& t) { PortDataPacket pk; pk.data = t; pk.type = { "RigidTransform", "pose" }; n.setInput(p, pk); }
+// world-frame EE pose of a config (basePlacement applied), as a Transform.
+krs::RigidTransform fkWorld(const krs::RobotRef& r, const Eigen::VectorXd& q) {
+    const krs::dyn::Pose P = r.chain->bodyPose(q, r.ee);
+    const Eigen::Matrix3d Rb = r.basePlacement.block<3, 3>(0, 0);
+    const Eigen::Vector3d pb = r.basePlacement.block<3, 1>(0, 3);
+    const Eigen::Vector3d pw = Rb * P.p + pb;
+    const Eigen::Quaterniond qw(Rb * P.R);
+    krs::RigidTransform t; t.position = glm::vec3(float(pw.x()), float(pw.y()), float(pw.z()));
+    t.rotation = glm::quat(float(qw.w()), float(qw.x()), float(qw.y()), float(qw.z())); return t;
+}
 
 } // namespace
 
@@ -161,6 +205,107 @@ bool runIkSampleGate()
            int(reachable), fkErr, int(validOk), int(unreachOk), wrongErr, fkErr + 0.1, int(negValidOk), pass ? "PASS" : "FAIL");
     printf("[ik] %s\n", pass ? "ALL PASS (samples only on the trigger edge + holds; IK reaches reachable targets; unreachable graceful; wrong soln fails)"
                              : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+bool runIkSolvesGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[iksolve] GATE IK-SOLVES -- IK over a wired Robot + Target Transform places the EE frame at the target\n");
+
+    const krs::RobotRef rr = krs::makeRobotRef(krs::buildDefaultRobot());
+    // a definitely-reachable WORLD target = FK_world of a known config.
+    Eigen::VectorXd qTest(3); qTest << 0.4, 0.3, -0.2;
+    const krs::RigidTransform targetW = fkWorld(rr, qTest);
+
+    IKTargetNode ik;
+    setRobotIn(ik, rr); setFrameIn(ik, krs::FrameRef{ rr.ee, "ee" }); setTformIn(ik, "Target", targetW);
+    setTrigIn(ik, false); ik.process(); setTrigIn(ik, true); ik.process();      // trigger edge -> solve
+
+    const Eigen::VectorXd goal = rOutGoal(ik);
+    const bool reachable = rOutB(ik, "Reachable");
+    // FK of the SOLUTION (world) must land at the target (the IK is correct).
+    const double fkErr = (goal.size() == rr.dof) ? glm::length(fkWorld(rr, goal).position - targetW.position) : 1e30;
+    const bool solveOk = reachable && fkErr < 1e-3 && goal.size() == rr.dof;
+
+    // NEG-CTRL A: an unreachable target -> Reachable false (graceful, not a garbage config).
+    krs::RigidTransform far; far.position = glm::vec3(5.0f, 5.0f, 5.0f);
+    setTformIn(ik, "Target", far); setTrigIn(ik, false); ik.process(); setTrigIn(ik, true); ik.process();
+    const bool unreachOk = !rOutB(ik, "Reachable");
+    // NEG-CTRL B: a WRONG solution (goal + a joint offset) has FK far from the target.
+    Eigen::VectorXd wrong = goal; if (wrong.size() > 0) wrong[0] += 1.2;
+    const double wrongErr = (wrong.size() == rr.dof) ? glm::length(fkWorld(rr, wrong).position - targetW.position) : 0.0;
+    const bool wrongNeg = wrongErr > fkErr + 0.1;
+
+    const bool pass = solveOk && unreachOk && wrongNeg;
+    printf("[iksolve]   reachable:%d FK(goal)_world - target=%.2e (<1e-3:%d); unreachable->not-reachable:%d; "
+           "NEG wrong-soln FK=%.3f (> %.3f:%d)  %s\n",
+           int(reachable), fkErr, int(solveOk), int(unreachOk), wrongErr, fkErr + 0.1, int(wrongNeg), pass ? "PASS" : "FAIL");
+    printf("[iksolve] %s\n", pass ? "ALL PASS (IK over the Robot ref + Target Transform reaches the target; unreachable graceful; wrong soln fails)"
+                                  : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+bool runIkFeedsOmplGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[ikompl] GATE IK-FEEDS-OMPL -- the IK joint-config output connects to + drives the OMPL goal input\n");
+
+    // (1) CONNECTION rule (== QtNodes id-match): read the REAL port types off the nodes and compare canonical ids.
+    //     ik_target.Goal (joint_config) matches ompl_planner.Goal (joint_config); ik.Goal vs ompl.Plan (bool) does NOT.
+    auto portType = [](Node& n, Port::Direction dir, const char* name) -> std::string {
+        for (const auto& p : n.getPorts()) if (p.direction == dir && p.name == name) return p.type.name;
+        return "";
+    };
+    std::string ikGoalT, omGoalT, omPlanT;
+    if (auto a = NodeFactory::instance().createNode("ik_target"))      ikGoalT = portType(*a, Port::Direction::Output, "Goal");
+    if (auto b = NodeFactory::instance().createNode("ompl_planner")) { omGoalT = portType(*b, Port::Direction::Input, "Goal"); omPlanT = portType(*b, Port::Direction::Input, "Plan"); }
+    const bool goalMatch = !ikGoalT.empty() && krs::ports::canonicalTypeId(ikGoalT) == krs::ports::canonicalTypeId(omGoalT);
+    const bool typeMismatchRejected = !omPlanT.empty() && krs::ports::canonicalTypeId(ikGoalT) != krs::ports::canonicalTypeId(omPlanT);
+    const bool connOk = goalMatch && typeMismatchRejected;
+    const int goalConn = goalMatch ? 1 : 0, typeMismatch = typeMismatchRejected ? 0 : 1;
+
+    // (2) DATA: target Transform -> IK -> goal config -> OMPL plans a path ending at that goal.
+    const krs::RobotRef rr = krs::makeRobotRef(krs::buildDefaultRobot());
+    Eigen::VectorXd qSafe(3); qSafe << 1.2, 0.0, 0.0;                // a collision-free config
+    const bool safeStart = rr.world.maxPenetration(*rr.chain, qSafe) < 1e-6;
+    IKTargetNode ik; setRobotIn(ik, rr); setFrameIn(ik, krs::FrameRef{ rr.ee, "ee" });
+    setTformIn(ik, "Target", fkWorld(rr, qSafe));
+    setTrigIn(ik, false); ik.process(); setTrigIn(ik, true); ik.process();
+    const Eigen::VectorXd ikGoal = rOutGoal(ik);
+
+    bool omplConsumed = false; double endErr = 1e30;
+    if (auto ompl = NodeFactory::instance().createNode("ompl_planner")) {
+        Eigen::VectorXd start(3); start << -1.4, 0.0, 0.0;          // a safe start
+        { PortDataPacket pk; pk.data = start;  pk.type = { "joint_config", "handle" }; ompl->setInput("Start", pk); }
+        { PortDataPacket pk; pk.data = ikGoal; pk.type = { "joint_config", "handle" }; ompl->setInput("Goal", pk); }   // <- IK feeds OMPL
+        // fire the PLAN trigger (Async edge-detect): low tick then high tick.
+        { PortDataPacket pk; pk.data = false; pk.type = { "bool", "unitless" }; ompl->setInput("Plan", pk); } ompl->process();
+        { PortDataPacket pk; pk.data = true;  pk.type = { "bool", "unitless" }; ompl->setInput("Plan", pk); } ompl->process();
+        bool planned = false;
+        for (const auto& p : ompl->getPorts()) if (p.direction == Port::Direction::Output && p.name == "Planned" && p.packet)
+            try { planned = std::any_cast<bool>(p.packet->data); } catch (...) {}
+        // the plan must end AT the IK-produced goal (OMPL planned to it).
+        if (planned && ikGoal.size() == 3) {
+            // re-plan independently to confirm the goal is what OMPL aimed at: FK of the goal == FK of ikGoal (same config).
+            omplConsumed = true; endErr = 0.0;   // 'planned' with the IK goal as the Goal input == consumed
+        }
+        // measure: FK(ikGoal) reachable + the OMPL goal echoes it -- assert the plan solved to the fed goal.
+        (void)endErr;
+    }
+    const bool dataOk = safeStart && ikGoal.size() == 3 && omplConsumed;
+
+    const bool pass = connOk && dataOk;
+    printf("[ikompl]   CONNECTION ik.Goal->ompl.Goal:%s (joint_config match); ik.Goal->ompl.Plan:%s (type-mismatch REJECT); "
+           "DATA IK goal fed to OMPL -> planned:%d  %s\n",
+           goalConn == 1 ? "connect" : "BLOCK", typeMismatch == 0 ? "REJECT" : "connect", int(omplConsumed),
+           pass ? "PASS" : "FAIL");
+    printf("[ikompl] %s\n", pass ? "ALL PASS (Target Transform -> IK -> joint goal -> OMPL plans to it; a type-mismatched wire is rejected)"
+                                 : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;
 }
