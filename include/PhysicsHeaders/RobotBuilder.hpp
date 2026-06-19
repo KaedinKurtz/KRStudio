@@ -267,6 +267,36 @@ inline RobotGraph buildGraphFromParts(const std::vector<ParsedPart>& parts, int 
 // faces in part-local frame) via STEPCAFControl_Reader. KR_WITH_OCCT only.
 std::vector<ParsedPart> parseAssembly(const std::string& path);
 
+// ---- EDITING-PANEL CONTROLLER (the data-op behind each on-screen control) ---
+// The editing panel's buttons call these; each INVOKES the proven RobotGraph op and
+// the chain re-derives. The gate drives these directly (the Qt panel that wires
+// clicks to them is OPERATOR-VISUAL-CONFIRM). A control that reports success without
+// invoking its op (or invokes the wrong one) is the failing model the gate rejects.
+struct EditController {
+    RobotGraph* graph = nullptr;
+
+    int dof() const { return graph ? graph->dof() : -1; }
+
+    // DELETE-JOINT control: removes the joint; the chain re-derives (DOF updates).
+    bool deleteJoint(int jointIdx) {
+        if (!graph || jointIdx < 0 || jointIdx >= int(graph->joints.size())) return false;
+        graph->deleteJoint(jointIdx);
+        return true;
+    }
+
+    // DEFINE-FROM-FEATURES control: a revolute from two selected world bore features.
+    // Returns false (no joint) on a degenerate pair (rejected for the right reason).
+    bool defineFromFeatures(const BRepFace& worldFaceA, int bodyA,
+                            const BRepFace& worldFaceB, int bodyB, RBJoint* created = nullptr) {
+        if (!graph) return false;
+        RBJoint j;
+        if (!defineRevoluteFromSelection(worldFaceA, worldFaceB, bodyA, bodyB, j)) return false;
+        graph->addJoint(j);
+        if (created) *created = j;
+        return true;
+    }
+};
+
 // ---- PHASE 0 recon + PHASES 1-4 gates (defined in RobotBuilder.cpp /
 //      RobotBuilderGate.cpp) -------------------------------------------------
 bool runParseReconGate();        // PHASE 0 (OCCT, real FANUC STEP)
@@ -275,5 +305,6 @@ bool runAutoParseChainGate();    // PHASE 1 (synthetic: inferred axes match geom
 bool runJointEditGate();         // PHASE 2 (manual joint from selected features matches; degenerate rejected; chain re-derives)
 bool runTagOwnershipGate();      // PHASE 3 (single-owner lock-out; membership-tracked)
 bool runSubtreeDetachGate();     // PHASE 4 (downstream subtree detaches intact; tag tracks membership)
+bool runEditOpInvokedGate();     // CONFIG Phase 3 (panel controls invoke the proven ops; no-op/wrong-op neg-ctrls)
 
 } // namespace krs::rbuild

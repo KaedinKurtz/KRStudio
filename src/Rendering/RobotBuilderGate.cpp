@@ -323,4 +323,71 @@ bool runSubtreeDetachGate()
     return pass;
 }
 
+// ===========================================================================
+// CONFIG Phase 3 -- the editing PANEL's data-ops are invoked by its controls. The
+// gate drives the EditController directly (the Qt panel wiring clicks->controller is
+// OPERATOR-VISUAL-CONFIRM). NEG-CTRLs: a control that reports success without invoking
+// its op (DOF unchanged), and a control wired to the WRONG op (delete on a define button).
+bool runEditOpInvokedGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[rbuild] GATE EDIT-OP-INVOKED -- panel controls invoke the proven ops; chain re-derives (DOF updates)\n");
+
+    // graph: B0-B1-B2 serial (joints J0,J1); B3 unjointed. B2,B3 share a bore axis for define.
+    RobotGraph g; g.base = 0; g.bodies.resize(4);
+    for (int i = 0; i < 4; ++i) g.bodies[i].placement = placement(0.3 * i, 0, 0, Eigen::Vector3d(0,0,1), 0.0);
+    const glm::vec3 AeeP(0.9f, 0, 0.2f), AeeD(0, 0, 1);
+    addCylWorld(g.bodies[2], AeeP, AeeD, 0.05f);
+    addCylWorld(g.bodies[3], AeeP, AeeD, 0.05f);
+    { RBJoint j; j.parent = 0; j.child = 1; j.axisDir = glm::vec3(0,0,1); g.addJoint(j); }
+    { RBJoint j; j.parent = 1; j.child = 2; j.axisDir = glm::vec3(0,0,1); g.addJoint(j); }
+    const int dof0 = g.dof();   // 2
+
+    // DELETE control invokes deleteJoint -> DOF drops.
+    RobotGraph gDel = g; EditController ctrlDel{ &gDel };
+    const bool delInvoked = ctrlDel.deleteJoint(gDel.jointBetween(1, 2));
+    const int dofDel = gDel.dof();
+    // NEG: a no-op control claims success but does NOT invoke -> DOF unchanged.
+    RobotGraph gNoop = g;
+    auto noOpDelete = [](RobotGraph&, int) { return true; };
+    const bool noopClaims = noOpDelete(gNoop, gNoop.jointBetween(1, 2));
+    const int dofNoop = gNoop.dof();
+    const bool deleteOk = delInvoked && dofDel == dof0 - 1 && noopClaims && dofNoop == dof0;
+
+    // DEFINE control invokes defineRevoluteFromSelection -> joint created, frame matches, DOF rises.
+    RobotGraph gDef = g; EditController ctrlDef{ &gDef };
+    const BRepFace wB2 = faceToWorld(gDef.bodies[2].faces[0], gDef.bodies[2].placement);
+    const BRepFace wB3 = faceToWorld(gDef.bodies[3].faces[0], gDef.bodies[3].placement);
+    RBJoint created;
+    const bool defInvoked = ctrlDef.defineFromFeatures(wB2, 2, wB3, 3, &created);
+    const int dofDef = gDef.dof();
+    const bool frameMatches = defInvoked && axisMatches(created.axisPos, created.axisDir, AeeP, AeeD, 1e-4f);
+    // NEG: a control wired to the WRONG op (delete instead of define) -> DOF falls, no joint created.
+    RobotGraph gWrong = g; EditController ctrlWrong{ &gWrong };
+    ctrlWrong.deleteJoint(gWrong.jointBetween(0, 1));
+    const int dofWrong = gWrong.dof();
+    const bool defineOk = defInvoked && dofDef == dof0 + 1 && frameMatches && dofWrong < dof0;
+
+    // a degenerate (offset) feature pair is rejected -> no joint, DOF unchanged.
+    RobotGraph gDeg = g; EditController ctrlDeg{ &gDeg };
+    BRepFace offA = faceToWorld(gDeg.bodies[2].faces[0], gDeg.bodies[2].placement);
+    BRepFace offB = offA; offB.axisPos += glm::vec3(0.2f, 0, 0);
+    const bool degRejected = !ctrlDeg.defineFromFeatures(offA, 2, offB, 3) && gDeg.dof() == dof0;
+
+    const bool pass = deleteOk && defineOk && degRejected;
+
+    printf("[rbuild]   delete-joint control: invoked=%s DOF %d->%d (want %d) ; no-op control leaves DOF=%d  %s\n",
+           delInvoked ? "yes" : "no", dof0, dofDel, dof0 - 1, dofNoop, deleteOk ? "PASS" : "FAIL");
+    printf("[rbuild]   define-from-features control: joint created frame-matches=%s DOF %d->%d ; wrong-op(delete) DOF=%d  %s\n",
+           frameMatches ? "yes" : "no", dof0, dofDef, dofWrong, defineOk ? "PASS" : "FAIL");
+    printf("[rbuild]   NEG-CTRL no-op & wrong-op controls fail to drive the intended op: %s ; degenerate rejected: %s  %s\n",
+           (dofNoop == dof0 && dofWrong < dof0) ? "yes" : "no", degRejected ? "yes" : "no",
+           (dofNoop == dof0 && dofWrong < dof0 && degRejected) ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (panel controls invoke the proven delete/define ops; chain re-derives; no-op/wrong-op rejected)"
+                                  : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
 } // namespace krs::rbuild

@@ -22,6 +22,8 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <set>
+#include <utility>
 #include "RobotDynamics.hpp"
 
 namespace krs::plan {
@@ -153,6 +155,18 @@ public:
     bool selfCollision = true;
     double tolerance = 1e-6;         // metres; valid iff maxPenetration < tolerance
 
+    // SELF-COLLISION MATRIX (Phase 1): capsule-index pairs DISABLED from self-collision
+    // checking (in addition to kinematic neighbours). The generated disable matrix
+    // populates this, so the planner's validity check skips always/never/adjacent pairs
+    // but STILL checks the kept (sometimes-colliding) real-risk pairs. Empty by default
+    // (no change to existing planning behaviour).
+    std::set<std::pair<int, int>> disabledSelfPairs;
+    bool selfPairDisabled(int i, int j) const {
+        if (disabledSelfPairs.empty()) return false;
+        const auto key = (i < j) ? std::make_pair(i, j) : std::make_pair(j, i);
+        return disabledSelfPairs.count(key) != 0;
+    }
+
     // World-space capsule endpoints for capsule k at config q (FK poses precomputed).
     void worldCapsule(const std::vector<krs::dyn::Pose>& poses, int k,
                       Eigen::Vector3d& A, Eigen::Vector3d& B) const {
@@ -192,6 +206,7 @@ public:
             for (int i = 0; i < nc; ++i)
                 for (int j = i + 1; j < nc; ++j) {
                     if (adjacent(chain, capsules[i].body, capsules[j].body)) continue;
+                    if (selfPairDisabled(i, j)) continue;   // matrix-disabled (always/never)
                     const double clear = segSegDist(A[i], B[i], A[j], B[j])
                                          - capsules[i].radius - capsules[j].radius;
                     rep.minClearance = std::min(rep.minClearance, clear);

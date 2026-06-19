@@ -31,6 +31,8 @@
 #include "SelectionHighlightPass.hpp"
 #include "SelectionService.hpp"   // krs::sel selection-highlight gates
 #include "RobotBuilder.hpp"        // krs::rbuild robot-builder gates (Phase 0 recon)
+#include "SelfCollisionMatrix.hpp" // krs::plan self-collision matrix gates
+#include "RobotConfig.hpp"         // krs::rcfg property hot-swap + provenance gates
 #include "TonemapPass.hpp"
 #include "GlassPass.hpp"
 #include "SmokeSystem.hpp"
@@ -837,6 +839,25 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // ROBOT CONFIG Phase 1: self-collision matrix generation + feeds-planner.
+    if (qEnvironmentVariableIntValue("KRS_SELFCOL_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SELFCOL_SELFTEST =================\n");
+        const bool ok = krs::plan::runSelfCollisionMatrixGate()
+                      & krs::plan::runSelfCollisionFeedsPlannerGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // ROBOT CONFIG Phases 2-3: property hot-swap + provenance + edit-op-invoked.
+    if (qEnvironmentVariableIntValue("KRS_PROPCFG_SELFTEST") != 0) {
+        std::printf("\n================= KRS_PROPCFG_SELFTEST =================\n");
+        const bool ok = krs::rcfg::runPropertyHotswapGate()
+                      & krs::rcfg::runPropertyProvenanceGate()
+                      & krs::rbuild::runEditOpInvokedGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // ROBOT BUILDER Phase 1: real FANUC assembly -> bodies -> inferred chain (operator-confirm demo).
     if (qEnvironmentVariableIntValue("KRS_AUTOPARSE_SELFTEST") != 0) {
         std::printf("\n================= KRS_AUTOPARSE_SELFTEST =================\n");
@@ -1576,6 +1597,11 @@ void RenderingSystem::initializeSharedResources()
             { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },
             { "GATE TAG-OWNERSHIP (member body tagged + free-move-locked; non-member free; always-allow neg-ctrl breaks single-owner)", krs::rbuild::runTagOwnershipGate() },
             { "GATE SUBTREE-DETACH (mid-joint delete detaches subtree intact; tag tracks membership; re-mate restores; destroy & stale-tag neg-ctrls)", krs::rbuild::runSubtreeDetachGate() },
+            { "GATE SELFCOLLISION-MATRIX (classify pairs vs brute-force GT; SOMETIMES pairs never disabled; ALWAYS/NEVER disabled; density-monotone)", krs::plan::runSelfCollisionMatrixGate() },
+            { "GATE SELFCOLLISION-FEEDS-PLANNER (validity skips disabled but catches a kept pair's collision; buggy-disable-real-pair neg-ctrl misses it)", krs::plan::runSelfCollisionFeedsPlannerGate() },
+            { "GATE PROPERTY-HOTSWAP (limit edit propagates LIVE to the planner's limits; stale-cache neg-ctrl mis-judges)", krs::rcfg::runPropertyHotswapGate() },
+            { "GATE PROPERTY-PROVENANCE (axes geometry-derived, limits user-supplied; fabricated-value & user-claimed-axis neg-ctrls flagged)", krs::rcfg::runPropertyProvenanceGate() },
+            { "GATE EDIT-OP-INVOKED (panel controls invoke proven delete/define ops + chain re-derives; no-op & wrong-op neg-ctrls)", krs::rbuild::runEditOpInvokedGate() },
             { "GATE J joint tooling (derive revolute frame <1e-6 vs oracle -> RobotArticSpec + reject neg-ctrl)", krs::cad::runJointGateJ() },
             { "GATE M MQTT (real broker; joint cmd->FK->state round-trip <1e-4; broadcast duality)", krs::mqtt::runMqttGateM() },
             { "GATE ND node graph (scene->node->ECS effect + graph->robot + disconnected/type neg-ctrls)", krs::nodes::runNodeGraphGateND() },

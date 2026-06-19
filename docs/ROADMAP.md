@@ -3722,3 +3722,61 @@ KRS_OVERNIGHT_BENCH. Built + freshly relinked via PowerShell (exe timestamp veri
    and the detached-subtree GRAB are the remaining UI to wire.)
 4. (UI pending) Delete a mid-chain joint -> the downstream part comes off as a still-articulated sub-assembly
    you can grab and move; re-mate -> it rejoins the robot.
+
+## ROBOT CONFIGURATION + SELF-COLLISION SPRINT (2026-06-19, branch avoidance-field)
+What CONSUMES and CONFIGURES the proven chain: the self-collision matrix generator (the one genuinely-computed
+MoveIt setup step), staged hot-swappable property configuration, and the editing-panel data-ops. Weighted to
+the gateable phases (1, 2); Phase 3's panel/viewport is the thin OPERATOR-VISUAL-CONFIRM top layer (the
+data-op behind each control is gated; the on-screen front-end is the user's to verify).
+
+### PHASE 1 -- SELF-COLLISION MATRIX (SelfCollisionMatrix.hpp; reuses the capsule krs::plan::CollisionWorld)
+Sample N seeded configs (respecting joint limits); for each non-adjacent link-capsule pair, classify by
+collision frequency: ADJACENT/NEVER(0)/ALWAYS(100%) -> DISABLE; SOMETIMES(mixed) -> KEEP (the real risks). A
+pair colliding at the default pose but SEPARABLE elsewhere is SOMETIMES -> KEPT (the SAFETY rule: NEVER disable
+a pair that collides in reachable configs). DENSITY-MONOTONE by construction: density-N is the first N of a
+fixed seeded sequence (superset), so a kept pair stays kept at higher density. The disable matrix populates
+CollisionWorld::disabledSelfPairs, which the planner's validity check (MotionPlanner isStateValid -> world.valid)
+skips -- so planning skips always/never/adjacent pairs but STILL checks the kept real-risk pairs.
+- **SELFCOLLISION-MATRIX PASS** (vs brute-force GT, 20k independent samples): 3/3 ADJACENT disabled; 2/2
+  GT-NEVER (bracket at radius 3, unreachable) disabled; 1/1 GT-SOMETIMES (fore-arm folds to the base post,
+  2559/20000) KEPT with **0 dangerous disables**; a non-adjacent ALWAYS pair (pinned arm + fat post) disabled;
+  density-monotone keep(500) subset-of keep(8000). NEG-CTRL: disabling a SOMETIMES pair is the dangerous error.
+- **SELFCOLLISION-FEEDS-PLANNER PASS**: with the matrix, the kept pair's colliding config is still INVALID
+  (caught); an ALWAYS-contact config becomes plannable (the permanent contact is skipped). NEG-CTRL: a buggy
+  matrix that disables the kept pair lets the real self-colliding config PASS as valid -- a detectable miss.
+
+### PHASE 2 -- STAGED HOT-SWAPPABLE PROPERTY CONFIG (RobotConfig.hpp; on krs::robot::Joint's provenance fields)
+Per-joint engineering properties (limits/efforts/speeds/interface/naming) are USER-SUPPLIED with honest
+provenance. RobotConfig::toJointLimits() re-derives the planner's krs::plan::JointLimits from the CURRENT joints
+every call -- an edit propagates LIVE, no cache.
+- **PROPERTY-HOTSWAP PASS**: widen [-1,1]->[-1,2] makes q=1.5 valid live (was invalid); tighten [-1,2]->[-1,0.5]
+  makes q=0.8 invalid (the planner respects the tighter limit live). NEG-CTRL: a STALE cached limit set still
+  rejects the now-valid config -- detectably wrong (hot-swap means live, not cached).
+- **PROPERTY-PROVENANCE PASS**: axes are GeometryDerived (from the parse), limits UserSupplied; a limit marked
+  GeometryDerived is a FABRICATED value (geometry produces no limits) and is flagged; an axis claimed
+  UserSupplied is flagged (axes must come from geometry).
+
+### PHASE 3 -- EDITING-OP CONTROLLER (gated) + UI (operator-confirm)
+EditController (RobotBuilder.hpp) wraps the proven krs::rbuild ops the panel's controls call.
+- **EDIT-OP-INVOKED PASS**: the delete control invokes deleteJoint (DOF 2->1); the define control creates a
+  joint from two selected bore features (frame matches the geometry, DOF 2->3). NEG-CTRLs: a no-op control
+  (reports success, does nothing -> DOF unchanged) and a wrong-op control (delete wired to a define button ->
+  DOF falls) both fail to drive the intended op; a degenerate feature pair is rejected.
+
+### ADVERSARIAL REVIEW (24 agents, 4 lenses + skeptic verify) -- 0 confirmed, 20 dismissed (clean).
+
+### RESULT (2026-06-19): KRS_SELFCOL / KRS_PROPCFG ALL PASS; 5 gates folded into KRS_OVERNIGHT_BENCH. Built +
+freshly relinked via PowerShell (exe timestamp verified each build).
+
+### OPERATOR-VISUAL-CONFIRM REQUIRED (the agent CANNOT verify on-screen -- the user must look on return):
+1. A robot-only viewport showing the robot isolated and slowly SPINNING around its base axis, property panels
+   docked on the right.
+2. The staged property panels (limits/efforts/speeds/interface/naming) navigable; editing a limit updates LIVE
+   (the planner respects the new value immediately -- the data path is gated by PROPERTY-HOTSWAP).
+3. Clicking delete-joint: the joint visibly removes and the DOF display updates on-screen.
+4. Selecting two bores + clicking define: a revolute appears at the right axis on-screen.
+5. Deleting a mid-chain joint: the downstream sub-assembly comes off, grabbable + still internally articulated;
+   re-mating rejoins it.
+NOTE: the data-op behind every control above is gated (EDIT-OP-INVOKED, JOINT-EDIT, SUBTREE-DETACH); the Qt
+panel + robot-only spinning viewport + subtree-grab interaction are the remaining front-end to wire (they need
+a live RobotGraph bound into the scene/UI) and are NOT headlessly verifiable -- not claimed working here.
