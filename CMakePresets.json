@@ -50,6 +50,18 @@
       }
     },
     {
+      "name": "linux-ninja-release",
+      "displayName": "Linux + vcpkg (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-linux",
+        "VCPKG_FEATURE_FLAGS": "manifests"
+      }
+    },
+    {
       "name": "qt-qtdir-fallback",
       "displayName": "Qt via QTDIR (fallback only)",
       "generator": "Ninja",
@@ -79,6 +91,11 @@
     {
       "name": "mac-release",
       "configurePreset": "macos-ninja-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-release",
+      "configurePreset": "linux-ninja-release",
       "configuration": "Release"
     }
   ]

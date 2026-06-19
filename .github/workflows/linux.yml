@@ -1,0 +1,83 @@
+name: ci-linux
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # 22.04 (gcc 11) is the safer base for this heavy from-source dependency set than 24.04.
+    runs-on: ubuntu-22.04
+    env:
+      VCPKG_DEFAULT_TRIPLET: x64-linux
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-bincache,readwrite"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # System packages vcpkg's qtbase + the GL/windowing stack need to BUILD and LINK on Linux. (The runner has
+      # no GPU/display -- this verifies compile+link, not rendering.)
+      - name: Install build + GL/X11/Wayland system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ninja-build pkg-config autoconf automake autoconf-archive libtool \
+            bison flex python3 \
+            libgl1-mesa-dev libglu1-mesa-dev libegl1-mesa-dev mesa-common-dev \
+            libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev libxrandr-dev \
+            libxcb1-dev libxcb-glx0-dev libxcb-util-dev libxcb-keysyms1-dev libxcb-image0-dev \
+            libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev \
+            libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-xkb-dev libxcb-cursor-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libfontconfig1-dev libfreetype6-dev \
+            libwayland-dev libwayland-egl-backend-dev wayland-protocols libdbus-1-dev \
+            libusb-1.0-0-dev libudev-dev libssl-dev \
+            xvfb
+
+      - name: Prepare vcpkg binary cache dir
+        run: mkdir -p "${{ github.workspace }}/vcpkg-bincache"
+
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-bincache
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-linux-
+
+      - name: Point VCPKG_ROOT at the runner's vcpkg
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+
+      - name: Configure (Release)
+        run: cmake --preset linux-ninja-release
+
+      - name: Build
+        run: cmake --build --preset linux-release --parallel
+
+      # Phase 2.3 -- honest link/start check (NOT a render test; the runner has no GPU).
+      - name: Link + headless-start smoke (best-effort, non-fatal)
+        run: |
+          BIN=build/linux-release/RoboticsSoftware
+          if [ -x "$BIN" ]; then
+            echo "=== ldd (do the runtime .so deps resolve?) ==="; ldd "$BIN" | (grep -i "not found" && echo "MISSING LIBS ABOVE" || echo "all linked libs resolved")
+            echo "=== offscreen start attempt (timeout 30s; failure here is EXPECTED without a GPU) ==="
+            QT_QPA_PLATFORM=offscreen timeout 30 xvfb-run -a "$BIN" || echo "smoke: did not run to completion headless -- OPERATOR/COLLEAGUE VERIFICATION REQUIRED on real hardware"
+          else
+            echo "no binary produced at $BIN"
+          fi
+
+      - name: Archive
+        run: |
+          cd build/linux-release
+          zip -r KRStudio-Linux.zip RoboticsSoftware assets 2>/dev/null || zip -r KRStudio-Linux.zip . -x 'CMakeFiles/*' '*.o' '*.ninja*'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KRStudio-Linux
+          path: build/linux-release/KRStudio-Linux.zip
+          if-no-files-found: warn
