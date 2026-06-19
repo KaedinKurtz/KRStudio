@@ -1,8 +1,14 @@
 name: ci-mac
 
+# DISABLED ON PURPOSE -- macOS is out of scope for KRStudio builds.
+#
+# macOS caps OpenGL at 4.1 and has deprecated GL entirely. KRStudio's renderer requires GL 4.3 COMPUTE shaders
+# (introduced in 4.3, never available on macOS), so the compute pipeline cannot run as written. Making a Mac
+# build work means porting the renderer from OpenGL to Vulkan via MoltenVK -- a large separate project, NOT a
+# build-config fix. Until that port exists, this workflow only runs on manual dispatch (it will not compile the
+# compute path) and never on push/PR, so it stops failing every commit. See docs/CI.md.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - uses: lukka/run-vcpkg@v11
         with:
@@ -23,24 +29,6 @@ jobs:
 
       - name: Build
         run: cmake --build --preset mac-release --parallel
-
-      - name: Try macdeployqt (optional)
-        shell: bash
-        run: |
-          APP_BUNDLE="build/macos-release/RoboticsSoftware.app"
-          if [ -d "$APP_BUNDLE" ]; then
-            TOOLS_ARM="$VCPKG_ROOT/installed/arm64-osx/tools/Qt6/bin/macdeployqt"
-            TOOLS_X64="$VCPKG_ROOT/installed/x64-osx/tools/Qt6/bin/macdeployqt"
-            if [ -x "$TOOLS_ARM" ]; then
-              "$TOOLS_ARM" "$APP_BUNDLE" -verbose=2 || true
-            elif [ -x "$TOOLS_X64" ]; then
-              "$TOOLS_X64" "$APP_BUNDLE" -verbose=2 || true
-            else
-              echo "macdeployqt not found in vcpkg tools; skipping."
-            fi
-          else
-            echo "No .app bundle found; skipping deploy."
-          fi
 
       - name: Archive
         run: |
