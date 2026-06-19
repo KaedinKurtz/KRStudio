@@ -386,6 +386,11 @@ void ViewportWidget::mousePressEvent(QMouseEvent* ev)
                 auto& reg = m_scene->getRegistry();
                 entt::entity target = entt::null;
                 for (auto eSel : reg.view<SelectedComponent>()) { target = eSel; break; }
+                // ROBOT-SUBCOMPONENT lock-out: a body owned by a robot's kinematic chain
+                // is NOT free-movable -- kinematics is the single owner of its motion.
+                // (OPERATOR-VISUAL-CONFIRM: the gizmo won't drag a jointed robot link.)
+                if (target != entt::null && reg.all_of<RobotSubcomponentComponent>(target))
+                    target = entt::null;
                 if (target != entt::null) {
                     glm::vec3 hitPoint = glm::vec3(0);
 

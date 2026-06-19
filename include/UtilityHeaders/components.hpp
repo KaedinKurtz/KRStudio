@@ -23,6 +23,12 @@
 struct Texture2D;
 struct Cubemap;
 struct SelectedComponent {};
+// ROBOT BUILDER: a body owned by a robot's kinematic chain (transitive closure from
+// the base). The kinematic chain is the SINGLE owner of its motion, so a tagged body
+// is LOCKED OUT of generic free-move (gizmo drag) -- it moves only via the robot's
+// kinematic interface. Detaching a mid-chain joint removes the tag from the detached
+// subtree (it becomes a freely-interactable passive articulated body).
+struct RobotSubcomponentComponent { int robotId = -1; };
 struct CameraGizmoTag {};
 struct RecordLedTag {};
 struct PulsingSplineTag {};

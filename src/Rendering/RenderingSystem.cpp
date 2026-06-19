@@ -30,6 +30,7 @@
 #include "CollisionDebugPass.hpp"
 #include "SelectionHighlightPass.hpp"
 #include "SelectionService.hpp"   // krs::sel selection-highlight gates
+#include "RobotBuilder.hpp"        // krs::rbuild robot-builder gates (Phase 0 recon)
 #include "TonemapPass.hpp"
 #include "GlassPass.hpp"
 #include "SmokeSystem.hpp"
@@ -828,6 +829,33 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // ROBOT BUILDER Phase 0: OCCT assembly-parse recon against the real FANUC STEP.
+    if (qEnvironmentVariableIntValue("KRS_PARSERECON_SELFTEST") != 0) {
+        std::printf("\n================= KRS_PARSERECON_SELFTEST =================\n");
+        const bool ok = krs::rbuild::runParseReconGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // ROBOT BUILDER Phase 1: real FANUC assembly -> bodies -> inferred chain (operator-confirm demo).
+    if (qEnvironmentVariableIntValue("KRS_AUTOPARSE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_AUTOPARSE_SELFTEST =================\n");
+        const bool ok = krs::rbuild::runAutoParseReport();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // ROBOT BUILDER Phases 1-4: auto-parse chain / joint-edit / tag-ownership / subtree-detach.
+    if (qEnvironmentVariableIntValue("KRS_ROBOTBUILD_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ROBOTBUILD_SELFTEST =================\n");
+        const bool ok = krs::rbuild::runAutoParseChainGate()
+                      & krs::rbuild::runJointEditGate()
+                      & krs::rbuild::runTagOwnershipGate()
+                      & krs::rbuild::runSubtreeDetachGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase 3 GATE J: joint/mate tooling (derive revolute frame from two bores <1e-6 vs oracle).
     if (qEnvironmentVariableIntValue("KRS_JOINT_SELFTEST") != 0) {
         std::printf("\n================= KRS_JOINT_SELFTEST =================\n");
@@ -1543,6 +1571,11 @@ void RenderingSystem::initializeSharedResources()
             { "GATE HIGHLIGHT-MATCHES (stored hover/selected feature == ray-resolved feature; neighbour & dominant-face highlight neg-ctrls)", krs::sel::runHighlightMatchesGate() },
             { "GATE INDICATOR-GEOMETRY (rendered disk/arrow == analytic feature <1e-4, derived from backend; wrong-feature & axis/radius-mismatch neg-ctrls)", krs::sel::runIndicatorGeometryGate() },
             { "GATE MULTI-SELECT (small-bore-on-large-part resolves to bore; set accumulates; dominant-resolver & non-accumulating-commit neg-ctrls)", krs::sel::runMultiSelectGate() },
+            { "GATE PARSE-RECON (OCCT STEPCAF recovers FANUC part tree + placements; mates absent -> infer from geometry; real assembly)", krs::rbuild::runParseReconGate() },
+            { "GATE AUTO-PARSE-CHAIN (inferred joint axes == interface geometry; FK==parsed placements; ambiguous/offset/planar NOT faked; wrong-axis neg-ctrl)", krs::rbuild::runAutoParseChainGate() },
+            { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },
+            { "GATE TAG-OWNERSHIP (member body tagged + free-move-locked; non-member free; always-allow neg-ctrl breaks single-owner)", krs::rbuild::runTagOwnershipGate() },
+            { "GATE SUBTREE-DETACH (mid-joint delete detaches subtree intact; tag tracks membership; re-mate restores; destroy & stale-tag neg-ctrls)", krs::rbuild::runSubtreeDetachGate() },
             { "GATE J joint tooling (derive revolute frame <1e-6 vs oracle -> RobotArticSpec + reject neg-ctrl)", krs::cad::runJointGateJ() },
             { "GATE M MQTT (real broker; joint cmd->FK->state round-trip <1e-4; broadcast duality)", krs::mqtt::runMqttGateM() },
             { "GATE ND node graph (scene->node->ECS effect + graph->robot + disconnected/type neg-ctrls)", krs::nodes::runNodeGraphGateND() },

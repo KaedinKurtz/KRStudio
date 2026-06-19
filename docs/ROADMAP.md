@@ -3651,3 +3651,74 @@ RoboticsSoftware.exe held the output file -> LNK1104; kill the process before re
 5. On a part with multiple bores, Shift-click each in sequence -> BOTH show indicators (the set accumulates);
    the SMALL bore on a big part is hoverable/clickable (not lost to the dominating face); re-clicking deselects.
 6. View > "Show Feature Selection Highlights" toggles the whole overlay off/on.
+
+## ROBOT BUILDER SPRINT (2026-06-19, branch avoidance-field)
+Auto-parse a STEP assembly into an EDITABLE kinematic chain, with constructive joint-editing, the robot-
+subcomponent ownership tag, and tree/subtree-detachment semantics. DEPENDS on selection-highlights (the manual
+joint-editing picks mating features). Gateable STRUCTURE (parsed chain FK, joint frames, tag/membership, tree
+semantics) is proven headless on synthetic parts; the viewport/on-screen editing is OPERATOR-VISUAL-CONFIRM.
+
+### PHASE 0 -- PARSE-RECON (empirical, against the REAL assets/FANUC-430 Robot.STEP)
+The recon DETERMINED auto-parse capability by testing what OCCT exposes, not assuming. Result:
+- **STEPControl_Reader (current importer)**: FLATTENS to 17 solids + 10 free shells, placements BAKED into
+  geometry, no tree.
+- **STEPCAFControl_Reader + XCAF**: recovers the **part TREE** (depth 2, 18 part defs + 2 sub-assemblies, 20
+  instances), **per-part PLACEMENTS (20/20 non-identity)**, meaningful **NAMES** (430-j1, 430-j2-2, 430-j5/j6,
+  430-balancer, sub-asm 430_j3-*), and **7 colors**. **MATES: NONE** -- STEP drops parametric constraints.
+- **VERDICT (no ambiguity to escalate)**: use the XCAF tree + placements as bodies; **INFER joints from
+  inter-part GEOMETRY** (the gated krs::joint::deriveRevoluteFromBores), since mates are absent.
+
+### REAL-ASSEMBLY AUTO-PARSE (KRS_AUTOPARSE_SELFTEST, on the actual FANUC)
+parseAssembly() -> **19 bodies** (placements) + 1051 cylinder faces; buildGraphFromParts() inferred **10
+coaxial-bore revolute interfaces** (residuals 0..3.7e-13, machine precision) into a spanning tree (DOF 7,
+8/19 bodies base-connected); **11 bodies left UNJOINTED** (no confident interface) -- the HONEST best-guess:
+it does not fabricate joints on ambiguous geometry; the manual layer corrects/completes it.
+
+### GATES (KRS_ROBOTBUILD_SELFTEST + KRS_PARSERECON_SELFTEST + bench; synthetic parts, real backend)
+- **PARSE-RECON PASS**: the structural report above, produced against the real FANUC STEP (the report IS the gate).
+- **AUTO-PARSE-CHAIN PASS**: inferred joint axes == the interface cylinder axes (A01 res 0, A12 res 1.5e-8);
+  FK(q=0) places each link at its parsed placement (err **1.1e-16** < 1e-9, dof=2). NEG-CTRLs: offset bores +
+  planar-only interface left UNJOINTED (not faked); a wrong-axis decoy bore REJECTED by the real inference
+  (parallelism residual) -- distinct from the offset case's collinearity rejection.
+- **JOINT-EDIT PASS**: deleting an auto-joint then defining one from two SELECTED bore features yields a frame
+  matching their analytic geometry (res 0, prov=Manual); the chain re-derives (dof 1->0->1). NEG-CTRL: a
+  degenerate (parallel-but-offset 0.15) pair rejected for offset>1e-4 (the right reason).
+- **TAG-OWNERSHIP PASS**: a member body is tagged + free-move-LOCKED (kinematics is the single owner); a
+  non-base-connected body is untagged + freely interactable; membership = transitive closure from base.
+  NEG-CTRL: an "always-allow" model lets a tagged member free-move (the real predicate refuses).
+- **SUBTREE-DETACH PASS**: deleting a mid-chain joint (J2 in B0..B5) detaches {B3,B4,B5} -- they lose the tag,
+  the subtree's INTERNAL joints (B3-B4,B4-B5) stay intact (a passive articulated body), dof 5->2; re-mating
+  restores dof=5 + re-tags. NEG-CTRLs: a destroy model erases the downstream joints (loses articulation); a
+  STALE cached tag set keeps B3 tagged while live membership untags it.
+
+### ADVERSARIAL REVIEW (26 agents, 4 failure-mode lenses + skeptic verify) -- 1 confirmed, 21 dismissed
+- Confirmed MINOR (FIXED): the AUTO-PARSE-CHAIN wrong-axis neg-control was vacuous (fed hard-coded decoy values
+  to the pure comparator, never running the inference -- always true, yet printed "non-vacuous"). It did NOT
+  open a false-pass hole (the notDecoy/axis01 conjuncts already catch a decoy-picking backend), but the
+  advertised neg-control was dishonest. Replaced with a real decoy-only-body inference that the backend rejects.
+
+### ARCHITECTURE
+- **krs::rbuild** (RobotBuilder.hpp, OCCT-free data model): ParsedPart (name+placement+analytic faces),
+  inferRevolute (best coaxial-cylinder interface via the gated deriveRevoluteFromBores; radii must match;
+  non-coaxial rejected), RobotGraph (TREE rooted at base; members()=closure; dof(); isTagged/freeMoveAllowed;
+  deleteJoint keeps the detached subtree's internal joints; toRobot() builds a krs::robot::Robot whose FK
+  reproduces placements), buildGraphFromParts (greedy union-find spanning tree, lowest residual first),
+  defineRevoluteFromSelection (manual joint from two selected world bores).
+- **parseAssembly** (RobotBuilder.cpp, OCCT): STEPCAFControl_Reader -> per-leaf accumulated placement +
+  analytic faces (same exact BRepAdaptor read as CadImporter).
+- **RobotSubcomponentComponent** (components.hpp) + ViewportWidget lock-out: a tagged body's gizmo drag is
+  refused (the single-owner invariant, on-screen).
+
+### RESULT (2026-06-19): KRS_PARSERECON / KRS_AUTOPARSE / KRS_ROBOTBUILD ALL PASS; 5 gates folded into
+KRS_OVERNIGHT_BENCH. Built + freshly relinked via PowerShell (exe timestamp verified each build).
+
+### OPERATOR-VISUAL-CONFIRM REQUIRED (the agent CANNOT verify on-screen -- the user must look):
+1. Import assets/FANUC-430 Robot.STEP -> the parts appear; running auto-parse, the inferred joints sit at the
+   right concentric interfaces; spot-check the chain looks structurally plausible (it is a BEST-GUESS).
+2. Select a cylindrical face -> a disk indicator; on a robot body, the gizmo will NOT free-drag it (locked --
+   kinematics is the single owner); a non-robot body still free-drags.
+3. (UI pending) Delete a wrongly-inferred joint -> it's gone; select two bores -> a revolute is created at the
+   right axis; the chain DOF updates. (The data-model ops + gates are proven; the on-screen joint-edit PANEL
+   and the detached-subtree GRAB are the remaining UI to wire.)
+4. (UI pending) Delete a mid-chain joint -> the downstream part comes off as a still-articulated sub-assembly
+   you can grab and move; re-mate -> it rejoins the robot.
