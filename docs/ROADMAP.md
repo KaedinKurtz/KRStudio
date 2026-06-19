@@ -3537,3 +3537,55 @@ OPERATOR VISUAL-CONFIRM REQUIRED: in the live editor, drag from Compose Vector3'
 PortTypes.hpp::canonicalTypeLabel and a Port::description field are IN PLACE (the derivation + the storage), but
 surfacing the grey type-text in portCaption, the hover descriptions, and the PORT-METADATA enforcement gate are
 NOT yet done. Resume point: derive the port caption "name [Label]" + author/derive port descriptions + the gate.
+
+## ROBOT / TRANSFORM / MATH FOUNDATION SPRINT (2026-06-19, branch avoidance-field)
+Recon via a 4-agent parallel workflow (transform/linalg, property-catalog, robot-chain, IK/OMPL wiring).
+
+### PART A -- CI BUILDS (gated on external runs)
+ci-win: the build COMPILED + LINKED on the runner (Configure + Build both green) -- only the Archive step failed
+(zipping the whole build/release tree hit Windows MAX_PATH on deep CMakeFiles paths). Fixed with a clean
+windeployqt dist (exe + Qt runtime + vcpkg DLLs + assets). ci-linux: the at-spi2-core Configure failure (the
+user read the log) was a missing libxtst-dev (had libxi-dev); added it + the xcursor/xdamage/xinerama Qt-X11
+cluster. Both fixes pushed (7768377); the re-runs build the full vcpkg dep set cold (~2.5 h) -- artifacts pending
+those completing. HONEST: CI green = compiled+linked on a headless runner, NOT runs-on-hardware -- a colleague
+must launch the artifact on a GL-4.3 GPU (OPERATOR/COLLEAGUE VERIFICATION). Mac stays out of scope (GL-4.3-compute
+is a Vulkan/MoltenVK port). See docs/CI.md.
+
+### PART B -- TRANSFORM TYPE + LINEAR ALGEBRA (the math backbone)
+krs::RigidTransform (include/NodeHeaders/RigidTransform.hpp): a QUAT-NATIVE rigid pose (unit quat + position),
+NOT a raw 4x4 -- composing chains stays drift-free; matrix() exposes a 4x4 when needed. Canonical port type
+"transform" (PortTypes.hpp), and getInput coerces RigidTransform <-> glm::mat4 so it interoperates with the
+legacy compose/decompose-transform nodes. New nodes (src/Nodes/TransformLinalgNodes.cpp): Bake Transform /
+from-XYZ-RPY / from-axis-angle, Transform compose/inverse/apply-point, vector scale, matrix transpose/inverse
+(dot/cross/normalize/magnitude/matmul already existed). The rigid-body Property node gains a Quaternion output
+for orientation (additive to the RPY layout). GATES: TRANSFORM-COMPOSE (compose matches closed form to 2e-7;
+inverse==identity; wrong-order neg-ctrl; FUZZ 8-transform chain == sequential application), QUATERNION-OUTPUT
+(Property quat matches the body orientation, bakes into a Transform losslessly; stale-quat neg-ctrl),
+LINALG-CORRECT (dot=32/cross/scale/magnitude/transpose/inverse vs closed form; sum-not-MAC dot neg-ctrl).
+
+### PART C -- ROBOT DEFINER NODE (the foundation IK/OMPL need)
+RobotNode ("robot_definer", src/Nodes/RobotNode.cpp) owns the krs::robot::Robot data model and outputs a shared
+krs::RobotRef handle (include/NodeHeaders/RobotRef.hpp: chain + limits + collision world + ee body + base
+placement, held by shared_ptr so the planner's const-refs stay alive). It publishes Tier-1 KINEMATIC properties
+(q, qLower/qUpper, end-effector position+orientation, DOF) into the same Property catalog rigid bodies use, so
+they read through an Object -> Property node. The base-to-floor placement is a rigid transform, NOT a chain DOF
+(DOF == member-joint count). Sensed Tier-2 (wrench/IMU) are NOT faked as native -- sensors are a later sprint.
+GATES: ROBOT-PUBLISHES (Tier-1 props match actual state, readable via Object->Property; base not a DOF -- a
+buggy include-non-member would publish 4 not 3; a phantom Tier-2 prop is absent), ROBOT-CHAIN-IS-PLANNABLE
+(OMPL plans over the ref's 3 owned joints; base + non-member excluded; buggy-include neg-ctrl).
+
+### PART D -- IK NODE rebuilt on Robot + Transform
+The IK node gains Robot (robot_ref) + Frame (frame_ref) + Target (RigidTransform) inputs, ADDITIVE to the old
+Position/Orientation + default-arm path (so the Phase-3 IK-SAMPLE gate stays green when nothing is wired). On the
+trigger edge it maps the WORLD target into the chain frame through the base placement and solves DLS IK for the
+named frame -> a joint config. GATES: IK-SOLVES (FK of the solution, world frame, lands at the target to 3e-7;
+unreachable -> Reachable false, not garbage; wrong-soln neg-ctrl; FUZZ 6/6 random reachable targets solve),
+IK-FEEDS-OMPL (IK's joint_config Goal type-matches + drives the OMPL Goal input: Transform -> IK -> goal ->
+OMPL plan; a joint_config -> bool wire is rejected by the type system).
+
+RESULT (2026-06-19): KRS_TFORM / KRS_QUATOUT / KRS_LINALG / KRS_ROBOTPUB / KRS_ROBOTPLAN / KRS_IKSOLVE /
+KRS_IKFEEDS all ALL PASS; folded into KRS_OVERNIGHT_BENCH -> 112/112 gate groups PASS. Built via PowerShell
+(exe timestamp verified). Commits: Part B 92aa970 (pushed); Parts C+D 1e8cce5 + fuzz ed97159 (committed locally,
+push when the in-progress ci-win finishes so its cache-prime is not cancelled).
+OPERATOR VISUAL-CONFIRM: wire Robot -> IK.Robot + a Bake-Transform target -> IK.Target -> the IK Goal -> OMPL;
+on the trigger the arm's goal config solves to the target pose and OMPL plans a path to it.
