@@ -3492,3 +3492,48 @@ OPERATOR VISUAL-CONFIRM REQUIRED: wire Compare(A>B) -> When.Condition -> a downs
 When output pulses once as A crosses B. Wire a trigger + a Compare -> If: only the matching branch's downstream
 runs. Wire Button -> While.Start with a Compare(Iteration < N) -> While.Condition feedback: the Body pulses N
 times then Done; set an always-true condition and confirm Capped lights at Max Iterations (no hang).
+
+## TYPE-SYSTEM CONSOLIDATION + PORT METADATA SPRINT (2026-06-18, branch avoidance-field)
+FOUNDATION sprint: the editor had a sprawl of vector types so things that SHOULD connect didn't (the vector
+out of Compose Vector3 wouldn't reach Dot Product's input), and ports showed no type/purpose.
+
+### PHASE 1 -- TYPE AUDIT (recon, via 2 parallel enumeration agents + verified inline)
+Connection compatibility = QtNodes NodeDataType.id match (NodeDelegate::dataType derived the id from the port's
+raw C++ type name). OLD rule: double/float/int->"number", bool->"bool", glm::vec3->"vec3", EVERYTHING ELSE kept
+its raw type name as the id. So the five real-vector representations each had a DIFFERENT id and could not connect:
+- glm::vec3 (id "vec3") -- signal_dot_product A/B, ik_target Position, physics/perception/emitter, orb...
+- Eigen::Vector3f (id "Eigen::Vector3f") -- linalg_compose_vec3 "Vector" OUT, linalg_vec_cross, linalg_decompose_vec3
+- Eigen::Vector3d (id "Eigen::Vector3d")
+- Eigen::VectorXf (id "Eigen::VectorXf") -- linalg_vec_magnitude/normalize, ai_run_inference, statespace
+- Eigen::VectorXd (id "Eigen::VectorXd") -- control_kalman x_hat, etc.
+HEADLINE confirmed: Compose Vector3 OUT = Eigen::Vector3f (id "Eigen::Vector3f") vs Dot Product IN = glm::vec3 (id
+"vec3") -> ids differ -> connectionPossible REJECTED; AND even forced, getInput<glm::vec3> any_cast of an
+Eigen::Vector3f would fail (data wouldn't transfer). So BOTH layers (connection id + data) were broken.
+GENUINELY-DIFFERENT (correctly stay separate): number/bool; complex vectors (VectorXcf/cd); matrices
+(MatrixXf/Xd/cf, glm::mat4=Transform); glm::quat; std::vector<glm::vec3>=Point Cloud; handles (entt::entity,
+entt::registry*); std::string; model types (StateSpaceModel/LQRResult/InferenceModel/Blackboard/BTStatus); enum.
+ARCHITECTURAL DECISION: joint_config (ik_target Goal, ompl Start/Goal/Command) is kept a DISTINCT semantic type
+(a robot configuration, not a generic math vector) even though it carries Eigen::VectorXd -- preserves the intent
+boundary (a random vector should not auto-wire into a joint command); bridge with an explicit converter if needed.
+
+### PHASE 2 -- TYPE CONSOLIDATION (the fix)
+New include/NodeHeaders/PortTypes.hpp -- the SINGLE SOURCE OF TRUTH: canonicalTypeId(typeName) (the connection id)
+and canonicalTypeLabel(typeName) (the human grey-text label), both DERIVED from the real type, never hardcoded.
+The five real-vector reps -> ONE id "vector". NodeDelegate::dataType now returns {canonicalTypeId, canonicalTypeLabel}.
+DATA layer: Node.hpp getInput<T> gains VECTOR COERCION (mirrors the existing numeric coercion) -- glm::vec3 /
+Eigen::Vector3f/3d / Eigen::VectorXf/Xd interconvert (extract to std::vector<double>, rebuild T; a fixed-3 target
+needs exactly 3 components, else returns nullopt -> the node handles it gracefully). So the connection AND the data
+both flow.
+GATE TYPE-CONNECT (KRS_TYPECONNECT_SELFTEST + bench): Compose Vector3 (Eigen::Vector3f) -> Dot Product (glm::vec3)
+now connectionPossible=YES via the REAL model; (1,2,3).(4,5,6) = 32 through the real Compose+Dot nodes (proves
+the getInput coercion). NEG-CTRL: the OLD id rule (replayed inline) gave "Eigen::Vector3f" != "vec3" -> REJECTED.
+Cross-rep (Vector3f -> VectorXf) connects. SAFETY: vector -> Scalar and vector -> Boolean are STILL REJECTED (did
+NOT make everything connect; real type safety preserved). GATE TYPE (no-regression): 8/8 connectionPossible checks
+still correct (number->vector still BLOCKED, etc.). ALL PASS.
+OPERATOR VISUAL-CONFIRM REQUIRED: in the live editor, drag from Compose Vector3's "Vector" output to Dot Product's
+"A" input -- the wire now takes (previously the editor refused it).
+
+### PHASE 3 -- PORT METADATA (type labels + descriptions): PAUSED (a new CI-builds /goal pre-empted this sprint).
+PortTypes.hpp::canonicalTypeLabel and a Port::description field are IN PLACE (the derivation + the storage), but
+surfacing the grey type-text in portCaption, the hover descriptions, and the PORT-METADATA enforcement gate are
+NOT yet done. Resume point: derive the port caption "name [Label]" + author/derive port descriptions + the gate.

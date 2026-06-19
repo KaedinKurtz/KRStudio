@@ -11,6 +11,7 @@
 #include "components.hpp"
 #include <QWidget>
 #include <glm/glm.hpp> // For glm::vec3, etc.
+#include <Eigen/Core>  // For the unified vector data coercion (Vector3f/3d, VectorXf/Xd <-> glm::vec3)
 
 
 // Forward declaration
@@ -53,7 +54,40 @@ struct Port {
     std::optional<PortDataPacket> packet;        // value delivered by an upstream CONNECTION
     std::optional<PortDataPacket> literalValue;  // value typed into the in-node input widget (used when unconnected)
     std::vector<std::string> enumOptions;        // for an "enum" input: the combo labels (selection = int index)
+    std::string description;                     // PORT METADATA: what this port expects/produces (hover text)
 };
+
+// --- unified-vector data coercion ------------------------------------------------------------------------
+// The five real-valued vector representations share the "vector" connection id (see PortTypes.hpp), so a wire
+// can deliver any of them into a port that reads any other. getInput<T> converts here: extract the data to a
+// common std::vector<double>, then rebuild the requested T (a fixed-3 target needs exactly 3 components).
+namespace krs::detail {
+template<class T> struct is_coercible_vector : std::false_type {};
+template<> struct is_coercible_vector<glm::vec3>       : std::true_type {};
+template<> struct is_coercible_vector<Eigen::Vector3f> : std::true_type {};
+template<> struct is_coercible_vector<Eigen::Vector3d> : std::true_type {};
+template<> struct is_coercible_vector<Eigen::VectorXf> : std::true_type {};
+template<> struct is_coercible_vector<Eigen::VectorXd> : std::true_type {};
+template<class T> inline constexpr bool is_coercible_vector_v = is_coercible_vector<T>::value;
+
+inline bool anyToVector(const std::any& a, std::vector<double>& out) {
+    out.clear();
+    if (auto* v = std::any_cast<glm::vec3>(&a))       { out = { v->x, v->y, v->z }; return true; }
+    if (auto* v = std::any_cast<Eigen::Vector3f>(&a)) { out = { double((*v)[0]), double((*v)[1]), double((*v)[2]) }; return true; }
+    if (auto* v = std::any_cast<Eigen::Vector3d>(&a)) { out = { (*v)[0], (*v)[1], (*v)[2] }; return true; }
+    if (auto* v = std::any_cast<Eigen::VectorXf>(&a)) { out.resize(v->size()); for (int i = 0; i < v->size(); ++i) out[i] = double((*v)[i]); return true; }
+    if (auto* v = std::any_cast<Eigen::VectorXd>(&a)) { out.resize(v->size()); for (int i = 0; i < v->size(); ++i) out[i] = (*v)[i]; return true; }
+    return false;
+}
+template<class T> std::optional<T> vectorTo(const std::vector<double>& f) {
+    if constexpr (std::is_same_v<T, glm::vec3>)            { if (f.size() != 3) return std::nullopt; return glm::vec3(float(f[0]), float(f[1]), float(f[2])); }
+    else if constexpr (std::is_same_v<T, Eigen::Vector3f>) { if (f.size() != 3) return std::nullopt; return Eigen::Vector3f(float(f[0]), float(f[1]), float(f[2])); }
+    else if constexpr (std::is_same_v<T, Eigen::Vector3d>) { if (f.size() != 3) return std::nullopt; return Eigen::Vector3d(f[0], f[1], f[2]); }
+    else if constexpr (std::is_same_v<T, Eigen::VectorXf>) { Eigen::VectorXf v(int(f.size())); for (int i = 0; i < int(f.size()); ++i) v[i] = float(f[i]); return v; }
+    else if constexpr (std::is_same_v<T, Eigen::VectorXd>) { Eigen::VectorXd v(int(f.size())); for (int i = 0; i < int(f.size()); ++i) v[i] = f[i]; return v; }
+    else return std::nullopt;
+}
+} // namespace krs::detail
 
 class Node {
 public:
@@ -169,6 +203,13 @@ public:
                     try { return T(std::any_cast<float>(src->data)); } catch (...) {}
                     try { return T(std::any_cast<int>(src->data)); } catch (...) {}
                     try { return T(std::any_cast<bool>(src->data) ? 1 : 0); } catch (...) {}
+                }
+                // VECTOR COERCION: the unified "vector" type id means a wire may carry glm::vec3 / Eigen::Vector3f
+                // / Eigen::Vector3d / Eigen::VectorXf / Eigen::VectorXd interchangeably -> convert to the requested T.
+                if constexpr (krs::detail::is_coercible_vector_v<T>) {
+                    std::vector<double> f;
+                    if (krs::detail::anyToVector(src->data, f))
+                        if (auto v = krs::detail::vectorTo<T>(f)) return v;
                 }
                 return std::nullopt;
             }

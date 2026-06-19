@@ -24,6 +24,7 @@
 #include <QMenu>
 #include <QAction>
 #include "ProxyComboBox.hpp"
+#include "PortTypes.hpp"
 
 #include <cstdio>
 #include <cmath>
@@ -454,6 +455,85 @@ bool runTypeGate()
     printf("[type] %d/%d real connectionPossible checks correct  %s\n", correct, total,
            pass ? "ALL PASS (compatible connect, incompatible/Trigger blocked, via the real model)" : "FAILURES PRESENT");
     fflush(stdout);
+    return pass;
+}
+
+bool runTypeConnectGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[typeconn] GATE TYPE-CONNECT -- consolidated vector types CONNECT + compute; real incompatibilities still rejected\n");
+    if (!QApplication::instance()) { printf("[typeconn] FAIL: needs QApplication\n"); return false; }
+    auto model = makeNodeGraphModel();
+
+    auto canConnect = [&](const char* on, const char* op, const char* in, const char* ip) -> int {
+        const QtNodes::NodeId o = model->addNode(on);
+        const QtNodes::NodeId i = model->addNode(in);
+        auto* od = model->delegateModel<NodeDelegate>(o);
+        auto* idl = model->delegateModel<NodeDelegate>(i);
+        Node* ob = od ? od->backendNode() : nullptr;
+        Node* ib = idl ? idl->backendNode() : nullptr;
+        const int oi = portIndexByName(ob, Port::Direction::Output, op);
+        const int ii = portIndexByName(ib, Port::Direction::Input, ip);
+        if (oi < 0 || ii < 0) return -1;
+        return model->connectionPossible({ o, QtNodes::PortIndex(oi), i, QtNodes::PortIndex(ii) }) ? 1 : 0;
+    };
+
+    // (1) HEADLINE: Compose Vector3 (output Eigen::Vector3f) -> Dot Product (input glm::vec3) now CONNECTS.
+    const int headline = canConnect("linalg_compose_vec3", "Vector", "signal_dot_product", "A");
+    // OLD-state neg-ctrl: replay the OLD id rule (only glm::vec3 mapped, Eigen::Vector3f kept its raw name) ->
+    // the two ids differed -> connectionPossible REJECTED. The NEW canonical rule maps both to "vector".
+    auto oldId = [](const std::string& tn) -> std::string {
+        if (tn == "double" || tn == "float" || tn == "int") return "number";
+        if (tn == "bool") return "bool";
+        if (tn == "glm::vec3") return "vec3";
+        return tn;                                  // OLD: Eigen::Vector3f stayed "Eigen::Vector3f"
+    };
+    const bool oldRejected = oldId("Eigen::Vector3f") != oldId("glm::vec3");                  // "Eigen::Vector3f" != "vec3"
+    const bool newConnects = krs::ports::canonicalTypeId("Eigen::Vector3f") == krs::ports::canonicalTypeId("glm::vec3")
+                          && krs::ports::canonicalTypeId("glm::vec3") == "vector";
+    const bool connectOk = headline == 1 && oldRejected && newConnects;
+
+    // (2) DATA computes through it: build (1,2,3) and (4,5,6) via the REAL Compose node (its output IS
+    // Eigen::Vector3f), feed both into Dot Product (which reads glm::vec3) -> 1*4+2*5+3*6 = 32 (getInput coercion).
+    auto vecPacket = [](float x, float y, float z) -> PortDataPacket {
+        auto n = NodeFactory::instance().createNode("linalg_compose_vec3");
+        if (!n) return {};
+        n->setPortLiteral<float>("X", x); n->setPortLiteral<float>("Y", y); n->setPortLiteral<float>("Z", z);
+        n->process();
+        for (const auto& p : n->getPorts())
+            if (p.direction == Port::Direction::Output && p.name == "Vector" && p.packet) return p.packet.value();
+        return {};
+    };
+    double dotResult = std::nan("");
+    if (auto dot = NodeFactory::instance().createNode("signal_dot_product")) {
+        dot->setInput("A", vecPacket(1, 2, 3));
+        dot->setInput("B", vecPacket(4, 5, 6));
+        dot->process();
+        for (const auto& p : dot->getPorts())
+            if (p.direction == Port::Direction::Output && p.name == "Result" && p.packet)
+                try { dotResult = double(std::any_cast<float>(p.packet->data)); } catch (...) {}
+    }
+    const bool dataOk = std::fabs(dotResult - 32.0) < 1e-4;
+
+    // (3) cross-representation also unifies: Eigen::Vector3f -> Eigen::VectorXf connects.
+    const int crossRep = canConnect("linalg_compose_vec3", "Vector", "linalg_vec_magnitude", "Vector");
+
+    // (4) GENUINELY-INCOMPATIBLE still REJECTED -- we did NOT make everything connect to everything.
+    const int vecToScalar = canConnect("linalg_compose_vec3", "Vector", "math_add", "A");       // vector -> Scalar: REJECT
+    const int vecToBool   = canConnect("linalg_compose_vec3", "Vector", "math_add", "Trigger"); // vector -> Boolean: REJECT
+    const bool safetyOk = vecToScalar == 0 && vecToBool == 0;
+
+    const bool pass = connectOk && dataOk && crossRep == 1 && safetyOk;
+    printf("[typeconn]   HEADLINE Compose(Vec3f)->Dot(glm::vec3): connect=%d (OLD ids differ->rejected:%d, NEW unify:%d); "
+           "DATA (1,2,3).(4,5,6)=%.1f (==32:%d); cross-rep Vec3f->VectorXf connect=%d; "
+           "SAFETY vector->Scalar:%s vector->Boolean:%s (both REJECT:%d)  %s\n",
+           headline, int(oldRejected), int(newConnects), dotResult, int(dataOk), crossRep,
+           vecToScalar == 0 ? "REJECT" : "connect", vecToBool == 0 ? "REJECT" : "connect", int(safetyOk),
+           pass ? "PASS" : "FAIL");
+    printf("[typeconn] %s\n", pass ? "ALL PASS (fragmented vectors now connect + compute through the real model; the old ids rejected it; real type safety preserved)"
+                                   : "FAILURES PRESENT");
+    std::fflush(stdout);
     return pass;
 }
 

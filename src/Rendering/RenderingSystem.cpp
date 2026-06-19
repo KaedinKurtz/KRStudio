@@ -966,6 +966,13 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
+    // Type-system consolidation GATE TYPE-CONNECT: the unified vector types connect + compute.
+    if (qEnvironmentVariableIntValue("KRS_TYPECONNECT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_TYPECONNECT_SELFTEST =================\n");
+        const bool ok = krs::nodes::runTypeConnectGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
     // Node-editor GATE TYPE: port type compatibility.
     if (qEnvironmentVariableIntValue("KRS_TYPE_SELFTEST") != 0) {
         std::printf("\n================= KRS_TYPE_SELFTEST =================\n");
@@ -1506,6 +1513,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE IF-ROUTES (If routes a trigger to True/False by the condition, exactly one branch; both-fire + inverted-condition neg-ctrls)", krs::nodes::runIfGate() },
             { "GATE WHILE-ITERATES-AND-TERMINATES (While fires the exact count then terminates; for-N exact; the mandatory max-iter cap catches an infinite loop; no-cap + wrong-count neg-ctrls)", krs::nodes::runWhileGate() },
             { "GATE TYPE (compatible ports connect, incompatible blocked)", krs::nodes::runTypeGate() },
+            { "GATE TYPE-CONNECT (consolidated vectors connect+compute: Compose(Vec3f)->Dot(glm::vec3)=32; old ids rejected; vector->Scalar/Boolean still rejected)", krs::nodes::runTypeConnectGate() },
             { "GATE TIME (live time source drives a sine over wall-clock)", krs::nodes::runTimeGate() },
             { "GATE CONNECT-AND-CONTROL (wired program, widget value, live time -> live robot)", krs::nodes::runConnectControlGate() },
             { "GATE FRAME (every registered node type exposes ports via the real QtNodes model, N of M)", krs::nodes::runFrameGate() },

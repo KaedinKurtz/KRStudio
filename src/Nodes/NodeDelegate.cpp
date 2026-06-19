@@ -4,6 +4,7 @@
 #include "ExecutionControlWidget.hpp"
 #include "NodeEditQueue.hpp"
 #include "ProxyComboBox.hpp"   // node-body combo with a QMenu popup (native dropdown mis-routes in the proxy)
+#include "PortTypes.hpp"       // canonical type id + label (the single source of truth for the type system)
 #include <string>
 
 #include <QtNodes/NodeData>
@@ -184,16 +185,14 @@ QtNodes::NodeDataType NodeDelegate::dataType(QtNodes::PortType portType, QtNodes
     const Port* p = getBackendPort(portType, portIndex);
     if (!p) return { "", "" };
 
-    // QtNodes connects an out->in pair only when their NodeDataType.id MATCHES. Map the library's scalar
-    // numeric types to ONE id "number" (double/float/int interchange) so signal/math nodes interconnect;
-    // bool stays "bool" (so a number can NOT be wired into a Trigger/bool input -- a type confusion);
-    // vectors -> "vec3"; everything else keeps its own id. (.name is the display label.)
+    // QtNodes connects an out->in pair only when their NodeDataType.id MATCHES. The canonical id (PortTypes.hpp,
+    // the single source of truth) unifies the numeric scalars -> "number" and the five real-vector reps ->
+    // "vector" (so Compose Vector3's Eigen::Vector3f connects to Dot Product's glm::vec3, with getInput coercing
+    // the data); bool stays "bool"; genuinely-different types keep their own id. The display NAME is the human
+    // TYPE LABEL ("Scalar"/"Vector"/...), DERIVED from the real type -- never hardcoded.
     const std::string& tn = p->type.name;
-    QString id = QString::fromStdString(tn);
-    if (tn == "double" || tn == "float" || tn == "int") id = "number";
-    else if (tn == "bool") id = "bool";
-    else if (tn == "glm::vec3") id = "vec3";
-    return { id, QString::fromStdString(tn) };
+    return { QString::fromStdString(krs::ports::canonicalTypeId(tn)),
+             QString::fromStdString(krs::ports::canonicalTypeLabel(tn)) };
 }
 
 void NodeDelegate::recomputeAndPropagate()

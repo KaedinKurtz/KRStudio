@@ -75,6 +75,12 @@ bool runWhileGate();
 // incompatible ones unconnectable (mirrors QtNodes connectionPossible). Needs QApplication.
 bool runTypeGate();
 
+// GATE TYPE-CONNECT (KRS_TYPECONNECT_SELFTEST): the consolidated vector types CONNECT and compute -- Compose
+// Vector3 (Eigen::Vector3f) wires to Dot Product (glm::vec3) and (1,2,3).(4,5,6)=32 via getInput coercion; the
+// OLD raw-name ids rejected it; cross-rep (Vector3f->VectorXf) connects; a vector into a Scalar/Boolean port is
+// still REJECTED (real type safety preserved). Needs QApplication.
+bool runTypeConnectGate();
+
 // GATE TIME (KRS_TIME_SELFTEST): a sine driven by the LIVE time source oscillates over wall-clock;
 // disconnected from the time source it is constant.
 bool runTimeGate();
