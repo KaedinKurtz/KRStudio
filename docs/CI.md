@@ -86,4 +86,79 @@ Accurate current state established with real evidence: platforms (win + mac, no 
 (`checkout` on the orphaned `external/SPlisHSPlasH` gitlink, build never runs), and the dependency breakage risk
 (uncached ~22-lib source build vs the 6 h limit). Fixes follow in the sections below.
 
-<!-- Phases 2-4 (Linux build, Windows build, packaging + install guide) appended as they land. -->
+---
+
+## Phase 2/3 — the fixes (Linux + Windows)
+
+Applied, in order, each verified against the live Actions API:
+
+1. **Checkout (the universal blocker) — FIXED.** Both workflows now check out with `submodules: false`. The
+   orphaned `external/SPlisHSPlasH` gitlink is no longer fetched; CMake's `EXISTS` guard auto-skips it.
+   *Observed:* `Run actions/checkout@v4` went green on both win and (new) linux — previously it was the failing step.
+
+2. **`lukka/run-vcpkg@v11` — REMOVED.** After checkout passed, the next run failed fast inside `run-vcpkg`.
+   Replaced it with the runner's **pre-installed vcpkg** (`VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT`) — fewer moving
+   parts, no third-party action. *Observed:* the run then advanced past setup into the Configure step.
+
+3. **Dependency build caching.** ~22 heavy libs (Qt, OpenCV, OpenVDB, PhysX, OCCT, OMPL, …) build from source in
+   manifest mode at configure time. Added a transparent `files` binary cache
+   (`VCPKG_BINARY_SOURCES=clear;files,<ws>/vcpkg-bincache,readwrite`) persisted by `actions/cache` keyed on
+   `vcpkg.json`. The first run pays the full multi-hour build and primes the cache; later runs restore prebuilt
+   binaries. (Note: a partial cache still persists when a job FAILS — only a *cancellation* skips the cache upload,
+   so `concurrency.cancel-in-progress` must not fire mid-prime.)
+
+4. **Linux workflow — CREATED.** `.github/workflows/ci-linux` (`ubuntu-22.04`): apt-installs the GL/X11/Wayland/
+   xcb + build-tool system packages vcpkg's qtbase and the windowing/GL link need, then the same vcpkg + preset
+   path via a new `linux-ninja-release` CMake preset (`x64-linux`). Includes a best-effort headless
+   `ldd` + offscreen-start smoke (non-fatal — the runner has no GPU).
+
+5. **macOS — DISABLED.** `ci-mac` now runs only on manual `workflow_dispatch` (was push/PR), so it stops failing
+   every commit. See the Mac section below for why it is out of scope.
+
+**Status as of this writing (commit 5889a66):** both `ci-win` and `ci-linux` reached the **Configure** step and are
+building the vcpkg dependency set — the first time the build phase has ever run in CI. Whether each goes fully
+green (Build → Archive → artifact) depends on that long cold build completing under the 6 h job limit and on each
+dependency building on its platform; failures from here are per-dependency and are fixed by iterating on the
+manifest/apt list (the cache makes each retry resume rather than restart). **This is the honest boundary: getting
+to a green compile+link may take one or more cache-priming runs.**
+
+---
+
+## Phase 4 — packaging + install (for a non-developer colleague)
+
+> HONEST BOUNDARY (repeated because it matters): a green CI run means KRStudio **compiled and linked** on a
+> headless runner. It does NOT prove the GUI launches or renders. **The real acceptance test is a colleague
+> running the downloaded artifact on a real machine with a GL-4.3 GPU — OPERATOR/COLLEAGUE VERIFICATION REQUIRED.**
+
+### Hardware / driver requirements (BOTH platforms)
+- A GPU + drivers supporting **OpenGL 4.3 or newer with compute shaders** (KRStudio's renderer is GL-4.3-compute).
+  This rules out very old GPUs, most integrated GPUs older than ~2014, headless servers without a GPU, and
+  **all Macs** (see below).
+- 64-bit Windows 10/11, or a reasonably current 64-bit Linux (glibc ≥ the runner's — built on Ubuntu 22.04).
+
+### Where to get the artifact
+GitHub → the repo → **Actions** → pick the latest green **ci-win** or **ci-linux** run → **Artifacts** →
+download `KRStudio-Windows` / `KRStudio-Linux`. (Artifacts are downloadable zips; no build-from-source needed.)
+
+### Windows
+1. Download `KRStudio-Windows` and unzip it.
+2. Run `RoboticsSoftware.exe`.
+3. If Windows prompts about the **Visual C++ runtime**, install the latest *Microsoft Visual C++ 2015-2022
+   Redistributable (x64)*. (CI currently zips the build tree; the Phase-4 follow-up is a `windeployqt` dist that
+   bundles the Qt DLLs + plugins so no separate Qt install is needed — noted as a refinement.)
+
+### Linux
+1. Download `KRStudio-Linux` and unzip it.
+2. `chmod +x RoboticsSoftware && ./RoboticsSoftware`.
+3. You need a working GL 4.3 driver (Mesa ≥ recent for AMD/Intel, or NVIDIA's proprietary driver). The bundled
+   zip is the binary + assets; some system libs (glibc, libstdc++, the GL driver) come from your distro.
+
+### Why macOS is deferred (NOT shipped this sprint)
+macOS caps OpenGL at 4.1 and has deprecated GL; KRStudio needs **GL 4.3 compute shaders**, which never existed on
+macOS. A Mac build cannot run the compute pipeline — supporting it means **porting the renderer to Vulkan via
+MoltenVK**, a large separate project, not a CI fix. `ci-mac` is parked on manual dispatch until then.
+
+### GATE PACKAGING
+The per-platform download → run steps and the GL-4.3 hardware requirement are documented above. The clean-bundle
+refinement (windeployqt on Windows; an AppImage/`linuxdeployqt` on Linux) is the remaining polish once the builds
+are reliably green.
