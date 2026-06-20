@@ -3780,3 +3780,52 @@ freshly relinked via PowerShell (exe timestamp verified each build).
 NOTE: the data-op behind every control above is gated (EDIT-OP-INVOKED, JOINT-EDIT, SUBTREE-DETACH); the Qt
 panel + robot-only spinning viewport + subtree-grab interaction are the remaining front-end to wire (they need
 a live RobotGraph bound into the scene/UI) and are NOT headlessly verifiable -- not claimed working here.
+
+## BLIND IMU EXTRINSIC RECOVERY SPRINT (2026-06-20, branch avoidance-field)
+The thesis-proving gate made unfakeable by an INFORMATION BARRIER: sensor extrinsic calibration via system-ID.
+A random IMU at a random 6-DOF mount on a random non-base link is excited by a known multi-sine; a recovery
+that sees ONLY (chain, FK joint states, IMU readings) -- NOT the true mount/link -- backs the mount out of the
+physics; it is checked against the SEALED truth afterward, over hundreds of random trials. Pure Eigen, no
+GL/PhysX/OCCT/UI. (krs::imu, ImuExtrinsics.hpp + ImuExtrinsicsGate.cpp.)
+
+### THE PHYSICS + THE RECOVERY
+- **Forward model** (lever-arm inclusive): a_point = a_origin + (hat(alpha)+hat(omega)^2)(R_b p) is the rigid-
+  body point acceleration; the accelerometer reads R_imu^T(a_point - g), the gyro reads R_imu^T*omega. POSITION
+  enters ONLY through the lever-arm term, excited by ROTATION -- so position is observable iff the link rotates.
+  Realistic per-axis bias + scale + white noise + bias random-walk. Kinematics (omega,alpha,a_origin) from
+  central finite-differences of FK.
+- **Recovery** (closed form -> provably centred under zero-mean noise): orientation R_mount via orthogonal
+  PROCRUSTES (gyro = R_mount^T(R_b^T omega) -> SVD); position p_mount via LINEAR least-squares (a_point is linear
+  in p_mount); gyro/accel BIAS estimated jointly. The link is identified by min fit-residual over all non-base
+  links. The information barrier is architectural: recoverMount's signature cannot reach the sealed link/mount.
+
+### GATES (KRS_IMU_SELFTEST + bench -> 130/130 gate groups PASS), each a measured number + REAL failing model
+- **IMU-MODEL-CORRECT**: constant-rate rotation -> centripetal |acc| = w0^2*L = 0.72250 (exact), gyro = w0 in
+  direction R_mount^T*z, sensed gravity rotates with mount orientation. NEG-CTRL: a leverless model (a_point =
+  a_origin) reads centripetal 0 -> position would be unrecoverable by construction.
+- **INFORMATION-BARRIER** (anti-cheat): over 8 non-degenerate trials, real recovery matches the sealed truth
+  8/8 (worst 0.0001m/0.001deg); ZEROED readings and NO-MOTION joint-states both FAIL to match 8/8 (min margins
+  posErr 0.16m, rotErr 95deg) -- the recovery provably solves from the physics, not leaked truth. (Hardened
+  after review: garbage input collapses the recovery to the degenerate {I,0}; the trial truth is drawn FAR from
+  {I,0} so the threshold neg-control is robust across the distribution, not seed-luck.)
+- **EXCITATION-OBSERVABILITY**: each of the 6 mount DOF measurably changes the readings under the multi-sine.
+  NEG-CTRL: a degenerate non-rotating (prismatic-only) excitation collapses the position sensitivity to ~0 vs
+  the rich case -> rotation is what reveals the lever arm.
+- **BLIND-RECOVERY + NOISE-ROBUST**: low-noise trials recover within 1cm/1deg (worst 0.0001m); under constant
+  bias + white noise the estimate stays CENTRED (mean-bias 0.0000m). NEG-CTRLs: an identity-mount model does not
+  match (0.30m); a no-bias-estimation model is shifted off-centre by the constant bias.
+- **HUNDREDS-OF-TRIALS**: 300 random link+pose trials (deep, compound-rotation links) -> 100% success
+  (pos<2cm & rot<2deg & correct link), link-ID 100%, pos err median 0.0000m / max 0.0003m. HONEST FAILURE MODE
+  DEMONSTRATED: a single-axis link (body 0, yaw-Z only) is UNDER-DETERMINED -- posErr 0.325m, rotErr 148deg --
+  because one rotation axis cannot observe the about-axis orientation or the along-axis position (which is WHY
+  the trials use compound-rotation links). NEG-CTRL: a lucky-single-case model fails the distribution.
+
+### ADVERSARIAL REVIEW (23 agents, 4 lenses incl. the genuine-fit-vs-tautology probe) -- 1 confirmed, 18 dismissed
+- Confirmed MINOR (FIXED): the info-barrier neg-control's threshold disjunction could spuriously "match" when
+  the TRUE mount sat near the garbage fixed point {I,0} (latent, masked by the shipped seed). Fixed by drawing
+  the barrier-test truth provably far from {I,0} and looping 8 trials. The tautology probe confirmed the
+  recovery is a GENUINE inversion (Procrustes solves orientation, linear-LS solves position) -- proven by the
+  things that break self-consistency: it stays tight+centred under added noise and fails on garbage input.
+
+### RESULT (2026-06-20): KRS_IMU_SELFTEST ALL PASS; 5 gates folded into KRS_OVERNIGHT_BENCH. Built + freshly
+relinked via PowerShell (exe timestamp verified). No display/UI -- pure math/physics gated against sealed truth.

@@ -33,6 +33,7 @@
 #include "RobotBuilder.hpp"        // krs::rbuild robot-builder gates (Phase 0 recon)
 #include "SelfCollisionMatrix.hpp" // krs::plan self-collision matrix gates
 #include "RobotConfig.hpp"         // krs::rcfg property hot-swap + provenance gates
+#include "ImuExtrinsics.hpp"       // krs::imu blind IMU extrinsic recovery gates
 #include "TonemapPass.hpp"
 #include "GlassPass.hpp"
 #include "SmokeSystem.hpp"
@@ -839,6 +840,18 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // BLIND IMU EXTRINSIC RECOVERY: synthetic IMU + information barrier + blind recovery.
+    if (qEnvironmentVariableIntValue("KRS_IMU_SELFTEST") != 0) {
+        std::printf("\n================= KRS_IMU_SELFTEST =================\n");
+        const bool ok = krs::imu::runImuModelGate()
+                      & krs::imu::runInfoBarrierGate()
+                      & krs::imu::runExcitationObservGate()
+                      & krs::imu::runBlindRecoveryGate()
+                      & krs::imu::runHundredsOfTrialsGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // ROBOT CONFIG Phase 1: self-collision matrix generation + feeds-planner.
     if (qEnvironmentVariableIntValue("KRS_SELFCOL_SELFTEST") != 0) {
         std::printf("\n================= KRS_SELFCOL_SELFTEST =================\n");
@@ -1602,6 +1615,11 @@ void RenderingSystem::initializeSharedResources()
             { "GATE PROPERTY-HOTSWAP (limit edit propagates LIVE to the planner's limits; stale-cache neg-ctrl mis-judges)", krs::rcfg::runPropertyHotswapGate() },
             { "GATE PROPERTY-PROVENANCE (axes geometry-derived, limits user-supplied; fabricated-value & user-claimed-axis neg-ctrls flagged)", krs::rcfg::runPropertyProvenanceGate() },
             { "GATE EDIT-OP-INVOKED (panel controls invoke proven delete/define ops + chain re-derives; no-op & wrong-op neg-ctrls)", krs::rbuild::runEditOpInvokedGate() },
+            { "GATE IMU-MODEL-CORRECT (noiseless readings match closed-form; lever-arm centripetal; leverless-model neg-ctrl)", krs::imu::runImuModelGate() },
+            { "GATE INFORMATION-BARRIER (blind recovery matches sealed truth; zeroed/no-motion garbage input FAILS -> uses physics not leaked truth)", krs::imu::runInfoBarrierGate() },
+            { "GATE EXCITATION-OBSERVABILITY (all 6 mount DOF observable under excitation; degenerate non-rotating leaves position under-observable)", krs::imu::runExcitationObservGate() },
+            { "GATE BLIND-RECOVERY+NOISE-ROBUST (recovered mount matches sealed truth <tol; centred under noise; identity & no-bias neg-ctrls)", krs::imu::runBlindRecoveryGate() },
+            { "GATE IMU-HUNDREDS-OF-TRIALS (hundreds of random link/pose trials match sealed truth; success rate + honest failure characterisation)", krs::imu::runHundredsOfTrialsGate() },
             { "GATE J joint tooling (derive revolute frame <1e-6 vs oracle -> RobotArticSpec + reject neg-ctrl)", krs::cad::runJointGateJ() },
             { "GATE M MQTT (real broker; joint cmd->FK->state round-trip <1e-4; broadcast duality)", krs::mqtt::runMqttGateM() },
             { "GATE ND node graph (scene->node->ECS effect + graph->robot + disconnected/type neg-ctrls)", krs::nodes::runNodeGraphGateND() },
