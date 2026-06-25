@@ -198,6 +198,7 @@ void RobotBuilderPanel::refresh()
 
 void RobotBuilderPanel::onLoadDemo()
 {
+    if (m_isUpdatingUI) return;   // consistency with the other action slots
     if (!m_scene) { setStatus(QStringLiteral("No scene.")); return; }
     auto& reg = m_scene->getRegistry();
     auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
@@ -291,9 +292,20 @@ void RobotBuilderPanel::onApplyLimit()
 
     const double lo = m_limitLo->value();
     const double hi = m_limitHi->value();
-    // The proven hot-swap: set the limit, then re-derive toJointLimits() LIVE (no
-    // stale cache). m_cfg->robot joint order matches toJointLimits()'s DOF order.
-    const bool ok = m_cfg->setPositionLimit(idx, lo, hi);
+    // Map the chain-DOF index to the robot.joints[] ARRAY index: toJointLimits()
+    // enumerates only member, non-Fixed joints in order, so DOF-space != array-space
+    // once a robot has a fixed/non-member joint. (For the all-revolute demo they
+    // coincide; this keeps Apply Limit correct for mixed-joint robots too.)
+    int arrIdx = -1, dofSeen = 0;
+    for (int ji = 0; ji < int(m_cfg->robot.joints.size()); ++ji) {
+        const auto& jt = m_cfg->robot.joints[ji];
+        if (!jt.member || jt.type == krs::dyn::JType::Fixed) continue;
+        if (dofSeen == idx) { arrIdx = ji; break; }
+        ++dofSeen;
+    }
+    if (arrIdx < 0) { setStatus(QStringLiteral("DOF index out of range.")); return; }
+    // The proven hot-swap: set the limit, then re-derive toJointLimits() LIVE (no cache).
+    const bool ok = m_cfg->setPositionLimit(arrIdx, lo, hi);
     const krs::plan::JointLimits L = m_cfg->toJointLimits();
     const double rlo = (idx < int(L.qLower.size())) ? L.qLower[idx] : 0.0;
     const double rhi = (idx < int(L.qUpper.size())) ? L.qUpper[idx] : 0.0;
