@@ -132,6 +132,24 @@ void SettingsManager::buildRegistry() {
         cad.note = QStringLiteral("Used for the next STEP import.");
         m_defs.push_back(cad);
     }
+
+    // --- Simulation Capacity --- (these size/realloc GPU buffers at subsystem
+    //     init, so they are RESTART-gated, NOT hot-swap, per design.)
+    {
+        SettingDef fb = E("sim/fluidBackend", "Fluid Solver Backend", "Simulation", QStringLiteral("auto"),
+                          { QStringLiteral("Auto"), QStringLiteral("PBF (GPU)"), QStringLiteral("DFSPH (CPU)") },
+                          { QStringLiteral("auto"), QStringLiteral("pbf"), QStringLiteral("dfsph") });
+        fb.note = QStringLiteral("Restart required.");
+        m_defs.push_back(fb);
+    }
+    m_defs.push_back(F("sim/fluidParticleRadius", "Fluid Particle Radius (m)", "Simulation", 0.025, 0.005, 0.1, 0.001, 4,
+                       "Smaller = higher detail and more particles. Restart required."));
+    m_defs.push_back(I("sim/smokeGridResolution", "Smoke Grid Resolution (0 = auto)", "Simulation", 0, 0, 256, 8,
+                       "N^3 voxels; 0 picks the per-GPU default. Restart required."));
+    m_defs.push_back(I("sim/mpmGridResolution", "MPM Grid Resolution (0 = auto)", "Simulation", 0, 0, 192, 4,
+                       "N^3 cells; 0 picks the per-GPU default. Restart required."));
+    m_defs.push_back(I("sim/mpmMaxParticles", "MPM Max Particles", "Simulation", 240000, 10000, 1000000, 10000,
+                       "GPU particle-buffer capacity. Restart required."));
 }
 
 const SettingDef* SettingsManager::def(const QString& key) const {

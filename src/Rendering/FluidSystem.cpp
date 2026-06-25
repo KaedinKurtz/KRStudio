@@ -3,6 +3,7 @@
 #include "Shader.hpp"
 #include "components.hpp"
 #include "HardwareCaps.hpp"
+#include "SettingsManager.hpp"   // sim/fluid* capacity knobs (restart-gated)
 
 #include "SdfBaker.hpp"
 #include "SdfColliderQuery.hpp" // krs::fluid::sdfRigidModel (SSOT placement; shared with GATE C)
@@ -42,7 +43,16 @@ void FluidSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     Q_UNUSED(renderer);
     if (m_initialized) return;
 
-    // Test hooks: select solver tier / render mode from the environment.
+    // Capacity/quality settings (restart-gated): chosen here, at buffer-alloc time.
+    {
+        const QString b = krs::SettingsManager::instance().getString(QStringLiteral("sim/fluidBackend"));
+        if (b == QLatin1String("dfsph"))     m_requestedBackend = FluidBackend::DfsphCpu;
+        else if (b == QLatin1String("pbf"))  m_requestedBackend = FluidBackend::PbfGpu;
+        else                                 m_requestedBackend = FluidBackend::Auto;
+        m_params.particleRadius = krs::SettingsManager::instance().getFloat(QStringLiteral("sim/fluidParticleRadius"));
+    }
+
+    // Test hooks: select solver tier / render mode from the environment (env wins).
     const QString backendEnv = qEnvironmentVariable("KRS_FLUID_BACKEND").toLower();
     if (backendEnv == QLatin1String("dfsph")) m_requestedBackend = FluidBackend::DfsphCpu;
     else if (backendEnv == QLatin1String("pbf")) m_requestedBackend = FluidBackend::PbfGpu;

@@ -4,6 +4,7 @@
 #include "Shader.hpp"
 #include "components.hpp"
 #include "HardwareCaps.hpp"
+#include "SettingsManager.hpp"   // sim/mpm* capacity knobs (restart-gated)
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <QDebug>
@@ -30,9 +31,13 @@ void MpmSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core*
     Q_UNUSED(renderer);
     if (m_initialized) return;
     m_N = krs::hardwareCaps().cudaPhysics ? 96 : 64;
+    // Settings overrides (restart-gated): 0 grid = keep the per-GPU default above.
+    const int setN = krs::SettingsManager::instance().getInt(QStringLiteral("sim/mpmGridResolution"));
+    if (setN >= 32 && setN <= 192) m_N = (setN / 4) * 4;
+    m_maxParticles = krs::SettingsManager::instance().getInt(QStringLiteral("sim/mpmMaxParticles"));
     bool ok = false;
     const int envN = qEnvironmentVariable("KRS_MPM_GRID").toInt(&ok);
-    if (ok && envN >= 32 && envN <= 160) m_N = (envN / 4) * 4;
+    if (ok && envN >= 32 && envN <= 160) m_N = (envN / 4) * 4;   // env wins (debug)
     // Thermodynamic field overrides (M4). Ambient temperature + Newton
     // exchange rate let a hot environment melt solids; default = inert ambient.
     if (qEnvironmentVariableIsSet("KRS_MPM_AMBIENT"))
@@ -46,7 +51,7 @@ void MpmSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core*
     if (viz >= 1 && viz <= 3) { m_appearance.mode = VizMode(viz); m_calibratePending = true; }
     allocate(gl);
     m_initialized = true;
-    qInfo() << "[MPM] initialized grid" << m_N << "^3, capacity" << kMaxParticles;
+    qInfo() << "[MPM] initialized grid" << m_N << "^3, capacity" << m_maxParticles;
 }
 
 void MpmSystem::allocate(QOpenGLFunctions_4_3_Core* gl)
@@ -54,7 +59,7 @@ void MpmSystem::allocate(QOpenGLFunctions_4_3_Core* gl)
     gl->glGenBuffers(1, &m_particleSSBO);
     gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_particleSSBO);
     gl->glBufferData(GL_SHADER_STORAGE_BUFFER,
-                     GLsizeiptr(sizeof(float)) * kStride * kMaxParticles, nullptr, GL_DYNAMIC_DRAW);
+                     GLsizeiptr(sizeof(float)) * kStride * m_maxParticles, nullptr, GL_DYNAMIC_DRAW);
 
     const int cells = m_N * m_N * m_N;
     gl->glGenBuffers(1, &m_gridIntSSBO);
@@ -142,7 +147,7 @@ void MpmSystem::seedBodies(QOpenGLFunctions_4_3_Core* gl, entt::registry& regist
     int count = 0;
 
     auto pushParticle = [&](const glm::vec3& p, const MpmBodyComponent& b) {
-        if (count >= kMaxParticles) return;
+        if (count >= m_maxParticles) return;
         const float vol = b.particleSpacing * b.particleSpacing * b.particleSpacing;
         const float mass = b.density * vol;
         const float mu = b.youngsModulus / (2.0f * (1.0f + b.poissonRatio));

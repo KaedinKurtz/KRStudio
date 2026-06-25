@@ -3,6 +3,7 @@
 #include "Shader.hpp"
 #include "components.hpp"
 #include "HardwareCaps.hpp"
+#include "SettingsManager.hpp"   // sim/smokeGridResolution (restart-gated)
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <QDebug>
@@ -33,9 +34,12 @@ void SmokeSystem::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
 
     // 96^3 default (~46 MB of volumes, iGPU-safe). NVIDIA/opt-in gets 128.
     m_N = krs::hardwareCaps().cudaPhysics ? 128 : 96;
+    // Settings override (restart-gated): 0 = keep the per-GPU default above.
+    const int setN = krs::SettingsManager::instance().getInt(QStringLiteral("sim/smokeGridResolution"));
+    if (setN >= 32 && setN <= 256) m_N = (setN / 8) * 8;       // multiple of local size
     bool ok = false;
     const int envN = qEnvironmentVariable("KRS_SMOKE_GRID").toInt(&ok);
-    if (ok && envN >= 32 && envN <= 192) m_N = (envN / 8) * 8; // multiple of local size
+    if (ok && envN >= 32 && envN <= 192) m_N = (envN / 8) * 8; // env wins (debug)
 
     allocate(gl);
     m_initialized = true;

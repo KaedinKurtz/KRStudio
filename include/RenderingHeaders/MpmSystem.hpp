@@ -28,7 +28,7 @@ class RenderingSystem;
 class MpmSystem
 {
 public:
-    static constexpr int kMaxParticles = 240000;
+    int m_maxParticles = 240000;   // GPU particle-buffer capacity (Settings: sim/mpmMaxParticles, restart-gated)
     // std430 particle stride: 12 vec4 (pos/mass, vel/vol, C cols x3, F cols x3,
     // plastic/thermo, material, color, therm2{k}). Keep in sync with the shaders.
     static constexpr int kFloatsPerParticle = 12 * 4;
