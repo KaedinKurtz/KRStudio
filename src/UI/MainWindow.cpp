@@ -1197,6 +1197,19 @@ MainWindow::MainWindow(QWidget* parent)
 
     // --- 5. FINAL, ROBUST INITIALIZATION AND RENDER LOOP START ---
     auto engineFrame = [this]() {
+        // Frame-rate cap (Settings: perf/maxFps). Render only once the free-running
+        // clock passes the next deadline, then advance the deadline by exactly
+        // m_minFrameMs so the *average* render rate equals the target regardless of
+        // how coarse the driving ticks are (frameSwapped + fallback timer). Carrying
+        // the deadline (vs. zeroing a clock) is what avoids the downward drift.
+        // 0 (m_minFrameMs==0) = uncapped (vsync governs).
+        if (m_minFrameMs > 0.0) {
+            if (!m_frameClock.isValid()) m_frameClock.start();
+            const double now = m_frameClock.nsecsElapsed() * 1e-6;
+            if (now < m_nextRenderMs) return;                 // too soon -> skip
+            m_nextRenderMs += m_minFrameMs;                   // schedule next (carry)
+            if (m_nextRenderMs < now) m_nextRenderMs = now + m_minFrameMs; // resync after a stall
+        }
         // Step the simulation (fixed-timestep physics), then render all
         // viewports on the engine's own GL context and schedule repaints.
         // [PERF] Split the frame period into physics vs render so the "CPU frame"
@@ -1217,9 +1230,16 @@ MainWindow::MainWindow(QWidget* parent)
             const double _renderMs = _ft.nsecsElapsed() * 1e-6;
             static double accTick = 0.0, accRender = 0.0;
             static int n = 0;
+            static QElapsedTimer _wall; if (!_wall.isValid()) _wall.start();
             accTick += _tickMs;
             accRender += _renderMs;
             if (++n >= 60) {
+                // True render rate = frames / wall-time over the window. Unlike
+                // RenderingSystem::getFPS() this counts ONLY actual renders, so it
+                // reflects the perf/maxFps cap (getFPS conflates the 60Hz logic loop).
+                const double _wallMs = _wall.nsecsElapsed() * 1e-6;
+                const double _renderFps = (_wallMs > 0.0) ? 1000.0 * n / _wallMs : 0.0;
+                _wall.restart();
                 // Pull the app's own numbers so the log shows what the user sees,
                 // plus GPU execution time (gpuTotal includes the GPU fluid compute
                 // via fluidSimMs) to localize cost: GPU-bound vs CPU-bound vs a
@@ -1227,8 +1247,8 @@ MainWindow::MainWindow(QWidget* parent)
                 const double _fps      = m_renderingSystem ? m_renderingSystem->getFPS() : 0.0;
                 const double _period   = m_renderingSystem ? m_renderingSystem->getFrameTime() : 0.0; // "CPU frame" = inter-frame period
                 const double _gpuTotal = m_renderingSystem ? m_renderingSystem->getGpuTimings().totalMs() : 0.0;
-                qDebug("[PERF] avg/%d: FPS=%.1f  period=%.1f ms  gpuTotal=%.2f ms  ||  tick=%.2f ms  render=%.2f ms  cpuWork=%.2f ms",
-                       n, _fps, _period, _gpuTotal, accTick / n, accRender / n, (accTick + accRender) / n);
+                qDebug("[PERF] avg/%d: renderFPS=%.1f (cap minFrameMs=%.1f)  loopFPS=%.1f  period=%.1f ms  gpuTotal=%.2f ms  ||  tick=%.2f ms  render=%.2f ms  cpuWork=%.2f ms",
+                       n, _renderFps, m_minFrameMs, _fps, _period, _gpuTotal, accTick / n, accRender / n, (accTick + accRender) / n);
                 accTick = accRender = 0.0;
                 n = 0;
             }
@@ -1266,6 +1286,28 @@ MainWindow::MainWindow(QWidget* parent)
             else if (key == QLatin1String("viewport/lookSmoothing"))    Camera::setLookSmoothing(v.toFloat());
             else if (key == QLatin1String("viewport/invertLookY"))      Camera::setInvertLookY(v.toBool());
             else if (key == QLatin1String("viewport/defaultNavMode"))   Camera::setDefaultNavMode(v.toString() == QLatin1String("FLY") ? Camera::NavMode::FLY : Camera::NavMode::ORBIT);
+            // --- Physics (live knobs) -------------------------------------------
+            // gravity: live AND baked into the next world build (setSceneGravity
+            // hits the running scene; buildPhysicsWorld re-reads the setting).
+            else if (key == QLatin1String("physics/gravity")) { if (m_simulation) m_simulation->setSceneGravity(0.0f, -v.toFloat(), 0.0f); }
+            // physics rate: SimulationController::tick() reads the static each frame.
+            else if (key == QLatin1String("physics/simRateHz"))         SimulationController::setSimRateHz(v.toInt());
+            // The remaining physics/* keys (solver, CCD, stabilization, PCM, GPU
+            // gate, bounce, weld) bake at createScene()/cook time -- buildPhysicsWorld
+            // and the cooking service read SettingsManager directly, so they apply
+            // on the next Play / mesh import. No live applier needed.
+            // --- Performance ----------------------------------------------------
+            else if (key == QLatin1String("perf/maxFps")) {
+                const int fps = v.toInt();
+                m_minFrameMs   = (fps > 0) ? 1000.0 / double(fps) : 0.0;
+                m_nextRenderMs = 0.0;   // resync the deadline on change (gate self-corrects)
+                // Pace the fallback timer at ~2x the cap so the carry-gate has fine
+                // granularity even when the viewport isn't presenting (frameSwapped
+                // silent); never slower than the 33 ms idle fallback.
+                if (m_masterRenderTimer)
+                    m_masterRenderTimer->setInterval(fps > 0 ? std::max(1, std::min(33, int(500.0 / fps))) : 33);
+            }
+            // perf/vsync is restart-only (applied in main.cpp at boot) -- no live action.
             else if (key.startsWith(QLatin1String("scene/")) && m_scene) {
                 auto& sp = m_scene->getRegistry().ctx().get<SceneProperties>();
                 if      (key == QLatin1String("scene/backgroundColor"))     { QColor c = v.value<QColor>(); sp.backgroundColor = glm::vec4(float(c.redF()), float(c.greenF()), float(c.blueF()), 1.0f); }
@@ -1288,7 +1330,10 @@ MainWindow::MainWindow(QWidget* parent)
     // (hidden/minimised window, headless test runs).
     connect(viewport1, &QOpenGLWidget::frameSwapped, this, engineFrame);
     m_masterRenderTimer->setTimerType(Qt::PreciseTimer);
-    m_masterRenderTimer->start(33);
+    // Honor the fallback interval the perf/maxFps applier set during applyAll
+    // (33 ms when uncapped); only fall back to 33 if nothing set it.
+    if (m_masterRenderTimer->interval() <= 0) m_masterRenderTimer->setInterval(33);
+    m_masterRenderTimer->start();
 
     // Dev aid: KRS_GRAB=<path.png> software-renders the whole widget tree to
     // a file 8s after boot — screen captures lie under DPI virtualization,

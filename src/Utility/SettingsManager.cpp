@@ -46,6 +46,12 @@ void SettingsManager::buildRegistry() {
         SettingDef d; d.key = key; d.label = label; d.category = cat; d.type = SettingDef::Enum;
         d.defaultValue = def; d.enumLabels = labels; d.enumValues = vals; return d;
     };
+    auto I = [](QString key, QString label, QString cat, int def, int mn, int mx,
+                int step = 1, QString note = {}) {
+        SettingDef d; d.key = key; d.label = label; d.category = cat; d.type = SettingDef::Int;
+        d.defaultValue = def; d.min = double(mn); d.max = double(mx); d.step = double(step); d.note = note;
+        return d;
+    };
 
     // --- Lighting ---
     m_defs.push_back(F("render/iblIntensity", "Ambient (IBL) Intensity", "Lighting", 0.40, 0.0, 2.0, 0.05, 2));
@@ -78,6 +84,34 @@ void SettingsManager::buildRegistry() {
     m_defs.push_back(E("viewport/defaultNavMode",   "Default Navigation Mode",    "Viewport", QStringLiteral("ORBIT"),
                        { QStringLiteral("Orbit"), QStringLiteral("Fly") },
                        { QStringLiteral("ORBIT"), QStringLiteral("FLY") }));
+
+    // --- Physics --- (scene-desc knobs bake at createScene -> apply on next Play;
+    //                  gravity & rate are live)
+    m_defs.push_back(B("physics/gpuEnabled",             "GPU Rigid-Body Physics",          "Physics", true,
+                       "Requires CUDA. Takes effect on next Play (Stop -> Play)."));
+    m_defs.push_back(I("physics/gpuMinBodies",           "GPU Min Dynamic Bodies",          "Physics", 256, 0, 100000, 1,
+                       "Use the GPU solver only above this many dynamic bodies; it only amortizes its overhead on large scenes."));
+    m_defs.push_back(E("physics/solverType",             "Solver Type",                     "Physics", QStringLiteral("TGS"),
+                       { QStringLiteral("TGS (accurate)"), QStringLiteral("PGS (fast)") },
+                       { QStringLiteral("TGS"), QStringLiteral("PGS") }));
+    m_defs.push_back(B("physics/ccdEnabled",             "Continuous Collision (CCD)",      "Physics", true,
+                       "Stops fast bodies tunneling. Next Play."));
+    m_defs.push_back(B("physics/stabilizationEnabled",   "Contact Stabilization",           "Physics", true, "Next Play."));
+    m_defs.push_back(B("physics/pcmEnabled",             "Persistent Contact Manifolds",    "Physics", true, "Next Play."));
+    m_defs.push_back(F("physics/bounceThresholdVelocity","Bounce Threshold Velocity (m/s)", "Physics", 0.50, 0.05, 5.0, 0.05, 2,
+                       "Impacts slower than this don't bounce. Next Play."));
+    m_defs.push_back(B("physics/weldCollisionMeshes",    "Weld Imported Collision Meshes",  "Physics", true,
+                       "Removes spurious internal edges. Applies when meshes are next cooked (import / Play)."));
+    m_defs.push_back(F("physics/gravity",                "Gravity (m/s^2, downward)",       "Physics", 9.81, 0.0, 30.0, 0.01, 2,
+                       "Live: applies to the running scene immediately."));
+    m_defs.push_back(I("physics/simRateHz",             "Physics Rate (Hz)",               "Physics", 240, 30, 1000, 10,
+                       "Fixed-timestep substep rate. Live."));
+
+    // --- Performance ---
+    m_defs.push_back(B("perf/vsync",  "Vertical Sync (VSync)",            "Performance", true,
+                       "Caps frames to the display refresh. Restart required."));
+    m_defs.push_back(I("perf/maxFps", "Frame Rate Cap (0 = unlimited)",   "Performance", 0, 0, 360, 5,
+                       "Live. Cannot exceed the display rate while VSync is on."));
 }
 
 const SettingDef* SettingsManager::def(const QString& key) const {

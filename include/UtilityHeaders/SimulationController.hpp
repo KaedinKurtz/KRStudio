@@ -40,7 +40,10 @@ public:
     SimulationState state() const { return m_state; }
     bool isPlaying() const { return m_state == SimulationState::Playing; }
 
-    static constexpr float kFixedDt = 1.0f / 240.0f; // benchmarked: halving from 1/120 sharpens restitution (less penetration correction per impact)
+    static constexpr float kFixedDt = 1.0f / 240.0f; // benchmarked default; halving from 1/120 sharpens restitution (less penetration correction per impact)
+    // Physics step rate (Settings: physics/simRateHz). tick() reads it each frame, so it hot-swaps live.
+    static void  setSimRateHz(int hz) { s_fixedDt = (hz > 0) ? 1.0f / float(hz) : kFixedDt; }
+    static float simFixedDt()         { return s_fixedDt; }
 
 public slots:
     void play();
@@ -122,6 +125,8 @@ private:
     void takeSnapshot();
     void restoreSnapshot();
     void setState(SimulationState s);
+
+    static float s_fixedDt;   // live physics timestep (defaults to kFixedDt; set via setSimRateHz)
 
     // HIL CAN telemetry (Phase 2): opened on play() when KRS_HIL_CAN is set.
     void openHilCan();

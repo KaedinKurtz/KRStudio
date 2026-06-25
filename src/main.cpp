@@ -7,6 +7,7 @@
 #include "DatabaseManager.hpp"
 #include "SettingsManager.hpp"
 #include "Camera.hpp"
+#include "SimulationController.hpp"
 #include <glm/glm.hpp>
 #include <cmath>
 
@@ -42,7 +43,11 @@ static QSurfaceFormat createDefaultFormat()
     // blits it to the widget backbuffer — blitting into a multisampled
     // backbuffer is GL_INVALID_OPERATION and leaves the window blank.
     f.setSamples(0);
-    f.setSwapInterval(1); // vsync — present at most once per display refresh
+    // vsync: present at most once per display refresh (1) or uncapped (0).
+    // Read from Settings (perf/vsync). Restart-only: the default surface format
+    // is fixed here at boot, before any GL window exists. Org/app name is set in
+    // main() before this runs, so QSettings resolves to the per-user store.
+    f.setSwapInterval(krs::SettingsManager::instance().getBool("perf/vsync") ? 1 : 0);
 
     return f;
 }
@@ -80,6 +85,16 @@ int main(int argc, char* argv[])
                                     << " (P[1][1]=" << m11 << " expected " << expected << ")";
         if (!projOk) ++fails;
         Camera::setFovDeg(45.0f); // restore default
+
+        // Decisive readback: physics/simRateHz drives the fixed timestep.
+        SimulationController::setSimRateHz(120);
+        const bool rateOk = std::abs(SimulationController::simFixedDt() - 1.0f / 120.0f) < 1e-6f;
+        qInfo().noquote().nospace() << "[SETTINGS] physics simRateHz->dt "
+                                    << (rateOk ? "PASS" : "FAIL")
+                                    << " (dt=" << SimulationController::simFixedDt() << ")";
+        if (!rateOk) ++fails;
+        SimulationController::setSimRateHz(240); // restore default
+
         return fails == 0 ? 0 : 1;
     }
     // Test/override hook: KRS_SET_SETTING="key=value" persists+applies a setting at

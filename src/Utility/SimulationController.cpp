@@ -4,6 +4,7 @@
 #include "CollisionCookingService.hpp"
 #include "HardwareCaps.hpp"
 #include "RobotDynamics.hpp"   // planned-config FK for the glass/ghost robot (independent of live state)
+#include "SettingsManager.hpp" // user-set physics knobs (gravity, solver, CCD, GPU gate, rate)
 
 #include <QDebug>
 #include <algorithm>
@@ -11,6 +12,10 @@
 #include <cmath>
 #include <thread>
 #include <unordered_map>
+
+// Live physics timestep (Settings: physics/simRateHz). Defaults to the benchmarked
+// kFixedDt; setSimRateHz() overrides it; tick()/singleStep() read it each step.
+float SimulationController::s_fixedDt = SimulationController::kFixedDt;
 
 #if defined(KR_WITH_PHYSX)
 #include <PxPhysicsAPI.h>
@@ -506,8 +511,8 @@ void SimulationController::singleStep()
         pause();
     }
     pushKinematicTargets();                 // C3: a single step advances kinematic bodies to their targets too
-    stepOnce(kFixedDt);
-    writeBackTransforms(kFixedDt);
+    stepOnce(s_fixedDt);
+    writeBackTransforms(s_fixedDt);
 }
 
 namespace {
@@ -534,19 +539,20 @@ void SimulationController::tick()
 
     int steps = 0;
     constexpr int kMaxStepsPerTick = 32;
-    while (m_accumulator >= kFixedDt && steps < kMaxStepsPerTick) {
+    const float dt = s_fixedDt;   // Settings: physics/simRateHz (live, read per frame)
+    while (m_accumulator >= dt && steps < kMaxStepsPerTick) {
         pushKinematicTargets();
         if (m_can) applyCanCommands();   // CAN effort commands -> body forces (this step)
-        stepOnce(kFixedDt);
+        stepOnce(dt);
         if (m_can) publishCanState();    // body pose/velocity/effort -> CAN state frames
-        m_accumulator -= kFixedDt;
+        m_accumulator -= dt;
         ++steps;
     }
     // Never silently drop simulated time (it desynchronizes sim time from
     // wall clock — caught by the free-fall benchmark). The 0.25 s frame
     // clamp above already prevents a death spiral.
 
-    if (steps > 0) { writeBackTransforms(float(steps) * kFixedDt); writeBackArticulationViz(); }
+    if (steps > 0) { writeBackTransforms(float(steps) * dt); writeBackArticulationViz(); }
 
     // Node-ecosystem sprint: the node graph is the SOLE joint driver. The hardcoded demo sweep that used
     // to write setArticJointPositions() here is REMOVED -- instead we apply the per-DOF targets the node
@@ -635,17 +641,25 @@ void SimulationController::buildPhysicsWorld()
     if (!m_px->ensureCore()) return;
 
     PxSceneDesc sceneDesc(m_px->physics->getTolerancesScale());
-    sceneDesc.gravity = PxVec3(0.0f, -9.81f, 0.0f);
+    // Physics tier settings. These bake into the scene at createScene(), so a
+    // change takes effect on the NEXT Play (Stop -> Play to apply). Gravity also
+    // has a live path (setSceneGravity) for edits while the world is alive.
+    auto& cfg = krs::SettingsManager::instance();
+    sceneDesc.gravity = PxVec3(0.0f, -cfg.getFloat("physics/gravity"), 0.0f);
     sceneDesc.cpuDispatcher = m_px->dispatcher;
     sceneDesc.filterShader = PxDefaultSimulationFilterShader;
     // Accuracy configuration (validated by the KRS_BENCH suite):
     // TGS is PhysX 5's high-accuracy solver (same as Omniverse defaults);
     // CCD stops fast bodies tunneling; a low bounce threshold keeps
-    // restitution physical down to slow impacts.
-    sceneDesc.solverType = PxSolverType::eTGS; // TGS: accurate friction/stacks (benchmarked: PGS creeps on inclines, restitution identical)
-    sceneDesc.flags |= PxSceneFlag::eENABLE_CCD | PxSceneFlag::eENABLE_STABILIZATION;
-    sceneDesc.bounceThresholdVelocity = 0.5f;
-    // Config bisection hooks (diagnosing solver-vs-flag interactions):
+    // restitution physical down to slow impacts. Defaults mirror the prior
+    // hardcoded behaviour exactly.
+    sceneDesc.solverType = (cfg.getString("physics/solverType") == QLatin1String("PGS"))
+        ? PxSolverType::ePGS : PxSolverType::eTGS;
+    if (cfg.getBool("physics/ccdEnabled"))           sceneDesc.flags |= PxSceneFlag::eENABLE_CCD;
+    if (cfg.getBool("physics/stabilizationEnabled")) sceneDesc.flags |= PxSceneFlag::eENABLE_STABILIZATION;
+    if (!cfg.getBool("physics/pcmEnabled"))          sceneDesc.flags &= ~PxSceneFlags(PxSceneFlag::eENABLE_PCM);
+    sceneDesc.bounceThresholdVelocity = cfg.getFloat("physics/bounceThresholdVelocity");
+    // Config bisection hooks (diagnosing solver-vs-flag interactions); env wins.
     if (qEnvironmentVariableIsSet("KRS_NO_STAB"))
         sceneDesc.flags &= ~PxSceneFlags(PxSceneFlag::eENABLE_STABILIZATION);
     if (qEnvironmentVariableIsSet("KRS_NO_CCD"))
@@ -675,8 +689,10 @@ void SimulationController::buildPhysicsWorld()
                 ++dynamicBodies;
     }
     const int kGpuMinBodies = qEnvironmentVariableIsSet("KRS_GPU_PHYSX_MIN_BODIES")
-        ? qEnvironmentVariableIntValue("KRS_GPU_PHYSX_MIN_BODIES") : 256;
+        ? qEnvironmentVariableIntValue("KRS_GPU_PHYSX_MIN_BODIES")
+        : cfg.getInt("physics/gpuMinBodies");                  // Settings: GPU body-count gate
     const bool gpuAvailable = m_px->cudaContextManager && krs::hardwareCaps().cudaPhysics
+        && cfg.getBool("physics/gpuEnabled")                  // Settings: master GPU-physics toggle
         && !qEnvironmentVariableIsSet("KRS_NO_GPU_PHYSICS");
     if (gpuAvailable && dynamicBodies >= kGpuMinBodies) {
         sceneDesc.cudaContextManager = m_px->cudaContextManager;

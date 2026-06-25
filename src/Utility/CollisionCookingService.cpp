@@ -1,6 +1,7 @@
 #include "CollisionCookingService.hpp"
 #include "VhacdDecomposer.hpp"
 #include "components.hpp"
+#include "SettingsManager.hpp"   // physics/weldCollisionMeshes (cook-time, applies on next import/rebuild)
 
 #include <QDebug>
 #include <QElapsedTimer>
@@ -64,7 +65,9 @@ struct CollisionCookingService::Impl
         PxCookingParams params{ PxTolerancesScale{} };
         // Imported meshes often arrive as disjoint triangle soups; welding
         // removes the spurious internal edges that cause contact noise.
-        if (!qEnvironmentVariableIsSet("KRS_NO_WELD")) {
+        const bool weld = krs::SettingsManager::instance().getBool("physics/weldCollisionMeshes")
+                          && !qEnvironmentVariableIsSet("KRS_NO_WELD");   // env override wins
+        if (weld) {
             params.meshWeldTolerance = 1e-4f;
             params.meshPreprocessParams = PxMeshPreprocessingFlag::eWELD_VERTICES;
         }

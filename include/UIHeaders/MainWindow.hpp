@@ -3,6 +3,7 @@
 #include <QPushButton>
 #include <QMainWindow>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QVector>
 #include <QResizeEvent>
 #include <memory> // Required for std::unique_ptr
@@ -135,6 +136,14 @@ private:
     entt::entity m_cameraEntity;
 
     QTimer* m_masterRenderTimer;
+
+    // Frame-rate cap (Settings: perf/maxFps). m_minFrameMs > 0 throttles renders;
+    // engineFrame() renders when the free-running clock passes m_nextRenderMs, then
+    // advances the deadline by exactly m_minFrameMs (carry => average rate == target,
+    // no downward drift from discrete tick granularity). 0 = uncapped.
+    QElapsedTimer m_frameClock;
+    double        m_minFrameMs   = 0.0;
+    double        m_nextRenderMs = 0.0;
 
     QWidget* m_viewportHangar;                // A hidden parent for our viewports
     QList<ViewportWidget*> m_viewports;         // A list of the REAL viewports
