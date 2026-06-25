@@ -926,7 +926,8 @@ void RenderingSystem::initializeSharedResources()
         std::printf("\n================= KRS_RBUILDUI_SELFTEST =================\n");
         const bool ok = krs::rbuild::runRobotBuilderBridgeGate()
                       & krs::rbuild::runRobotBuilderPanelGate()
-                      & krs::rbuild::runRobotViewportGate();
+                      & krs::rbuild::runRobotViewportGate()
+                      & krs::rbuild::runRobotSubtreeGrabGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }

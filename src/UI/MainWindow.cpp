@@ -1599,6 +1599,14 @@ MainWindow::MainWindow(QWidget* parent)
         this->refreshGizmoAndProperties(); // picks primary viewport automatically
         };
 
+    // Phase 3 (subtree-grab): when the gizmo edits a body's transform, push the new
+    // pose into the live physics world (rebuilds the actor for the moved body). For a
+    // genuinely-detached sub-assembly this lets the grabbed subtree move as a passive
+    // articulated body. (Previously onTransformEdited was never assigned.)
+    m_gizmoSystem->onTransformEdited = [this](entt::entity e) {
+        if (m_simulation) m_simulation->notifyEntityChanged(e);
+    };
+
     auto undoSc = new QShortcut(QKeySequence::Undo, this);
     connect(undoSc, &QShortcut::activated, this, [this] {
         this->m_gizmoSystem->undo();   // adjust path to reach your gizmo system

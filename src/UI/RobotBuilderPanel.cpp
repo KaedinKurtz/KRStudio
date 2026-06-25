@@ -170,6 +170,10 @@ void RobotBuilderPanel::refresh()
         return;
     }
 
+    // Keep entity robot-tags in sync with LIVE membership so a detached subtree
+    // becomes grabbable in the viewport and a re-mated one re-locks (Phase 3).
+    if (m_scene) krs::rbuild::syncRobotTagsToMembership(*m_scene, *g);
+
     static const char* kJTypeName[] = { "Revolute", "Prismatic", "Fixed" };
     for (int i = 0; i < int(g->joints.size()); ++i) {
         const auto& j = g->joints[i];

@@ -50,6 +50,14 @@ int mirrorGraphIntoScene(Scene& preview, const RobotGraph& g, int robotId = 0);
 // viewport's spin tick uses (gated headless: motion + constant orbit radius).
 glm::vec3 turntableCameraPos(const glm::vec3& base, float dist, float elev, float angleRad);
 
+// Sync each body's entity RobotSubcomponentComponent to its LIVE membership: a member
+// body is tagged (kinematic chain owns it -> the viewport drag lock-out blocks it); a
+// NON-member (detached / unjointed) body is untagged -> the lock-out frees it for grab.
+// (isTagged == isMember, per the data model.) Call after every graph edit. This is the
+// "relax the lock-out for detached subtrees" mechanism -- membership-accurate, not a
+// blanket override.
+void syncRobotTagsToMembership(Scene& scene, const RobotGraph& g);
+
 // GATE BRIDGE-RENDER: every demo body becomes a valid, renderable scene entity.
 // NEG-CTRLs: an un-spawned graph (entity==-1) and a fake bridge (entity set to a
 // non-created id) both FAIL the rendered-entity check.
@@ -64,5 +72,10 @@ bool runRobotBuilderPanelGate();
 // viewport binds the LIVE graph (not a copy), the spin is a real base-axis transform,
 // and the graph's bodies are mirrored into the view scene. Rendering is operator-confirm.
 bool runRobotViewportGate();
+
+// GATE SUBTREE-GRAB-INVOKED (Phase 3): after a mid-chain delete the detached subtree
+// becomes grabbable (untagged) while still-attached bodies stay locked (tagged); re-mate
+// re-locks. NEG-CTRL: a grab on a still-attached/robot-tagged body fails.
+bool runRobotSubtreeGrabGate();
 
 } // namespace krs::rbuild

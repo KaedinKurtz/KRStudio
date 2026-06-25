@@ -388,7 +388,10 @@ void ViewportWidget::mousePressEvent(QMouseEvent* ev)
                 for (auto eSel : reg.view<SelectedComponent>()) { target = eSel; break; }
                 // ROBOT-SUBCOMPONENT lock-out: a body owned by a robot's kinematic chain
                 // is NOT free-movable -- kinematics is the single owner of its motion.
-                // (OPERATOR-VISUAL-CONFIRM: the gizmo won't drag a jointed robot link.)
+                // The tag tracks LIVE membership (krs::rbuild::syncRobotTagsToMembership):
+                // a DETACHED sub-assembly is untagged here and therefore grabbable, while
+                // an attached link stays locked. (OPERATOR-VISUAL-CONFIRM: the gizmo drags
+                // a detached subtree but not a jointed link.)
                 if (target != entt::null && reg.all_of<RobotSubcomponentComponent>(target))
                     target = entt::null;
                 if (target != entt::null) {

@@ -106,6 +106,20 @@ glm::vec3 turntableCameraPos(const glm::vec3& base, float dist, float elev, floa
     return base + glm::vec3(dist * std::cos(angleRad), elev, dist * std::sin(angleRad));
 }
 
+void syncRobotTagsToMembership(Scene& scene, const RobotGraph& g) {
+    auto& reg = scene.getRegistry();
+    for (int i = 0; i < int(g.bodies.size()); ++i) {
+        const int eid = g.bodies[i].entity;
+        if (eid < 0) continue;
+        const entt::entity e = entt::entity(static_cast<std::uint32_t>(eid));
+        if (!reg.valid(e)) continue;
+        if (g.isMember(i))                              // owned by the chain -> locked
+            reg.emplace_or_replace<RobotSubcomponentComponent>(e, 0);
+        else if (reg.all_of<RobotSubcomponentComponent>(e))  // detached/unjointed -> grabbable
+            reg.remove<RobotSubcomponentComponent>(e);
+    }
+}
+
 // ===========================================================================
 // GATE BRIDGE-RENDER -- the user's explicit requirement: the demo graph's bodies
 // must actually become RENDERED entities, not just exist in memory. The on-screen
@@ -178,6 +192,75 @@ bool runRobotBuilderBridgeGate() {
     printf("[rbuild]   NEG-CTRL un-spawned graph renders %d (want 0); fake-id bridge valid %d (want 0)  %s\n",
            renderedNo, renderedFake, (negUnspawned && negFake) ? "REJECTS(non-vacuous)" : "VACUOUS!");
     printf("[rbuild] %s\n", pass ? "ALL PASS (demo graph bodies are genuinely rendered entities)"
+                                  : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
+// GATE SUBTREE-GRAB-INVOKED (Phase 3) -- after a mid-chain delete, the proven
+// SUBTREE-DETACH leaves the downstream sub-assembly intact; the viewport drag
+// lock-out reads RobotSubcomponentComponent, and syncRobotTagsToMembership() makes
+// that tag track LIVE membership. So a detached body becomes grabbable (untagged)
+// while still-attached bodies stay locked (tagged); re-mate re-locks. The on-screen
+// drag is OPERATOR-VISUAL-CONFIRM; the grabbability LOGIC (driven by genuine
+// detachment) is gated. NEG-CTRL: a grab on a still-attached/robot-tagged body fails.
+// ===========================================================================
+bool runRobotSubtreeGrabGate() {
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[rbuild] GATE SUBTREE-GRAB-INVOKED -- detached subtree is grabbable; still-attached bodies stay locked; re-mate re-locks\n");
+
+    Scene scene;
+    auto& reg = scene.getRegistry();
+    RobotGraph g = buildDemoGraph();
+    spawnGraphBodies(scene, g, 0);
+
+    // Define J2 (B2-B3) so the chain is B0-B1-B2-B3 (members 0..3).
+    EditController ctrl{ &g };
+    const BRepFace wB2 = faceToWorld(g.bodies[2].faces[0], g.bodies[2].placement);
+    const BRepFace wB3 = faceToWorld(g.bodies[3].faces[0], g.bodies[3].placement);
+    ctrl.defineFromFeatures(wB2, 2, wB3, 3);
+    syncRobotTagsToMembership(scene, g);
+
+    // grabbable mirrors the ViewportWidget lock-out: a valid entity that is NOT
+    // robot-tagged is free to drag.
+    auto grabbable = [&](int bodyIdx) {
+        const entt::entity e = entt::entity(static_cast<std::uint32_t>(g.bodies[bodyIdx].entity));
+        return reg.valid(e) && !reg.all_of<RobotSubcomponentComponent>(e);
+    };
+
+    // Before detach: every body is a chain member -> NONE grabbable.
+    const bool preLocked = !grabbable(0) && !grabbable(1) && !grabbable(2) && !grabbable(3);
+
+    // Delete the mid joint J1 (B1-B2): SUBTREE-DETACH -> {B2,B3} come off intact.
+    ctrl.deleteJoint(g.jointBetween(1, 2));
+    syncRobotTagsToMembership(scene, g);
+
+    const bool detachFree   = g.freeMoveAllowed(2) && g.freeMoveAllowed(3)
+                           && !g.freeMoveAllowed(0) && !g.freeMoveAllowed(1);
+    const bool grabDetached = grabbable(2) && grabbable(3);   // the detached subtree is grabbable
+    const bool lockAttached = !grabbable(0) && !grabbable(1); // NEG-CTRL: attached bodies stay locked
+    // the detached subtree is still articulated (its internal J2 survived).
+    const bool subtreeIntact = (g.jointBetween(2, 3) >= 0);
+
+    // Re-mate B1-B2 (proven re-mate op = addJoint) -> membership restored -> re-locked.
+    RBJoint rj; rj.parent = 1; rj.child = 2; rj.type = JType::Revolute; rj.axisDir = glm::vec3(0, 0, 1);
+    g.addJoint(rj);
+    syncRobotTagsToMembership(scene, g);
+    const bool remateLocks = !grabbable(2) && !grabbable(3);
+
+    const bool pass = preLocked && detachFree && grabDetached && lockAttached
+                   && subtreeIntact && remateLocks;
+
+    printf("[rbuild]   pre-detach all-locked=%s ; after mid-delete: detached{B2,B3} grabbable=%s, attached{B0,B1} locked=%s, subtree-intact=%s ; re-mate re-locks=%s  %s\n",
+           preLocked ? "yes" : "no", grabDetached ? "yes" : "no", lockAttached ? "yes" : "no",
+           subtreeIntact ? "yes" : "no", remateLocks ? "yes" : "no",
+           pass ? "PASS" : "FAIL");
+    printf("[rbuild]   NEG-CTRL: grab on still-attached/robot-tagged body blocked=%s ; grab only after genuine detach=%s  %s\n",
+           lockAttached ? "yes" : "no", (preLocked && grabDetached) ? "yes" : "no",
+           (lockAttached && preLocked && grabDetached) ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (grab operates on the genuinely-detached subtree; attached bodies locked; re-mate re-locks)"
                                   : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;
