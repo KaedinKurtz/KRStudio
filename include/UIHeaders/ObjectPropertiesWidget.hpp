@@ -115,6 +115,10 @@ private:
 
     // --- UI State Helpers ---
     void updateTransformInputs(const TransformComponent& transform);
+    // Apply the user's display-units (Settings: units/*) to the transform spin
+    // boxes: suffix, decimals and range for the length (position) and angle
+    // (euler) fields. Called at init and whenever a units/* setting changes.
+    void applyUnitFormatting();
     void setUIColor(const glm::vec3& color, QFrame* frame, QSpinBox* r, QSpinBox* g, QSpinBox* b);
 
     // Pointer to the Qt Designer UI class

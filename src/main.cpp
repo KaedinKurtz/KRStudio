@@ -95,6 +95,26 @@ int main(int argc, char* argv[])
         if (!rateOk) ++fails;
         SimulationController::setSimRateHz(240); // restore default
 
+        // Decisive readbacks: display-unit conversions (Settings: units/*).
+        auto& sm = krs::SettingsManager::instance();
+        const QVariant savedLen = sm.value("units/length");
+        const QVariant savedAng = sm.value("units/angle");
+        const QVariant savedCad = sm.value("units/cadImportUnit");
+        sm.set("units/length", QStringLiteral("mm"));
+        sm.set("units/angle",  QStringLiteral("deg"));
+        sm.set("units/cadImportUnit", QStringLiteral("mm"));
+        const bool unitOk =
+            std::abs(krs::units::metersToDisplay(1.0) - 1000.0) < 1e-6 &&
+            std::abs(krs::units::displayToMeters(1000.0) - 1.0) < 1e-9 &&
+            std::abs(krs::units::radiansToDisplay(3.14159265358979323846) - 180.0) < 1e-4 &&
+            std::abs(krs::units::cadMetersPerUnit() - 0.001) < 1e-9;
+        qInfo().noquote().nospace() << "[SETTINGS] units conversions " << (unitOk ? "PASS" : "FAIL")
+                                    << " (1 m=" << krs::units::metersToDisplay(1.0) << "mm, pi rad="
+                                    << krs::units::radiansToDisplay(3.14159265358979) << "deg, cad="
+                                    << krs::units::cadMetersPerUnit() << ")";
+        if (!unitOk) ++fails;
+        sm.set("units/length", savedLen); sm.set("units/angle", savedAng); sm.set("units/cadImportUnit", savedCad);
+
         return fails == 0 ? 0 : 1;
     }
     // Test/override hook: KRS_SET_SETTING="key=value" persists+applies a setting at

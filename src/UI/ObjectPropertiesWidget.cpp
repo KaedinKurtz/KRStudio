@@ -4,6 +4,7 @@
 #include "Scene.hpp"
 #include "components.hpp"
 #include "QtHelpers.hpp" // Your helper functions for setting up widgets
+#include "SettingsManager.hpp" // display-units (units/*) for the transform fields
 
 #include <QSignalBlocker>
 #include <QColorDialog>
@@ -79,8 +80,29 @@ void ObjectPropertiesWidget::initializeUI()
     WH::unbounded(ui->QuatYdoubleSpinBox, 5);
     WH::unbounded(ui->QuatZdoubleSpinBox, 5);
 
+    // Overlay the user's display-units onto the length/angle fields (suffix,
+    // decimals, range). Runs after the WH:: defaults so it wins.
+    applyUnitFormatting();
+
     // Set initial state for stacked widgets
     ui->stackedWidget->setCurrentWidget(ui->eulerRotationStackPage);
+}
+
+void ObjectPropertiesWidget::applyUnitFormatting()
+{
+    using namespace krs;
+    // Length (position) fields: suffix + precision per units/length, units/lengthDecimals.
+    const QString lsuf = units::lengthSuffix();
+    const int     ldec = units::lengthDecimals();
+    QDoubleSpinBox* pos[] = { ui->XPositionDoubleSpinBox, ui->YPositionDoubleSpinBox, ui->ZPositionDoubleSpinBox };
+    for (QDoubleSpinBox* sb : pos) { sb->setDecimals(ldec); sb->setSuffix(lsuf); }
+
+    // Angle (euler) fields: suffix + precision + range per units/angle, units/angleDecimals.
+    const QString asuf = units::angleSuffix();
+    const int     adec = units::angleDecimals();
+    const double  alim = units::angleDisplayLimit();
+    QDoubleSpinBox* eul[] = { ui->PitchdoubleSpinBox, ui->YawdoubleSpinBox, ui->RolldoubleSpinBox };
+    for (QDoubleSpinBox* sb : eul) { sb->setRange(-alim, alim); sb->setDecimals(adec); sb->setSuffix(asuf); }
 }
 
 void ObjectPropertiesWidget::setupConnections()
@@ -158,6 +180,24 @@ void ObjectPropertiesWidget::setupConnections()
     connectAppearanceWidgets(ui->emissiveGInputDSBox);
     connectAppearanceWidgets(ui->emissiveBInputDSBox);
     connectAppearanceWidgets(ui->emissiveStrengthSlider);
+
+    // --- Units hot-swap ---
+    // When the user changes a display-units setting, re-apply the spin-box
+    // suffix/precision/range and re-display the current selection in the new
+    // units (guarded so the programmatic setValue doesn't write back).
+    connect(&krs::SettingsManager::instance(), &krs::SettingsManager::changed, this,
+        [this](const QString& key, const QVariant&) {
+            if (!key.startsWith(QLatin1String("units/"))) return;
+            applyUnitFormatting();
+            if (m_scene && m_scene->getRegistry().valid(m_currentEntity)) {
+                if (auto* t = m_scene->getRegistry().try_get<TransformComponent>(m_currentEntity)) {
+                    const QSignalBlocker blocker(this);
+                    m_isUpdatingUI = true;
+                    updateTransformInputs(*t);
+                    m_isUpdatingUI = false;
+                }
+            }
+        });
 }
 
 
@@ -428,14 +468,15 @@ void ObjectPropertiesWidget::updateDerivedMechanicalProperties()
 
 void ObjectPropertiesWidget::updateTransformInputs(const TransformComponent& transform)
 {
-    ui->XPositionDoubleSpinBox->setValue(transform.translation.x);
-    ui->YPositionDoubleSpinBox->setValue(transform.translation.y);
-    ui->ZPositionDoubleSpinBox->setValue(transform.translation.z);
+    // Storage is metres/radians; show in the user's display units (units/*).
+    ui->XPositionDoubleSpinBox->setValue(krs::units::metersToDisplay(transform.translation.x));
+    ui->YPositionDoubleSpinBox->setValue(krs::units::metersToDisplay(transform.translation.y));
+    ui->ZPositionDoubleSpinBox->setValue(krs::units::metersToDisplay(transform.translation.z));
 
-    glm::vec3 eulerDegrees = glm::degrees(glm::eulerAngles(transform.rotation));
-    ui->PitchdoubleSpinBox->setValue(eulerDegrees.x);
-    ui->YawdoubleSpinBox->setValue(eulerDegrees.y);
-    ui->RolldoubleSpinBox->setValue(eulerDegrees.z);
+    glm::vec3 eulerRadians = glm::eulerAngles(transform.rotation);
+    ui->PitchdoubleSpinBox->setValue(krs::units::radiansToDisplay(eulerRadians.x));
+    ui->YawdoubleSpinBox->setValue(krs::units::radiansToDisplay(eulerRadians.y));
+    ui->RolldoubleSpinBox->setValue(krs::units::radiansToDisplay(eulerRadians.z));
 
     ui->QuatWdoubleSpinBox->setValue(transform.rotation.w);
     ui->QuatXdoubleSpinBox->setValue(transform.rotation.x);
@@ -453,15 +494,19 @@ void ObjectPropertiesWidget::updateTransformComponent()
     if (!m_scene->getRegistry().valid(m_currentEntity)) return;
     auto& transform = m_scene->getRegistry().get<TransformComponent>(m_currentEntity);
 
+    // Spin boxes are in display units; convert back to canonical metres/radians.
     transform.translation = {
-        ui->XPositionDoubleSpinBox->value(),
-        ui->YPositionDoubleSpinBox->value(),
-        ui->ZPositionDoubleSpinBox->value()
+        float(krs::units::displayToMeters(ui->XPositionDoubleSpinBox->value())),
+        float(krs::units::displayToMeters(ui->YPositionDoubleSpinBox->value())),
+        float(krs::units::displayToMeters(ui->ZPositionDoubleSpinBox->value()))
     };
 
     if (ui->rotationTypeSelectionSpinBox->currentIndex() == 0) { // Euler
-        glm::vec3 eulerDegrees(ui->PitchdoubleSpinBox->value(), ui->YawdoubleSpinBox->value(), ui->RolldoubleSpinBox->value());
-        transform.rotation = glm::quat(glm::radians(eulerDegrees));
+        glm::vec3 eulerRadians(
+            float(krs::units::displayToRadians(ui->PitchdoubleSpinBox->value())),
+            float(krs::units::displayToRadians(ui->YawdoubleSpinBox->value())),
+            float(krs::units::displayToRadians(ui->RolldoubleSpinBox->value())));
+        transform.rotation = glm::quat(eulerRadians);
     }
     else { // Quaternion
         transform.rotation = glm::normalize(glm::quat(

@@ -2734,7 +2734,9 @@ void MainWindow::importStepFile()
     const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Import STEP"),
         QString(), QStringLiteral("STEP files (*.step *.stp);;All files (*)"));
     if (path.isEmpty() || !m_scene) return;
-    krs::cad::ImportResult r = krs::cad::importStep(*m_scene, path.toStdString());
+    // Scale per the user's CAD import unit (Settings: units/cadImportUnit).
+    const float metersPerUnit = float(krs::units::cadMetersPerUnit());
+    krs::cad::ImportResult r = krs::cad::importStep(*m_scene, path.toStdString(), metersPerUnit);
     QMessageBox::information(this, QStringLiteral("Import CAD"),
         QString::fromStdString(r.message) +
         QStringLiteral("\nSolids: %1   Faces: %2   Attachment frames: %3\nTotal B-Rep volume: %4 m^3")

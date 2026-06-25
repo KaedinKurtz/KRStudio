@@ -112,6 +112,26 @@ void SettingsManager::buildRegistry() {
                        "Caps frames to the display refresh. Restart required."));
     m_defs.push_back(I("perf/maxFps", "Frame Rate Cap (0 = unlimited)",   "Performance", 0, 0, 360, 5,
                        "Live. Cannot exceed the display rate while VSync is on."));
+
+    // --- Units & Display --- (the engine stores metres/radians; these are display only)
+    m_defs.push_back(E("units/length", "Length Unit", "Units & Display", QStringLiteral("m"),
+                       { QStringLiteral("Meters"), QStringLiteral("Centimeters"), QStringLiteral("Millimeters"),
+                         QStringLiteral("Inches"), QStringLiteral("Feet") },
+                       { QStringLiteral("m"), QStringLiteral("cm"), QStringLiteral("mm"),
+                         QStringLiteral("in"), QStringLiteral("ft") }));
+    m_defs.push_back(I("units/lengthDecimals", "Length Precision (decimals)", "Units & Display", 3, 0, 6, 1));
+    m_defs.push_back(E("units/angle", "Angle Unit", "Units & Display", QStringLiteral("deg"),
+                       { QStringLiteral("Degrees"), QStringLiteral("Radians") },
+                       { QStringLiteral("deg"), QStringLiteral("rad") }));
+    m_defs.push_back(I("units/angleDecimals", "Angle Precision (decimals)", "Units & Display", 2, 0, 6, 1));
+    {
+        SettingDef cad = E("units/cadImportUnit", "CAD (STEP) Import Unit", "Units & Display", QStringLiteral("mm"),
+                           { QStringLiteral("Millimeters"), QStringLiteral("Centimeters"),
+                             QStringLiteral("Meters"), QStringLiteral("Inches") },
+                           { QStringLiteral("mm"), QStringLiteral("cm"), QStringLiteral("m"), QStringLiteral("in") });
+        cad.note = QStringLiteral("Used for the next STEP import.");
+        m_defs.push_back(cad);
+    }
 }
 
 const SettingDef* SettingsManager::def(const QString& key) const {
@@ -274,5 +294,56 @@ int SettingsManager::selfTest() {
                                 << " (" << int(m.m_defs.size()) << " keys, " << fails << " failures)";
     return fails;
 }
+
+// ---------------------------------------------------------------------------
+// Display-units helpers (see SettingsManager.hpp). Canonical storage is metres
+// and radians; these convert to/from the user's chosen display units.
+// ---------------------------------------------------------------------------
+namespace units {
+
+// display length units per metre.
+static double lengthFactor() {
+    const QString u = SettingsManager::instance().getString(QStringLiteral("units/length"));
+    if (u == QLatin1String("cm")) return 100.0;
+    if (u == QLatin1String("mm")) return 1000.0;
+    if (u == QLatin1String("in")) return 1.0 / 0.0254;        // 39.37007874...
+    if (u == QLatin1String("ft")) return 1.0 / 0.3048;        // 3.280839895...
+    return 1.0;                                               // metres
+}
+
+double  metersToDisplay(double meters) { return meters * lengthFactor(); }
+double  displayToMeters(double disp)   { const double f = lengthFactor(); return f != 0.0 ? disp / f : disp; }
+
+QString lengthSuffix() {
+    const QString u = SettingsManager::instance().getString(QStringLiteral("units/length"));
+    if (u == QLatin1String("cm")) return QStringLiteral(" cm");
+    if (u == QLatin1String("mm")) return QStringLiteral(" mm");
+    if (u == QLatin1String("in")) return QStringLiteral(" in");
+    if (u == QLatin1String("ft")) return QStringLiteral(" ft");
+    return QStringLiteral(" m");
+}
+
+int lengthDecimals() { return SettingsManager::instance().getInt(QStringLiteral("units/lengthDecimals")); }
+
+bool angleIsDegrees() {
+    return SettingsManager::instance().getString(QStringLiteral("units/angle")) != QLatin1String("rad");
+}
+
+double radiansToDisplay(double radians) { return angleIsDegrees() ? glm::degrees(radians) : radians; }
+double displayToRadians(double disp)    { return angleIsDegrees() ? glm::radians(disp)   : disp; }
+
+QString angleSuffix()     { return angleIsDegrees() ? QString::fromUtf8("\xC2\xB0") : QStringLiteral(" rad"); } // "°"
+int     angleDecimals()   { return SettingsManager::instance().getInt(QStringLiteral("units/angleDecimals")); }
+double  angleDisplayLimit() { return angleIsDegrees() ? 180.0 : 3.14159265358979323846; }
+
+double cadMetersPerUnit() {
+    const QString u = SettingsManager::instance().getString(QStringLiteral("units/cadImportUnit"));
+    if (u == QLatin1String("cm")) return 0.01;
+    if (u == QLatin1String("m"))  return 1.0;
+    if (u == QLatin1String("in")) return 0.0254;
+    return 0.001;  // millimetres (STEP default)
+}
+
+} // namespace units
 
 } // namespace krs

@@ -82,4 +82,26 @@ private:
     mutable QSettings       m_settings; // resolves to org/app set in main.cpp
 };
 
+// ---------------------------------------------------------------------------
+// Display-units helpers. The engine stores everything canonically (lengths in
+// metres, angles in radians); these convert to/from the user's chosen display
+// units (Settings: units/length, units/angle) for the inspector spin boxes, and
+// expose the CAD-import scale. They read SettingsManager::instance() live, so a
+// units change takes effect the next time a value is formatted/parsed.
+namespace units {
+    double  metersToDisplay(double meters);   // metres -> display length unit
+    double  displayToMeters(double disp);      // display length unit -> metres
+    QString lengthSuffix();                    // " m" / " cm" / " mm" / " in" / " ft"
+    int     lengthDecimals();
+
+    double  radiansToDisplay(double radians);  // radians -> display angle unit
+    double  displayToRadians(double disp);      // display angle unit -> radians
+    QString angleSuffix();                      // "°" (deg) or " rad"
+    int     angleDecimals();
+    bool    angleIsDegrees();
+    double  angleDisplayLimit();                // +/- range for a spin box (180 deg or PI rad)
+
+    double  cadMetersPerUnit();                 // Settings: units/cadImportUnit -> metres/unit
+}
+
 } // namespace krs
