@@ -31,6 +31,7 @@
 #include "SelectionHighlightPass.hpp"
 #include "SelectionService.hpp"   // krs::sel selection-highlight gates
 #include "RobotBuilder.hpp"        // krs::rbuild robot-builder gates (Phase 0 recon)
+#include "RobotBuilderScene.hpp"   // krs::rbuild demo graph + body->entity render bridge + gate
 #include "SelfCollisionMatrix.hpp" // krs::plan self-collision matrix gates
 #include "RobotConfig.hpp"         // krs::rcfg property hot-swap + provenance gates
 #include "ImuExtrinsics.hpp"       // krs::imu blind IMU extrinsic recovery gates
@@ -913,6 +914,17 @@ void RenderingSystem::initializeSharedResources()
                       & krs::rbuild::runJointEditGate()
                       & krs::rbuild::runTagOwnershipGate()
                       & krs::rbuild::runSubtreeDetachGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // ROBOT-BUILDER UI sprint: the body->entity RENDER BRIDGE (demo graph bodies
+    // become rendered scene entities) + (extended in later phases) the panel / viewport
+    // / grab gates. The on-screen pixels are OPERATOR-VISUAL-CONFIRM; these gate the
+    // code ADJACENT to the pixels.
+    if (qEnvironmentVariableIntValue("KRS_RBUILDUI_SELFTEST") != 0) {
+        std::printf("\n================= KRS_RBUILDUI_SELFTEST =================\n");
+        const bool ok = krs::rbuild::runRobotBuilderBridgeGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
