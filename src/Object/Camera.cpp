@@ -8,6 +8,16 @@
 
 // NO "class Camera { ... }" RE-DECLARATION HERE
 
+// --- Global camera preferences (set via Settings; shared by all cameras) ---
+float          Camera::s_fovDeg      = 45.0f;
+float          Camera::s_zNear       = 0.001f;
+float          Camera::s_zFar        = 300.0f;
+float          Camera::s_orbitSens   = 0.01f;
+float          Camera::s_zoomFactor  = 0.95f;
+float          Camera::s_smoothAlpha = 0.25f;
+bool           Camera::s_invertY     = false;
+Camera::NavMode Camera::s_defaultNavMode = Camera::NavMode::ORBIT;
+
 // Constructor Definition
 Camera::Camera(glm::vec3 position)
     : m_Position(position),
@@ -40,23 +50,23 @@ glm::mat4 Camera::getProjectionMatrix(float aspectRatio) const {
     }
     if (m_IsPerspective) {
         // CHANGE THIS LINE to use your member variables
-        return glm::perspective(glm::radians(m_FOVDeg), aspectRatio, m_zNear, m_zFar);
+        return glm::perspective(glm::radians(s_fovDeg), aspectRatio, s_zNear, s_zFar);
     }
     else {
         // Orthographic projection also benefits from correct planes
         float ortho_size = m_Distance * 0.5f;
         return glm::ortho(-ortho_size * aspectRatio, ortho_size * aspectRatio,
             -ortho_size, ortho_size,
-            -m_zFar, m_zFar); // Can also be controlled here
+            -s_zFar, s_zFar); // Can also be controlled here
     }
 }
 
 void Camera::orbit(float xoffset, float yoffset) {
-    float k = 0.01f;                                    // tune to taste
+    float k = s_orbitSens;                              // Settings: viewport/orbitSensitivity
     float sensitivity = k * std::min(1.0f, std::sqrt(m_Distance));
 	// Adjust yaw and pitch based on mouse movement
     m_Yaw += xoffset * sensitivity;
-    m_Pitch += yoffset * sensitivity;
+    m_Pitch += (s_invertY ? -yoffset : yoffset) * sensitivity;
 
     // Clamp pitch to avoid flipping
     m_Pitch = std::clamp(m_Pitch, -glm::pi<float>() / 2.0f + 0.01f, glm::pi<float>() / 2.0f - 0.01f);
@@ -67,7 +77,7 @@ void Camera::pan(float dx, float dy) { pan(dx, dy, 1280, 720); }
 
 void Camera::dolly(float wheelDelta)
 {
-    float step = std::pow(0.95f, wheelDelta / 120.0f);   // 120 = one wheel click
+    float step = std::pow(s_zoomFactor, wheelDelta / 120.0f);  // Settings: viewport/zoomFactor (120 = one wheel click)
     m_Distance *= step;
     m_Distance = std::clamp(m_Distance, 0.05f, 5000.0f);
     updateCameraVectors();
@@ -116,7 +126,7 @@ void Camera::resetView(float aspectRatio, const glm::vec3& target, float objectV
     Q_UNUSED(aspectRatio);
     m_FocalPoint = target;
     m_IsPerspective = true;
-    float verticalFoV_rad = glm::radians(45.0f);
+    float verticalFoV_rad = glm::radians(s_fovDeg);
     m_Distance = (objectVisibleSize * 0.5f) / tan(verticalFoV_rad * 0.5f);
     if (m_Distance < 0.1f * objectVisibleSize) m_Distance = 0.1f * objectVisibleSize;
     if (m_Distance < 1.0f) m_Distance = 1.0f;
@@ -198,7 +208,7 @@ void Camera::pan(float dxPix, float dyPix, float vpW, float vpH)
 
     float unitsPerPixel;
     if (m_IsPerspective) {
-        float vFov = glm::radians(45.0f);           // same you use in getProjectionMatrix
+        float vFov = glm::radians(s_fovDeg);        // same you use in getProjectionMatrix
         unitsPerPixel = 2.0f * m_Distance * tan(vFov * 0.5f) / vpH;
     }
     else {
@@ -214,11 +224,11 @@ void Camera::freeLook(float dxPix, float dyPix)
 {
     // exponential moving average for silky motion
     glm::vec2 raw(dxPix, dyPix);
-    m_lastDelta = m_smoothAlpha * raw + (1.0f - m_smoothAlpha) * m_lastDelta;
+    m_lastDelta = s_smoothAlpha * raw + (1.0f - s_smoothAlpha) * m_lastDelta;
 
     float sensitivity = 0.0025f;
     m_Yaw += m_lastDelta.x * sensitivity;
-    m_Pitch += m_lastDelta.y * sensitivity;
+    m_Pitch += (s_invertY ? -m_lastDelta.y : m_lastDelta.y) * sensitivity;
     m_Pitch = std::clamp(m_Pitch,
         -glm::half_pi<float>() + 0.01f,
         +glm::half_pi<float>() - 0.01f);

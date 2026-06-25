@@ -42,6 +42,10 @@ void SettingsManager::buildRegistry() {
         SettingDef d; d.key = key; d.label = label; d.category = cat; d.type = SettingDef::Vec3;
         d.defaultValue = vec3ToString(def); return d;
     };
+    auto E = [](QString key, QString label, QString cat, QString def, QStringList labels, QVariantList vals) {
+        SettingDef d; d.key = key; d.label = label; d.category = cat; d.type = SettingDef::Enum;
+        d.defaultValue = def; d.enumLabels = labels; d.enumValues = vals; return d;
+    };
 
     // --- Lighting ---
     m_defs.push_back(F("render/iblIntensity", "Ambient (IBL) Intensity", "Lighting", 0.40, 0.0, 2.0, 0.05, 2));
@@ -61,6 +65,19 @@ void SettingsManager::buildRegistry() {
     m_defs.push_back(F("scene/fogStartDistance", "Fog Start Distance", "Viewport", 15.0, 0.0, 500.0, 1.0, 1));
     m_defs.push_back(F("scene/fogEndDistance", "Fog End Distance", "Viewport", 100.0, 1.0, 2000.0, 5.0, 0));
     m_defs.push_back(B("scene/showCollisionShapes", "Show Collision Shapes", "Viewport", false));
+
+    // --- Viewport (Camera) ---
+    m_defs.push_back(F("viewport/cameraFovDeg",     "Camera Field of View (deg)", "Viewport", 45.0,   20.0,   110.0,   1.0,   0));
+    m_defs.push_back(F("viewport/cameraNearPlane",  "Camera Near Clip",           "Viewport", 0.001,  0.0001, 1.0,     0.001, 4));
+    m_defs.push_back(F("viewport/cameraFarPlane",   "Camera Far Clip",            "Viewport", 300.0,  10.0,   10000.0, 10.0,  0));
+    m_defs.push_back(F("viewport/orbitSensitivity", "Orbit Sensitivity",          "Viewport", 0.01,   0.001,  0.05,    0.001, 3));
+    m_defs.push_back(F("viewport/zoomFactor",       "Zoom Step Factor",           "Viewport", 0.95,   0.80,   0.99,    0.01,  2,
+                       "Lower = faster zoom per wheel click."));
+    m_defs.push_back(F("viewport/lookSmoothing",    "Look Smoothing (fly cam)",   "Viewport", 0.25,   0.0,    0.95,    0.05,  2));
+    m_defs.push_back(B("viewport/invertLookY",      "Invert Look/Orbit Y",        "Viewport", false));
+    m_defs.push_back(E("viewport/defaultNavMode",   "Default Navigation Mode",    "Viewport", QStringLiteral("ORBIT"),
+                       { QStringLiteral("Orbit"), QStringLiteral("Fly") },
+                       { QStringLiteral("ORBIT"), QStringLiteral("FLY") }));
 }
 
 const SettingDef* SettingsManager::def(const QString& key) const {
@@ -185,7 +202,19 @@ int SettingsManager::selfTest() {
         case SettingDef::Float: test = std::clamp(d.defaultValue.toDouble() + d.step, d.min, d.max); break;
         case SettingDef::Color: test = QColor(Qt::magenta); break;
         case SettingDef::Vec3:  test = QStringLiteral("0.1,0.2,0.3"); break;
-        default:                test = d.enumValues.value(0, QStringLiteral("x")); break;
+        default: {
+            // Enum/String: pick a value that DIFFERS from the default, otherwise
+            // set() no-ops (value==default) and nothing is persisted to verify.
+            if (!d.enumValues.isEmpty()) {
+                QVariant t = d.enumValues.value(0);
+                for (const QVariant& ev : d.enumValues)
+                    if (ev.toString() != d.defaultValue.toString()) { t = ev; break; }
+                test = t;
+            } else {
+                test = QStringLiteral("selftest-x");
+            }
+            break;
+        }
         }
         m.set(k, test);
         chk(k, "roundtrip", eq(d, m.value(k), m.clampToDef(d, test)));

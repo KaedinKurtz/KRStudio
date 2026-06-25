@@ -6,6 +6,9 @@
 #include "MainWindow.hpp"
 #include "DatabaseManager.hpp"
 #include "SettingsManager.hpp"
+#include "Camera.hpp"
+#include <glm/glm.hpp>
+#include <cmath>
 
 // custom message handler (you can leave this out if you don�t need it)
 static void qtMessageOutput(QtMsgType type, const QMessageLogContext& ctx, const QString& msg)
@@ -61,8 +64,24 @@ int main(int argc, char* argv[])
     QApplication app(argc, argv);
 
     // Headless settings gate (CI/dev): round-trip, persistence, clamp, defaults.
-    if (qEnvironmentVariableIsSet("KRS_SETTINGS_SELFTEST"))
-        return krs::SettingsManager::selfTest() == 0 ? 0 : 1;
+    if (qEnvironmentVariableIsSet("KRS_SETTINGS_SELFTEST")) {
+        int fails = krs::SettingsManager::selfTest();
+        // Decisive readback: the FOV setting must actually drive the projection
+        // matrix. glm::perspective puts 1/tan(fovy/2) at P[1][1]. (Round-trip in
+        // SettingsManager proves persistence; THIS proves the value reaches the
+        // render math.)
+        Camera::setFovDeg(60.0f);
+        Camera cam;
+        const float m11 = cam.getProjectionMatrix(1.0f)[1][1];
+        const float expected = 1.0f / std::tan(glm::radians(60.0f) * 0.5f);
+        const bool projOk = std::abs(m11 - expected) < 1e-3f;
+        qInfo().noquote().nospace() << "[SETTINGS] camera FOV->projection "
+                                    << (projOk ? "PASS" : "FAIL")
+                                    << " (P[1][1]=" << m11 << " expected " << expected << ")";
+        if (!projOk) ++fails;
+        Camera::setFovDeg(45.0f); // restore default
+        return fails == 0 ? 0 : 1;
+    }
     // Test/override hook: KRS_SET_SETTING="key=value" persists+applies a setting at
     // boot (drives pixel-probe verification of any setting headlessly).
     if (qEnvironmentVariableIsSet("KRS_SET_SETTING")) {

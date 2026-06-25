@@ -1256,6 +1256,16 @@ MainWindow::MainWindow(QWidget* parent)
             else if (key == QLatin1String("render/tonemapExposure"))  rs->setTonemapExposure(v.toFloat());
             else if (key == QLatin1String("render/specFireflyClamp")) rs->setSpecFireflyClamp(v.toFloat());
             else if (key == QLatin1String("render/hdrEnabled"))       rs->setHdrEnabled(v.toBool());
+            // Camera prefs are global statics (read by every viewport's camera each frame),
+            // so a single set call applies live everywhere — no per-viewport iteration.
+            else if (key == QLatin1String("viewport/cameraFovDeg"))     Camera::setFovDeg(v.toFloat());
+            else if (key == QLatin1String("viewport/cameraNearPlane"))  Camera::setNearClip(v.toFloat());
+            else if (key == QLatin1String("viewport/cameraFarPlane"))   Camera::setFarClip(v.toFloat());
+            else if (key == QLatin1String("viewport/orbitSensitivity")) Camera::setOrbitSensitivity(v.toFloat());
+            else if (key == QLatin1String("viewport/zoomFactor"))       Camera::setZoomFactor(v.toFloat());
+            else if (key == QLatin1String("viewport/lookSmoothing"))    Camera::setLookSmoothing(v.toFloat());
+            else if (key == QLatin1String("viewport/invertLookY"))      Camera::setInvertLookY(v.toBool());
+            else if (key == QLatin1String("viewport/defaultNavMode"))   Camera::setDefaultNavMode(v.toString() == QLatin1String("FLY") ? Camera::NavMode::FLY : Camera::NavMode::ORBIT);
             else if (key.startsWith(QLatin1String("scene/")) && m_scene) {
                 auto& sp = m_scene->getRegistry().ctx().get<SceneProperties>();
                 if      (key == QLatin1String("scene/backgroundColor"))     { QColor c = v.value<QColor>(); sp.backgroundColor = glm::vec4(float(c.redF()), float(c.greenF()), float(c.blueF()), 1.0f); }
