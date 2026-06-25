@@ -32,6 +32,7 @@ class ViewportManagerPopup; // Forward-declare ViewportManagerPopup
 class GizmoSystem;
 class SimulationController;
 class PhysicsPropertiesWidget;
+class RobotBuilderPanel;
 class TextureBrowserWidget;
 
 namespace ads {
@@ -118,6 +119,7 @@ private:
     std::unique_ptr<GizmoSystem> m_gizmoSystem;
     std::unique_ptr<SimulationController> m_simulation;
     PhysicsPropertiesWidget* m_physicsPanel = nullptr;
+    RobotBuilderPanel*       m_robotBuilderPanel = nullptr;
     TextureBrowserWidget* m_textureBrowser = nullptr;
 
     void buildMenuBar();

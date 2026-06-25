@@ -924,7 +924,8 @@ void RenderingSystem::initializeSharedResources()
     // code ADJACENT to the pixels.
     if (qEnvironmentVariableIntValue("KRS_RBUILDUI_SELFTEST") != 0) {
         std::printf("\n================= KRS_RBUILDUI_SELFTEST =================\n");
-        const bool ok = krs::rbuild::runRobotBuilderBridgeGate();
+        const bool ok = krs::rbuild::runRobotBuilderBridgeGate()
+                      & krs::rbuild::runRobotBuilderPanelGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }

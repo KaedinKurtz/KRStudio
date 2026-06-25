@@ -45,4 +45,9 @@ int bodyIndexForEntity(const RobotGraph& g, int entity);
 // non-created id) both FAIL the rendered-entity check.
 bool runRobotBuilderBridgeGate();
 
+// GATE RBUILD-PANEL (Phase 1, defined in src/UI/RobotBuilderPanel.cpp): the panel's
+// controls exist, are signal-connected, and invoke the proven ops (delete/define/
+// property hot-swap); the data model changes correctly. Needs QApplication (GUI).
+bool runRobotBuilderPanelGate();
+
 } // namespace krs::rbuild

@@ -49,6 +49,7 @@
 #include "SimulationController.hpp"
 #include "PrimitiveBuilders.hpp"
 #include "PhysicsPropertiesWidget.hpp"
+#include "RobotBuilderPanel.hpp"   // robot-builder editing panel (invokes proven krs::rbuild ops)
 #include "OutlinerWidget.hpp"
 #include "FluidPropertiesWidget.hpp"
 #include "SmokePropertiesWidget.hpp"
@@ -1544,6 +1545,22 @@ MainWindow::MainWindow(QWidget* parent)
             m_dockManager->addDockWidget(ads::CenterDockWidgetArea, texDock, physArea);
         else
             m_dockManager->addDockWidget(ads::RightDockWidgetArea, texDock);
+
+        // Robot Builder: edits the live krs::rbuild::RobotGraph (delete/define joints,
+        // hot-swap limits) via the proven EditController. Tabbed with the Physics panel.
+        // graphChanged re-renders so spawned/edited bodies show immediately.
+        m_robotBuilderPanel = new RobotBuilderPanel(m_scene.get(), this);
+        connect(m_robotBuilderPanel, &RobotBuilderPanel::graphChanged, this, [this]() {
+            if (m_renderingSystem) m_renderingSystem->requestViewportUpdates();
+        });
+        auto* rbDock = new ads::CDockWidget(QStringLiteral("Robot Builder"), this);
+        rbDock->setWidget(m_robotBuilderPanel);
+        rbDock->setStyleSheet(sidePanelStyle);
+        if (auto* physArea = physDock->dockAreaWidget())
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, rbDock, physArea);
+        else
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, rbDock);
+
         physDock->setAsCurrentTab();
     }
 
