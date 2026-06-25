@@ -62,7 +62,9 @@ void main()
     transmitted *= u_tint;
 
     vec3 R = reflect(-V, N);
-    vec3 reflected = textureLod(u_prefilteredEnv, R, u_roughness * 4.0).rgb;
+    // Clamp reflected radiance — belt-and-suspenders against firefly patches from
+    // an over-bright env reflection (this pass runs in linear HDR before tonemap).
+    vec3 reflected = min(textureLod(u_prefilteredEnv, R, u_roughness * 4.0).rgb, vec3(8.0));
 
     float f0 = (u_ior - 1.0) / (u_ior + 1.0);
     f0 *= f0;

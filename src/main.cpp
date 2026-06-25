@@ -5,6 +5,7 @@
 #include <QtWidgets>
 #include "MainWindow.hpp"
 #include "DatabaseManager.hpp"
+#include "SettingsManager.hpp"
 
 // custom message handler (you can leave this out if you don�t need it)
 static void qtMessageOutput(QtMsgType type, const QMessageLogContext& ctx, const QString& msg)
@@ -47,11 +48,28 @@ int main(int argc, char* argv[])
 {
     qInstallMessageHandler(qtMessageOutput);
 
+    // Identify the app so QSettings() resolves to a stable per-user store
+    // (HKCU\Software\KRStudio\KRStudio on Windows). Must be set before any
+    // QSettings() is constructed (SettingsManager is lazy-init).
+    QCoreApplication::setOrganizationName(QStringLiteral("KRStudio"));
+    QCoreApplication::setApplicationName(QStringLiteral("KRStudio"));
+
     // share OpenGL contexts & set our default format
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
     QSurfaceFormat::setDefaultFormat(createDefaultFormat());
 
     QApplication app(argc, argv);
+
+    // Headless settings gate (CI/dev): round-trip, persistence, clamp, defaults.
+    if (qEnvironmentVariableIsSet("KRS_SETTINGS_SELFTEST"))
+        return krs::SettingsManager::selfTest() == 0 ? 0 : 1;
+    // Test/override hook: KRS_SET_SETTING="key=value" persists+applies a setting at
+    // boot (drives pixel-probe verification of any setting headlessly).
+    if (qEnvironmentVariableIsSet("KRS_SET_SETTING")) {
+        const QString kv = qEnvironmentVariable("KRS_SET_SETTING");
+        const int eqi = kv.indexOf('=');
+        if (eqi > 0) krs::SettingsManager::instance().setFromString(kv.left(eqi), kv.mid(eqi + 1));
+    }
 
     // make sure Qt loads the debug sqlite plugin from "./sqldrivers"
     QStringList paths = QCoreApplication::libraryPaths();

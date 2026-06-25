@@ -13,7 +13,7 @@ void TonemapPass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
 
 void TonemapPass::execute(const RenderFrameContext& context)
 {
-    if (!RenderingSystem::hdrEnabled()) return;
+    if (!context.renderer.getHdrEnabled()) return;
     auto* gl = context.gl;
     Shader* shader = context.renderer.getShader("tonemap");
     if (!gl || !shader) return;
@@ -48,9 +48,9 @@ void TonemapPass::execute(const RenderFrameContext& context)
     gl->glActiveTexture(GL_TEXTURE0);
     gl->glBindTexture(GL_TEXTURE_2D, s.tex);
     shader->setInt(gl, "u_hdr", 0);
-    // Slight push: the env HDR grades dim and most PBR pack albedos sit in
-    // the 0.3-0.4 midtone range; ACES rolls the sky off gracefully.
-    shader->setFloat(gl, "u_exposure", 1.35f);
+    // Exposure is now a live setting (render/tonemapExposure, default 1.0). 1.0 is
+    // neutral; raising it brightens the whole frame through the ACES shoulder.
+    shader->setFloat(gl, "u_exposure", context.renderer.getTonemapExposure());
 
     gl->glBindVertexArray(m_emptyVao);
     gl->glDrawArrays(GL_TRIANGLES, 0, 3);

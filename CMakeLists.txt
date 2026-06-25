@@ -593,6 +593,20 @@ if(WIN32)
               "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin/sqlite3.dll"
               "$<TARGET_FILE_DIR:RoboticsSoftware>")
   endif()
+
+  # PhysX loads PhysXGpu_64.dll (and PhysXDevice64.dll) at RUNTIME via LoadLibrary,
+  # so windeployqt / vcpkg applocal -- which only walk the import table -- never copy
+  # them. Without PhysXGpu_64.dll next to the exe, PhysX silently falls back to the
+  # CPU solver ("Failed to load PhysXGpu_64.dll" / "No CUDA-capable GPU"). Same class
+  # of fix as the sqlite3.dll copy above.
+  if(ENABLE_PHYSX AND DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+    add_custom_command(TARGET RoboticsSoftware POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin/PhysXGpu_64.dll"
+              "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin/PhysXDevice64.dll"
+              "$<TARGET_FILE_DIR:RoboticsSoftware>"
+      COMMENT "Deploying PhysX GPU runtime (PhysXGpu_64.dll, PhysXDevice64.dll)")
+  endif()
 endif()
 
 # Define installation rules for creating a distributable package.

@@ -28,6 +28,8 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QElapsedTimer>   // [PERF] frame-split instrumentation (opt-in via KRS_PERF)
+#include <QDebug>
 #include "FluidSystem.hpp"
 #include "FlowVisualizerMenu.hpp"
 #include "Helpers.hpp"   
@@ -50,6 +52,11 @@
 #include "OutlinerWidget.hpp"
 #include "FluidPropertiesWidget.hpp"
 #include "SmokePropertiesWidget.hpp"
+#include "LightingPropertiesWidget.hpp"
+#include "SettingsManager.hpp"
+#include "SettingsDialog.hpp"
+#include <QPointer>
+#include <glm/glm.hpp>
 #include "TextureBrowserWidget.hpp"
 #include "AssetBrowserWidget.hpp"
 #include "FluidMesher.hpp"
@@ -1192,17 +1199,77 @@ MainWindow::MainWindow(QWidget* parent)
     auto engineFrame = [this]() {
         // Step the simulation (fixed-timestep physics), then render all
         // viewports on the engine's own GL context and schedule repaints.
+        // [PERF] Split the frame period into physics vs render so the "CPU frame"
+        // wall-time can be attributed. Opt-in via KRS_PERF=1; qDebug output lands
+        // in Qt Creator/VS "Application Output" (or the console). Zero cost when off.
+        static const bool krsPerf = qEnvironmentVariableIsSet("KRS_PERF");
+        QElapsedTimer _ft;
+        if (krsPerf) _ft.start();
         if (m_simulation) {
             m_simulation->tick();
         }
+        const double _tickMs = krsPerf ? _ft.nsecsElapsed() * 1e-6 : 0.0;
+        if (krsPerf) _ft.restart();
         if (m_renderingSystem) {
             m_renderingSystem->renderAllViewports();
+        }
+        if (krsPerf) {
+            const double _renderMs = _ft.nsecsElapsed() * 1e-6;
+            static double accTick = 0.0, accRender = 0.0;
+            static int n = 0;
+            accTick += _tickMs;
+            accRender += _renderMs;
+            if (++n >= 60) {
+                // Pull the app's own numbers so the log shows what the user sees,
+                // plus GPU execution time (gpuTotal includes the GPU fluid compute
+                // via fluidSimMs) to localize cost: GPU-bound vs CPU-bound vs a
+                // present/vsync stall (period >> cpuWork+gpuTotal).
+                const double _fps      = m_renderingSystem ? m_renderingSystem->getFPS() : 0.0;
+                const double _period   = m_renderingSystem ? m_renderingSystem->getFrameTime() : 0.0; // "CPU frame" = inter-frame period
+                const double _gpuTotal = m_renderingSystem ? m_renderingSystem->getGpuTimings().totalMs() : 0.0;
+                qDebug("[PERF] avg/%d: FPS=%.1f  period=%.1f ms  gpuTotal=%.2f ms  ||  tick=%.2f ms  render=%.2f ms  cpuWork=%.2f ms",
+                       n, _fps, _period, _gpuTotal, accTick / n, accRender / n, (accTick + accRender) / n);
+                accTick = accRender = 0.0;
+                n = 0;
+            }
         }
     };
     m_masterRenderTimer = new QTimer(this);
     connect(m_masterRenderTimer, &QTimer::timeout, this, engineFrame);
 
     m_renderingSystem->initialize(m_scene.get());
+
+    // --- Settings hot-swap routing ------------------------------------------
+    // Route every persisted/changed setting to its owning subsystem so edits in
+    // the Settings dialog apply live (the render loop shows them next frame).
+    // applySetting is also invoked for every key now so persisted values reach
+    // the subsystems before the first frame. Extend the dispatch per tier.
+    {
+        auto& smgr = krs::SettingsManager::instance();
+        auto applySetting = [this](const QString& key, const QVariant& v) {
+            RenderingSystem* rs = m_renderingSystem.get();
+            if (!rs) return;
+            if      (key == QLatin1String("render/iblIntensity"))     rs->setIblIntensity(v.toFloat());
+            else if (key == QLatin1String("render/sunIntensity"))     rs->setSunIntensity(v.toFloat());
+            else if (key == QLatin1String("render/sunColor"))         { QColor c = v.value<QColor>(); rs->setSunColor(glm::vec3(float(c.redF()), float(c.greenF()), float(c.blueF()))); }
+            else if (key == QLatin1String("render/sunDirection"))     rs->setSunDirection(krs::SettingsManager::vec3FromVariant(v));
+            else if (key == QLatin1String("render/tonemapExposure"))  rs->setTonemapExposure(v.toFloat());
+            else if (key == QLatin1String("render/specFireflyClamp")) rs->setSpecFireflyClamp(v.toFloat());
+            else if (key == QLatin1String("render/hdrEnabled"))       rs->setHdrEnabled(v.toBool());
+            else if (key.startsWith(QLatin1String("scene/")) && m_scene) {
+                auto& sp = m_scene->getRegistry().ctx().get<SceneProperties>();
+                if      (key == QLatin1String("scene/backgroundColor"))     { QColor c = v.value<QColor>(); sp.backgroundColor = glm::vec4(float(c.redF()), float(c.greenF()), float(c.blueF()), 1.0f); }
+                else if (key == QLatin1String("scene/fogEnabled"))          sp.fogEnabled = v.toBool();
+                else if (key == QLatin1String("scene/fogColor"))            { QColor c = v.value<QColor>(); sp.fogColor = glm::vec3(float(c.redF()), float(c.greenF()), float(c.blueF())); }
+                else if (key == QLatin1String("scene/fogStartDistance"))    sp.fogStartDistance = v.toFloat();
+                else if (key == QLatin1String("scene/fogEndDistance"))      sp.fogEndDistance = v.toFloat();
+                else if (key == QLatin1String("scene/showCollisionShapes")) sp.showCollisionShapes = v.toBool();
+            }
+        };
+        connect(&smgr, &krs::SettingsManager::changed, this, applySetting);
+        for (const auto& d : smgr.registry()) applySetting(d.key, smgr.value(d.key));
+    }
+
     // Drive engine frames from the primary viewport's vsync (frameSwapped):
     // a free-running 8 ms timer beat against the 60 Hz display, so animated
     // motion (the orbiting key light) alternated 1-and-2 engine steps per
@@ -1400,6 +1467,16 @@ MainWindow::MainWindow(QWidget* parent)
             m_dockManager->addDockWidget(ads::CenterDockWidgetArea, smokeDock, physArea);
         else
             m_dockManager->addDockWidget(ads::RightDockWidgetArea, smokeDock);
+
+        // Object lighting controls (IBL/ambient + sun): tabbed with the Fluid/Gas panels.
+        auto* lightingPanel = new LightingPropertiesWidget(m_renderingSystem.get(), this);
+        auto* lightingDock = new ads::CDockWidget(QStringLiteral("Lighting"), this);
+        lightingDock->setWidget(lightingPanel);
+        lightingDock->setStyleSheet(sidePanelStyle);
+        if (auto* physArea = physDock->dockAreaWidget())
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, lightingDock, physArea);
+        else
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, lightingDock);
 
         // Texture browser: hot-swaps material packs onto the selection.
         const QString materialsRoot =
@@ -2577,6 +2654,19 @@ void MainWindow::buildEngineeringToolbar()
             this, &MainWindow::addHeatSourceToSelection);
     connect(tb->addAction(QStringLiteral("Inspect")), &QAction::triggered,
             this, &MainWindow::inspectSelection);
+
+    // Right-aligned Settings entry (the menu bar is hidden, so this toolbar IS
+    // the top bar). Opens the modeless, registry-driven Settings dialog.
+    auto* spacer = new QWidget(tb);
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    tb->addWidget(spacer);
+    connect(tb->addAction(QStringLiteral("⚙  Settings")), &QAction::triggered, this, [this] {
+        static QPointer<SettingsDialog> dlg;
+        if (!dlg) dlg = new SettingsDialog(this);
+        dlg->show();
+        dlg->raise();
+        dlg->activateWindow();
+    });
 }
 
 void MainWindow::importStepFile()

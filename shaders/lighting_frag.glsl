@@ -17,6 +17,11 @@ uniform vec3 lightPositions[MAX_LIGHTS];
 uniform vec3 lightColors[MAX_LIGHTS];
 uniform int activeLightCount;
 uniform int u_hdrEnabled; // 1: output linear HDR (TonemapPass finishes), 0: legacy in-shader Reinhard
+uniform float u_iblIntensity; // scales IBL diffuse+specular fill; HDR irradiance is ~PI*sky-radiance, so ~0.3 keeps texture contrast instead of blowing albedo to white
+uniform vec3  u_sunDir;       // STATIC directional sun: world-space direction the light TRAVELS (down/forward)
+uniform vec3  u_sunColor;     // sun radiance (linear), NO 1/d^2 falloff -> constant in time (no orbit pulse)
+uniform mat4  u_invViewProj;  // reconstructs the world-space view ray for background/silhouette fragments
+uniform float u_specClamp;    // specular IBL firefly clamp (Settings: render/specFireflyClamp)
 
 in vec2 TexCoords;
 out vec4 fragColor;
@@ -42,11 +47,33 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// World-space view ray for a fullscreen-pass pixel. Used to sample the env for
+// degenerate/background fragments so the silhouette dissolves into the sky
+// instead of leaving a near-black 1px coverage band.
+vec3 viewRay(vec2 uv) {
+    vec4 clip = vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+    vec4 wp = u_invViewProj * clip;
+    wp /= wp.w;
+    return normalize(wp.xyz - viewPos);
+}
+
 void main()
 {
     // --- 1. RETRIEVE MATERIAL PROPERTIES ---
     vec3 fragPos   = texture(gPosition, TexCoords).rgb;
-    vec3 N         = normalize(texture(gNormal, TexCoords).rgb);
+    vec3 nRaw      = texture(gNormal, TexCoords).rgb;
+    // Background / silhouette-edge pixels carry a zeroed G-buffer normal. The
+    // rasterizer marks a thin (sub-pixel/1px) edge band 'covered' (depth<1.0),
+    // so the skybox's LEQUAL test can't overwrite it, and shading a zero normal
+    // gives a near-black band. Output the environment along the view ray so the
+    // silhouette dissolves into the sky instead of ringing dark.
+    if (dot(nRaw, nRaw) < 1e-8) {
+        vec3 sky = textureLod(prefilteredEnvMap, viewRay(TexCoords), 0.0).rgb;
+        if (u_hdrEnabled == 0) { sky = sky / (sky + vec3(1.0)); sky = pow(sky, vec3(1.0/2.2)); }
+        fragColor = vec4(sky, 1.0);
+        return;
+    }
+    vec3 N         = normalize(nRaw);
     vec3 albedo    = texture(gAlbedoAO, TexCoords).rgb;
     float ao       = texture(gAlbedoAO, TexCoords).a;
     float metallic = texture(gMetalRough, TexCoords).r;
@@ -80,23 +107,47 @@ void main()
         vec3 kD = vec3(1.0) - kS;
         kD *= (1.0 - metallic);
         
-        float NdotL = max(dot(N, L), 0.0);        
+        float NdotL = max(dot(N, L), 0.0);
         Lo += (kD * albedo / PI + specular) * radiance * NdotL;
-    }   
-    
+    }
+
+    // --- 2b. DIRECT LIGHTING (Static Directional Sun) ---
+    // A fixed key light (no position, no 1/d^2) so brightness is constant in
+    // time. This replaces the orbiting point light that caused the periodic
+    // whole-arm dimming. activeLightCount=0 disables the point loop above.
+    {
+        vec3 L = normalize(-u_sunDir);   // toward the sun
+        vec3 H = normalize(V + L);
+        vec3 radiance = u_sunColor;      // constant: no attenuation
+
+        float NDF = DistributionGGX(N, H, roughness);
+        float G   = GeometrySmith(N, V, L, roughness);
+        vec3  F   = FresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 numerator    = NDF * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
+        vec3 specular     = numerator / denominator;
+
+        vec3 kS = F;
+        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
+
     // --- 3. INDIRECT LIGHTING (Image-Based Lighting) ---
     vec3 F_ambient      = FresnelSchlick(max(dot(N, V), 0.0), F0);
     vec3 kS_ambient     = F_ambient;
     vec3 kD_ambient     = (vec3(1.0) - kS_ambient) * (1.0 - metallic);
     
     vec3 irradiance     = texture(irradianceMap, N).rgb;
-    vec3 diffuseIBL     = kD_ambient * irradiance * albedo;
+    vec3 diffuseIBL     = kD_ambient * irradiance * albedo * u_iblIntensity;
 
     // --- 4a. GEOMETRIC CORRECTION & COMPOSITING (stabilized) ---
     const float MAX_REFLECTION_LOD = 4.0;
 
     // 1. Compact, stable curvature estimate
-    float curvature = length(fwidth(N));    
+    float curvature = clamp(length(fwidth(N)), 0.0, 4.0);  // clamp: fwidth across a silhouette (valid|NaN normal) otherwise explodes/NaNs
 
     // 2. Scale & clamp geometric roughness
     const float geoScale = 0.5;      // how strongly edges blur
@@ -119,13 +170,12 @@ void main()
     // 6. Reflection tinting & BRDF LUT as before
     prefilteredColor = mix(prefilteredColor, prefilteredColor * albedo, (1.0 - metallic) * 0.5);
     vec2 brdf = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
-    vec3 specularIBL = prefilteredColor * (F_ambient * brdf.x + brdf.y);
+    vec3 specularIBL = prefilteredColor * (F_ambient * brdf.x + brdf.y) * u_iblIntensity;
 
     // Firefly clamp: isolated ultra-bright HDR env texels (e.g. the sun)
     // otherwise saturate single pixels to white through the tonemapper.
     float specLum = dot(specularIBL, vec3(0.2126, 0.7152, 0.0722));
-    const float kMaxSpecLum = 4.0;
-    if (specLum > kMaxSpecLum) specularIBL *= kMaxSpecLum / specLum;
+    if (specLum > u_specClamp) specularIBL *= u_specClamp / specLum;
 
     // --- 5. FINAL ASSEMBLY ---
     vec3 ambient = (diffuseIBL + specularIBL) * ao;
@@ -140,5 +190,12 @@ void main()
         color = pow(color, vec3(1.0/2.2));   // gamma
     }
 
+    // Belt-and-suspenders: sanitize any residual NaN/Inf to the environment
+    // (not black) so nothing degenerate reaches the screen as a dark speckle.
+    if (any(isnan(color)) || any(isinf(color))) {
+        vec3 sky = textureLod(prefilteredEnvMap, viewRay(TexCoords), 0.0).rgb;
+        if (u_hdrEnabled == 0) { sky = sky / (sky + vec3(1.0)); sky = pow(sky, vec3(1.0/2.2)); }
+        color = sky;
+    }
     fragColor = vec4(color, 1.0);
 }

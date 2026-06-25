@@ -33,22 +33,27 @@ void LightingPass::execute(const RenderFrameContext& context) {
     gl->glDisable(GL_DEPTH_TEST);
     gl->glClear(GL_COLOR_BUFFER_BIT);
 
-    // --- Animated light (Your existing code is good here) ---
-    float radius = 10.0f;
-    float speed = 1.5f;
-	float baseHeight = 5.0f; // Fixed height for the light
-	float heightAmplitude = 3.0f; // No vertical oscillation
-    float x = radius * cos(context.elapsedTime * speed);
-    float z = radius * sin(context.elapsedTime * speed);
-    float y = baseHeight + heightAmplitude * sin(context.elapsedTime * speed); // Fixed height for the light
-    glm::vec3 animatedLightPos = glm::vec3(x, 5.0f, z);
+    // --- Static directional sun (replaces the orbiting point light) ---
+    // The old light circled the scene via cos/sin(elapsedTime) with 1/d^2 falloff,
+    // so the whole arm brightened/dimmed once per orbit -- not a shadow, just a
+    // moving light. A fixed directional sun is constant in time and is the
+    // directional key light the scene actually wants. Tune dir/color to taste.
+    const glm::vec3 sunDir   = renderer.getSunDirection();                      // live (Settings)
+    const glm::vec3 sunColor = renderer.getSunColor() * renderer.getSunIntensity(); // live tint * intensity
 
     lightingShd->use(gl);
     lightingShd->setVec3(gl, "viewPos", context.camera.getPosition());
-    lightingShd->setVec3(gl, "lightPositions[0]", animatedLightPos);
-    lightingShd->setVec3(gl, "lightColors[0]", glm::vec3(200.0, 150.0, 150.0)); // Increased intensity for physical correctness
-    lightingShd->setInt(gl, "activeLightCount", 1);
-    lightingShd->setInt(gl, "u_hdrEnabled", RenderingSystem::hdrEnabled() ? 1 : 0);
+    lightingShd->setVec3(gl, "u_sunDir", sunDir);
+    lightingShd->setVec3(gl, "u_sunColor", sunColor);
+    lightingShd->setInt(gl, "activeLightCount", 0); // orbiting point light disabled
+    // Per-pixel view-ray reconstruction so the lighting pass can blend silhouette
+    // /background fragments into the sky instead of a near-black coverage band.
+    lightingShd->setMat4(gl, "u_invViewProj", glm::inverse(context.projection * context.view));
+    lightingShd->setInt(gl, "u_hdrEnabled", renderer.getHdrEnabled() ? 1 : 0);
+    // IBL fill strength. HDR irradiance is ~PI*sky-radiance, which blows albedo
+    // to flat white; ~0.3 restores texture contrast. Tune 0.2-0.4 to taste.
+    lightingShd->setFloat(gl, "u_iblIntensity", renderer.getIblIntensity());
+    lightingShd->setFloat(gl, "u_specClamp", renderer.getSpecFireflyClamp());
 
     // --- Texture Binding ---
     int unit = 0;

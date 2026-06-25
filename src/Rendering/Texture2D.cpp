@@ -105,6 +105,37 @@ bool Texture2D::loadFromMemory(const unsigned char* bytes, size_t size, bool gam
     return true;
 }
 
+bool Texture2D::loadHDR(const std::string& path) {
+    int w, h, channels;
+    stbi_set_flip_vertically_on_load(true);
+    float* data = stbi_loadf(path.c_str(), &w, &h, &channels, 0);
+    if (!data) {
+        qWarning() << "Texture2D: Failed to load HDR image:" << QString::fromStdString(path);
+        return false;
+    }
+
+    GLenum internalFormat = GL_RGB16F, dataFormat = GL_RGB;
+    if (channels == 1)      { internalFormat = GL_R16F;    dataFormat = GL_RED;  }
+    else if (channels == 4) { internalFormat = GL_RGBA16F; dataFormat = GL_RGBA; }
+
+    _width = w; _height = h;
+    _internalFormat = internalFormat;
+    _dataFormat = dataFormat;
+
+    if (!_id) glGenTextures(1, &_id);
+    glBindTexture(GL_TEXTURE_2D, _id);
+    // GL_FLOAT upload — the key difference from generate(), which hardcodes
+    // GL_UNSIGNED_BYTE and would clamp the HDR to 8-bit LDR.
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, w, h, 0, dataFormat, GL_FLOAT, data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    stbi_image_free(data);
+    return true;
+}
+
 void Texture2D::generate(int width, int height, GLenum internalFormat, GLenum dataFormat, const void* data) {
     _width = width;
     _height = height;

@@ -136,6 +136,22 @@ public:
     float getFrameTime() const { return m_frameTime; }
     GpuTimings getGpuTimings() const { return m_gpuTimings; }
 
+    // --- Object lighting (live, set from the Lighting menu; read by LightingPass) ---
+    float getIblIntensity() const { return m_iblIntensity; }
+    void  setIblIntensity(float v) { m_iblIntensity = v; }
+    float getSunIntensity() const { return m_sunIntensity; }
+    void  setSunIntensity(float v) { m_sunIntensity = v; }
+    glm::vec3 getSunColor() const { return m_sunColor; }
+    void  setSunColor(const glm::vec3& c) { m_sunColor = c; }
+    glm::vec3 getSunDirection() const { return m_sunDirection; }
+    void  setSunDirection(const glm::vec3& d) { m_sunDirection = d; }
+    float getTonemapExposure() const { return m_tonemapExposure; }
+    void  setTonemapExposure(float v) { m_tonemapExposure = v; }
+    float getSpecFireflyClamp() const { return m_specFireflyClamp; }
+    void  setSpecFireflyClamp(float v) { m_specFireflyClamp = v; }
+    bool  getHdrEnabled() const { return m_hdrEnabled; }
+    void  setHdrEnabled(bool v) { m_hdrEnabled = v; }
+
     const TargetFBOs* getTargetFBO(ViewportWidget* vp) const;
 
     // --- Fluid simulation (GPU PBF, stepped on the engine context) ---
@@ -276,6 +292,15 @@ private:
     // Supersampling: internal render resolution = native * m_renderScale,
     // downsampled to native on present (KRS_RENDER_SCALE env override).
     float m_renderScale = 1.0f;
+
+    // Object-lighting knobs exposed live via LightingPropertiesWidget.
+    float m_iblIntensity = 0.4f;  // IBL/ambient fill default (0.3 read too dim, 0.6 washed out); persisted via QSettings
+    float m_sunIntensity = 3.0f;  // directional sun (key light) magnitude
+    glm::vec3 m_sunColor = glm::vec3(1.0f, 0.967f, 0.9f);      // warm-white sun tint
+    glm::vec3 m_sunDirection = glm::vec3(-0.4f, -1.0f, -0.3f); // direction sun light travels
+    float m_tonemapExposure = 1.0f;   // ACES exposure (TonemapPass)
+    float m_specFireflyClamp = 4.0f;  // specular IBL luminance clamp (lighting_frag)
+    bool  m_hdrEnabled = true;        // ACES HDR pipeline vs legacy Reinhard
 
     // --- GPU stage timing (engine-context GL_TIME_ELAPSED query rings) ---
     static constexpr int kGpuStages = 5;     // geometry, lighting, post, overlay, fluid sim

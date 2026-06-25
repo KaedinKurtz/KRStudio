@@ -56,7 +56,10 @@ void main()
         {
             // The blur comes from averaging many sharp samples.
             // Always sample from the highest resolution (mip 0).
-            prefilteredColor += textureLod(environmentMap, L, 0.0).rgb * NdotL;
+            // Clamp HDR radiance so the (now-unclamped) bright sun cannot bake
+            // firefly speckle into the reflection probe — the source of the
+            // aquamarine/yellow patches seen through glass around the light.
+            prefilteredColor += min(textureLod(environmentMap, L, 0.0).rgb, vec3(8.0)) * NdotL;
             totalWeight      += NdotL;
         }
     }

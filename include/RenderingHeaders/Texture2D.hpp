@@ -24,6 +24,11 @@ public:
     // Load from compressed image bytes in memory (embedded glb/fbx textures).
     bool loadFromMemory(const unsigned char* data, size_t size, bool gammaCorrection = false);
 
+    // Load a floating-point HDR (.hdr) as a GL_RGB16F texture via stbi_loadf.
+    // Unlike loadFromFile (which decodes to clamped 8-bit), this preserves the
+    // full dynamic range needed for correct image-based lighting.
+    bool loadHDR(const std::string& path);
+
     // Generate an empty texture of given size and formats, optionally uploading data.
     void generate(int width, int height,
         GLenum internalFormat = GL_RGBA8,

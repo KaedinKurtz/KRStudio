@@ -510,6 +510,16 @@ void SimulationController::singleStep()
     writeBackTransforms(kFixedDt);
 }
 
+namespace {
+    // [PERF] Per-frame physics timing, filled by stepOnce() and reported+reset
+    // by tick(). GUI-thread only. Opt-in via KRS_PERF=1. Declared before tick()
+    // (which is earlier in the file than stepOnce) so both can see it.
+    double g_perfSimMs    = 0.0;   // scene->simulate(dt) dispatch (async kick)
+    double g_perfFetchMs  = 0.0;   // scene->fetchResults(true) -- BLOCKS the CPU until the
+                                   //   solve finishes; with GPU/CUDA tiers this is the GPU round-trip
+    int    g_perfSubsteps = 0;
+}
+
 void SimulationController::tick()
 {
     if (m_state != SimulationState::Playing) { m_clock.restart(); return; }
@@ -542,6 +552,30 @@ void SimulationController::tick()
     // to write setArticJointPositions() here is REMOVED -- instead we apply the per-DOF targets the node
     // graph (physics_articulation_drive) posted to the command bus. One writer -> no conflict, no crash.
     applyArticulationCommands();
+
+    // [PERF] Attribute the physics share of the "CPU frame": substeps/frame, the
+    // cheap simulate() dispatch, and the BLOCKING fetchResults(true) wait (the GPU
+    // round-trip with CUDA tiers on). Compare against renderAllViewports() from the
+    // [PERF] line in MainWindow::engineFrame, and re-run with KRS_NO_GPU_PHYSICS=1
+    // to see the fetch time collapse. Opt-in via KRS_PERF=1.
+    static const bool krsPerf = qEnvironmentVariableIsSet("KRS_PERF");
+    if (krsPerf) {
+        static double accSim = 0.0, accFetch = 0.0;
+        static int accSub = 0, frames = 0;
+        accSim += g_perfSimMs;
+        accFetch += g_perfFetchMs;
+        accSub += g_perfSubsteps;
+        g_perfSimMs = g_perfFetchMs = 0.0;
+        g_perfSubsteps = 0;
+        if (++frames >= 60) {
+            qDebug("[PERF/sim] avg/%d frames: substeps=%.1f/frame  simulate=%.2f ms  fetchResults(true)=%.2f ms  (physics CPU=%.2f ms/frame)",
+                   frames, double(accSub) / frames, accSim / frames, accFetch / frames,
+                   (accSim + accFetch) / frames);
+            accSim = accFetch = 0.0;
+            accSub = 0;
+            frames = 0;
+        }
+    }
 }
 
 // Read the registry-ctx command bus and teleport the live articulation to the node-commanded per-DOF
@@ -625,12 +659,35 @@ void SimulationController::buildPhysicsWorld()
     // NVIDIA tier: GPU rigid dynamics (Omniverse-class). Enables SDF
     // collision for dynamic triangle meshes once cooking provides them.
     // Opt out with KRS_NO_GPU_PHYSICS while the tier matures.
-    if (m_px->cudaContextManager && krs::hardwareCaps().cudaPhysics
-        && !qEnvironmentVariableIsSet("KRS_NO_GPU_PHYSICS")) {
+    //
+    // BODY-COUNT GATE: the GPU solver's fixed per-step kernel-launch + the
+    // blocking fetchResults device round-trip DWARF the actual solve on small
+    // scenes. Measured: a single FANUC articulation costs ~25 ms/frame (tick)
+    // on the GPU tier vs ~0.5 ms on the CPU TGS solver (~50x, 55->243 FPS).
+    // So only take the GPU tier once the scene has enough dynamic bodies to
+    // amortize that overhead. KRS_GPU_PHYSX_MIN_BODIES tunes the threshold
+    // (set 0 to always use GPU when CUDA is present); KRS_NO_GPU_PHYSICS forces CPU.
+    int dynamicBodies = 0;
+    {
+        auto& reg0 = m_scene->getRegistry();
+        for (auto e : reg0.view<RigidBodyComponent>())
+            if (reg0.get<RigidBodyComponent>(e).bodyType != RigidBodyComponent::BodyType::Static)
+                ++dynamicBodies;
+    }
+    const int kGpuMinBodies = qEnvironmentVariableIsSet("KRS_GPU_PHYSX_MIN_BODIES")
+        ? qEnvironmentVariableIntValue("KRS_GPU_PHYSX_MIN_BODIES") : 256;
+    const bool gpuAvailable = m_px->cudaContextManager && krs::hardwareCaps().cudaPhysics
+        && !qEnvironmentVariableIsSet("KRS_NO_GPU_PHYSICS");
+    if (gpuAvailable && dynamicBodies >= kGpuMinBodies) {
         sceneDesc.cudaContextManager = m_px->cudaContextManager;
         sceneDesc.flags |= PxSceneFlag::eENABLE_GPU_DYNAMICS;
         sceneDesc.broadPhaseType = PxBroadPhaseType::eGPU;
-        qInfo() << "[Sim] GPU rigid dynamics ON:" << krs::hardwareCaps().cudaDeviceName.c_str();
+        qInfo() << "[Sim] GPU rigid dynamics ON:" << krs::hardwareCaps().cudaDeviceName.c_str()
+                << "(" << dynamicBodies << "dynamic bodies)";
+    } else if (gpuAvailable) {
+        qInfo() << "[Sim] CPU rigid dynamics:" << dynamicBodies
+                << "dynamic bodies <" << kGpuMinBodies
+                << "-- GPU tier amortizes only on large scenes (KRS_GPU_PHYSX_MIN_BODIES=0 forces GPU)";
     }
 #endif
     if (qEnvironmentVariableIsSet("KRS_BENCH")) {
@@ -1105,8 +1162,20 @@ void SimulationController::stepOnce(float dt)
 {
 #if defined(KR_WITH_PHYSX)
     if (!m_px->scene) return;
+    static const bool krsPerf = qEnvironmentVariableIsSet("KRS_PERF");
+    if (!krsPerf) {
+        m_px->scene->simulate(dt);
+        m_px->scene->fetchResults(true);
+        return;
+    }
+    QElapsedTimer _s;
+    _s.start();
     m_px->scene->simulate(dt);
-    m_px->scene->fetchResults(true);
+    g_perfSimMs += _s.nsecsElapsed() * 1e-6;
+    _s.restart();
+    m_px->scene->fetchResults(true);   // blocking wait -- the suspected GPU-physics stall
+    g_perfFetchMs += _s.nsecsElapsed() * 1e-6;
+    ++g_perfSubsteps;
 #else
     Q_UNUSED(dt);
 #endif

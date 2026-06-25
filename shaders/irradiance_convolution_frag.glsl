@@ -29,7 +29,11 @@ void main() {
         vec3 sampleDir = vec3(cos(phi)*sinTheta, sinTheta*0.0 + cosTheta, sin(phi)*sinTheta);
         // build world-space sample vector
         vec3 L = normalize(sampleDir.x * right + sampleDir.y * up + sampleDir.z * N);
-        irradiance += texture(environmentMap, L).rgb * cosTheta;
+        // Clamp HDR radiance: an unclamped bright/over-bright sky (or a sun that
+        // overflows GL_RGB16F to +inf) otherwise dominates the diffuse integral
+        // and tints every surface (the cyan/blue cast). 8.0 keeps real sky energy
+        // while taming the spike. Skybox stays full-HDR (it samples the cubemap directly).
+        irradiance += min(texture(environmentMap, L).rgb, vec3(8.0)) * cosTheta;
     }
     irradiance = PI * irradiance / float(SAMPLE_COUNT);
     FragColor = vec4(irradiance, 1.0);

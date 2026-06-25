@@ -81,6 +81,9 @@
 #include <QDebug>
 #include <stdexcept>
 #include <QCoreApplication>
+#include <QFile>
+#include <QRandomGenerator>
+#include <QDateTime>
 #include <QElapsedTimer>
 #include <QDir>
 
@@ -499,10 +502,34 @@ void RenderingSystem::initializeSharedResources()
     // --- 2) Build IBL resources ---
     {
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/assets/");
-        std::string hdrPath = (assetDir + "env2.hdr").toStdString();
+
+        // Pick an environment HDR: random per boot among the env*.hdr that are
+        // actually deployed next to the exe. KRS_ENV=<file> forces a specific one
+        // for deterministic tests (e.g. KRS_ENV=env3.hdr).
+        QString chosenHdr;
+        if (qEnvironmentVariableIsSet("KRS_ENV")) {
+            chosenHdr = qEnvironmentVariable("KRS_ENV");
+        } else {
+            const QStringList candidates = { QStringLiteral("env.hdr"),
+                                             QStringLiteral("env2.hdr"),
+                                             QStringLiteral("env3.hdr") };
+            QStringList present;
+            for (const QString& c : candidates)
+                if (QFile::exists(assetDir + c)) present.push_back(c);
+            if (present.isEmpty()) present.push_back(QStringLiteral("env.hdr"));
+            // Seed a LOCAL generator from the wall clock so the pick varies every
+            // boot and can never be pinned by global-RNG state. (Note: if fewer
+            // than the full env*.hdr set is deployed next to the exe, 'present'
+            // collapses and the pick is necessarily fixed — deploy all three.)
+            QRandomGenerator localRng(static_cast<quint32>(QDateTime::currentMSecsSinceEpoch() & 0xffffffffULL));
+            chosenHdr = present.at(localRng.bounded(present.size()));
+        }
+        if (!QFile::exists(assetDir + chosenHdr)) chosenHdr = QStringLiteral("env.hdr");
+        qInfo() << "[IBL] Using environment HDR:" << chosenHdr;
+        std::string hdrPath = (assetDir + chosenHdr).toStdString();
 
         auto hdrTex = std::make_shared<Texture2D>();
-        if (!hdrTex->loadFromFile(hdrPath, /*flipVert=*/true)) {
+        if (!hdrTex->loadHDR(hdrPath)) {
             qWarning() << "[IBL] Failed to load HDR env:" << QString::fromStdString(hdrPath);
         }
         else {
@@ -2172,8 +2199,11 @@ void RenderingSystem::geometryPass()
     m_gl->glEnable(GL_DEPTH_TEST);
 
     // 5) Clear all attachments with a single call.
-    // This now succeeds because all color attachments have the same format.
-    m_gl->glClearColor(0.f, 0.f, 0.f, 0.f);
+    // Use the configurable background color (Settings: scene/backgroundColor);
+    // visible only where the skybox/IBL does not cover the frame.
+    const glm::vec4 bg = m_scene ? m_scene->getRegistry().ctx().get<SceneProperties>().backgroundColor
+                                 : glm::vec4(0.1f, 0.1f, 0.15f, 1.0f);
+    m_gl->glClearColor(bg.r, bg.g, bg.b, bg.a);
     m_gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     // The entire fallback `else` block is no longer needed.
 
