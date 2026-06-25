@@ -33,6 +33,7 @@ class GizmoSystem;
 class SimulationController;
 class PhysicsPropertiesWidget;
 class RobotBuilderPanel;
+class RobotViewport;
 class TextureBrowserWidget;
 
 namespace ads {
@@ -120,6 +121,7 @@ private:
     std::unique_ptr<SimulationController> m_simulation;
     PhysicsPropertiesWidget* m_physicsPanel = nullptr;
     RobotBuilderPanel*       m_robotBuilderPanel = nullptr;
+    RobotViewport*           m_robotViewport = nullptr;
     TextureBrowserWidget* m_textureBrowser = nullptr;
 
     void buildMenuBar();

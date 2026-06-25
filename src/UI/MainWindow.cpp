@@ -50,6 +50,7 @@
 #include "PrimitiveBuilders.hpp"
 #include "PhysicsPropertiesWidget.hpp"
 #include "RobotBuilderPanel.hpp"   // robot-builder editing panel (invokes proven krs::rbuild ops)
+#include "RobotViewport.hpp"       // robot-only spinning viewport bound to the live graph
 #include "OutlinerWidget.hpp"
 #include "FluidPropertiesWidget.hpp"
 #include "SmokePropertiesWidget.hpp"
@@ -1560,6 +1561,15 @@ MainWindow::MainWindow(QWidget* parent)
             m_dockManager->addDockWidget(ads::CenterDockWidgetArea, rbDock, physArea);
         else
             m_dockManager->addDockWidget(ads::RightDockWidgetArea, rbDock);
+
+        // Robot-only spinning viewport (isolated 2nd scene), bound to the SAME live
+        // graph the panel edits. Re-mirrors whenever the panel changes the graph.
+        m_robotViewport = new RobotViewport(m_scene.get(), this);
+        connect(m_robotBuilderPanel, &RobotBuilderPanel::graphChanged,
+                m_robotViewport, &RobotViewport::refreshFromLive);
+        auto* rvDock = new ads::CDockWidget(QStringLiteral("Robot View"), this);
+        rvDock->setWidget(m_robotViewport);
+        m_dockManager->addDockWidget(ads::LeftDockWidgetArea, rvDock);
 
         physDock->setAsCurrentTab();
     }

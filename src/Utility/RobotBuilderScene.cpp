@@ -4,6 +4,9 @@
 #include "PrimitiveBuilders.hpp"
 
 #include <cstdio>
+#include <cstdint>
+#include <cmath>
+#include <limits>
 #include <string>
 #include <Eigen/Dense>
 #include <glm/glm.hpp>
@@ -38,6 +41,28 @@ void addBore(RBBody& b, const glm::vec3& axisPosLocal, const glm::vec3& axisDirL
     b.faces.push_back(f);
 }
 
+// Spawn ONE body as a renderable, pickable entity (const body). Shared by the
+// main-scene bridge (records entity) and the preview mirror (read-only).
+entt::entity spawnOneBody(entt::registry& reg, const RBBody& b, int robotId) {
+    entt::entity e = reg.create();
+    auto& mesh = reg.emplace<RenderableMeshComponent>(e);
+    std::vector<uint32_t> idx;
+    buildUnitCube(mesh.vertices, idx);
+    const float vis = 0.12f;
+    glm::vec3 mn(std::numeric_limits<float>::max());
+    glm::vec3 mx(std::numeric_limits<float>::lowest());
+    for (auto& v : mesh.vertices) { v.position *= vis; mn = glm::min(mn, v.position); mx = glm::max(mx, v.position); }
+    mesh.indices.assign(idx.begin(), idx.end());
+    mesh.hasUVs = false; mesh.hasTangents = false;
+    mesh.aabbMin = mn; mesh.aabbMax = mx;
+    reg.emplace<TransformComponent>(e, placePos(b.placement), placeRot(b.placement), glm::vec3(1.0f));
+    reg.emplace<TriPlanarMaterialTag>(e);
+    reg.emplace<TagComponent>(e, b.name.empty() ? std::string("RBody") : b.name);
+    reg.emplace<RobotSubcomponentComponent>(e, robotId);
+    if (!b.faces.empty()) { BRepFaceComponent fc; fc.faces = b.faces; reg.emplace<BRepFaceComponent>(e, std::move(fc)); }
+    return e;
+}
+
 } // namespace
 
 RobotGraph buildDemoGraph() {
@@ -60,41 +85,25 @@ RobotGraph buildDemoGraph() {
 
 void spawnGraphBodies(Scene& scene, RobotGraph& g, int robotId) {
     auto& reg = scene.getRegistry();
-    for (int i = 0; i < int(g.bodies.size()); ++i) {
-        RBBody& b = g.bodies[i];
-        entt::entity e = reg.create();
+    for (int i = 0; i < int(g.bodies.size()); ++i)
+        g.bodies[i].entity = int(spawnOneBody(reg, g.bodies[i], robotId));
+}
 
-        // Renderable mesh: a small cube. Mirrors SceneBuilder::spawnPrimitive's
-        // component set; vertices are pre-scaled so the visual size is independent
-        // of the body frame (TransformComponent must equal the placement so picking
-        // world-transforms the LOCAL bore faces correctly).
-        auto& mesh = reg.emplace<RenderableMeshComponent>(e);
-        std::vector<uint32_t> idx;
-        buildUnitCube(mesh.vertices, idx);
-        const float vis = 0.12f;
-        glm::vec3 mn(std::numeric_limits<float>::max());
-        glm::vec3 mx(std::numeric_limits<float>::lowest());
-        for (auto& v : mesh.vertices) { v.position *= vis; mn = glm::min(mn, v.position); mx = glm::max(mx, v.position); }
-        mesh.indices.assign(idx.begin(), idx.end());
-        mesh.hasUVs = false; mesh.hasTangents = false;
-        mesh.aabbMin = mn; mesh.aabbMax = mx;
-
-        reg.emplace<TransformComponent>(e, placePos(b.placement), placeRot(b.placement), glm::vec3(1.0f));
-        reg.emplace<TriPlanarMaterialTag>(e);
-        reg.emplace<TagComponent>(e, b.name.empty() ? std::string("RBody") : b.name);
-        reg.emplace<RobotSubcomponentComponent>(e, robotId);
-        if (!b.faces.empty()) {
-            BRepFaceComponent fc; fc.faces = b.faces;
-            reg.emplace<BRepFaceComponent>(e, std::move(fc));
-        }
-        b.entity = int(e);
-    }
+int mirrorGraphIntoScene(Scene& preview, const RobotGraph& g, int robotId) {
+    auto& reg = preview.getRegistry();
+    int n = 0;
+    for (const auto& b : g.bodies) { spawnOneBody(reg, b, robotId); ++n; }
+    return n;
 }
 
 int bodyIndexForEntity(const RobotGraph& g, int entity) {
     for (int i = 0; i < int(g.bodies.size()); ++i)
         if (g.bodies[i].entity == entity) return i;
     return -1;
+}
+
+glm::vec3 turntableCameraPos(const glm::vec3& base, float dist, float elev, float angleRad) {
+    return base + glm::vec3(dist * std::cos(angleRad), elev, dist * std::sin(angleRad));
 }
 
 // ===========================================================================

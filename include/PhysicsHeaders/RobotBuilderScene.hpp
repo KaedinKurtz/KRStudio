@@ -40,6 +40,16 @@ void spawnGraphBodies(Scene& scene, RobotGraph& g, int robotId = 0);
 // picked scene entity back to a graph body (for define-from-features / grab).
 int bodyIndexForEntity(const RobotGraph& g, int entity);
 
+// Mirror the graph's bodies into a (preview) scene as renderable representation
+// entities WITHOUT mutating g (read-only). Returns the count spawned. Used by the
+// isolated robot-only viewport to render the live graph in its own scene.
+int mirrorGraphIntoScene(Scene& preview, const RobotGraph& g, int robotId = 0);
+
+// Turntable spin: a camera position orbiting `base` at horizontal radius `dist` and
+// height `elev`, at azimuth `angleRad`. The real base-axis transform the robot-only
+// viewport's spin tick uses (gated headless: motion + constant orbit radius).
+glm::vec3 turntableCameraPos(const glm::vec3& base, float dist, float elev, float angleRad);
+
 // GATE BRIDGE-RENDER: every demo body becomes a valid, renderable scene entity.
 // NEG-CTRLs: an un-spawned graph (entity==-1) and a fake bridge (entity set to a
 // non-created id) both FAIL the rendered-entity check.
@@ -49,5 +59,10 @@ bool runRobotBuilderBridgeGate();
 // controls exist, are signal-connected, and invoke the proven ops (delete/define/
 // property hot-swap); the data model changes correctly. Needs QApplication (GUI).
 bool runRobotBuilderPanelGate();
+
+// GATE VIEWPORT-DATA (Phase 2, defined in src/UI/RobotViewport.cpp): the robot-only
+// viewport binds the LIVE graph (not a copy), the spin is a real base-axis transform,
+// and the graph's bodies are mirrored into the view scene. Rendering is operator-confirm.
+bool runRobotViewportGate();
 
 } // namespace krs::rbuild
