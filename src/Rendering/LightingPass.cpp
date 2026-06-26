@@ -6,6 +6,8 @@
 
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_4_3_Core>
+#include <QtGlobal>
+#include <QString>
 
 LightingPass::~LightingPass() {}
 
@@ -33,19 +35,42 @@ void LightingPass::execute(const RenderFrameContext& context) {
     gl->glDisable(GL_DEPTH_TEST);
     gl->glClear(GL_COLOR_BUFFER_BIT);
 
-    // --- Static directional sun (replaces the orbiting point light) ---
-    // The old light circled the scene via cos/sin(elapsedTime) with 1/d^2 falloff,
-    // so the whole arm brightened/dimmed once per orbit -- not a shadow, just a
-    // moving light. A fixed directional sun is constant in time and is the
-    // directional key light the scene actually wants. Tune dir/color to taste.
+    // --- Orbiting point light (RESTORED to the pre-sprint behaviour) ---
+    // The settings sprint replaced this moving key light with a static directional
+    // sun and set activeLightCount=0. With a dim/wrong sun colour that left the
+    // scene lit ONLY by the blue-sky IBL -> cyan ground + void-black robot + no
+    // moving light. Restoring the orbiting point light brings the key illumination
+    // (and the motion) back; the directional sun + IBL below remain Settings-driven.
+    // NEAR orbiting key light: a tight orbit (was radius 10 -> ~1.6 radiance at the
+    // robot with 1/d^2, too dim to light the textures) brought in close + brightened
+    // so it actually illuminates the robot (the directional sun + IBL are fill).
+    // Orbit at ROBOT HEIGHT (was y=4, above the arm -> only lit the tops like the sun,
+    // leaving the vertical faces the camera sees dark under a dark-horizon env). At
+    // y~2 / radius 3.5 the key light sweeps the SIDES of the robot, so its visible
+    // faces get a bright, hue-preserving white key as it orbits.
+    const float lightRadius = 3.5f;
+    const float lightSpeed  = 1.5f;
+    const float lx = lightRadius * cos(context.elapsedTime * lightSpeed);
+    const float lz = lightRadius * sin(context.elapsedTime * lightSpeed);
+    glm::vec3 animatedLightPos = glm::vec3(lx, 2.0f, lz);
+    // Dev aid: KRS_LIGHTPOS="x,y,z" pins the key light (deterministic lighting for
+    // verification grabs, instead of the nondeterministic orbit phase at grab time).
+    if (qEnvironmentVariableIsSet("KRS_LIGHTPOS")) {
+        const QStringList p = qEnvironmentVariable("KRS_LIGHTPOS").split(',');
+        if (p.size() == 3) animatedLightPos = glm::vec3(p[0].toFloat(), p[1].toFloat(), p[2].toFloat());
+    }
+
+    // --- Static directional sun (Settings-controlled supplementary key light) ---
     const glm::vec3 sunDir   = renderer.getSunDirection();                      // live (Settings)
     const glm::vec3 sunColor = renderer.getSunColor() * renderer.getSunIntensity(); // live tint * intensity
 
     lightingShd->use(gl);
     lightingShd->setVec3(gl, "viewPos", context.camera.getPosition());
+    lightingShd->setVec3(gl, "lightPositions[0]", animatedLightPos);
+    lightingShd->setVec3(gl, "lightColors[0]", glm::vec3(300.0f, 270.0f, 240.0f)); // fairly bright warm key (1/d^2 -> ~8 radiance at the robot)
+    lightingShd->setInt(gl, "activeLightCount", 1);  // orbiting point light RESTORED
     lightingShd->setVec3(gl, "u_sunDir", sunDir);
     lightingShd->setVec3(gl, "u_sunColor", sunColor);
-    lightingShd->setInt(gl, "activeLightCount", 0); // orbiting point light disabled
     // Per-pixel view-ray reconstruction so the lighting pass can blend silhouette
     // /background fragments into the sky instead of a near-black coverage band.
     lightingShd->setMat4(gl, "u_invViewProj", glm::inverse(context.projection * context.view));
@@ -54,6 +79,22 @@ void LightingPass::execute(const RenderFrameContext& context) {
     // to flat white; ~0.3 restores texture contrast. Tune 0.2-0.4 to taste.
     lightingShd->setFloat(gl, "u_iblIntensity", renderer.getIblIntensity());
     lightingShd->setFloat(gl, "u_specClamp", renderer.getSpecFireflyClamp());
+
+    // --- TEMP empirical desaturation probes (env-overridable; remove after diagnosis) ---
+    // KRS_DBG=1..7 isolates a single lighting term to the screen (run with KRS_HDR=0).
+    // KRS_IBL=<f> live-overrides the IBL fill strength so we can dial it without a rebuild.
+    {
+        const int dbg = qEnvironmentVariableIsSet("KRS_DBG") ? qEnvironmentVariable("KRS_DBG").toInt() : 0;
+        lightingShd->setInt(gl, "u_debugView", dbg);
+        if (qEnvironmentVariableIsSet("KRS_IBL"))
+            lightingShd->setFloat(gl, "u_iblIntensity", qEnvironmentVariable("KRS_IBL").toFloat());
+        // Default 1.0: the specular IBL is now albedo-tinted (hue-preserving) in the
+        // shader, so we keep its full brightness as the robot's fill instead of cutting it.
+        const float specScale = qEnvironmentVariableIsSet("KRS_SPECIBL") ? qEnvironmentVariable("KRS_SPECIBL").toFloat() : 1.0f;
+        lightingShd->setFloat(gl, "u_iblSpecScale", specScale);
+        const float iblTint = qEnvironmentVariableIsSet("KRS_TINT") ? qEnvironmentVariable("KRS_TINT").toFloat() : 1.0f;
+        lightingShd->setFloat(gl, "u_iblTint", iblTint);
+    }
 
     // --- Texture Binding ---
     int unit = 0;

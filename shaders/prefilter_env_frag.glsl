@@ -56,10 +56,15 @@ void main()
         {
             // The blur comes from averaging many sharp samples.
             // Always sample from the highest resolution (mip 0).
-            // Clamp HDR radiance so the (now-unclamped) bright sun cannot bake
-            // firefly speckle into the reflection probe — the source of the
-            // aquamarine/yellow patches seen through glass around the light.
-            prefilteredColor += min(textureLod(environmentMap, L, 0.0).rgb, vec3(8.0)) * NdotL;
+            // Clamp HDR radiance to 1.0 — the week-ago 8-bit (loadFromFile) ceiling.
+            // The switch to loadHDR (full-range float) made this prefiltered probe
+            // ~4x brighter, and since the dielectric spec-IBL term is ADDITIVE and
+            // near-neutral, that bright reflection dumped ~0.4 of flat grey onto
+            // every surface -> floored the low channels of saturated albedo (the
+            // washed/desaturated robot). Capping the reflection source at the old
+            // LDR ceiling restores albedo saturation; the diffuse IBL (irradiance,
+            // still clamped 4.0) stays strong as the hue-preserving fill.
+            prefilteredColor += min(textureLod(environmentMap, L, 0.0).rgb, vec3(1.0)) * NdotL;
             totalWeight      += NdotL;
         }
     }

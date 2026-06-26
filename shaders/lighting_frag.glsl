@@ -22,6 +22,9 @@ uniform vec3  u_sunDir;       // STATIC directional sun: world-space direction t
 uniform vec3  u_sunColor;     // sun radiance (linear), NO 1/d^2 falloff -> constant in time (no orbit pulse)
 uniform mat4  u_invViewProj;  // reconstructs the world-space view ray for background/silhouette fragments
 uniform float u_specClamp;    // specular IBL firefly clamp (Settings: render/specFireflyClamp)
+uniform int   u_debugView;    // TEMP desaturation probe: 0=normal, 1=albedo, 2=diffuseIBL, 3=specularIBL, 4=ambient, 5=Lo(direct), 6=irradiance, 7=prefiltered
+uniform float u_iblSpecScale; // scales ONLY the additive specular IBL. Diffuse IBL is multiplicative (hue-preserving) so it stays as the fill; the specular env term is near-neutral and ADDITIVE, so a high IBL fill floods saturated albedo with grey. Keep this low (~0.15) for matte surfaces.
+uniform float u_iblTint;      // 0..1 how much the DIELECTRIC spec-IBL reflection is tinted by albedo (1 = hue-preserving fill, 0 = neutral/physical). High IBL with neutral reflection washes saturated albedo grey.
 
 in vec2 TexCoords;
 out vec4 fragColor;
@@ -167,15 +170,43 @@ void main()
     float mipLevel = finalRoughness * MAX_REFLECTION_LOD;
     vec3 prefilteredColor = textureLod(prefilteredEnvMap, R, mipLevel).rgb;
 
-    // 6. Reflection tinting & BRDF LUT as before
-    prefilteredColor = mix(prefilteredColor, prefilteredColor * albedo, (1.0 - metallic) * 0.5);
+    // 6. Reflection tinting & BRDF LUT.
+    // For DIELECTRICS, fully tint the prefiltered env reflection by albedo. Physically
+    // a dielectric's spec reflection is neutral-white, but with env2's dark horizon the
+    // robot's vertical faces are lit almost entirely by this rough sky reflection. A
+    // NEUTRAL reflection there dumps grey onto saturated albedo (the washed-out look the
+    // user reported). Tinting it by albedo keeps the same illumination/brightness but
+    // makes it HUE-PRESERVING -> a red surface reflects red, not grey. (Metals keep their
+    // F0=albedo tint via the BRDF term below, so this only changes the dielectric fill.)
+    prefilteredColor = mix(prefilteredColor, prefilteredColor * albedo, (1.0 - metallic) * u_iblTint);
     vec2 brdf = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
-    vec3 specularIBL = prefilteredColor * (F_ambient * brdf.x + brdf.y) * u_iblIntensity;
+    // Karis environment-BRDF split-sum: scale term uses the FLAT F0, not the full
+    // angle-dependent Fresnel (F_ambient, which -> 1 at grazing). Using F_ambient here
+    // double-counted Fresnel and inflated dielectric spec-IBL up to ~25x, adding a
+    // near-neutral env reflection that floored the dark albedo (the washed-out look).
+    vec3 specularIBL = prefilteredColor * (F0 * brdf.x + brdf.y) * u_iblIntensity * u_iblSpecScale;
 
     // Firefly clamp: isolated ultra-bright HDR env texels (e.g. the sun)
     // otherwise saturate single pixels to white through the tonemapper.
     float specLum = dot(specularIBL, vec3(0.2126, 0.7152, 0.0722));
     if (specLum > u_specClamp) specularIBL *= u_specClamp / specLum;
+
+    // --- DEBUG VIEW (empirical desaturation probe) ---
+    // Run with KRS_HDR=0 so TonemapPass skips and this gamma-encoded term hits the
+    // screen directly. Lets us see WHICH term (diffuseIBL / specularIBL / Lo) is
+    // washing the albedo. u_debugView=0 in normal operation.
+    if (u_debugView != 0) {
+        vec3 dbg = vec3(0.0);
+        if      (u_debugView == 1) dbg = albedo;
+        else if (u_debugView == 2) dbg = diffuseIBL;
+        else if (u_debugView == 3) dbg = specularIBL;
+        else if (u_debugView == 4) dbg = diffuseIBL + specularIBL;
+        else if (u_debugView == 5) dbg = Lo;
+        else if (u_debugView == 6) dbg = irradiance;
+        else if (u_debugView == 7) dbg = prefilteredColor;
+        fragColor = vec4(pow(max(dbg, 0.0), vec3(1.0/2.2)), 1.0);
+        return;
+    }
 
     // --- 5. FINAL ASSEMBLY ---
     vec3 ambient = (diffuseIBL + specularIBL) * ao;
