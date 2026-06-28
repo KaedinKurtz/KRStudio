@@ -44,6 +44,18 @@ struct ParsedPart {
 };
 using RBBody = ParsedPart;
 
+// ---- engineering limits for a joint (consumed by clampDof via toRobot) -------
+// enabled=false models a CONTINUOUS revolute (URDF 'continuous': no position limit),
+// avoiding a new JType enum value (which would break the int serialization). effort /
+// velocity default to 0 == unspecified (URDF treats as +inf).
+struct JointLimits {
+    double lower   = -3.14159265;   // rad (revolute) / m (prismatic)
+    double upper   =  3.14159265;
+    double effort  = 0.0;
+    double velocity= 0.0;
+    bool   enabled = true;          // false => continuous (no position clamp)
+};
+
 // ---- a joint connecting two bodies, frame DERIVED from feature geometry -----
 struct RBJoint {
     int parent = -1;
@@ -54,6 +66,7 @@ struct RBJoint {
     Prov prov = Prov::Inferred;
     bool ambiguous = false;                  // flagged low-confidence -> NOT a committed joint
     double residual = 0.0;                   // coaxiality residual (diagnostic)
+    JointLimits limits;                      // position/effort/velocity bounds (Revolute/Prismatic)
 };
 
 // ---- transform an analytic BRepFace from local to world by a placement ------
@@ -226,8 +239,12 @@ struct RobotGraph {
             const int pb = co.parentBody[body];
             const Eigen::Matrix4d rel = bodies[pb].placement.inverse() * bodies[body].placement;
             krs::robot::Joint rj;
-            rj.type = (joints[pj].type == JType::Fixed) ? krs::dyn::JType::Fixed : krs::dyn::JType::Revolute;
-            rj.member = true;
+            // Lower ALL three authoring types (was a Fixed?Fixed:Revolute ternary that
+            // silently coerced Prismatic -> Revolute).
+            rj.type = (joints[pj].type == JType::Fixed)     ? krs::dyn::JType::Fixed
+                    : (joints[pj].type == JType::Prismatic) ? krs::dyn::JType::Prismatic
+                                                            : krs::dyn::JType::Revolute;
+            rj.member = true;   // in the chain (a Fixed joint positions its child rigidly; 0-DOF)
             rj.Rtree = rel.block<3,3>(0,0);
             rj.ptree = rel.block<3,1>(0,3);
             // joint axis expressed in the PARENT link frame (world axis rotated by parent^-1).
@@ -236,6 +253,15 @@ struct RobotGraph {
             rj.axis = (Rp.transpose() * aw).normalized();
             rj.frameProv = (joints[pj].prov == Prov::Manual) ? krs::robot::Provenance::UserSupplied
                                                              : krs::robot::Provenance::GeometryDerived;
+            // Carry engineering limits so clampDof enforces them. Continuous (enabled=false)
+            // => effectively unlimited. effort/velocity 0 == unspecified -> keep Joint defaults.
+            const JointLimits& L = joints[pj].limits;
+            if (L.enabled) { rj.qLower = L.lower; rj.qUpper = L.upper; }
+            else           { rj.qLower = -1e9;    rj.qUpper = 1e9; }
+            if (L.velocity > 0.0) rj.vMax = L.velocity;
+            if (L.effort   > 0.0) rj.effortMax = L.effort;
+            rj.engProv = (joints[pj].prov == Prov::Manual) ? krs::robot::Provenance::UserSupplied
+                                                           : krs::robot::Provenance::GeometryDerived;
             r.joints.push_back(rj);
         }
         return r;
@@ -316,6 +342,25 @@ struct EditController {
         if (!defineRevoluteFromSelection(worldFaceA, worldFaceB, bodyA, bodyB, j)) return false;
         graph->addJoint(j);
         if (created) *created = j;
+        return true;
+    }
+
+    // SET-JOINT-TYPE control: re-type an existing joint (Revolute/Prismatic/Fixed).
+    // Switching to/from Fixed changes dof() (Fixed is excluded), so the caller must
+    // rebuild the LiveRobot + re-init the articulation. Marks the joint Manual.
+    bool setJointType(int jointIdx, JType newType) {
+        if (!graph || jointIdx < 0 || jointIdx >= int(graph->joints.size())) return false;
+        graph->joints[jointIdx].type = newType;
+        graph->joints[jointIdx].prov = Prov::Manual;
+        return true;
+    }
+
+    // SET-LIMITS control: edit a joint's position/effort/velocity bounds (or make it
+    // continuous via enabled=false). Marks the joint Manual.
+    bool setJointLimits(int jointIdx, const JointLimits& lim) {
+        if (!graph || jointIdx < 0 || jointIdx >= int(graph->joints.size())) return false;
+        graph->joints[jointIdx].limits = lim;
+        graph->joints[jointIdx].prov   = Prov::Manual;
         return true;
     }
 };

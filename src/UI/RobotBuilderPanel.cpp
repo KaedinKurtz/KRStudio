@@ -18,6 +18,7 @@
 #include <QListWidget>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
+#include <QComboBox>
 #include <QSignalBlocker>
 #include <QMetaMethod>
 
@@ -103,6 +104,19 @@ void RobotBuilderPanel::initializeUI()
     m_defineBtn->setObjectName(QStringLiteral("rbDefineFromFeaturesButton"));
     layout->addWidget(m_defineBtn);
 
+    // --- Joint type (Revolute / Continuous / Prismatic / Fixed) for the selected joint ---
+    layout->addWidget(makeSectionHeader(QStringLiteral("Joint Type"), content));
+    auto* typeBox = new QGroupBox(content);
+    auto* typeForm = new QFormLayout(typeBox);
+    m_jointType = new QComboBox(typeBox);
+    m_jointType->setObjectName(QStringLiteral("rbJointTypeCombo"));
+    m_jointType->addItem(QStringLiteral("Revolute"));     // 0
+    m_jointType->addItem(QStringLiteral("Continuous"));   // 1 (revolute, no limits)
+    m_jointType->addItem(QStringLiteral("Prismatic"));    // 2
+    m_jointType->addItem(QStringLiteral("Fixed / Rigid")); // 3 (0-DOF weld)
+    typeForm->addRow(QStringLiteral("Selected joint"), m_jointType);
+    layout->addWidget(typeBox);
+
     // --- Joint limits (proven property hot-swap) ---
     layout->addWidget(makeSectionHeader(QStringLiteral("Joint Limits (hot-swap)"), content));
     auto* limBox = new QGroupBox(content);
@@ -171,6 +185,8 @@ void RobotBuilderPanel::setupConnections()
     connect(m_applyAxisBtn,  &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyAxisOrigin);
     connect(m_snapAxisBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onSnapAxisToBore);
     connect(m_jointsList,    &QListWidget::currentRowChanged, this, &RobotBuilderPanel::onJointSelected);
+    connect(m_jointType, QOverload<int>::of(&QComboBox::activated),
+            this, &RobotBuilderPanel::onJointTypeChanged);
 }
 
 krs::rbuild::RobotGraph* RobotBuilderPanel::graph() const
@@ -460,21 +476,64 @@ void RobotBuilderPanel::onJointSelected(int row)
             if (ji == row) dofIdx = dofSeen;
             ++dofSeen;
         }
-        const QSignalBlocker bl(m_limitLo), bh(m_limitHi), bd(m_dofIndex);
+        const QSignalBlocker bl(m_limitLo), bh(m_limitHi), bd(m_dofIndex), bt(m_jointType);
         if (dofIdx >= 0) m_dofIndex->setValue(dofIdx);
         m_limitLo->setValue(j.qLower);
         m_limitHi->setValue(j.qUpper);
+        // Reflect the live joint's type (krs::dyn::JType has no 'continuous' notion).
+        int ti = 0;
+        if (j.type == krs::dyn::JType::Prismatic) ti = 2;
+        else if (j.type == krs::dyn::JType::Fixed) ti = 3;
+        m_jointType->setCurrentIndex(ti);
         return;
     }
 
-    // Authoring graph: reflect the selected joint's axis origin into the adjust spin boxes.
+    // Authoring graph: reflect the selected joint's axis origin + type into the controls.
     auto* g = graph();
     if (!g || row < 0 || row >= int(g->joints.size()) || !m_axisX) return;
     const auto& j = g->joints[row];
-    const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ);
+    const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ), bt(m_jointType);
     m_axisX->setValue(j.axisPos.x);
     m_axisY->setValue(j.axisPos.y);
     m_axisZ->setValue(j.axisPos.z);
+    int ti = 0;
+    if (j.type == krs::rbuild::JType::Revolute)  ti = j.limits.enabled ? 0 : 1;  // 1 = continuous
+    else if (j.type == krs::rbuild::JType::Prismatic) ti = 2;
+    else if (j.type == krs::rbuild::JType::Fixed)     ti = 3;
+    m_jointType->setCurrentIndex(ti);
+}
+
+void RobotBuilderPanel::onJointTypeChanged(int comboIndex)
+{
+    if (m_isUpdatingUI) return;
+    if (m_editRobotId >= 0) {   // FANUC live-bind: structural re-type is a graph-authoring op (Phase 3)
+        setStatus(QStringLiteral("Joint-type editing applies to builder-authored robots. "
+                                 "Load Demo to author; the FANUC becomes fully editable in a later phase."));
+        return;
+    }
+    auto* g = graph();
+    const int row = m_jointsList->currentRow();
+    if (!g || row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to re-type.")); return; }
+
+    krs::rbuild::JType t = krs::rbuild::JType::Revolute;
+    bool continuous = false;
+    switch (comboIndex) {
+        case 0: t = krs::rbuild::JType::Revolute;  continuous = false; break;
+        case 1: t = krs::rbuild::JType::Revolute;  continuous = true;  break;   // continuous = revolute, no limits
+        case 2: t = krs::rbuild::JType::Prismatic; continuous = false; break;
+        case 3: t = krs::rbuild::JType::Fixed;     continuous = false; break;
+        default: break;
+    }
+    krs::rbuild::EditController ctrl{ g };
+    const int before = ctrl.dof();
+    ctrl.setJointType(row, t);
+    krs::rbuild::JointLimits lim = g->joints[row].limits;
+    lim.enabled = !continuous;
+    ctrl.setJointLimits(row, lim);
+    setStatus(QStringLiteral("J%1 type -> %2. DOF %3 -> %4 (Fixed=0-DOF weld; Continuous=no limits).")
+        .arg(row).arg(m_jointType->currentText()).arg(before).arg(ctrl.dof()));
+    refresh();
+    emit graphChanged();
 }
 
 void RobotBuilderPanel::onApplyAxisOrigin()
@@ -717,8 +776,34 @@ bool runRobotBuilderPanelGate()
                limitOk ? "PASS" : "FAIL");
     }
 
+    // PHASE 1: joint-type model -- EditController re-types; toRobot honours type+limits
+    // (Prismatic no longer coerced to Revolute; Fixed is a 0-DOF weld; continuous unbounds).
+    bool prismaticOk = false, fixedDropsDof = false, continuousOk = false, comboPresent = false;
+    {
+        Scene scene;
+        auto& g = scene.getRegistry().ctx().emplace<RobotGraph>(buildDemoGraph());
+        spawnGraphBodies(scene, g, 0);
+        const int dof0 = g.dof();
+        EditController ctrl{ &g };
+        ctrl.setJointType(0, JType::Prismatic);
+        for (const auto& jj : g.toRobot().joints) if (jj.type == krs::dyn::JType::Prismatic) prismaticOk = true;
+        JointLimits cl; cl.enabled = false;
+        ctrl.setJointType(0, JType::Revolute); ctrl.setJointLimits(0, cl);
+        for (const auto& jj : g.toRobot().joints) if (jj.qUpper > 1e8) continuousOk = true;
+        ctrl.setJointType(0, JType::Fixed);
+        fixedDropsDof = (g.dof() == dof0 - 1);
+        RobotBuilderPanel panel(&scene);
+        auto* combo = panel.findChild<QComboBox*>(QStringLiteral("rbJointTypeCombo"));
+        comboPresent = combo && combo->count() == 4;
+        printf("[rbuild]   joint-type model: prismatic-not-coerced=%s fixed-drops-dof=%s continuous-unbounds=%s combo(4)=%s  %s\n",
+               prismaticOk ? "yes" : "no", fixedDropsDof ? "yes" : "no", continuousOk ? "yes" : "no",
+               comboPresent ? "yes" : "no",
+               (prismaticOk && fixedDropsDof && continuousOk && comboPresent) ? "PASS" : "FAIL");
+    }
+    const bool typeModelOk = prismaticOk && fixedDropsDof && continuousOk && comboPresent;
+
     const bool pass = completeness && wiringDetector && loadDemoWired && deleteOk && !deleteWrongDir
-                    && defineOk && !defineWrongDir && degenRejected && limitOk;
+                    && defineOk && !defineWrongDir && degenRejected && limitOk && typeModelOk;
 
     printf("[rbuild]   NEG-CTRLs: delete-wrong-direction=%s define-wrong-direction=%s degenerate-rejected=%s  %s\n",
            deleteWrongDir ? "YES(bug)" : "no", defineWrongDir ? "YES(bug)" : "no",

@@ -21,6 +21,7 @@ class QLabel;
 class QPushButton;
 class QDoubleSpinBox;
 class QSpinBox;
+class QComboBox;
 
 namespace krs::rbuild { struct RobotGraph; }
 namespace krs::rcfg  { struct RobotConfig; }
@@ -58,6 +59,7 @@ private slots:
     void onApplyLimit();
     void onApplyAxisOrigin();   // move the selected joint's axis origin (where it snaps to)
     void onSnapAxisToBore();    // snap the selected joint's axis to the selected bore feature
+    void onJointTypeChanged(int comboIndex);   // re-type the selected joint (Revolute/Continuous/Prismatic/Fixed)
 
 private:
     void initializeUI();
@@ -77,6 +79,7 @@ private:
     QPushButton*    m_loadDemoBtn   = nullptr;
     QLabel*         m_dofLabel      = nullptr;
     QListWidget*    m_jointsList    = nullptr;
+    QComboBox*      m_jointType     = nullptr;
     QPushButton*    m_deleteBtn     = nullptr;
     QLabel*         m_defineHint    = nullptr;
     QPushButton*    m_defineBtn     = nullptr;

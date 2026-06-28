@@ -118,8 +118,11 @@ struct LiveRobot {
     void rebuild() {
         chain = model.toChain();
         memberJoint.clear();
+        // DOF index -> model joint index: only NON-FIXED member joints carry a DOF, so
+        // memberJoint.size() == chain.nq() even when Fixed joints rigidly weld sub-links.
         for (int i = 0; i < int(model.joints.size()); ++i)
-            if (model.joints[i].member) memberJoint.push_back(i);
+            if (model.joints[i].member && model.joints[i].type != krs::dyn::JType::Fixed)
+                memberJoint.push_back(i);
         const int n = chain.nq();
         if (int(q.size())       != n) q       = Eigen::VectorXd::Zero(n);
         if (int(qActual.size()) != n) qActual = Eigen::VectorXd::Zero(n);
