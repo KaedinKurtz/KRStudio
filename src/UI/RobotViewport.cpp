@@ -291,7 +291,7 @@ void RobotViewport::rebuildView()
                     const glm::vec3 d(float(ax.second.x()), float(ax.second.y()), float(ax.second.z()));
                     const entt::entity ae = SceneBuilder::spawnPrimitive(
                         *m_viewScene, int(Primitive::Cylinder), o,
-                        glm::vec3(0.012f, 0.35f, 0.012f), "JointAxis");
+                        glm::vec3(0.014f, 0.90f, 0.014f), "JointAxis");   // long bar; drawn on-top
                     if (reg.valid(ae)) {
                         reg.get<TransformComponent>(ae).rotation =
                             glm::rotation(glm::vec3(0.0f, 1.0f, 0.0f), glm::normalize(d));
@@ -299,6 +299,9 @@ void RobotViewport::rebuildView()
                         mat.albedoColor      = glm::vec3(0.10f, 0.90f, 1.00f);
                         mat.emissiveColor    = glm::vec3(0.10f, 0.90f, 1.00f);
                         mat.emissiveStrength = 4.0f;
+                        // Drawn always-on-top by JointAxisPass (and excluded from the opaque
+                        // G-buffer), so the axis is visible even where it passes through a link.
+                        reg.emplace<JointAxisComponent>(ae);
                     }
                 }
             }

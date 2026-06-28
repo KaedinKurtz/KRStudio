@@ -14,9 +14,9 @@ public:
     void execute(const RenderFrameContext& context) override;
 
     using DeferredExclusionTags = entt::exclude_t<
-        GizmoHandleComponent          // add more tags here later
+        GizmoHandleComponent,         // add more tags here later
+        JointAxisComponent            // joint-axis bars draw on-top via JointAxisPass
         // , NoDeferredDrawTag
-        // , AnotherSkipTag
     >;
 
 private:

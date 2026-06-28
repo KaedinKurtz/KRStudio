@@ -78,6 +78,11 @@ Robot robotFromArticSpec(const krs::dyn::RobotArticSpec& spec) {
         rj.Rtree = R;
         rj.ptree = Eigen::Vector3d(j.ptree[0], j.ptree[1], j.ptree[2]);
         rj.axis  = Eigen::Vector3d(j.axis[0], j.axis[1], j.axis[2]).normalized();
+        // Carry the real engineering limits so clampDof() enforces them (the FINAL clamp).
+        // Without this, qLower/qUpper kept their +/-pi defaults and the drive never clamped.
+        rj.qLower = double(j.qLower); rj.qUpper = double(j.qUpper);
+        rj.vMax = double(j.vMax); rj.effortMax = double(j.effortMax);
+        rj.engProv = Provenance::UserSupplied;
         r.joints.push_back(rj);
     }
     return r;

@@ -32,6 +32,10 @@ struct RobotSubcomponentComponent { int robotId = -1; };
 struct CameraGizmoTag {};
 struct RecordLedTag {};
 struct PulsingSplineTag {};
+// A joint-axis indicator bar (spawned in the Robot View). Drawn always-on-top by
+// JointAxisPass and EXCLUDED from the opaque G-buffer pass, so the robot's defined
+// rotation axes are visible even when their geometry sits inside a link body.
+struct JointAxisComponent {};
 struct ColorIndexComponent {
     int paletteIndex;
 };

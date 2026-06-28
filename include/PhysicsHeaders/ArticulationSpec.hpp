@@ -18,6 +18,12 @@ struct ArticJointSpec {
     float mass = 1.0f;
     std::array<float, 3> com{ {0.f, 0.f, 0.f} };
     std::array<float, 3> inertiaDiag{ {0.1f, 0.1f, 0.1f} };
+    // Engineering limits -- carried so they reach krs::robot::Joint and clampDof() is the
+    // FINAL authoritative clamp on commanded angles (no command may exceed the bound).
+    // Defaults are wide (+/-pi); canonicalSpec() overrides with real per-axis bounds.
+    float qLower = -3.14159265f, qUpper = 3.14159265f;  // rad (revolute) / m (prismatic)
+    float vMax = 2.0f, effortMax = 100.0f;
+    bool  frozen = false;                              // declared but not yet a driven DOF (e.g. wrist pending 6-DoF parse)
 };
 
 // Optional closed loop (the FANUC parallelogram): pin link `tipLink`'s +tipLocal

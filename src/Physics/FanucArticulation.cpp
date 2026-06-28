@@ -40,18 +40,23 @@ krs::dyn::RobotArticSpec canonicalSpec()
 {
     using krs::dyn::ArticJointSpec;
     krs::dyn::RobotArticSpec ps; ps.fixBase = true;
-    auto addJ = [&](int parent, float ax, float ay, float az, float px, float py, float pz) {
+    auto addJ = [&](int parent, float ax, float ay, float az, float px, float py, float pz,
+                    float lo, float hi, bool frozen = false) {
         ArticJointSpec j; j.parent = parent; j.revolute = true;
         j.axis = { ax, ay, az };
         j.Rtree = { 1,0,0, 0,1,0, 0,0,1 };
         j.ptree = { px, py, pz };
         j.mass = 1.0f; j.com = { 0,0,0 }; j.inertiaDiag = { 0.1f, 0.1f, 0.1f };
+        // Approximate FANUC-430-class per-axis travel (rad). User-editable; Phase 4 will
+        // refine via collision sweep. These are real FINITE bounds (not +/-pi) so clampDof
+        // demonstrably stops a command at the limit.
+        j.qLower = lo; j.qUpper = hi; j.vMax = 2.0f; j.effortMax = 100.0f; j.frozen = frozen;
         ps.joints.push_back(j);
     };
-    addJ(-1, 0,1,0,  0.f, 0.f,    0.f);     // J1 base yaw   (Y @ origin)
-    addJ( 0, 1,0,0,  0.f, 0.74f,  0.305f);  // J2 shoulder   (X @ 0.74,0.305)
-    addJ( 1, 1,0,0,  0.f, 1.075f, 0.f);     // J3 elbow      (X, +1.075 -> world 1.815,0.305)
-    addJ( 2, 0,0,1,  0.f, 0.25f,  0.f);     // J4 wrist roll (Z) -- present but FROZEN
+    addJ(-1, 0,1,0,  0.f, 0.f,    0.f,   -2.967f, 2.967f);          // J1 base yaw  (Y @ origin)  +/-170deg
+    addJ( 0, 1,0,0,  0.f, 0.74f,  0.305f,-1.571f, 2.618f);          // J2 shoulder  (X)           -90..+150deg
+    addJ( 1, 1,0,0,  0.f, 1.075f, 0.f,   -2.792f, 2.792f);          // J3 elbow     (X)           +/-160deg
+    addJ( 2, 0,0,1,  0.f, 0.25f,  0.f,   -3.316f, 3.316f, true);    // J4 wrist roll(Z) FROZEN     +/-190deg
     return ps;
 }
 

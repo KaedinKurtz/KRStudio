@@ -25,6 +25,7 @@
 #include "FieldVisualizerPass.hpp"
 #include "PointCloudPass.hpp"
 #include "GizmoPass.hpp"
+#include "JointAxisPass.hpp"
 #include "FluidPass.hpp"
 #include "MpmPass.hpp"
 #include "FluidSurfacePass.hpp"
@@ -713,6 +714,9 @@ void RenderingSystem::initializeSharedResources()
     // Display transform AFTER the water/foam composite (they blend in linear
     // HDR), BEFORE the gizmo (authored in display space).
     m_overlayPasses.push_back(std::make_unique<TonemapPass>());
+    // Joint-axis indicator bars: always-on-top, post-tonemap (no exposure pre-divide
+    // needed). Before the gizmo so the gizmo stays on absolute top.
+    m_overlayPasses.push_back(std::make_unique<JointAxisPass>());
     m_overlayPasses.push_back(std::make_unique<GizmoPass>());
 
     // Fluid solver lives on the engine context alongside the passes.
