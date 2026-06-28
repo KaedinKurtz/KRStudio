@@ -43,6 +43,9 @@ public:
     float orbitSpeed() const { return m_orbitSpeed; }
     void  setOrbitSpeed(float radPerSec);
 
+    // # of mirrored view bodies currently carrying the selection (cross-viewport check).
+    int viewSelectedCount() const;
+
 public slots:
     void refreshFromLive();   // re-bind to the live graph + re-mirror its bodies
 

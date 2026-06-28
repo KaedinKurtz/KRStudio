@@ -101,6 +101,16 @@ void RobotViewport::onModeToggled(bool builder)
     if (m_modeToggle) m_modeToggle->setText(builder ? QStringLiteral("Builder") : QStringLiteral("Mirror"));
 }
 
+int RobotViewport::viewSelectedCount() const
+{
+    if (!m_viewScene) return 0;
+    auto& vreg = m_viewScene->getRegistry();
+    int n = 0;
+    for (const auto& pr : m_bodyMap)
+        if (vreg.valid(pr.second) && vreg.any_of<SelectedComponent>(pr.second)) ++n;
+    return n;
+}
+
 void RobotViewport::layoutOverlayControls()
 {
     if (!m_orbitSlider) return;
@@ -152,9 +162,27 @@ void RobotViewport::mousePressEvent(QMouseEvent* ev)
 
 void RobotViewport::mouseReleaseEvent(QMouseEvent* ev)
 {
-    ViewportWidget::mouseReleaseEvent(ev);   // let the base finish its nav first
+    ViewportWidget::mouseReleaseEvent(ev);   // base picks (sets selection in the VIEW scene)
     m_manualNav = false;
     reseedOrbitFromCamera();                 // resume orbit from the current view
+
+    // Cross-viewport selection (VIEW -> MAIN): if a robot body was picked in this view,
+    // select its twin in the main scene (the source of truth). onSpinTick then mirrors it
+    // back so both viewports gold-outline the same part, even at different poses.
+    if (!m_bodyMap.empty() && m_mainScene && m_viewScene) {
+        auto& vreg = m_viewScene->getRegistry();
+        auto& mreg = m_mainScene->getRegistry();
+        std::vector<entt::entity> picked;     // main twins of selected view bodies
+        for (const auto& pr : m_bodyMap)
+            if (vreg.valid(pr.second) && vreg.any_of<SelectedComponent>(pr.second) && mreg.valid(pr.first))
+                picked.push_back(pr.first);
+        if (!picked.empty()) {
+            for (const auto& pr : m_bodyMap)
+                if (mreg.valid(pr.first) && mreg.any_of<SelectedComponent>(pr.first))
+                    mreg.remove<SelectedComponent>(pr.first);
+            for (auto e : picked) mreg.emplace_or_replace<SelectedComponent>(e);
+        }
+    }
 }
 
 void RobotViewport::reseedOrbitFromCamera()
@@ -304,6 +332,11 @@ void RobotViewport::onSpinTick()
             } else if (mreg.valid(pr.first)) {
                 if (auto* mtc = mreg.try_get<TransformComponent>(pr.first)) *vtc = *mtc;  // live
             }
+            // Cross-viewport selection: mirror the MAIN scene's selection onto the view
+            // twin so a body selected in the main viewport/outliner is gold-outlined here.
+            const bool sel = mreg.valid(pr.first) && mreg.any_of<SelectedComponent>(pr.first);
+            if (sel && !vreg.any_of<SelectedComponent>(pr.second))      vreg.emplace<SelectedComponent>(pr.second);
+            else if (!sel && vreg.any_of<SelectedComponent>(pr.second)) vreg.remove<SelectedComponent>(pr.second);
         }
     }
 

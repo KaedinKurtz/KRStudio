@@ -1602,6 +1602,22 @@ MainWindow::MainWindow(QWidget* parent)
         QTimer::singleShot(5000, this, [this]() {
             if (m_robotViewport) m_robotViewport->setOrbitSpeed(0.75f);
         });
+        // 2b) Select a robot body in the MAIN scene so the grab shows it gold-outlined in
+        //     BOTH viewports (cross-viewport selection).
+        QTimer::singleShot(5500, this, [this]() {
+            auto& reg = m_scene->getRegistry();
+            entt::entity pick = entt::null; float bestY = -1e9f;
+            for (auto e : reg.view<RobotSubcomponentComponent, RenderableMeshComponent, TransformComponent>())
+                if (reg.get<RobotSubcomponentComponent>(e).robotId == 0) {
+                    const float y = reg.get<TransformComponent>(e).translation.y;  // highest = most visible
+                    if (y > bestY) { bestY = y; pick = e; }
+                }
+            if (pick != entt::null) {
+                for (auto s : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(s);
+                reg.emplace_or_replace<SelectedComponent>(pick);
+                qInfo() << "[XSEL] selected main robot body e=" << std::uint32_t(pick) << "y=" << bestY;
+            }
+        });
         // 3) After GL init + many frames, grab + sample pixels.
         QTimer::singleShot(8000, this, [this, outDir]() {
             if (!m_robotViewport) { qInfo() << "[ROBOTVIEW] no viewport"; return; }
@@ -1612,6 +1628,8 @@ MainWindow::MainWindow(QWidget* parent)
                 mvp->grab().save(outDir + QStringLiteral("/mainvp.png"));
             if (OutlinerWidget* ow = findChild<OutlinerWidget*>())  // the Robot->bodies tree
                 ow->grab().save(outDir + QStringLiteral("/outliner.png"));
+            if (m_robotViewport)
+                qInfo() << "[XSEL] view-twins selected (cross-viewport):" << m_robotViewport->viewSelectedCount();
             const QImage wi = pm.toImage();
             const int w = wi.width(), h = wi.height();
             QFile f(outDir + QStringLiteral("/robotview_result.txt"));
