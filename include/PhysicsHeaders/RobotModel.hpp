@@ -149,6 +149,24 @@ struct LiveRobot {
         std::vector<krs::dyn::Pose> poses; chain.fk(q, poses); return poses;
     }
 
+    // World-frame (axisPos, axisDir) of each member joint at HOME (q=0), for the Robot
+    // View joint-axis overlay. Joint origin = parent link frame * ptree; axis = parent
+    // rotation * Rtree * axis. Parent of member joint k is chain body k-1 (base for k=0).
+    std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> jointAxesWorld() const {
+        std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> out;
+        if (chain.nq() <= 0) return out;
+        std::vector<krs::dyn::Pose> poses; chain.fk(Eigen::VectorXd::Zero(chain.nq()), poses);
+        const Eigen::Matrix3d Rb = model.basePlacement.block<3, 3>(0, 0);
+        const Eigen::Vector3d pb = model.basePlacement.block<3, 1>(0, 3);
+        for (int k = 0; k < int(memberJoint.size()); ++k) {
+            const Joint& j = model.joints[memberJoint[k]];
+            Eigen::Matrix3d Rp = Rb; Eigen::Vector3d pp = pb;
+            if (k > 0 && (k - 1) < int(poses.size())) { Rp = Rb * poses[k - 1].R; pp = Rb * poses[k - 1].p + pb; }
+            out.emplace_back(pp + Rp * j.ptree, (Rp * (j.Rtree * j.axis)).normalized());
+        }
+        return out;
+    }
+
     Eigen::VectorXd deviation() const {
         return (q.size() == qActual.size()) ? Eigen::VectorXd(q - qActual) : Eigen::VectorXd();
     }

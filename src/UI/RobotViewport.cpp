@@ -9,6 +9,8 @@
 #include "RobotBuilder.hpp"        // krs::rbuild::RobotGraph
 #include "RobotBuilderScene.hpp"   // mirrorGraphIntoScene / turntableCameraPos / gate
 #include "RobotModel.hpp"          // krs::robot::RobotRegistry / mirrorLiveRobotIntoScene
+#include "PrimitiveBuilders.hpp"   // Primitive::Cylinder (joint-axis bars)
+#include <glm/gtx/quaternion.hpp>  // glm::rotation (align a bar to the axis direction)
 
 #include <QTimer>
 #include <QSlider>
@@ -277,6 +279,28 @@ void RobotViewport::rebuildView()
                     if (auto* t = mreg.try_get<TransformComponent>(m_bodyMap[i].first)) m_restXf[i] = *t;
                 lr->q = savedQ;
                 krs::robot::writeBackRobotViz(*m_mainScene, *lr);     // restore live pose
+            }
+        }
+
+        // Joint-axis overlay: a bright cyan emissive bar through each joint's HOME axis,
+        // so the robot's defined axes are visible (esp. in Builder mode for joint editing).
+        if (auto* rr = mreg.ctx().find<krs::robot::RobotRegistry>()) {
+            if (auto* lr = rr->get(m_robotId)) {
+                for (const auto& ax : lr->jointAxesWorld()) {
+                    const glm::vec3 o(float(ax.first.x()), float(ax.first.y()), float(ax.first.z()));
+                    const glm::vec3 d(float(ax.second.x()), float(ax.second.y()), float(ax.second.z()));
+                    const entt::entity ae = SceneBuilder::spawnPrimitive(
+                        *m_viewScene, int(Primitive::Cylinder), o,
+                        glm::vec3(0.012f, 0.35f, 0.012f), "JointAxis");
+                    if (reg.valid(ae)) {
+                        reg.get<TransformComponent>(ae).rotation =
+                            glm::rotation(glm::vec3(0.0f, 1.0f, 0.0f), glm::normalize(d));
+                        auto& mat = reg.get_or_emplace<MaterialComponent>(ae);
+                        mat.albedoColor      = glm::vec3(0.10f, 0.90f, 1.00f);
+                        mat.emissiveColor    = glm::vec3(0.10f, 0.90f, 1.00f);
+                        mat.emissiveStrength = 4.0f;
+                    }
+                }
             }
         }
     } else if (m_liveGraph && !m_liveGraph->bodies.empty()) {
