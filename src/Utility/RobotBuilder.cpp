@@ -237,9 +237,28 @@ bool runAutoParseReport()
     printf("[autoparse]   %zu body(ies) left UNJOINTED (no confident interface) -- manual definition required\n",
            parts.size() - mem.size());
 
-    const bool pass = parts.size() >= 2;   // the real OCCT parse -> inference pipeline ran on actual data
-    printf("[autoparse] %s\n", pass ? "PASS (real assembly parsed into bodies+placements; joints inferred from geometry; ambiguous left unjointed)"
-                                    : "FAIL (parse produced too few bodies)");
+    // NAME-DRIVEN chain (the robust first guess): names set the serial ORDER, geometry the axes.
+    // Rule 2: the wrist (j4/j5/j6) is geometrically ambiguous, so we VERIFY the joint order
+    // matches the named chain base->j1->..->j6, not merely that some chain closes.
+    RobotGraph gn = buildNamedSerialChain(parts);
+    int revs = 0, ambig = 0, expect = 1; bool orderOk = true;
+    for (const auto& j : gn.joints) {
+        if (j.type != JType::Revolute) continue;
+        ++revs; if (j.ambiguous) ++ambig;
+        const int childJ = jointNumberFromName(parts[j.child].name);
+        if (childJ != expect) orderOk = false;
+        ++expect;
+    }
+    const int dofN = gn.dof();
+    printf("[autoparse]   NAME-DRIVEN chain: %d revolute joint(s), DOF=%d, %d ambiguous(need manual axis); "
+           "named order base->j1..j6 = %s\n",
+           revs, dofN, ambig, orderOk ? "OK" : "WRONG");
+
+    // Gate passes iff a real 6-joint serial chain in the NAMED order was produced (axes may
+    // still be ambiguous on the wrist -- that is honest, the user defines those).
+    const bool pass = parts.size() >= 2 && revs == 6 && orderOk;
+    printf("[autoparse] %s\n", pass ? "PASS (named 6-DoF serial chain in correct order; axes from bores; ambiguous wrist axes flagged for manual definition)"
+                                    : "FAIL (named serial chain not 6 joints in order)");
     std::fflush(stdout);
     return pass;
 #endif

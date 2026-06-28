@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <array>
 #include <algorithm>
 #include <cmath>
 
@@ -345,6 +346,69 @@ inline RobotGraph buildGraphFromParts(const std::vector<ParsedPart>& parts, int 
     for (const auto& e : edges) {
         const int ra = find(e.a), rb = find(e.b);
         if (ra != rb) { uf[ra] = rb; g.addJoint(e.j); }     // tree edge -> commit the joint
+    }
+    return g;
+}
+
+// ---- NAME-DRIVEN serial-chain parse (the robust first guess for a named arm) -----------
+// Pure geometric inference is AMBIGUOUS for a compact wrist (j4/j5/j6 share a near-common
+// axis line, so lowest-residual coaxial pairing mis-orders them). When the CAD parts are
+// NAMED by joint (FANUC: 430-base, 430-j1..j6, the 430_j3-* forearm cluster), the NAMES
+// establish the serial ORDER; geometry only supplies each joint's axis. This:
+//   * groups parts by joint number (the first 'j<1..6>' token in the name; else base),
+//   * collapses each multi-part link with FIXED joints (dof() ignores them) -- e.g. the
+//     430_j3-* cluster and 430-j1-hardstop ride their link rigidly,
+//   * adds a REVOLUTE between consecutive link representatives, axis from the best coaxial
+//     bore between the two link groups (ambiguous=true if none -> user defines it),
+//   * orders base -> j1 -> j2 -> j3 -> j4 -> j5 -> j6.
+// Returns a RobotGraph whose committed revolute joints are in the NAMED chain order.
+inline int jointNumberFromName(const std::string& nm) {
+    for (size_t i = 0; i + 1 < nm.size(); ++i)
+        if ((nm[i] == 'j' || nm[i] == 'J') && nm[i + 1] >= '1' && nm[i + 1] <= '6')
+            return nm[i + 1] - '0';
+    return 0;   // base / static accessory
+}
+inline RobotGraph buildNamedSerialChain(const std::vector<ParsedPart>& parts)
+{
+    RobotGraph g; g.bodies = parts; g.base = 0;
+    std::array<std::vector<int>, 7> grp;            // [0]=base/static, [1..6]=j1..j6
+    for (int i = 0; i < int(parts.size()); ++i) grp[jointNumberFromName(parts[i].name)].push_back(i);
+
+    int prevRep = -1; std::vector<int> prevGroup;
+    bool baseSet = false;
+    for (int L = 0; L <= 6; ++L) {
+        if (grp[L].empty()) continue;
+        const int rep = grp[L].front();
+        if (!baseSet) { g.base = rep; baseSet = true; }
+        // intra-link rigidity: the other parts of this link ride the representative (Fixed).
+        for (size_t k = 1; k < grp[L].size(); ++k) {
+            RBJoint fj; fj.parent = rep; fj.child = grp[L][k];
+            fj.type = JType::Fixed; fj.prov = Prov::Inferred;
+            g.addJoint(fj);
+        }
+        // serial revolute to the previous link, axis from the best coaxial bore between
+        // groups. The name prior already GUARANTEES these two links are connected, so the
+        // axis search is RELAXED (coax/rad tol) vs the strict pure-geometric spanning tree
+        // (which must avoid false positives): we just want the best-fitting shared axis. The
+        // lowest-residual candidate is the true pivot; bolt holes across a pitch joint are
+        // not coaxial, so they lose.
+        if (prevRep >= 0) {
+            RBJoint best; double bestRes = 1e30; bool found = false;
+            for (int a : prevGroup) for (int b : grp[L]) {
+                RBJoint cand;
+                if (inferRevolute(parts[a], parts[b], cand, /*coaxTol*/ 5e-3, /*radTol*/ 5e-3)
+                    && cand.residual < bestRes) {
+                    bestRes = cand.residual; best = cand; found = true;
+                }
+            }
+            best.parent = prevRep; best.child = rep; best.type = JType::Revolute;
+            best.prov = Prov::Inferred;
+            best.ambiguous = !found;                 // no coaxial bore -> needs manual definition
+            if (!found) { best.axisDir = glm::vec3(0, 0, 1); best.axisPos = glm::vec3(0); }
+            best.orthonormalizeFrame();
+            g.addJoint(best);
+        }
+        prevRep = rep; prevGroup = grp[L];
     }
     return g;
 }
