@@ -3,7 +3,9 @@
 #include "RenderingHeaders/Texture2D.hpp"
 #include "RenderingHeaders/Shader.hpp"
 #include <QOpenGLFunctions_4_3_Core>
+#include <QOpenGLContext>
 #include <memory>
+#include <unordered_map>
 #include <glm/vec4.hpp> // For glm::u8vec4
 
 
@@ -11,25 +13,33 @@ namespace {
     // This helper is now in an anonymous namespace,
     // making it local to just this .cpp file.
     GLuint getFullscreenQuadVAO(QOpenGLFunctions_4_3_Core* gl) {
-        static GLuint quadVAO = 0;
-        if (quadVAO == 0) {
-            float quadVertices[] = {
-                -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-                -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-                 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-                 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-            };
-            GLuint quadVBO;
-            gl->glGenVertexArrays(1, &quadVAO);
-            gl->glGenBuffers(1, &quadVBO);
-            gl->glBindVertexArray(quadVAO);
-            gl->glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-            gl->glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-            gl->glEnableVertexAttribArray(0);
-            gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-            gl->glEnableVertexAttribArray(1);
-            gl->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-        }
+        // VAOs are PER-CONTEXT (never shared, even under AA_ShareOpenGLContexts which
+        // shares only buffers/textures). With multiple viewports = multiple contexts, a
+        // single static VAO is valid in just ONE context and draws garbage in the others.
+        // Cache one VAO per current context.
+        static std::unordered_map<QOpenGLContext*, GLuint> quadVAOs;
+        QOpenGLContext* ctx = QOpenGLContext::currentContext();
+        auto it = quadVAOs.find(ctx);
+        if (it != quadVAOs.end()) return it->second;
+
+        float quadVertices[] = {
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        };
+        GLuint quadVAO = 0, quadVBO = 0;
+        gl->glGenVertexArrays(1, &quadVAO);
+        gl->glGenBuffers(1, &quadVBO);
+        gl->glBindVertexArray(quadVAO);
+        gl->glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        gl->glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        gl->glEnableVertexAttribArray(0);
+        gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        gl->glEnableVertexAttribArray(1);
+        gl->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+        gl->glBindVertexArray(0);
+        quadVAOs[ctx] = quadVAO;
         return quadVAO;
     }
 } // anonymous namespace
@@ -77,9 +87,19 @@ namespace GLUtils {
     }
 
     GLuint getUnitCubeVAO(QOpenGLFunctions_4_3_Core* gl) {
-        // static VAO ensures the cube is only created on the GPU once.
-        static GLuint cubeVAO = 0;
-        if (cubeVAO == 0) {
+        // VAOs are PER-CONTEXT (never shared across GL contexts). A single static cube
+        // VAO is valid in only the context that created it; in a SECOND viewport's
+        // context it draws garbage -> the skybox / grey-room / IBL-bake cube renders
+        // with black wedges. (This is the multi-viewport "black planes" regression.)
+        // Cache one cube VAO per current context.
+        static std::unordered_map<QOpenGLContext*, GLuint> cubeVAOs;
+        QOpenGLContext* ctx = QOpenGLContext::currentContext();
+        {
+            auto it = cubeVAOs.find(ctx);
+            if (it != cubeVAOs.end()) return it->second;
+        }
+        GLuint cubeVAO = 0;
+        {
             float vertices[] = {
                 // positions
                 -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
@@ -107,6 +127,7 @@ namespace GLUtils {
             // We can delete the VBO now that the VAO has captured the state.
             gl->glDeleteBuffers(1, &cubeVBO);
         }
+        cubeVAOs[ctx] = cubeVAO;
         return cubeVAO;
     }
 

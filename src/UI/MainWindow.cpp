@@ -1642,6 +1642,78 @@ MainWindow::MainWindow(QWidget* parent)
         });
     }
 
+    // Debug: KRS_HIDE_TAG=<substr> hides (HiddenComponent) every entity whose tag contains
+    // the substring at +5s -- to bisect which object draws the reported black plane.
+    if (qEnvironmentVariableIsSet("KRS_HIDE_TAG")) {
+        const QString needle = qEnvironmentVariable("KRS_HIDE_TAG");
+        QTimer::singleShot(5000, this, [this, needle]() {
+            auto& reg = m_scene->getRegistry();
+            int hidden = 0;
+            // OpaquePass ignores HiddenComponent, so MOVE matched entities far below the
+            // world to remove them from the render (decisive bisect of who draws what).
+            for (auto e : reg.view<TagComponent, TransformComponent>()) {
+                if (QString::fromStdString(reg.get<TagComponent>(e).tag).contains(needle, Qt::CaseInsensitive)) {
+                    reg.get<TransformComponent>(e).translation.y -= 100000.0f;
+                    reg.emplace_or_replace<HiddenComponent>(e); ++hidden;
+                }
+            }
+            qInfo() << "[KRS_HIDE_TAG] moved/hid" << hidden << "entities matching" << needle;
+        });
+    }
+
+    // Debug: KRS_SCENE_DUMP=1 logs every renderable main-scene entity's tag/scale/world
+    // AABB extent at +6s, flagging OVERSIZED geometry + all lights -- to find the "black
+    // plane converging at the focal point" reported in the main viewport.
+    if (qEnvironmentVariableIsSet("KRS_SCENE_DUMP")) {
+        QTimer::singleShot(6000, this, [this]() {
+            auto& reg = m_scene->getRegistry();
+            ViewportWidget::propagateTransforms(reg);
+            qInfo() << "===== KRS_SCENE_DUMP (WORLD-space extents) =====";
+            int n = 0, flagged = 0;
+            for (auto e : reg.view<RenderableMeshComponent, TransformComponent>()) {
+                ++n;
+                const auto& m = reg.get<RenderableMeshComponent>(e);
+                glm::mat4 W(1.0f);
+                if (auto* wt = reg.try_get<WorldTransformComponent>(e)) W = wt->matrix;
+                else W = reg.get<TransformComponent>(e).getTransform();
+                glm::vec3 mn(1e30f), mx(-1e30f);
+                for (int c = 0; c < 8; ++c) {
+                    const glm::vec3 corner(
+                        (c & 1) ? m.aabbMax.x : m.aabbMin.x,
+                        (c & 2) ? m.aabbMax.y : m.aabbMin.y,
+                        (c & 4) ? m.aabbMax.z : m.aabbMin.z);
+                    const glm::vec3 wp = glm::vec3(W * glm::vec4(corner, 1.0f));
+                    mn = glm::min(mn, wp); mx = glm::max(mx, wp);
+                }
+                const glm::vec3 ext = mx - mn;
+                const float maxExt = std::max({ ext.x, ext.y, ext.z });
+                const auto* tag = reg.try_get<TagComponent>(e);
+                const QString name = tag ? QString::fromStdString(tag->tag) : QStringLiteral("?");
+                const bool isLight = reg.any_of<LightComponent>(e);
+                const bool isGizmo = reg.any_of<GizmoHandleComponent>(e) || name.contains("Gizmo");
+                if (maxExt > 15.0f || isLight || isGizmo) {
+                    ++flagged;
+                    const glm::vec3 wc = (mn + mx) * 0.5f;
+                    qInfo().noquote() << QString("  e=%1 '%2' worldCenter=(%3,%4,%5) worldExt=%6 light=%7 gizmo=%8 verts=%9")
+                        .arg(std::uint32_t(e)).arg(name)
+                        .arg(wc.x,0,'f',1).arg(wc.y,0,'f',1).arg(wc.z,0,'f',1)
+                        .arg(maxExt,0,'f',1).arg(isLight?1:0).arg(isGizmo?1:0).arg(m.vertices.size());
+                }
+            }
+            // Gizmo root scale (the suspected culprit: viewports fight over updateScreenScale).
+            for (auto e : reg.view<TagComponent, TransformComponent>()) {
+                if (QString::fromStdString(reg.get<TagComponent>(e).tag) == "GizmoRoot") {
+                    const auto& x = reg.get<TransformComponent>(e);
+                    qInfo().noquote() << QString("  GizmoRoot scale=(%1,%2,%3) pos=(%4,%5,%6)")
+                        .arg(x.scale.x,0,'f',2).arg(x.scale.y,0,'f',2).arg(x.scale.z,0,'f',2)
+                        .arg(x.translation.x,0,'f',1).arg(x.translation.y,0,'f',1).arg(x.translation.z,0,'f',1);
+                }
+            }
+            int selCount = 0; for (auto e : reg.view<SelectedComponent>()) { (void)e; ++selCount; }
+            qInfo() << "===== renderable=" << n << " flagged=" << flagged << " selected=" << selCount << "=====";
+        });
+    }
+
     // Test hook: KRS_TEST_SPAWN_MESH=<path> spawns a mesh asset at the
     // origin shortly after boot (headless import/material verification).
     if (qEnvironmentVariableIsSet("KRS_TEST_SPAWN_MESH")) {
