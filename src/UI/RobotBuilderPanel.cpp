@@ -54,7 +54,21 @@ RobotBuilderPanel::RobotBuilderPanel(Scene* scene, QWidget* parent)
         "QGroupBox{border:1px solid #4a5260;margin-top:6px;}"
         "QPushButton{background:#262b33;border:1px solid #4a5260;padding:4px;}"
         "QPushButton:hover{background:#323844;}"
-        "QListWidget,QDoubleSpinBox,QSpinBox{background:#262b33;border:1px solid #4a5260;}"));
+        "QListWidget,QDoubleSpinBox,QSpinBox,QComboBox{background:#262b33;border:1px solid #4a5260;}"
+        // Once a custom border is set on the spin boxes, the style no longer computes the
+        // up/down sub-control geometry, so the UP button's hit-area misaligns (unclickable,
+        // wrong cursor). Define both buttons explicitly so each is clearly clickable.
+        "QSpinBox,QDoubleSpinBox{min-height:24px;padding-right:18px;}"
+        "QSpinBox::up-button,QDoubleSpinBox::up-button{subcontrol-origin:border;"
+        "subcontrol-position:top right;width:16px;height:11px;border-left:1px solid #4a5260;}"
+        "QSpinBox::down-button,QDoubleSpinBox::down-button{subcontrol-origin:border;"
+        "subcontrol-position:bottom right;width:16px;height:11px;border-left:1px solid #4a5260;}"
+        "QSpinBox::up-button:hover,QDoubleSpinBox::up-button:hover,"
+        "QSpinBox::down-button:hover,QDoubleSpinBox::down-button:hover{background:#323844;}"
+        "QSpinBox::up-arrow,QDoubleSpinBox::up-arrow{image:none;width:0;height:0;"
+        "border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid #cfd6df;}"
+        "QSpinBox::down-arrow,QDoubleSpinBox::down-arrow{image:none;width:0;height:0;"
+        "border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #cfd6df;}"));
 
     initializeUI();
     setupConnections();
@@ -508,6 +522,22 @@ void RobotBuilderPanel::onJointSelected(int row)
     else if (j.type == krs::rbuild::JType::Prismatic) ti = 2;
     else if (j.type == krs::rbuild::JType::Fixed)     ti = 3;
     m_jointType->setCurrentIndex(ti);
+
+    // Point the DOF field + limit spins at the selected joint, so the limit editor acts on
+    // the joint you clicked (the DOF index = this joint's position among the non-Fixed,
+    // committed joints). Fixed/ambiguous joints carry no DOF -> leave the field as-is.
+    int dofIdx = -1, dofSeen = 0;
+    for (int ji = 0; ji <= row; ++ji) {
+        if (g->joints[ji].ambiguous || g->joints[ji].type == krs::rbuild::JType::Fixed) continue;
+        if (ji == row) dofIdx = dofSeen;
+        ++dofSeen;
+    }
+    if (dofIdx >= 0) {
+        const QSignalBlocker bd(m_dofIndex), bl(m_limitLo), bh(m_limitHi);
+        m_dofIndex->setValue(dofIdx);
+        m_limitLo->setValue(j.limits.lower);
+        m_limitHi->setValue(j.limits.upper);
+    }
 }
 
 void RobotBuilderPanel::onJointTypeChanged(int comboIndex)

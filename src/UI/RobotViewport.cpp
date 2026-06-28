@@ -284,11 +284,13 @@ void RobotViewport::rebuildView()
 
         // Joint-axis overlay: a bright cyan emissive bar through each joint's HOME axis,
         // so the robot's defined axes are visible (esp. in Builder mode for joint editing).
+        m_axisEntities.clear();
         if (auto* rr = mreg.ctx().find<krs::robot::RobotRegistry>()) {
             if (auto* lr = rr->get(m_robotId)) {
-                for (const auto& ax : lr->jointAxesWorld()) {
-                    const glm::vec3 o(float(ax.first.x()), float(ax.first.y()), float(ax.first.z()));
-                    const glm::vec3 d(float(ax.second.x()), float(ax.second.y()), float(ax.second.z()));
+                const auto axes = lr->jointAxesWorld();   // HOME axes (updated per-tick in onSpinTick)
+                for (int k = 0; k < int(axes.size()); ++k) {
+                    const glm::vec3 o(float(axes[k].first.x()), float(axes[k].first.y()), float(axes[k].first.z()));
+                    const glm::vec3 d(float(axes[k].second.x()), float(axes[k].second.y()), float(axes[k].second.z()));
                     const entt::entity ae = SceneBuilder::spawnPrimitive(
                         *m_viewScene, int(Primitive::Cylinder), o,
                         glm::vec3(0.014f, 0.90f, 0.014f), "JointAxis");   // long bar; drawn on-top
@@ -302,6 +304,7 @@ void RobotViewport::rebuildView()
                         // Drawn always-on-top by JointAxisPass (and excluded from the opaque
                         // G-buffer), so the axis is visible even where it passes through a link.
                         reg.emplace<JointAxisComponent>(ae);
+                        m_axisEntities.emplace_back(ae, k);   // track for per-tick follow
                     }
                 }
             }
@@ -364,6 +367,31 @@ void RobotViewport::onSpinTick()
             const bool sel = mreg.valid(pr.first) && mreg.any_of<SelectedComponent>(pr.first);
             if (sel && !vreg.any_of<SelectedComponent>(pr.second))      vreg.emplace<SelectedComponent>(pr.second);
             else if (!sel && vreg.any_of<SelectedComponent>(pr.second)) vreg.remove<SelectedComponent>(pr.second);
+        }
+    }
+
+    // Joint-axis bars FOLLOW the robot: recompute each from the CURRENT joint axes
+    // (Builder = home q0; Mirror = the live robot's q) so they track the pose instead of
+    // being left behind at home when the robot moves.
+    if (!m_axisEntities.empty() && m_mainScene && m_viewScene) {
+        auto& mreg = m_mainScene->getRegistry();
+        auto& vreg = m_viewScene->getRegistry();
+        if (auto* rr = mreg.ctx().find<krs::robot::RobotRegistry>()) {
+            if (auto* lr = rr->get(m_robotId)) {
+                const Eigen::VectorXd q = m_builderMode ? Eigen::VectorXd::Zero(std::max(0, lr->ndof())) : lr->q;
+                const auto axes = lr->jointAxesWorld(q);
+                for (const auto& ae : m_axisEntities) {
+                    if (ae.second < 0 || ae.second >= int(axes.size())) continue;
+                    if (!vreg.valid(ae.first)) continue;
+                    auto* tc = vreg.try_get<TransformComponent>(ae.first);
+                    if (!tc) continue;
+                    const auto& a = axes[ae.second];
+                    tc->translation = glm::vec3(float(a.first.x()), float(a.first.y()), float(a.first.z()));
+                    const glm::vec3 d(float(a.second.x()), float(a.second.y()), float(a.second.z()));
+                    if (glm::length(d) > 1e-6f)
+                        tc->rotation = glm::rotation(glm::vec3(0.0f, 1.0f, 0.0f), glm::normalize(d));
+                }
+            }
         }
     }
 

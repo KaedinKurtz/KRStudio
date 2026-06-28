@@ -1632,6 +1632,15 @@ MainWindow::MainWindow(QWidget* parent)
             if (lr) for (int ji = 0; ji < int(lr->model.joints.size()); ++ji)
                 if (lr->model.joints[ji].member && lr->model.joints[ji].type != krs::dyn::JType::Fixed) { memberArr = ji; break; }
             if (lr && memberArr >= 0) { beforeLo = lr->model.joints[memberArr].qLower; beforeHi = lr->model.joints[memberArr].qUpper; }
+            // Bug 4: selecting a joint row must update the DOF field (was not plumbed).
+            int dofAfterSelect = -1;
+            if (jl && dofSpin && jl->count() > 2) { jl->setCurrentRow(2); dofAfterSelect = dofSpin->value(); }
+            // Bug 2 diagnostic: entities driving each link (0 => that joint moves NO geometry).
+            QString linkCounts;
+            if (lr) for (int k = 0; k < int(lr->linkEntities.size()); ++k)
+                linkCounts += QString::number(int(lr->linkEntities[k].size())) + " ";
+            qInfo() << "[EDITFANUC] dofFieldFollowsSelect(row2->)" << dofAfterSelect
+                    << " linkEntityCounts=[" << linkCounts.trimmed() << "] (0 => joint drives nothing)";
             if (dofSpin && loSpin && hiSpin && applyBtn) {
                 dofSpin->setValue(0); loSpin->setValue(-0.5); hiSpin->setValue(0.5);
                 applyBtn->click();   // -> onApplyLimit -> onApplyLimitLive -> writes lr.model + rebuild

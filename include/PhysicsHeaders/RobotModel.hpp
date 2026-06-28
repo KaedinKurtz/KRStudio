@@ -156,9 +156,15 @@ struct LiveRobot {
     // View joint-axis overlay. Joint origin = parent link frame * ptree; axis = parent
     // rotation * Rtree * axis. Parent of member joint k is chain body k-1 (base for k=0).
     std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> jointAxesWorld() const {
+        return jointAxesWorld(Eigen::VectorXd::Zero(std::max(0, chain.nq())));
+    }
+    // World-frame (axisPos, axisDir) of each member joint at an ARBITRARY config q (so the
+    // axis overlay can FOLLOW the robot when it moves, not stay stuck at home).
+    std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> jointAxesWorld(const Eigen::VectorXd& q) const {
         std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> out;
         if (chain.nq() <= 0) return out;
-        std::vector<krs::dyn::Pose> poses; chain.fk(Eigen::VectorXd::Zero(chain.nq()), poses);
+        Eigen::VectorXd qq = (q.size() == chain.nq()) ? q : Eigen::VectorXd::Zero(chain.nq());
+        std::vector<krs::dyn::Pose> poses; chain.fk(qq, poses);
         const Eigen::Matrix3d Rb = model.basePlacement.block<3, 3>(0, 0);
         const Eigen::Vector3d pb = model.basePlacement.block<3, 1>(0, 3);
         for (int k = 0; k < int(memberJoint.size()); ++k) {

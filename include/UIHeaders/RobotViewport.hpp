@@ -78,6 +78,9 @@ private:
     int   m_robotId = -1;            // mirrored robot's id (-1 = demo-graph fallback)
     std::vector<std::pair<entt::entity, entt::entity>> m_bodyMap;
     std::vector<TransformComponent> m_restXf;   // each view body's HOME (q0) transform (Builder mode)
+    // Joint-axis overlay bars: {view entity, member-joint index}. Updated every tick from
+    // the CURRENT joint axes so they FOLLOW the robot (Mirror mode) instead of staying home.
+    std::vector<std::pair<entt::entity, int>> m_axisEntities;
 
     // Builder mode = robot frozen at the 0-degree HOME pose (for building/fixing joints).
     // Mirror mode  = view bodies track the live scene robot's joint angles.
