@@ -1513,7 +1513,11 @@ MainWindow::MainWindow(QWidget* parent)
                 reg.remove<TriPlanarMaterialTag>(e); reg.remove<ParallaxMaterialTag>(e);
                 reg.emplace_or_replace<MaterialDirectoryTag>(e, dir);
                 auto& req = reg.emplace_or_replace<MaterialReloadRequest>(e);
-                req.tilingOverride = tiling; req.heightScaleOverride = hasHeight ? 0.05f : -1.0f;
+                req.tilingOverride = tiling;
+                // Exaggerated height so the parallax direction is clearly visible for the audit
+                // (env KRS_POM_HEIGHT overrides; default 0.2).
+                { bool ok=false; float hs = qEnvironmentVariable("KRS_POM_HEIGHT").toFloat(&ok);
+                  req.heightScaleOverride = hasHeight ? (ok ? hs : 0.2f) : -1.0f; }
                 krs::material::applyPackTags(reg, e, hasHeight);
                 qInfo() << "[TEXTEST] applied" << QString::fromStdString(dir) << "-> UV="
                         << reg.all_of<UVTexturedMaterialTag>(e) << "TriPlanar=" << reg.all_of<TriPlanarMaterialTag>(e)

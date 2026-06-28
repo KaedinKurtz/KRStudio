@@ -59,7 +59,10 @@ vec2 pom_plane_with_shadow(
     float layer = 1.0 / float(STEPS);
 
     // Use eye?surface ray: negate if V is frag?eye (typical)
-    vec2  P   = (-vParallel / nz) * u_height_scale; // in-plane stretch
+    // March in TILE space: the UVs passed in are world coords * u_texture_scale, so the
+    // parallax sweep must carry the same u_texture_scale or the step units mismatch the grid
+    // (parallax over/undershoots and stretches along an axis when u_texture_scale != 1).
+    vec2  P   = (-vParallel / nz) * u_height_scale * u_texture_scale;
     vec2  dUV = P / float(STEPS);
 
     vec2  curUV = uv;
@@ -178,24 +181,27 @@ void main()
     vec3 N = normalize(fs_WorldNormal);
     vec3 V = normalize(fs_ViewDir_tangent); // frag?eye; we negate inside POM 
 
-    float sx = sign(N.x), sy = sign(N.y), sz = sign(N.z);
+    // NOTE: the previous code flipped uv.x/vp.x on back-facing planes (sx/sy/sz < 0) BEFORE
+    // the POM march, but sample_triplanar()/sample_triplanar_normal() sample with UNFLIPPED
+    // UVs -> the offset was computed in a mirrored frame and applied to an unmirrored one, so
+    // the parallax marched the WRONG WAY on every negative-facing face. Remove the flips so
+    // the march frame matches the (unflipped) sampling frame -- consistent with the working
+    // non-POM gbuffer_triplanar path. (vNormal is the OUT-of-plane component, unaffected by an
+    // in-plane mirror, so it is passed unmodified.)
 
-    // X faces ? YZ plane
+    // X faces -> YZ plane
     vec2 uv_x = vec2(fs_WorldPos.z, fs_WorldPos.y) * u_texture_scale;
     vec2 vp_x = vec2(V.z, V.y);
-    if (sx < 0.0) { uv_x.x = -uv_x.x; vp_x.x = -vp_x.x; }
     float occ_x; vec2 off_x = pom_plane_with_shadow(material.heightMap, uv_x, vp_x, V.x, occ_x);
 
-    // Y faces ? XZ plane
+    // Y faces -> XZ plane
     vec2 uv_y = vec2(fs_WorldPos.x, fs_WorldPos.z) * u_texture_scale;
     vec2 vp_y = vec2(V.x, V.z);
-    if (sy < 0.0) { uv_y.x = -uv_y.x; vp_y.x = -vp_y.x; }
     float occ_y; vec2 off_y = pom_plane_with_shadow(material.heightMap, uv_y, vp_y, V.y, occ_y);
 
-    // Z faces ? XY plane
+    // Z faces -> XY plane
     vec2 uv_z = vec2(fs_WorldPos.x, fs_WorldPos.y) * u_texture_scale;
     vec2 vp_z = vec2(V.x, V.y);
-    if (sz < 0.0) { uv_z.x = -uv_z.x; vp_z.x = -vp_z.x; }
     float occ_z; vec2 off_z = pom_plane_with_shadow(material.heightMap, uv_z, vp_z, V.z, occ_z);
 
     // Weight the self-occlusion like other tri-planar textures
