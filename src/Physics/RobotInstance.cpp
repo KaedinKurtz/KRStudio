@@ -208,9 +208,13 @@ LiveRobot* instantiateFanucRobot(Scene& scene,
         reg.emplace_or_replace<RobotSubcomponentComponent>(e, robotId);
     }
 
-    captureRobotRest(scene, lr);   // rest at q=0 (ready for when useRobotFkViz turns on)
-    lr.ownsDrive     = false;      // step 6a: hierarchy/selection only; legacy drive keeps the sweep
-    lr.useRobotFkViz = false;
+    captureRobotRest(scene, lr);   // rest at q=0 (basePlacement identity; canonicalSpec is world-aligned)
+    // Step 6b: the Robot now OWNS the FANUC -- its q drives the PhysX articulation as a
+    // kinematic follower, and Robot FK (delta-from-rest) drives the link viz. The node
+    // graph still writes the bus, but it is drained INTO LiveRobot::q first (single source
+    // of truth). At q=0 the FK delta is identity, so there is no jump from the rest pose.
+    lr.ownsDrive     = true;
+    lr.useRobotFkViz = true;
     return &lr;
 }
 

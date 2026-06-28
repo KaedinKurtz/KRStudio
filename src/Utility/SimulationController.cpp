@@ -609,9 +609,16 @@ void SimulationController::applyArticulationCommands()
         for (auto& rp : rr->robots) if (rp && rp->ownsDrive) { driver = rp.get(); break; }
     }
     if (driver) {
-        std::vector<float> q(nDof, 0.0f);                  // member-joint order == PhysX DOF order (FANUC)
+        // STEP 5 -- PhysX as INFLUENCE: read the ACTUAL post-step joint positions back
+        // into LiveRobot::qActual (never overwrites q). For the kinematic FANUC (fixBase,
+        // zero gravity) qActual tracks q; deviation() would surface contact/gravity influence.
+        const std::vector<float> actual = articJointPositions();
+        for (int d = 0; d < int(actual.size()) && d < int(driver->qActual.size()); ++d)
+            driver->qActual[d] = double(actual[d]);
+        // q -> PhysX (kinematic follower) -- member-joint order == PhysX DOF order (FANUC).
+        std::vector<float> q(nDof, 0.0f);
         for (int d = 0; d < nDof && d < driver->ndof(); ++d) q[d] = float(driver->q[d]);
-        setArticJointPositions(q);                         // PhysX FOLLOWS the Robot's q
+        setArticJointPositions(q);
         if (driver->useRobotFkViz) krs::robot::writeBackRobotViz(*m_scene, *driver);
         else                       writeBackArticulationViz();
         return;
