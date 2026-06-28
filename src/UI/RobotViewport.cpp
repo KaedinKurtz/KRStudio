@@ -8,6 +8,7 @@
 #include "SceneBuilder.hpp"
 #include "RobotBuilder.hpp"        // krs::rbuild::RobotGraph
 #include "RobotBuilderScene.hpp"   // mirrorGraphIntoScene / turntableCameraPos / gate
+#include "RobotModel.hpp"          // krs::robot::RobotRegistry / mirrorLiveRobotIntoScene
 
 #include <QTimer>
 #include <QSlider>
@@ -150,9 +151,17 @@ RobotViewport::~RobotViewport()
 
 void RobotViewport::refreshFromLive()
 {
-    m_liveGraph = m_mainScene
-        ? m_mainScene->getRegistry().ctx().find<krs::rbuild::RobotGraph>()
-        : nullptr;
+    m_robotId = -1;
+    m_liveGraph = nullptr;
+    if (m_mainScene) {
+        auto& reg = m_mainScene->getRegistry();
+        // Prefer a first-class LiveRobot (e.g. the FANUC) -> mirror its real bodies.
+        if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>()) {
+            for (auto& rp : rr->robots) if (rp) { m_robotId = rp->robotId; break; }
+        }
+        // Fall back to the authoring demo graph only if no live robot exists.
+        if (m_robotId < 0) m_liveGraph = reg.ctx().find<krs::rbuild::RobotGraph>();
+    }
     rebuildView();
 }
 
@@ -160,6 +169,7 @@ void RobotViewport::rebuildView()
 {
     if (!m_viewScene) return;
     auto& reg = m_viewScene->getRegistry();
+    m_bodyMap.clear();
 
     // Clear everything except the camera (PreviewViewport::clearPreview idiom).
     std::vector<entt::entity> kill;
@@ -167,7 +177,33 @@ void RobotViewport::rebuildView()
         if (e != m_cameraEntity) kill.push_back(e);
     reg.destroy(kill.begin(), kill.end());
 
-    if (m_liveGraph && !m_liveGraph->bodies.empty()) {
+    if (m_robotId >= 0 && m_mainScene) {
+        // Mirror the ACTUAL robot bodies (e.g. the FANUC) into the isolated view scene.
+        krs::robot::mirrorLiveRobotIntoScene(*m_viewScene, *m_mainScene, m_robotId, m_bodyMap);
+
+        // Mirror the scene LIGHTS (LightComponent only, not their emitter meshes) so the
+        // robot is lit like the main view -- otherwise it is IBL-only and reads near-black.
+        auto& mreg = m_mainScene->getRegistry();
+        for (auto le : mreg.view<LightComponent, TransformComponent>()) {
+            const entt::entity ve = reg.create();
+            reg.emplace<LightComponent>(ve, mreg.get<LightComponent>(le));
+            reg.emplace<TransformComponent>(ve, mreg.get<TransformComponent>(le));
+        }
+
+        // Frame the camera on the robot using the body BOUNDING BOX (not the centroid,
+        // which a tall arm's many base parts bias downward), so the whole arm fits.
+        glm::vec3 mn(1e9f), mx(-1e9f);
+        for (auto& pr : m_bodyMap)
+            if (auto* tc = reg.try_get<TransformComponent>(pr.second)) {
+                mn = glm::min(mn, tc->translation); mx = glm::max(mx, tc->translation);
+            }
+        if (mx.x >= mn.x) {
+            m_base = (mn + mx) * 0.5f;
+            const float r = std::max(0.4f, 0.5f * glm::length(mx - mn));
+            m_dist = std::clamp(r * 3.0f, 3.0f, 16.0f);
+            m_elev = r * 0.4f;
+        }
+    } else if (m_liveGraph && !m_liveGraph->bodies.empty()) {
         krs::rbuild::mirrorGraphIntoScene(*m_viewScene, *m_liveGraph, /*robotId*/ 0);
         const int bi = (m_liveGraph->base >= 0 && m_liveGraph->base < int(m_liveGraph->bodies.size()))
                        ? m_liveGraph->base : 0;
@@ -204,6 +240,20 @@ void RobotViewport::onSpinTick()
         const glm::vec3 pos = krs::rbuild::turntableCameraPos(m_base, m_dist, m_elev, m_spinAngle);
         getCamera().forceRecalculateView(pos, m_base, m_dist);
     }
+    // Mirror the live robot pose: copy each main body's transform onto its view twin
+    // (Mirror mode). Main bodies are parented to an identity root, so their local
+    // transform IS the world transform -> copy straight across to the parent-less twin.
+    if (!m_bodyMap.empty() && m_mainScene && m_viewScene) {
+        auto& mreg = m_mainScene->getRegistry();
+        auto& vreg = m_viewScene->getRegistry();
+        for (const auto& pr : m_bodyMap) {
+            if (!mreg.valid(pr.first) || !vreg.valid(pr.second)) continue;
+            const auto* mtc = mreg.try_get<TransformComponent>(pr.first);
+            auto*       vtc = vreg.try_get<TransformComponent>(pr.second);
+            if (mtc && vtc) *vtc = *mtc;
+        }
+    }
+
     // Self-drive the render: this isolated RenderingSystem is not pumped by the main
     // engine frame (which only renders the main system), so render then present.
     if (m_viewRender) m_viewRender->renderAllViewports();

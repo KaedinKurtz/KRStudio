@@ -24,6 +24,7 @@
 #include <iomanip>
 #include <cmath>
 #include <memory>
+#include <utility>
 #include <entt/entt.hpp>
 #include "RobotDynamics.hpp"
 
@@ -323,6 +324,15 @@ struct SceneGrouping {
 // outliner can render a Robot->bodies tree and selection can resolve to the owning
 // robot. Headless-safe (pure registry walk), so it is unit-gated. (Step 7.)
 SceneGrouping groupByRobot(entt::registry& reg);
+
+// Mirror a robot's renderable body entities (by robotId) from the main scene INTO an
+// isolated view scene (copies mesh + material + transform + material tags), so the
+// Robot View can show the ACTUAL robot (e.g. the FANUC) rather than placeholder cubes.
+// Fills outMap with {mainEntity, viewEntity} pairs (for live pose mirroring + cross-
+// viewport selection). The view bodies are parent-less (their copied transform is
+// already world, the main bodies' root being identity). Returns the count.
+int mirrorLiveRobotIntoScene(Scene& viewScene, Scene& mainScene, int robotId,
+                             std::vector<std::pair<entt::entity, entt::entity>>& outMap);
 
 // Drain the node-graph command bus (registry-ctx ArticulationCommandComponent) INTO each
 // registered LiveRobot::q (clamped to limits, driven DOFs only). LiveRobot::q is THE

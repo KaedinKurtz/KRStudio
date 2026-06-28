@@ -17,6 +17,8 @@
 // ===========================================================================
 #include "ViewportWidget.hpp"
 #include <memory>
+#include <vector>
+#include <utility>
 
 class Scene;
 class RenderingSystem;
@@ -64,6 +66,12 @@ private:
     krs::rbuild::RobotGraph*          m_liveGraph = nullptr;   // bound pointer (NOT a copy)
     std::unique_ptr<Scene>            m_viewScene;             // this view's own isolated scene
     std::unique_ptr<RenderingSystem>  m_viewRender;            // this view's own renderer
+
+    // When a first-class Robot (e.g. the FANUC) exists, the view mirrors ITS real body
+    // meshes (not the placeholder demo cubes). m_bodyMap pairs {mainEntity, viewEntity}
+    // so the view bodies track the live pose (Mirror) + cross-viewport selection works.
+    int   m_robotId = -1;            // mirrored robot's id (-1 = demo-graph fallback)
+    std::vector<std::pair<entt::entity, entt::entity>> m_bodyMap;
 
     QTimer*       m_spinTimer = nullptr;
     QElapsedTimer m_spinClock;

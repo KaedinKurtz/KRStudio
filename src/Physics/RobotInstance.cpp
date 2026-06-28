@@ -241,6 +241,31 @@ SceneGrouping groupByRobot(entt::registry& reg)
     return out;
 }
 
+int mirrorLiveRobotIntoScene(Scene& viewScene, Scene& mainScene, int robotId,
+                             std::vector<std::pair<entt::entity, entt::entity>>& outMap)
+{
+    auto& mreg = mainScene.getRegistry();
+    auto& vreg = viewScene.getRegistry();
+    outMap.clear();
+    int n = 0;
+    for (auto me : mreg.view<RobotSubcomponentComponent, RenderableMeshComponent, TransformComponent>()) {
+        if (mreg.get<RobotSubcomponentComponent>(me).robotId != robotId) continue;
+        const entt::entity ve = vreg.create();
+        vreg.emplace<RenderableMeshComponent>(ve, mreg.get<RenderableMeshComponent>(me));
+        vreg.emplace<TransformComponent>(ve, mreg.get<TransformComponent>(me));  // root is identity -> local == world
+        if (auto* mat = mreg.try_get<MaterialComponent>(me)) vreg.emplace<MaterialComponent>(ve, *mat);
+        if (auto* tag = mreg.try_get<TagComponent>(me))      vreg.emplace<TagComponent>(ve, *tag);
+        // carry the material-type tag so the view picks the same shader path
+        if (mreg.all_of<TriPlanarMaterialTag>(me))   vreg.emplace<TriPlanarMaterialTag>(ve);
+        if (mreg.all_of<UVTexturedMaterialTag>(me))  vreg.emplace<UVTexturedMaterialTag>(ve);
+        if (mreg.all_of<TessellatedMaterialTag>(me)) vreg.emplace<TessellatedMaterialTag>(ve);
+        if (mreg.all_of<ParallaxMaterialTag>(me))    vreg.emplace<ParallaxMaterialTag>(ve);
+        outMap.emplace_back(me, ve);
+        ++n;
+    }
+    return n;
+}
+
 int drainCommandBusIntoRobots(entt::registry& reg)
 {
     RobotRegistry* rr = reg.ctx().find<RobotRegistry>();
