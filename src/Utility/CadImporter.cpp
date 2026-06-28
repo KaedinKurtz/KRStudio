@@ -189,6 +189,143 @@ int stitchBodyUVs(const TopoDS_Shape& body, double s, const std::vector<FaceSpan
 }
 } // namespace
 
+// Mesh ONE shape into a renderable scene entity -- the shared core of importStep. Triangulates
+// the B-Rep, bakes world-scale UVs + smooth normals + per-face analytic BRepFace, computes the
+// exact volume, and emplaces RenderableMeshComponent + BRepFaceComponent + TransformComponent +
+// TagComponent + UVTexturedMaterialTag + MaterialComponent + AttachmentComponent. `tag` names
+// the entity. Mutates res (faces/volume/attachments/solids). Returns the entity, or entt::null
+// if the shape produced no triangles. Reused by importStepAssembly (named-part assembly import).
+static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape& solid,
+                                        double s, const std::string& tag, ImportResult& res)
+{
+    // --- meshing quality from the body's bounding box (adaptive deflection) ---
+    Bnd_Box bb; BRepBndLib::Add(solid, bb);
+    double xmin, ymin, zmin, xmax, ymax, zmax;
+    bb.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+    const double diag = std::sqrt((xmax - xmin) * (xmax - xmin) + (ymax - ymin) * (ymax - ymin)
+                                  + (zmax - zmin) * (zmax - zmin));
+    const double defl = std::max(1e-3, diag * 0.004);     // 0.4% of the diagonal
+    BRepMesh_IncrementalMesh(solid, defl, Standard_False, 0.5, Standard_True); // triangulate B-Rep
+
+    std::vector<Vertex> verts;
+    std::vector<unsigned int> idx;
+    std::vector<glm::dvec3> nAccum;                        // smooth-normal accumulation
+    std::vector<FaceSpan> faceSpans;                       // for cross-face UV stitching (A.2)
+    std::vector<int> triFace;                              // GATE F: B-Rep face id per triangle
+    std::vector<BRepFace> brepFaces;                       // GATE F: per-face analytic params
+
+    for (TopExp_Explorer faceEx(solid, TopAbs_FACE); faceEx.More(); faceEx.Next()) {
+        const TopoDS_Face face = TopoDS::Face(faceEx.Current());
+        ++res.faces;
+        TopLoc_Location loc;
+        Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(face, loc);
+        if (tri.IsNull()) continue;
+        const gp_Trsf trsf = loc.Transformation();
+        const unsigned base = unsigned(verts.size());
+        std::vector<gp_Pnt2d> faceUV;                       // world-scale (metres) UV per node
+        const bool hasUV = faceWorldUVs(face, tri, s, faceUV);
+        faceSpans.push_back({ face, base, tri->NbNodes(), hasUV });
+        // GATE F: read this face's ANALYTIC parameters straight from the B-Rep surface (no mesh
+        // fit / RANSAC) and remember its id, so a ray-picked triangle resolves to exact params.
+        BRepFace bf;
+        {
+            BRepAdaptor_Surface ad(face, Standard_True);
+            switch (ad.GetType()) {
+                case GeomAbs_Plane: { bf.type = 0; const gp_Pln pl = ad.Plane();
+                    const gp_Dir n = pl.Axis().Direction(); const gp_Pnt o = pl.Location();
+                    bf.normal = { float(n.X()), float(n.Y()), float(n.Z()) };
+                    bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) }; break; }
+                case GeomAbs_Cylinder: { bf.type = 1; const gp_Cylinder cy = ad.Cylinder();
+                    const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
+                    bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
+                    bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
+                    bf.radius = float(cy.Radius() * s); break; }
+                case GeomAbs_Cone: { bf.type = 2; const gp_Cone co = ad.Cone();
+                    const gp_Pnt o = co.Axis().Location(); const gp_Dir d = co.Axis().Direction();
+                    bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
+                    bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
+                    bf.radius = float(co.RefRadius() * s); break; }
+                case GeomAbs_Sphere: { bf.type = 3; const gp_Sphere sp = ad.Sphere();
+                    const gp_Pnt o = sp.Location();
+                    bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
+                    bf.radius = float(sp.Radius() * s); break; }
+                default: bf.type = 4; break;
+            }
+        }
+        const int thisFaceId = int(brepFaces.size());
+        brepFaces.push_back(bf);
+        for (int i = 1; i <= tri->NbNodes(); ++i) {
+            gp_Pnt p = tri->Node(i); p.Transform(trsf);    // -> assembly coords
+            Vertex v; v.position = { float(p.X() * s), float(p.Y() * s), float(p.Z() * s) };
+            if (hasUV) v.uv = { float(faceUV[i - 1].X()), float(faceUV[i - 1].Y()) }; // metres; tiled at render
+            verts.push_back(v); nAccum.emplace_back(0.0);
+        }
+        const bool rev = (face.Orientation() == TopAbs_REVERSED);
+        for (int t = 1; t <= tri->NbTriangles(); ++t) {
+            int a, b, c; tri->Triangle(t).Get(a, b, c);
+            unsigned i0 = base + (a - 1), i1 = base + (b - 1), i2 = base + (c - 1);
+            if (rev) std::swap(i1, i2);                    // keep CCW winding outward
+            idx.push_back(i0); idx.push_back(i1); idx.push_back(i2);
+            triFace.push_back(thisFaceId);                 // GATE F: this triangle's B-Rep face id
+            const glm::dvec3 p0 = verts[i0].position, p1 = verts[i1].position, p2 = verts[i2].position;
+            const glm::dvec3 fn = glm::cross(p1 - p0, p2 - p0); // area-weighted face normal
+            nAccum[i0] += fn; nAccum[i1] += fn; nAccum[i2] += fn;
+        }
+    }
+    if (verts.empty()) return entt::null;
+    stitchBodyUVs(solid, s, faceSpans, verts);             // A.2: cross-face-continuous UV charts
+    for (size_t i = 0; i < verts.size(); ++i) {
+        glm::dvec3 n = nAccum[i];
+        verts[i].normal = (glm::length(n) > 1e-12) ? glm::vec3(glm::normalize(n)) : glm::vec3(0, 1, 0);
+    }
+
+    // --- exact B-Rep volume + mass channel ---
+    GProp_GProps vprops; BRepGProp::VolumeProperties(solid, vprops);
+    const double volume = std::abs(vprops.Mass()) * s * s * s; // GProp "Mass" = volume; scale^3
+
+    // --- spawn entity ---
+    entt::entity e = reg.create();
+    auto& mesh = reg.emplace<RenderableMeshComponent>(e);
+    mesh.vertices = std::move(verts);
+    mesh.indices = std::move(idx);
+    mesh.triFace = std::move(triFace);                     // GATE F: triangle -> B-Rep face id
+    mesh.sourcePath = "occt_step";
+    if (!brepFaces.empty()) reg.emplace<BRepFaceComponent>(e, std::move(brepFaces)); // GATE F
+    reg.emplace<TransformComponent>(e, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+    reg.emplace<TagComponent>(e, tag);
+    // A.1b: real per-vertex UVs (baked above) -> drop the world-space triplanar tag and mark for
+    // the UV-texture path. A.3: albedoTiling.x is the TEXELS-PER-METRE control (1 => 1 texture per
+    // 1 m^2, since UVs are world-scale metres); exposed via ObjectPropertiesWidget's tiling widget.
+    reg.emplace<UVTexturedMaterialTag>(e);                 // GL thread assigns a checker albedoMap -> uvShader
+    auto& mat = reg.emplace<MaterialComponent>(e);
+    mat.albedoTiling = glm::vec2(1.0f, 1.0f);              // texels per metre (default 1 m^2 / tile)
+    mat.volume_m3 = float(volume);
+    res.totalVolume += volume;
+
+    // --- Task 3: cylindrical mounting features -> AttachmentComponent ---
+    AttachmentComponent att;
+    for (TopExp_Explorer fx(solid, TopAbs_FACE); fx.More(); fx.Next()) {
+        const TopoDS_Face f = TopoDS::Face(fx.Current());
+        Handle(Geom_Surface) surf = BRep_Tool::Surface(f);
+        Handle(Geom_CylindricalSurface) cyl = Handle(Geom_CylindricalSurface)::DownCast(surf);
+        if (cyl.IsNull()) continue;
+        const gp_Ax1 axis = cyl->Axis();
+        const gp_Pnt o = axis.Location();
+        const gp_Dir d = axis.Direction();
+        AttachmentFrame fr;
+        fr.localPosition = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
+        fr.localAxis = { float(d.X()), float(d.Y()), float(d.Z()) };
+        fr.radius = float(cyl->Radius() * s);
+        fr.isHole = (f.Orientation() == TopAbs_REVERSED);  // inward-facing cylinder = hole
+        att.frames.push_back(fr);
+    }
+    res.attachments += int(att.frames.size());
+    if (!att.frames.empty()) reg.emplace<AttachmentComponent>(e, std::move(att));
+
+    ++res.solids;
+    return e;
+}
+
 ImportResult importStep(Scene& scene, const std::string& path, float metersPerUnit)
 {
     ImportResult res;
@@ -211,132 +348,9 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
     for (TopExp_Explorer ex(root, TopAbs_FACE,  TopAbs_SHELL); ex.More(); ex.Next()) bodies.push_back(ex.Current());
 
     for (const TopoDS_Shape& solid : bodies) {
-
-        // --- meshing quality from the body's bounding box (adaptive deflection) ---
-        Bnd_Box bb; BRepBndLib::Add(solid, bb);
-        double xmin, ymin, zmin, xmax, ymax, zmax;
-        bb.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-        const double diag = std::sqrt((xmax - xmin) * (xmax - xmin) + (ymax - ymin) * (ymax - ymin)
-                                      + (zmax - zmin) * (zmax - zmin));
-        const double defl = std::max(1e-3, diag * 0.004);     // 0.4% of the diagonal
-        BRepMesh_IncrementalMesh(solid, defl, Standard_False, 0.5, Standard_True); // triangulate B-Rep
-
-        std::vector<Vertex> verts;
-        std::vector<unsigned int> idx;
-        std::vector<glm::dvec3> nAccum;                        // smooth-normal accumulation
-        std::vector<FaceSpan> faceSpans;                       // for cross-face UV stitching (A.2)
-        std::vector<int> triFace;                              // GATE F: B-Rep face id per triangle
-        std::vector<BRepFace> brepFaces;                       // GATE F: per-face analytic params
-
-        for (TopExp_Explorer faceEx(solid, TopAbs_FACE); faceEx.More(); faceEx.Next()) {
-            const TopoDS_Face face = TopoDS::Face(faceEx.Current());
-            ++res.faces;
-            TopLoc_Location loc;
-            Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(face, loc);
-            if (tri.IsNull()) continue;
-            const gp_Trsf trsf = loc.Transformation();
-            const unsigned base = unsigned(verts.size());
-            std::vector<gp_Pnt2d> faceUV;                       // world-scale (metres) UV per node
-            const bool hasUV = faceWorldUVs(face, tri, s, faceUV);
-            faceSpans.push_back({ face, base, tri->NbNodes(), hasUV });
-            // GATE F: read this face's ANALYTIC parameters straight from the B-Rep surface (no mesh
-            // fit / RANSAC) and remember its id, so a ray-picked triangle resolves to exact params.
-            BRepFace bf;
-            {
-                BRepAdaptor_Surface ad(face, Standard_True);
-                switch (ad.GetType()) {
-                    case GeomAbs_Plane: { bf.type = 0; const gp_Pln pl = ad.Plane();
-                        const gp_Dir n = pl.Axis().Direction(); const gp_Pnt o = pl.Location();
-                        bf.normal = { float(n.X()), float(n.Y()), float(n.Z()) };
-                        bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) }; break; }
-                    case GeomAbs_Cylinder: { bf.type = 1; const gp_Cylinder cy = ad.Cylinder();
-                        const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
-                        bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
-                        bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
-                        bf.radius = float(cy.Radius() * s); break; }
-                    case GeomAbs_Cone: { bf.type = 2; const gp_Cone co = ad.Cone();
-                        const gp_Pnt o = co.Axis().Location(); const gp_Dir d = co.Axis().Direction();
-                        bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
-                        bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
-                        bf.radius = float(co.RefRadius() * s); break; }
-                    case GeomAbs_Sphere: { bf.type = 3; const gp_Sphere sp = ad.Sphere();
-                        const gp_Pnt o = sp.Location();
-                        bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
-                        bf.radius = float(sp.Radius() * s); break; }
-                    default: bf.type = 4; break;
-                }
-            }
-            const int thisFaceId = int(brepFaces.size());
-            brepFaces.push_back(bf);
-            for (int i = 1; i <= tri->NbNodes(); ++i) {
-                gp_Pnt p = tri->Node(i); p.Transform(trsf);    // -> assembly coords
-                Vertex v; v.position = { float(p.X() * s), float(p.Y() * s), float(p.Z() * s) };
-                if (hasUV) v.uv = { float(faceUV[i - 1].X()), float(faceUV[i - 1].Y()) }; // metres; tiled at render
-                verts.push_back(v); nAccum.emplace_back(0.0);
-            }
-            const bool rev = (face.Orientation() == TopAbs_REVERSED);
-            for (int t = 1; t <= tri->NbTriangles(); ++t) {
-                int a, b, c; tri->Triangle(t).Get(a, b, c);
-                unsigned i0 = base + (a - 1), i1 = base + (b - 1), i2 = base + (c - 1);
-                if (rev) std::swap(i1, i2);                    // keep CCW winding outward
-                idx.push_back(i0); idx.push_back(i1); idx.push_back(i2);
-                triFace.push_back(thisFaceId);                 // GATE F: this triangle's B-Rep face id
-                const glm::dvec3 p0 = verts[i0].position, p1 = verts[i1].position, p2 = verts[i2].position;
-                const glm::dvec3 fn = glm::cross(p1 - p0, p2 - p0); // area-weighted face normal
-                nAccum[i0] += fn; nAccum[i1] += fn; nAccum[i2] += fn;
-            }
-        }
-        if (verts.empty()) continue;
-        stitchBodyUVs(solid, s, faceSpans, verts);             // A.2: cross-face-continuous UV charts
-        for (size_t i = 0; i < verts.size(); ++i) {
-            glm::dvec3 n = nAccum[i];
-            verts[i].normal = (glm::length(n) > 1e-12) ? glm::vec3(glm::normalize(n)) : glm::vec3(0, 1, 0);
-        }
-
-        // --- exact B-Rep volume + mass channel ---
-        GProp_GProps vprops; BRepGProp::VolumeProperties(solid, vprops);
-        const double volume = std::abs(vprops.Mass()) * s * s * s; // GProp "Mass" = volume; scale^3
-
-        // --- spawn entity ---
-        entt::entity e = reg.create();
-        auto& mesh = reg.emplace<RenderableMeshComponent>(e);
-        mesh.vertices = std::move(verts);
-        mesh.indices = std::move(idx);
-        mesh.triFace = std::move(triFace);                     // GATE F: triangle -> B-Rep face id
-        mesh.sourcePath = "occt_step";
-        if (!brepFaces.empty()) reg.emplace<BRepFaceComponent>(e, std::move(brepFaces)); // GATE F
-        reg.emplace<TransformComponent>(e, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
-        reg.emplace<TagComponent>(e, std::string("STEP solid ") + std::to_string(res.solids + 1));
-        // A.1b: real per-vertex UVs (baked above) -> drop the world-space triplanar tag and mark for
-        // the UV-texture path. A.3: albedoTiling.x is the TEXELS-PER-METRE control (1 => 1 texture per
-        // 1 m^2, since UVs are world-scale metres); exposed via ObjectPropertiesWidget's tiling widget.
-        reg.emplace<UVTexturedMaterialTag>(e);                 // GL thread assigns a checker albedoMap -> uvShader
-        auto& mat = reg.emplace<MaterialComponent>(e);
-        mat.albedoTiling = glm::vec2(1.0f, 1.0f);              // texels per metre (default 1 m^2 / tile)
-        mat.volume_m3 = float(volume);
-        res.totalVolume += volume;
-
-        // --- Task 3: cylindrical mounting features -> AttachmentComponent ---
-        AttachmentComponent att;
-        for (TopExp_Explorer fx(solid, TopAbs_FACE); fx.More(); fx.Next()) {
-            const TopoDS_Face f = TopoDS::Face(fx.Current());
-            Handle(Geom_Surface) surf = BRep_Tool::Surface(f);
-            Handle(Geom_CylindricalSurface) cyl = Handle(Geom_CylindricalSurface)::DownCast(surf);
-            if (cyl.IsNull()) continue;
-            const gp_Ax1 axis = cyl->Axis();
-            const gp_Pnt o = axis.Location();
-            const gp_Dir d = axis.Direction();
-            AttachmentFrame fr;
-            fr.localPosition = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
-            fr.localAxis = { float(d.X()), float(d.Y()), float(d.Z()) };
-            fr.radius = float(cyl->Radius() * s);
-            fr.isHole = (f.Orientation() == TopAbs_REVERSED);  // inward-facing cylinder = hole
-            att.frames.push_back(fr);
-        }
-        res.attachments += int(att.frames.size());
-        if (!att.frames.empty()) reg.emplace<AttachmentComponent>(e, std::move(att));
-
-        ++res.solids;
+        // 1-indexed tag preserves the previous "STEP solid N" numbering (res.solids only
+        // advances for non-empty bodies, exactly as the old inline loop did).
+        meshShapeIntoEntity(reg, solid, s, std::string("STEP solid ") + std::to_string(res.solids + 1), res);
     }
     res.ok = res.solids > 0;
     if (!res.ok && res.message.empty()) res.message = "STEP had no solid bodies";
