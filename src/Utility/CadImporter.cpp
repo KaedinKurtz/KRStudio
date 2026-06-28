@@ -9,6 +9,16 @@
 
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
+#include <STEPCAFControl_Reader.hxx>   // assembly-aware import (named parts + placements)
+#include <TDocStd_Document.hxx>
+#include <XCAFApp_Application.hxx>
+#include <XCAFDoc_DocumentTool.hxx>
+#include <XCAFDoc_ShapeTool.hxx>
+#include <TDF_Label.hxx>
+#include <TDF_LabelSequence.hxx>
+#include <TDataStd_Name.hxx>
+#include <TCollection_AsciiString.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
@@ -44,6 +54,7 @@
 #include "SelectionService.hpp"  // GATE SUBFEAT: sub-feature selection backend (krs::sel)
 #include "JointTooling.hpp"  // GATE J: derive a revolute frame from two bore features (krs::joint)
 #include "ArticulationSpec.hpp" // GATE J: write the derived joint into the canonical RobotArticSpec
+#include "RobotBuilder.hpp"  // krs::rbuild::ParsedPart (assembly import returns named parts)
 #include <GeomAbs_SurfaceType.hxx>
 #include <gp_Vec.hxx>
 #include <gp_Pnt2d.hxx>
@@ -356,6 +367,111 @@ ImportResult importStep(Scene& scene, const std::string& path, float metersPerUn
     if (!res.ok && res.message.empty()) res.message = "STEP had no solid bodies";
     else if (res.ok) res.message = "Imported " + std::to_string(res.solids) + " solid(s)";
     return res;
+}
+
+// ---------------------------------------------------------------------------
+// Assembly-aware import: walk the STEPCAF part tree, bake each leaf's accumulated
+// placement into world geometry, mesh it via meshShapeIntoEntity (-> one entity per
+// NAMED part), and return the parts (name + world placement + part-local analytic
+// faces + entity, all metres) for building a named kinematic chain.
+// ---------------------------------------------------------------------------
+namespace {
+std::string cafLabelName(const TDF_Label& label) {
+    Handle(TDataStd_Name) nm;
+    if (label.FindAttribute(TDataStd_Name::GetID(), nm)) {
+        TCollection_AsciiString a(nm->Get());
+        return std::string(a.ToCString());
+    }
+    return std::string("(unnamed)");
+}
+Eigen::Matrix4d trsfToMatrixScaled(const gp_Trsf& t, double s) {
+    Eigen::Matrix4d M = Eigen::Matrix4d::Identity();
+    for (int r = 0; r < 3; ++r) {
+        for (int c = 0; c < 3; ++c) M(r, c) = t.Value(r + 1, c + 1);
+        M(r, 3) = t.Value(r + 1, 4) * s;   // translation -> metres (rotation is unitless)
+    }
+    return M;
+}
+std::vector<BRepFace> analyticFacesScaled(const TopoDS_Shape& shape, double s) {
+    std::vector<BRepFace> faces;
+    for (TopExp_Explorer fx(shape, TopAbs_FACE); fx.More(); fx.Next()) {
+        const TopoDS_Face face = TopoDS::Face(fx.Current());
+        BRepAdaptor_Surface ad(face, Standard_True);
+        BRepFace bf;
+        switch (ad.GetType()) {
+            case GeomAbs_Plane: { bf.type = 0; const gp_Pln pl = ad.Plane();
+                const gp_Dir n = pl.Axis().Direction(); const gp_Pnt o = pl.Location();
+                bf.normal = { float(n.X()), float(n.Y()), float(n.Z()) };
+                bf.axisPos = { float(o.X()*s), float(o.Y()*s), float(o.Z()*s) }; break; }
+            case GeomAbs_Cylinder: { bf.type = 1; const gp_Cylinder cy = ad.Cylinder();
+                const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
+                bf.axisPos = { float(o.X()*s), float(o.Y()*s), float(o.Z()*s) };
+                bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
+                bf.radius = float(cy.Radius()*s); break; }
+            case GeomAbs_Cone: { bf.type = 2; const gp_Cone co = ad.Cone();
+                const gp_Pnt o = co.Axis().Location(); const gp_Dir d = co.Axis().Direction();
+                bf.axisPos = { float(o.X()*s), float(o.Y()*s), float(o.Z()*s) };
+                bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
+                bf.radius = float(co.RefRadius()*s); break; }
+            case GeomAbs_Sphere: { bf.type = 3; const gp_Sphere sp = ad.Sphere();
+                const gp_Pnt o = sp.Location();
+                bf.axisPos = { float(o.X()*s), float(o.Y()*s), float(o.Z()*s) };
+                bf.radius = float(sp.Radius()*s); break; }
+            default: bf.type = 4; break;
+        }
+        faces.push_back(bf);
+    }
+    return faces;
+}
+void collectMeshParts(entt::registry& reg, const Handle(XCAFDoc_ShapeTool)& st,
+                      const TDF_Label& label, const TopLoc_Location& parentLoc,
+                      double s, krs::cad::ImportResult& res, std::vector<krs::rbuild::ParsedPart>& out) {
+    if (st->IsAssembly(label)) {
+        TDF_LabelSequence comps; st->GetComponents(label, comps);
+        for (int i = 1; i <= comps.Length(); ++i) {
+            const TDF_Label comp = comps.Value(i);
+            const TopLoc_Location loc = parentLoc * st->GetLocation(comp);
+            TDF_Label ref;
+            if (XCAFDoc_ShapeTool::GetReferredShape(comp, ref))
+                collectMeshParts(reg, st, ref, loc, s, res, out);
+        }
+    } else {
+        const TopoDS_Shape local = st->GetShape(label);
+        if (local.IsNull()) return;
+        // Bake the accumulated assembly placement into world geometry, then mesh: meshShapeIntoEntity
+        // scales to metres + writes an identity TransformComponent -- consistent with importStep's
+        // flattened world bake, so the FK delta-from-rest viz drives the solids correctly.
+        const TopoDS_Shape world =
+            BRepBuilderAPI_Transform(local, parentLoc.Transformation(), Standard_True).Shape();
+        krs::rbuild::ParsedPart p;
+        p.name = cafLabelName(label);
+        const entt::entity e = meshShapeIntoEntity(reg, world, s, p.name, res);
+        if (e == entt::null) return;                                  // produced no triangles
+        p.entity    = int(static_cast<std::uint32_t>(e));
+        p.placement = trsfToMatrixScaled(parentLoc.Transformation(), s);  // world, metres
+        p.faces     = analyticFacesScaled(local, s);                      // part-local, metres
+        out.push_back(std::move(p));
+    }
+}
+} // namespace
+
+std::vector<krs::rbuild::ParsedPart> importStepAssembly(Scene& scene, const std::string& path, float metersPerUnit)
+{
+    std::vector<krs::rbuild::ParsedPart> parts;
+    const double s = double(metersPerUnit);
+    Handle(TDocStd_Document) doc;
+    Handle(XCAFApp_Application) app = XCAFApp_Application::GetApplication();
+    app->NewDocument("MDTV-XCAF", doc);
+    STEPCAFControl_Reader caf;
+    caf.SetColorMode(true); caf.SetNameMode(true); caf.SetLayerMode(true);
+    if (caf.ReadFile(path.c_str()) != IFSelect_RetDone || !caf.Transfer(doc)) return parts;
+    Handle(XCAFDoc_ShapeTool) st = XCAFDoc_DocumentTool::ShapeTool(doc->Main());
+    TDF_LabelSequence freeShapes; st->GetFreeShapes(freeShapes);
+    ImportResult res;
+    auto& reg = scene.getRegistry();
+    for (int i = 1; i <= freeShapes.Length(); ++i)
+        collectMeshParts(reg, st, freeShapes.Value(i), TopLoc_Location(), s, res, parts);
+    return parts;
 }
 
 // ---------------------------------------------------------------------------
@@ -1355,6 +1471,7 @@ bool runUvGateU()
 
 #else
 // --- Built without OpenCASCADE: graceful no-op so the UI degrades cleanly. ---
+#include "RobotBuilder.hpp"   // krs::rbuild::ParsedPart (complete type for the stub return)
 namespace krs::cad {
 bool available() { return false; }
 ImportResult importStep(Scene&, const std::string&, float)
@@ -1363,6 +1480,7 @@ ImportResult importStep(Scene&, const std::string&, float)
     r.message = "STEP import needs OpenCASCADE — rebuild with KR_WITH_OCCT (opencascade in vcpkg.json).";
     return r;
 }
+std::vector<krs::rbuild::ParsedPart> importStepAssembly(Scene&, const std::string&, float) { return {}; }
 void inspectStep(const std::string&) {} // no OCCT -> no-op
 bool runSelfTest() { return true; } // no OCCT -> vacuous pass, keeps harnesses green
 bool runUvGateU() { return true; }  // no OCCT -> vacuous pass

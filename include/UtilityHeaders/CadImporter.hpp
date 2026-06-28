@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 class Scene;
+namespace krs::rbuild { struct ParsedPart; }   // assembly import returns these (RobotBuilder.hpp)
 
 /**
  * @brief OpenCASCADE STEP ingestion (Phase 4). Loads a .step assembly, spawns
@@ -29,6 +31,14 @@ bool available();
 /// Import a STEP file into the scene. `metersPerUnit` scales STEP units (often
 /// millimetres) to engine metres (default 0.001 = mm).
 ImportResult importStep(Scene& scene, const std::string& path, float metersPerUnit = 0.001f);
+
+/// Assembly-aware STEP import: walks the STEPCAF part tree and spawns one entity per NAMED
+/// leaf part, baking each part's accumulated assembly placement into world-metre mesh coords
+/// (reusing importStep's exact mesh pipeline). Returns the parts (name + world placement +
+/// part-local analytic faces + spawned entity, all in metres) for building a named kinematic
+/// chain (krs::rbuild::buildNamedSerialChain). Empty in the no-OCCT build.
+std::vector<krs::rbuild::ParsedPart> importStepAssembly(Scene& scene, const std::string& path,
+                                                        float metersPerUnit = 0.001f);
 
 /// Phase A topology recon (gated by KRS_STEP_INSPECT=<path>): loads a STEP
 /// assembly and prints, per solid, its bounding box / centroid / exact volume /

@@ -245,7 +245,7 @@ bool runAutoParseReport()
     for (const auto& j : gn.joints) {
         if (j.type != JType::Revolute) continue;
         ++revs; if (j.ambiguous) ++ambig;
-        const int childJ = jointNumberFromName(parts[j.child].name);
+        const int childJ = jointNumberFromName(gn.bodies[j.child].name);   // collapsed link bodies
         if (childJ != expect) orderOk = false;
         ++expect;
     }

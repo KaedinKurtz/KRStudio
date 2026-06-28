@@ -356,10 +356,10 @@ inline RobotGraph buildGraphFromParts(const std::vector<ParsedPart>& parts, int 
 // NAMED by joint (FANUC: 430-base, 430-j1..j6, the 430_j3-* forearm cluster), the NAMES
 // establish the serial ORDER; geometry only supplies each joint's axis. This:
 //   * groups parts by joint number (the first 'j<1..6>' token in the name; else base),
-//   * collapses each multi-part link with FIXED joints (dof() ignores them) -- e.g. the
-//     430_j3-* cluster and 430-j1-hardstop ride their link rigidly,
-//   * adds a REVOLUTE between consecutive link representatives, axis from the best coaxial
-//     bore between the two link groups (ambiguous=true if none -> user defines it),
+//   * COLLAPSES each multi-part link into ONE RBBody (the 430_j3-* cluster + 430-j1-hardstop
+//     ride their link as extraEntities, driven together by instantiateFromGraph),
+//   * adds a REVOLUTE between consecutive link bodies, axis from the best coaxial bore
+//     between the two link groups (ambiguous=true if none -> user defines it),
 //   * orders base -> j1 -> j2 -> j3 -> j4 -> j5 -> j6.
 // Returns a RobotGraph whose committed revolute joints are in the NAMED chain order.
 inline int jointNumberFromName(const std::string& nm) {
@@ -370,45 +370,84 @@ inline int jointNumberFromName(const std::string& nm) {
 }
 inline RobotGraph buildNamedSerialChain(const std::vector<ParsedPart>& parts)
 {
-    RobotGraph g; g.bodies = parts; g.base = 0;
-    std::array<std::vector<int>, 7> grp;            // [0]=base/static, [1..6]=j1..j6
+    RobotGraph g; g.base = 0;
+    std::array<std::vector<int>, 7> grp;            // part indices per joint number [0]=base/static, [1..6]=j1..j6
     for (int i = 0; i < int(parts.size()); ++i) grp[jointNumberFromName(parts[i].name)].push_back(i);
 
-    int prevRep = -1; std::vector<int> prevGroup;
-    bool baseSet = false;
+    // COLLAPSE each link group into ONE RBBody: the representative part carries the link's
+    // frame/faces; the OTHER parts of the link ride it as extraEntities (multi-solid link).
+    // instantiateFromGraph drives {entity} U extraEntities together, so a whole link (e.g. the
+    // 430_j3-* forearm cluster) moves as one. Result: bodies = base, j1, j2, j3, j4, j5, j6.
+    std::vector<std::vector<int>> linkParts;        // original part indices per collapsed body
     for (int L = 0; L <= 6; ++L) {
         if (grp[L].empty()) continue;
         const int rep = grp[L].front();
-        if (!baseSet) { g.base = rep; baseSet = true; }
-        // intra-link rigidity: the other parts of this link ride the representative (Fixed).
-        for (size_t k = 1; k < grp[L].size(); ++k) {
-            RBJoint fj; fj.parent = rep; fj.child = grp[L][k];
-            fj.type = JType::Fixed; fj.prov = Prov::Inferred;
-            g.addJoint(fj);
+        RBBody b = parts[rep];                       // name + placement + faces + entity (rep)
+        for (size_t k = 1; k < grp[L].size(); ++k)
+            if (parts[grp[L][k]].entity >= 0) b.extraEntities.push_back(parts[grp[L][k]].entity);
+        g.bodies.push_back(b);
+        linkParts.push_back(grp[L]);
+    }
+    g.base = 0;                                      // bodies[0] is the base link
+
+    // Serial REVOLUTE between consecutive link bodies, axis = the best coaxial bore across the
+    // two link GROUPS (searching all part-pairs, each in its own placement). The name prior
+    // already GUARANTEES these links connect, so the axis search is RELAXED vs the strict
+    // pure-geometric spanning tree (which must avoid false positives). If no coaxial bore is
+    // found, the joint is flagged ambiguous (axis to be defined manually).
+    // Largest world-space cylinder face across a link group (the dominant bore/bearing) --
+    // the fallback axis source when no clean coaxial PAIR exists.
+    auto biggestCyl = [&](const std::vector<int>& gids, BRepFace& out)->bool {
+        float best = -1.f; bool any = false;
+        for (int pi : gids) {
+            const ParsedPart& P = parts[pi];
+            for (const auto& f : P.faces) {
+                if (f.type != 1 || f.radius <= best) continue;
+                out = faceToWorld(f, P.placement); best = f.radius; any = true;
+            }
         }
-        // serial revolute to the previous link, axis from the best coaxial bore between
-        // groups. The name prior already GUARANTEES these two links are connected, so the
-        // axis search is RELAXED (coax/rad tol) vs the strict pure-geometric spanning tree
-        // (which must avoid false positives): we just want the best-fitting shared axis. The
-        // lowest-residual candidate is the true pivot; bolt holes across a pitch joint are
-        // not coaxial, so they lose.
-        if (prevRep >= 0) {
-            RBJoint best; double bestRes = 1e30; bool found = false;
-            for (int a : prevGroup) for (int b : grp[L]) {
-                RBJoint cand;
-                if (inferRevolute(parts[a], parts[b], cand, /*coaxTol*/ 5e-3, /*radTol*/ 5e-3)
-                    && cand.residual < bestRes) {
-                    bestRes = cand.residual; best = cand; found = true;
+        return any;
+    };
+    for (int bi = 1; bi < int(g.bodies.size()); ++bi) {
+        RBJoint best; double bestRes = 1e30; bool found = false;
+        // (1) best coaxial bore PAIR across the two groups (highest confidence).
+        for (int a : linkParts[bi - 1]) for (int b : linkParts[bi]) {
+            RBJoint cand;
+            if (inferRevolute(parts[a], parts[b], cand, /*coaxTol*/ 5e-3, /*radTol*/ 5e-3)
+                && cand.residual < bestRes) {
+                bestRes = cand.residual; best = cand; found = true;
+            }
+        }
+        // (2) FALLBACK: the largest cylinder on each link, radius-agnostic, relaxed coaxiality
+        //     (the structural pivot often shares a hinge LINE even when bore/shaft radii differ).
+        if (!found) {
+            BRepFace wa, wb;
+            if (biggestCyl(linkParts[bi - 1], wa) && biggestCyl(linkParts[bi], wb)) {
+                krs::joint::JointFrame jf; double ang = 0, off = 0;
+                if (krs::joint::deriveRevoluteFromBores(wa, wb, jf, /*coaxTol*/ 1.5e-2, &ang, &off)) {
+                    best.axisPos = jf.axisPos; best.axisDir = jf.axisDir;
+                    best.residual = std::max(ang, off); found = true;
                 }
             }
-            best.parent = prevRep; best.child = rep; best.type = JType::Revolute;
-            best.prov = Prov::Inferred;
-            best.ambiguous = !found;                 // no coaxial bore -> needs manual definition
-            if (!found) { best.axisDir = glm::vec3(0, 0, 1); best.axisPos = glm::vec3(0); }
-            best.orthonormalizeFrame();
-            g.addJoint(best);
         }
-        prevRep = rep; prevGroup = grp[L];
+        // (3) LAST RESORT: the child link's largest cylinder axis (a drivable guess so the
+        //     chain stays connected/6-DoF; flagged low-confidence for the user to refine).
+        bool lowConf = false;
+        if (!found) {
+            BRepFace wb;
+            if (biggestCyl(linkParts[bi], wb)) {
+                best.axisPos = wb.axisPos; best.axisDir = wb.axisDir; best.residual = 1.0; found = true; lowConf = true;
+            }
+        }
+        best.parent = bi - 1; best.child = bi; best.type = JType::Revolute; best.prov = Prov::Inferred;
+        // Commit every joint so the chain stays connected (a drivable 6-DoF first guess); only a
+        // joint with NO cylinder at all on either link is ambiguous (degenerate). Low-confidence
+        // fallback axes are committed + refinable via the editable graph.
+        best.ambiguous = !found;
+        if (!found) { best.axisDir = glm::vec3(0, 0, 1); best.axisPos = glm::vec3(0); }
+        (void)lowConf;
+        best.orthonormalizeFrame();
+        g.addJoint(best);
     }
     return g;
 }

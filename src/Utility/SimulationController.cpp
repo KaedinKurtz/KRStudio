@@ -591,7 +591,7 @@ void SimulationController::tick()
 void SimulationController::applyArticulationCommands()
 {
     const int nDof = articDofCount();
-    if (!m_scene || nDof <= 0) return;
+    if (!m_scene) return;   // NB: nDof may be 0 -- a pure FK-viz robot drives without PhysX (below)
     auto& reg = m_scene->getRegistry();
     const ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
     if (!cmd) return;
@@ -609,23 +609,28 @@ void SimulationController::applyArticulationCommands()
         for (auto& rp : rr->robots) if (rp && rp->ownsDrive) { driver = rp.get(); break; }
     }
     if (driver) {
-        // STEP 5 -- PhysX as INFLUENCE: read the ACTUAL post-step joint positions back
-        // into LiveRobot::qActual (never overwrites q). For the kinematic FANUC (fixBase,
-        // zero gravity) qActual tracks q; deviation() would surface contact/gravity influence.
-        const std::vector<float> actual = articJointPositions();
-        for (int d = 0; d < int(actual.size()) && d < int(driver->qActual.size()); ++d)
-            driver->qActual[d] = double(actual[d]);
-        // q -> PhysX (kinematic follower) -- member-joint order == PhysX DOF order (FANUC).
-        std::vector<float> q(nDof, 0.0f);
-        for (int d = 0; d < nDof && d < driver->ndof(); ++d) q[d] = float(driver->q[d]);
-        setArticJointPositions(q);
+        if (nDof > 0) {
+            // STEP 5 -- PhysX as INFLUENCE: read the ACTUAL post-step joint positions back
+            // into LiveRobot::qActual (never overwrites q). For the kinematic FANUC (fixBase,
+            // zero gravity) qActual tracks q; deviation() would surface contact/gravity influence.
+            const std::vector<float> actual = articJointPositions();
+            for (int d = 0; d < int(actual.size()) && d < int(driver->qActual.size()); ++d)
+                driver->qActual[d] = double(actual[d]);
+            // q -> PhysX (kinematic follower) -- member-joint order == PhysX DOF order (FANUC).
+            std::vector<float> q(nDof, 0.0f);
+            for (int d = 0; d < nDof && d < driver->ndof(); ++d) q[d] = float(driver->q[d]);
+            setArticJointPositions(q);
+        }
+        // A pure FK-viz robot (e.g. the assembly-parsed 6-DoF FANUC) drives its links from q
+        // directly via writeBackRobotViz -- no PhysX articulation required (nDof may be 0).
         if (driver->useRobotFkViz) krs::robot::writeBackRobotViz(*m_scene, *driver);
-        else                       writeBackArticulationViz();
+        else if (nDof > 0)         writeBackArticulationViz();
         return;
     }
 
     // LEGACY PATH (no Robot owner yet): bus -> PhysX directly (pre-foundation behaviour,
     // keeps the FANUC sweeping until step 6 registers it as a first-class Robot).
+    if (nDof <= 0) return;                                 // legacy drive needs a PhysX articulation
     std::vector<float> q = articJointPositions();          // start from the live config
     if (int(q.size()) != nDof) q.assign(nDof, 0.0f);
     bool any = false;

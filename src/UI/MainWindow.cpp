@@ -883,7 +883,34 @@ MainWindow::MainWindow(QWidget* parent)
     // validate: the 17 STEP solids track their serial links live, J1/J2/J3 sweep on
     // play. setupFanucScene imports + builds the canonical articulation + maps the
     // solids; the sim auto-plays so the arm moves from the first frame.
-    if (bootFanuc) {
+    if (bootFanuc && qEnvironmentVariableIsSet("KRS_FANUC_6DOF")) {
+        // TRUE 6-DoF boot: STEPCAF assembly import -> one entity per NAMED part -> name-driven
+        // serial chain (base->j1..j6, the 430_j3-* cluster collapsed into one link) -> first-class
+        // LiveRobot. Each joint drives its OWN geometry via FK viz (no PhysX needed). The graph is
+        // stashed in the ctx so the Robot Builder can edit it (re-type / redefine / refine axes).
+        auto& reg = m_scene->getRegistry();
+        std::vector<krs::rbuild::ParsedPart> parts = krs::cad::importStepAssembly(*m_scene, fanucStepPath);
+        krs::rbuild::RobotGraph g = krs::rbuild::buildNamedSerialChain(parts);
+        g.robotId = 0;
+        { auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
+          if (!gp) gp = &reg.ctx().emplace<krs::rbuild::RobotGraph>();
+          *gp = g; }
+        if (krs::robot::LiveRobot* lr = krs::robot::instantiateFromGraph(*m_scene, g, 0)) {
+            lr->name = lr->model.name = "FANUC-430";
+            lr->ownsDrive = true; lr->useRobotFkViz = true;
+            if (reg.valid(lr->root)) {
+                reg.emplace_or_replace<RobotRootComponent>(lr->root, RobotRootComponent{ "FANUC-430", 0 });
+                reg.emplace_or_replace<TagComponent>(lr->root, std::string("FANUC-430"));
+            }
+            QString lc; for (int k = 0; k < int(lr->linkEntities.size()); ++k)
+                lc += QString::number(int(lr->linkEntities[k].size())) + " ";
+            qInfo() << "[FANUC] 6-DoF assembly boot:" << int(parts.size()) << "named parts; dof" << lr->ndof()
+                    << " linkEntityCounts=[" << lc.trimmed() << "] (each >0 => that joint drives its own geometry)";
+        } else {
+            qWarning() << "[FANUC] 6-DoF assembly boot FAILED (import/chain)";
+        }
+    }
+    else if (bootFanuc) {
         krs::fanuc::Setup fs = krs::fanuc::setupFanucScene(*m_scene, *m_simulation, fanucStepPath);
         if (fs.ok) {
             // The hardcoded demo sweep is GONE. The FANUC is driven by the DEFAULT NODE GRAPH spawned
