@@ -524,17 +524,16 @@ void RenderingSystem::initializeSharedResources()
         if (qEnvironmentVariableIsSet("KRS_ENV")) {
             chosenHdr = qEnvironmentVariable("KRS_ENV");
         } else {
-            // env.hdr is DELIBERATELY excluded from the auto-rotation: it is a partial/
-            // broken equirect whose lower hemisphere + horizon bake to PURE BLACK (verified:
-            // fromEquirectangular center pixel = 0,0,0, vs ~0.05 for env2/env3), which showed
-            // up as "black void planes attached to the camera" in the skybox. env2/env3 are
-            // full HDRs and bake correctly. env.hdr is still loadable via KRS_ENV=env.hdr.
-            const QStringList candidates = { QStringLiteral("env2.hdr"),
+            // All three HDRs are good (the earlier "env.hdr bakes black" was a red herring:
+            // the real cause was the per-context VAO bug corrupting the equirect->cubemap
+            // bake -- fixed in GLUtils::getUnitCubeVAO).
+            const QStringList candidates = { QStringLiteral("env.hdr"),
+                                             QStringLiteral("env2.hdr"),
                                              QStringLiteral("env3.hdr") };
             QStringList present;
             for (const QString& c : candidates)
                 if (QFile::exists(assetDir + c)) present.push_back(c);
-            if (present.isEmpty()) present.push_back(QStringLiteral("env2.hdr"));
+            if (present.isEmpty()) present.push_back(QStringLiteral("env.hdr"));
             // Seed a LOCAL generator from the wall clock so the pick varies every
             // boot and can never be pinned by global-RNG state. (Note: if fewer
             // than the full env*.hdr set is deployed next to the exe, 'present'
@@ -542,7 +541,7 @@ void RenderingSystem::initializeSharedResources()
             QRandomGenerator localRng(static_cast<quint32>(QDateTime::currentMSecsSinceEpoch() & 0xffffffffULL));
             chosenHdr = present.at(localRng.bounded(present.size()));
         }
-        if (!QFile::exists(assetDir + chosenHdr)) chosenHdr = QStringLiteral("env2.hdr");
+        if (!QFile::exists(assetDir + chosenHdr)) chosenHdr = QStringLiteral("env.hdr");
         qInfo() << "[IBL] Using environment HDR:" << chosenHdr;
         std::string hdrPath = (assetDir + chosenHdr).toStdString();
 
