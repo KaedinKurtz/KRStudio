@@ -5,6 +5,7 @@
 #include "SelectionService.hpp"     // krs::sel::SelectionState / Selection / FeatureType
 #include "RobotBuilder.hpp"         // krs::rbuild::RobotGraph / EditController / RBJoint
 #include "RobotBuilderScene.hpp"    // buildDemoGraph / spawnGraphBodies / bodyIndexForEntity
+#include "RobotModel.hpp"           // krs::robot::instantiateFromGraph (demo as a first-class robot)
 #include "RobotConfig.hpp"          // krs::rcfg::RobotConfig (proven property hot-swap)
 
 #include <QVBoxLayout>
@@ -228,12 +229,33 @@ void RobotBuilderPanel::onLoadDemo()
     if (m_isUpdatingUI) return;   // consistency with the other action slots
     if (!m_scene) { setStatus(QStringLiteral("No scene.")); return; }
     auto& reg = m_scene->getRegistry();
+
+    // The demo is a SEPARATE robot (robotId 1) so it coexists with the boot FANUC
+    // (robotId 0) -- two named robots in the outliner, each selectable. Clean up a
+    // previous demo's bodies + root first so repeated loads don't accumulate.
+    const int demoId = 1;
+    std::vector<entt::entity> kill;
+    for (auto e : reg.view<RobotSubcomponentComponent>())
+        if (reg.get<RobotSubcomponentComponent>(e).robotId == demoId) kill.push_back(e);
+    for (auto e : reg.view<RobotRootComponent>())
+        if (reg.get<RobotRootComponent>(e).robotId == demoId) kill.push_back(e);
+    if (!kill.empty()) reg.destroy(kill.begin(), kill.end());
+
     auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
     if (!gp) gp = &reg.ctx().emplace<krs::rbuild::RobotGraph>();
     *gp = krs::rbuild::buildDemoGraph();
-    krs::rbuild::spawnGraphBodies(*m_scene, *gp, /*robotId*/ 0);
-    setStatus(QStringLiteral("Loaded demo robot: %1 bodies, DOF %2. Select two bores on B2/B3 to define J2.")
-                  .arg(int(gp->bodies.size())).arg(gp->dof()));
+    gp->robotId = demoId;   // carried on the graph so refresh()'s tag-sync keeps id 1 (not 0)
+    krs::rbuild::spawnGraphBodies(*m_scene, *gp, demoId);
+    // Make it first-class (named root + LiveRobot) so it shows as its own outliner robot.
+    if (auto* lr = krs::robot::instantiateFromGraph(*m_scene, *gp, demoId)) {
+        lr->name = lr->model.name = "Demo Robot";
+        if (reg.valid(lr->root)) {
+            reg.emplace_or_replace<RobotRootComponent>(lr->root, RobotRootComponent{ "Demo Robot", demoId });
+            reg.emplace_or_replace<TagComponent>(lr->root, std::string("Demo Robot"));
+        }
+    }
+    setStatus(QStringLiteral("Loaded demo robot (robotId %1): %2 bodies, DOF %3. Select two bores to define J2.")
+                  .arg(demoId).arg(int(gp->bodies.size())).arg(gp->dof()));
     refresh();
     emit graphChanged();
 }

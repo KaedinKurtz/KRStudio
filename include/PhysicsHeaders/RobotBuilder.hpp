@@ -122,6 +122,10 @@ struct RobotGraph {
     std::vector<RBBody> bodies;
     std::vector<RBJoint> joints;
     int base = 0;
+    // Which first-class robot this authoring graph represents. The boot FANUC is 0;
+    // the Builder's "Load Demo" graph is 1, etc. syncRobotTagsToMembership() stamps
+    // member bodies with THIS id so two graphs coexist without clobbering each other.
+    int robotId = 0;
 
     // bodies reachable from base through committed joints (BFS over the undirected graph).
     std::set<int> members() const {

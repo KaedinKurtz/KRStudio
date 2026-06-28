@@ -1602,6 +1602,14 @@ MainWindow::MainWindow(QWidget* parent)
         QTimer::singleShot(5000, this, [this]() {
             if (m_robotViewport) m_robotViewport->setOrbitSpeed(0.75f);
         });
+        // 2a2) Load the demo robot as a SECOND robot (robotId 1) to exercise multi-robot.
+        QTimer::singleShot(4500, this, [this]() {
+            RobotBuilderPanel* rbp = m_robotBuilderPanel ? m_robotBuilderPanel
+                                                         : findChild<RobotBuilderPanel*>();
+            QPushButton* btn = rbp ? rbp->findChild<QPushButton*>(QStringLiteral("rbLoadDemoButton")) : nullptr;
+            qInfo() << "[MULTIROBOT] load-demo: panel=" << (rbp != nullptr) << "button=" << (btn != nullptr);
+            if (btn) btn->click();
+        });
         // 2b) Select a robot body in the MAIN scene so the grab shows it gold-outlined in
         //     BOTH viewports (cross-viewport selection).
         QTimer::singleShot(5500, this, [this]() {
@@ -1630,6 +1638,13 @@ MainWindow::MainWindow(QWidget* parent)
                 ow->grab().save(outDir + QStringLiteral("/outliner.png"));
             if (m_robotViewport)
                 qInfo() << "[XSEL] view-twins selected (cross-viewport):" << m_robotViewport->viewSelectedCount();
+            // Multi-robot check: count distinct RobotRootComponents (FANUC + any loaded demo).
+            { auto& r = m_scene->getRegistry(); int roots = 0, r0 = 0, r1 = 0, rOther = 0;
+              for (auto e : r.view<RobotRootComponent>()) { (void)e; ++roots; }
+              for (auto e : r.view<RobotSubcomponentComponent>()) {
+                  const int id = r.get<RobotSubcomponentComponent>(e).robotId;
+                  if (id == 0) ++r0; else if (id == 1) ++r1; else ++rOther; }
+              qInfo() << "[MULTIROBOT] roots:" << roots << " bodies robotId0=" << r0 << "robotId1=" << r1 << "other=" << rOther; }
             const QImage wi = pm.toImage();
             const int w = wi.width(), h = wi.height();
             QFile f(outDir + QStringLiteral("/robotview_result.txt"));

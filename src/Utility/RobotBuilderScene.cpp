@@ -119,7 +119,7 @@ void syncRobotTagsToMembership(Scene& scene, const RobotGraph& g) {
         const entt::entity e = entt::entity(static_cast<std::uint32_t>(eid));
         if (!reg.valid(e)) continue;
         if (g.isMember(i))                              // owned by the chain -> locked
-            reg.emplace_or_replace<RobotSubcomponentComponent>(e, 0);
+            reg.emplace_or_replace<RobotSubcomponentComponent>(e, g.robotId);
         else if (reg.all_of<RobotSubcomponentComponent>(e))  // detached/unjointed -> grabbable
             reg.remove<RobotSubcomponentComponent>(e);
     }
