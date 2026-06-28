@@ -274,6 +274,14 @@ void OpaquePass::execute(const RenderFrameContext& context)
             }
             if (activeShader == pomShader) {
                 activeShader->setFloat(gl, "u_texture_scale", texScale);
+                activeShader->setVec3(gl, "uViewPos", context.camera.getPosition()); // per-pixel viewDir
+
+                // The -bl texture packs ship HEIGHT maps (white=high); POM marches DEPTH, so
+                // invert by default (depth = 1 - height). White rock -> carved least (sits at
+                // the plane), black lava -> carved deepest. env KRS_POM_INVERT=0 disables (A/B).
+                { const int inv = qEnvironmentVariableIsSet("KRS_POM_INVERT")
+                                  ? qEnvironmentVariableIntValue("KRS_POM_INVERT") : 1;
+                  activeShader->setFloat(gl, "u_height_invert", inv != 0 ? 1.0f : 0.0f); }
                 // Two long-standing bugs: the authored heightScale was
                 // ignored (hardcoded 0.05) and material.heightMap was never
                 // bound — the sampler defaulted to unit 0, so the parallax

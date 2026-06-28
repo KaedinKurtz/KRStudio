@@ -22,6 +22,15 @@ struct Material {
 uniform Material material;
 uniform float u_texture_scale;
 uniform float u_height_scale;
+// World-space camera position, so the view direction is recomputed PER-PIXEL here. The
+// vertex shader's per-vertex viewDir is linearly interpolated across the (low-poly, 24 m)
+// floor quad and diverges badly from the true direction up close -> the parallax marched
+// the wrong way ("shifts right instead of away when near the ground"). Per-pixel fixes it.
+uniform vec3 uViewPos;
+// DEBUG A/B: 1 = treat the map as a HEIGHT map (white=high) by converting to DEPTH
+// (depth = 1 - value) for the march; 0 = use the raw value as depth. Driven by env
+// KRS_POM_INVERT via OpaquePass so the correct convention can be determined empirically.
+uniform float u_height_invert;
 
 // ----------------------- Tunables (no new uniforms) -----------------------
 const float HEIGHT_CONTRAST   = 2.4;   // 2.0�3.0 hardens edges
@@ -35,6 +44,7 @@ const int   SHADOW_STEPS_MAX  = 16;
 
 // ----------------------------- Helpers ------------------------------------
 float shape_height(float h) {
+    h = mix(h, 1.0 - h, clamp(u_height_invert, 0.0, 1.0));   // height->depth conversion (A/B)
     h = clamp((h - 0.5) * HEIGHT_CONTRAST + 0.5, 0.0, 1.0);
     return pow(h, HEIGHT_GAMMA);
 }
@@ -179,7 +189,7 @@ vec3 sample_triplanar_normal(sampler2D nmap, vec3 wp, vec3 wn,
 void main()
 {
     vec3 N = normalize(fs_WorldNormal);
-    vec3 V = normalize(fs_ViewDir_tangent); // frag?eye; we negate inside POM 
+    vec3 V = normalize(uViewPos - fs_WorldPos); // frag->eye, PER-PIXEL (not the interpolated vert value)
 
     // NOTE: the previous code flipped uv.x/vp.x on back-facing planes (sx/sy/sz < 0) BEFORE
     // the POM march, but sample_triplanar()/sample_triplanar_normal() sample with UNFLIPPED

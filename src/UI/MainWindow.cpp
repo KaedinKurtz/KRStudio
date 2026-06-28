@@ -1523,7 +1523,7 @@ MainWindow::MainWindow(QWidget* parent)
                         << reg.all_of<UVTexturedMaterialTag>(e) << "TriPlanar=" << reg.all_of<TriPlanarMaterialTag>(e)
                         << "Parallax=" << reg.all_of<ParallaxMaterialTag>(e);
             };
-            applyPack(findTag("Ground.Slab"), "assets/Textures/ground-bl/columned-lava-rock-bl", true, 0.5f);   // parallax (height)
+            applyPack(findTag("Ground.Slab"), "assets/Textures/ground-bl/lava-and-rock-bl", true, 0.5f);   // parallax debug: rock=high, lava=low
             applyPack(findTag("Aluminium Block (FEM)"), "assets/Textures/bonus-bl/boulder1", false, 2.0f);       // PLAIN (no height)
         });
         QTimer::singleShot(9000, this, [this, outDir]() {
