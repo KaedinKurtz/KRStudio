@@ -137,8 +137,14 @@ vec2 pom_plane_with_shadow(
         }
     }
 
-    // Center mid-gray (0.5) around the mesh plane
-    return (uv - curUV) - P * 0.5;
+    // The parallax offset is just (entry uv - intersection uv); the texture is then sampled
+    // at the intersection (curUV), which is locked to the surface. The old "- P*0.5"
+    // mid-plane centering added a VIEW-DEPENDENT global shift (P depends on the view), which
+    // slid the ENTIRE texture -- including flat surface areas -- as the camera moved (the
+    // "texture swims / doesn't hold to the geometry" artifact). Dropping it locks the surface;
+    // only genuinely recessed texels parallax. (Trade: displacement now carves down from the
+    // plane rather than centering on it -- standard POM, and swim-free.)
+    return (uv - curUV);
 }
 
 // -------- Tri-planar sampling (color) using POM offsets ----------
