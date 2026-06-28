@@ -13,6 +13,7 @@
 #include <QTimer>
 #include <QSlider>
 #include <QLabel>
+#include <QPushButton>
 #include <QResizeEvent>
 #include <QMouseEvent>
 #include <cstdio>
@@ -77,7 +78,27 @@ void RobotViewport::buildOverlayControls()
         "QSlider::sub-page:horizontal{background:#d4af34;border-radius:2px;}"));
     connect(m_orbitSlider, &QSlider::valueChanged, this, &RobotViewport::onOrbitSliderChanged);
 
+    // Builder/Mirror toggle (left of the slider). Builder = home (0deg) for joint editing;
+    // Mirror = live joint angles from the scene robot.
+    m_modeToggle = new QPushButton(this);
+    m_modeToggle->setCheckable(true);
+    m_modeToggle->setChecked(m_builderMode);
+    m_modeToggle->setText(m_builderMode ? QStringLiteral("Builder") : QStringLiteral("Mirror"));
+    m_modeToggle->setFixedWidth(72);
+    m_modeToggle->setToolTip(QStringLiteral("Builder = robot at home (0 deg) for editing joints; "
+                                            "Mirror = mirror the live scene robot's joint angles"));
+    m_modeToggle->setStyleSheet(QStringLiteral(
+        "QPushButton{color:#dddddd;background:#3a3a3a;border:1px solid #555;border-radius:3px;font-size:10px;padding:2px;}"
+        "QPushButton:checked{background:#d4af34;color:#222;border:1px solid #d4af34;}"));
+    connect(m_modeToggle, &QPushButton::toggled, this, &RobotViewport::onModeToggled);
+
     layoutOverlayControls();
+}
+
+void RobotViewport::onModeToggled(bool builder)
+{
+    m_builderMode = builder;
+    if (m_modeToggle) m_modeToggle->setText(builder ? QStringLiteral("Builder") : QStringLiteral("Mirror"));
 }
 
 void RobotViewport::layoutOverlayControls()
@@ -92,6 +113,11 @@ void RobotViewport::layoutOverlayControls()
     if (m_orbitLabel) {
         m_orbitLabel->adjustSize();
         m_orbitLabel->move(x, y - m_orbitLabel->height());
+    }
+    if (m_modeToggle) {
+        const int tw = m_modeToggle->width();
+        const int th = m_modeToggle->sizeHint().height();
+        m_modeToggle->move(x - tw - 10, height() - th - m);   // left of the orbit slider
     }
 }
 
@@ -203,6 +229,28 @@ void RobotViewport::rebuildView()
             m_dist = std::clamp(r * 3.0f, 3.0f, 16.0f);
             m_elev = r * 0.4f;
         }
+
+        // Capture each body's HOME (q0) transform for Builder mode. Default = the current
+        // (live) transform; for moving bodies, override with the FK(q=0) pose by briefly
+        // posing the LiveRobot at q0 (restored immediately; not rendered in between).
+        m_restXf.clear();
+        m_restXf.reserve(m_bodyMap.size());
+        for (auto& pr : m_bodyMap) {
+            const auto* tc = mreg.try_get<TransformComponent>(pr.first);
+            m_restXf.push_back(tc ? *tc : TransformComponent{});
+        }
+        if (auto* rr = mreg.ctx().find<krs::robot::RobotRegistry>()) {
+            krs::robot::LiveRobot* lr = rr->get(m_robotId);
+            if (lr && lr->useRobotFkViz && lr->ndof() > 0) {
+                const Eigen::VectorXd savedQ = lr->q;
+                lr->q.setZero();
+                krs::robot::writeBackRobotViz(*m_mainScene, *lr);     // main bodies -> q0
+                for (size_t i = 0; i < m_bodyMap.size(); ++i)
+                    if (auto* t = mreg.try_get<TransformComponent>(m_bodyMap[i].first)) m_restXf[i] = *t;
+                lr->q = savedQ;
+                krs::robot::writeBackRobotViz(*m_mainScene, *lr);     // restore live pose
+            }
+        }
     } else if (m_liveGraph && !m_liveGraph->bodies.empty()) {
         krs::rbuild::mirrorGraphIntoScene(*m_viewScene, *m_liveGraph, /*robotId*/ 0);
         const int bi = (m_liveGraph->base >= 0 && m_liveGraph->base < int(m_liveGraph->bodies.size()))
@@ -246,11 +294,16 @@ void RobotViewport::onSpinTick()
     if (!m_bodyMap.empty() && m_mainScene && m_viewScene) {
         auto& mreg = m_mainScene->getRegistry();
         auto& vreg = m_viewScene->getRegistry();
-        for (const auto& pr : m_bodyMap) {
-            if (!mreg.valid(pr.first) || !vreg.valid(pr.second)) continue;
-            const auto* mtc = mreg.try_get<TransformComponent>(pr.first);
-            auto*       vtc = vreg.try_get<TransformComponent>(pr.second);
-            if (mtc && vtc) *vtc = *mtc;
+        for (size_t i = 0; i < m_bodyMap.size(); ++i) {
+            const auto& pr = m_bodyMap[i];
+            if (!vreg.valid(pr.second)) continue;
+            auto* vtc = vreg.try_get<TransformComponent>(pr.second);
+            if (!vtc) continue;
+            if (m_builderMode) {
+                if (i < m_restXf.size()) *vtc = m_restXf[i];          // frozen HOME (q0) pose
+            } else if (mreg.valid(pr.first)) {
+                if (auto* mtc = mreg.try_get<TransformComponent>(pr.first)) *vtc = *mtc;  // live
+            }
         }
     }
 

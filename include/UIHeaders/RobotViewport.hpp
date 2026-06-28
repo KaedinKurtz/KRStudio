@@ -25,6 +25,7 @@ class RenderingSystem;
 class QTimer;
 class QSlider;
 class QLabel;
+class QPushButton;
 
 namespace krs::rbuild { struct RobotGraph; }
 
@@ -54,6 +55,7 @@ protected:
 private slots:
     void onSpinTick();
     void onOrbitSliderChanged(int value);
+    void onModeToggled(bool builder);
 
 private:
     void rebuildView();
@@ -72,6 +74,12 @@ private:
     // so the view bodies track the live pose (Mirror) + cross-viewport selection works.
     int   m_robotId = -1;            // mirrored robot's id (-1 = demo-graph fallback)
     std::vector<std::pair<entt::entity, entt::entity>> m_bodyMap;
+    std::vector<TransformComponent> m_restXf;   // each view body's HOME (q0) transform (Builder mode)
+
+    // Builder mode = robot frozen at the 0-degree HOME pose (for building/fixing joints).
+    // Mirror mode  = view bodies track the live scene robot's joint angles.
+    bool          m_builderMode = true;
+    QPushButton*  m_modeToggle  = nullptr;
 
     QTimer*       m_spinTimer = nullptr;
     QElapsedTimer m_spinClock;
