@@ -883,8 +883,8 @@ MainWindow::MainWindow(QWidget* parent)
     // validate: the 17 STEP solids track their serial links live, J1/J2/J3 sweep on
     // play. setupFanucScene imports + builds the canonical articulation + maps the
     // solids; the sim auto-plays so the arm moves from the first frame.
-    if (bootFanuc && qEnvironmentVariableIsSet("KRS_FANUC_6DOF")) {
-        // TRUE 6-DoF boot: STEPCAF assembly import -> one entity per NAMED part -> name-driven
+    if (bootFanuc && !qEnvironmentVariableIsSet("KRS_FANUC_LEGACY")) {
+        // TRUE 6-DoF boot (DEFAULT): STEPCAF assembly import -> one entity per NAMED part -> name-driven
         // serial chain (base->j1..j6, the 430_j3-* cluster collapsed into one link) -> first-class
         // LiveRobot. Each joint drives its OWN geometry via FK viz (no PhysX needed). The graph is
         // stashed in the ctx so the Robot Builder can edit it (re-type / redefine / refine axes).
