@@ -50,6 +50,8 @@ private slots:
     void onDefineFromFeatures();
     void onJointSelected(int row);
     void onApplyLimit();
+    void onApplyAxisOrigin();   // move the selected joint's axis origin (where it snaps to)
+    void onSnapAxisToBore();    // snap the selected joint's axis to the selected bore feature
 
 private:
     void initializeUI();
@@ -71,6 +73,12 @@ private:
     QDoubleSpinBox* m_limitLo       = nullptr;
     QDoubleSpinBox* m_limitHi       = nullptr;
     QPushButton*    m_applyLimitBtn = nullptr;
+    // Joint axis origin (where the joint snaps to) -- adjusts RBJoint.axisPos.
+    QDoubleSpinBox* m_axisX         = nullptr;
+    QDoubleSpinBox* m_axisY         = nullptr;
+    QDoubleSpinBox* m_axisZ         = nullptr;
+    QPushButton*    m_applyAxisBtn  = nullptr;
+    QPushButton*    m_snapAxisBtn   = nullptr;
     QLabel*         m_status        = nullptr;
 
     // Proven property hot-swap object (krs::rcfg). Rebuilt from graph->toRobot() on

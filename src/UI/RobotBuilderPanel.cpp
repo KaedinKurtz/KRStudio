@@ -125,6 +125,31 @@ void RobotBuilderPanel::initializeUI()
     m_applyLimitBtn->setObjectName(QStringLiteral("rbApplyLimitButton"));
     layout->addWidget(m_applyLimitBtn);
 
+    // --- Joint axis origin (adjust where the selected joint snaps to) ---
+    layout->addWidget(makeSectionHeader(QStringLiteral("Joint Axis Origin"), content));
+    auto* axBox = new QGroupBox(content);
+    auto* axForm = new QFormLayout(axBox);
+    auto mkAxisSpin = [&](const char* objName) {
+        auto* s = new QDoubleSpinBox(axBox);
+        s->setObjectName(QString::fromLatin1(objName));
+        s->setRange(-1000.0, 1000.0); s->setDecimals(3); s->setSingleStep(0.01);
+        s->setKeyboardTracking(false);
+        return s;
+    };
+    m_axisX = mkAxisSpin("rbAxisXSpin");
+    m_axisY = mkAxisSpin("rbAxisYSpin");
+    m_axisZ = mkAxisSpin("rbAxisZSpin");
+    axForm->addRow(QStringLiteral("X (m)"), m_axisX);
+    axForm->addRow(QStringLiteral("Y (m)"), m_axisY);
+    axForm->addRow(QStringLiteral("Z (m)"), m_axisZ);
+    layout->addWidget(axBox);
+    m_applyAxisBtn = new QPushButton(QStringLiteral("Apply Axis Origin to Selected Joint"), content);
+    m_applyAxisBtn->setObjectName(QStringLiteral("rbApplyAxisButton"));
+    layout->addWidget(m_applyAxisBtn);
+    m_snapAxisBtn = new QPushButton(QStringLiteral("Snap Selected Joint to Selected Bore"), content);
+    m_snapAxisBtn->setObjectName(QStringLiteral("rbSnapAxisButton"));
+    layout->addWidget(m_snapAxisBtn);
+
     // --- Status ---
     m_status = new QLabel(QStringLiteral("No robot loaded."), content);
     m_status->setObjectName(QStringLiteral("rbStatusLabel"));
@@ -142,6 +167,8 @@ void RobotBuilderPanel::setupConnections()
     connect(m_deleteBtn,     &QPushButton::clicked,           this, &RobotBuilderPanel::onDeleteJoint);
     connect(m_defineBtn,     &QPushButton::clicked,           this, &RobotBuilderPanel::onDefineFromFeatures);
     connect(m_applyLimitBtn, &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyLimit);
+    connect(m_applyAxisBtn,  &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyAxisOrigin);
+    connect(m_snapAxisBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onSnapAxisToBore);
     connect(m_jointsList,    &QListWidget::currentRowChanged, this, &RobotBuilderPanel::onJointSelected);
 }
 
@@ -276,9 +303,57 @@ void RobotBuilderPanel::onDefineFromFeatures()
     emit graphChanged();
 }
 
-void RobotBuilderPanel::onJointSelected(int /*row*/)
+void RobotBuilderPanel::onJointSelected(int row)
 {
-    // Selection drives delete/property targeting; nothing to mutate here.
+    // Reflect the selected joint's axis origin into the adjust spin boxes.
+    auto* g = graph();
+    if (!g || row < 0 || row >= int(g->joints.size()) || !m_axisX) return;
+    const auto& j = g->joints[row];
+    const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ);
+    m_axisX->setValue(j.axisPos.x);
+    m_axisY->setValue(j.axisPos.y);
+    m_axisZ->setValue(j.axisPos.z);
+}
+
+void RobotBuilderPanel::onApplyAxisOrigin()
+{
+    if (m_isUpdatingUI) return;
+    auto* g = graph();
+    if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
+    const int row = m_jointsList->currentRow();
+    if (row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to adjust.")); return; }
+    g->joints[row].axisPos = glm::vec3(float(m_axisX->value()), float(m_axisY->value()), float(m_axisZ->value()));
+    g->joints[row].prov    = krs::rbuild::Prov::Manual;   // user-adjusted -> manual provenance
+    setStatus(QStringLiteral("J%1 axis origin set to (%2, %3, %4).")
+        .arg(row).arg(g->joints[row].axisPos.x, 0, 'f', 3)
+        .arg(g->joints[row].axisPos.y, 0, 'f', 3).arg(g->joints[row].axisPos.z, 0, 'f', 3));
+    refresh();
+    emit graphChanged();
+}
+
+void RobotBuilderPanel::onSnapAxisToBore()
+{
+    if (m_isUpdatingUI) return;
+    auto* g = graph();
+    if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
+    const int row = m_jointsList->currentRow();
+    if (row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to snap.")); return; }
+    auto* sel = m_scene ? m_scene->getRegistry().ctx().find<krs::sel::SelectionState>() : nullptr;
+    const krs::sel::Selection* bore = nullptr;
+    if (sel) for (const auto& s : sel->selected)
+        if (s.valid && s.type == krs::sel::FeatureType::Cylinder) { bore = &s; break; }
+    if (!bore) { setStatus(QStringLiteral("Select a cylindrical bore in the viewport to snap to.")); return; }
+    g->joints[row].axisPos = bore->axisPos;
+    g->joints[row].axisDir = glm::normalize(bore->axisDir);
+    g->joints[row].prov    = krs::rbuild::Prov::Manual;
+    if (m_axisX) {
+        const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ);
+        m_axisX->setValue(bore->axisPos.x); m_axisY->setValue(bore->axisPos.y); m_axisZ->setValue(bore->axisPos.z);
+    }
+    setStatus(QStringLiteral("J%1 snapped to bore axis (%2, %3, %4).")
+        .arg(row).arg(bore->axisPos.x, 0, 'f', 3).arg(bore->axisPos.y, 0, 'f', 3).arg(bore->axisPos.z, 0, 'f', 3));
+    refresh();
+    emit graphChanged();
 }
 
 void RobotBuilderPanel::onApplyLimit()
