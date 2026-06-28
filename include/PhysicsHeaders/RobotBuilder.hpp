@@ -38,7 +38,11 @@ struct ParsedPart {
     std::string name;
     Eigen::Matrix4d placement = Eigen::Matrix4d::Identity();
     std::vector<BRepFace> faces;
-    int entity = -1;                 // scene entity once spawned (-1 = not spawned)
+    int entity = -1;                 // primary scene entity once spawned (-1 = not spawned)
+    // Additional scene entities rigidly belonging to this body's link. A CAD link owns
+    // SEVERAL solids/shells (e.g. a FANUC link = a casting + brackets + bolts); they all
+    // move together. instantiateFromGraph parents + drives {entity} U extraEntities.
+    std::vector<int> extraEntities;
     glm::vec3 visSize{ 0.12f, 0.12f, 0.12f };  // per-axis size of the placeholder box mesh
                                                // (lets the demo build proper-looking links)
 };

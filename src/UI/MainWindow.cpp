@@ -52,6 +52,7 @@
 #include "RobotBuilderPanel.hpp"   // robot-builder editing panel (invokes proven krs::rbuild ops)
 #include "RobotViewport.hpp"       // robot-only spinning viewport bound to the live graph
 #include "RobotModel.hpp"          // krs::robot::instantiateFanucRobot (first-class Robot)
+#include "RobotBuilder.hpp"        // krs::rbuild::RobotGraph (re-apply edits to the live robot)
 #include "OutlinerWidget.hpp"
 #include "FluidPropertiesWidget.hpp"
 #include "SmokePropertiesWidget.hpp"
@@ -2036,6 +2037,15 @@ MainWindow::MainWindow(QWidget* parent)
         // graphChanged re-renders so spawned/edited bodies show immediately.
         m_robotBuilderPanel = new RobotBuilderPanel(m_scene.get(), this);
         connect(m_robotBuilderPanel, &RobotBuilderPanel::graphChanged, this, [this]() {
+            // Re-apply the edited authoring graph to its live robot so builder edits
+            // (re-type / define / delete / limits) take REAL effect on the running robot.
+            if (m_scene) {
+                auto& reg = m_scene->getRegistry();
+                auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
+                auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
+                if (gp && rr && rr->get(gp->robotId))
+                    krs::robot::reapplyGraphToRobot(*m_scene, *gp, gp->robotId);
+            }
             if (m_renderingSystem) m_renderingSystem->requestViewportUpdates();
         });
         auto* rbDock = new ads::CDockWidget(QStringLiteral("Robot Builder"), this);

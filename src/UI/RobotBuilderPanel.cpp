@@ -290,22 +290,29 @@ void RobotBuilderPanel::editRobot(int robotId)
     if (m_isUpdatingUI || !m_scene) return;
     auto& reg = m_scene->getRegistry();
 
-    // Authoring graph already owns this robot -> edit it as a graph (richest path).
+    // Authoring graph already represents this robot -> edit it directly (keeps any
+    // un-jointed bodies / bore features authored this session).
     if (auto* g = reg.ctx().find<krs::rbuild::RobotGraph>(); g && g->robotId == robotId) {
         m_editRobotId = -1;
         refresh();
-        setStatus(QStringLiteral("Editing authored robot %1: define/delete joints, snap axes.").arg(robotId));
+        setStatus(QStringLiteral("Editing robot %1: re-type / define / delete joints, edit axes + limits.").arg(robotId));
         return;
     }
 
-    // Otherwise bind to the LiveRobot (e.g. the FANUC) for limit editing.
+    // Otherwise synthesize an editable graph that MIRRORS the live robot (the keystone:
+    // even the boot FANUC becomes an ordinary editable RobotGraph -- delete/define/re-type
+    // all work, and edits re-apply to the live robot via reapplyGraphToRobot on graphChanged).
     auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
     krs::robot::LiveRobot* lr = rr ? rr->get(robotId) : nullptr;
     if (!lr) { setStatus(QStringLiteral("Robot %1 not found in the live registry.").arg(robotId)); return; }
-    m_editRobotId = robotId;
+
+    krs::rbuild::RobotGraph* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
+    if (!gp) gp = &reg.ctx().emplace<krs::rbuild::RobotGraph>();
+    *gp = krs::robot::buildGraphFromLiveRobot(*lr);
+    m_editRobotId = -1;   // it IS a graph now -> full graph-authoring mode
     refresh();
-    setStatus(QStringLiteral("Editing %1 (live robot %2): %3 DOF. Pick a DOF, set [lo, hi], Apply Limit.")
-                  .arg(QString::fromStdString(lr->name)).arg(robotId).arg(lr->ndof()));
+    setStatus(QStringLiteral("Editing %1 as a graph (%2 joints): re-type / define / delete / limits all take live effect.")
+                  .arg(QString::fromStdString(lr->name)).arg(int(gp->joints.size())));
 }
 
 // Fill the controls from a bound LiveRobot's model (no RobotGraph round-trip, so the
@@ -615,7 +622,18 @@ void RobotBuilderPanel::onApplyLimit()
     const krs::plan::JointLimits L = m_cfg->toJointLimits();
     const double rlo = (idx < int(L.qLower.size())) ? L.qLower[idx] : 0.0;
     const double rhi = (idx < int(L.qUpper.size())) ? L.qUpper[idx] : 0.0;
-    setStatus(QStringLiteral("Hot-swap limit DOF %1: set [%2, %3] %4; readback [%5, %6]")
+    // ALSO write the limit into the authoring GRAPH joint so it re-applies to the live
+    // robot (graphChanged -> reapplyGraphToRobot). Map the DOF index to the graph joint
+    // index the same way (skip ambiguous / Fixed = non-DOF joints).
+    int gi = -1, gdof = 0;
+    for (int ji = 0; ji < int(g->joints.size()); ++ji) {
+        if (g->joints[ji].ambiguous || g->joints[ji].type == krs::rbuild::JType::Fixed) continue;
+        if (gdof == idx) { gi = ji; break; }
+        ++gdof;
+    }
+    if (gi >= 0) { g->joints[gi].limits.lower = lo; g->joints[gi].limits.upper = hi;
+                   g->joints[gi].limits.enabled = true; g->joints[gi].prov = krs::rbuild::Prov::Manual; }
+    setStatus(QStringLiteral("Limit DOF %1: set [%2, %3] %4; readback [%5, %6] (live)")
         .arg(idx).arg(lo, 0, 'f', 3).arg(hi, 0, 'f', 3)
         .arg(ok ? QStringLiteral("ok") : QStringLiteral("FAILED"))
         .arg(rlo, 0, 'f', 3).arg(rhi, 0, 'f', 3));

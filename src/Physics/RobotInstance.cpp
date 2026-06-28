@@ -148,14 +148,21 @@ LiveRobot* instantiateFromGraph(Scene& scene, const krs::rbuild::RobotGraph& g, 
     lr.model.name = lr.name;
     lr.rebuild();
 
-    // Named root entity. Identity TransformComponent so parenting is a transform
-    // NO-OP (propagateTransforms composes world = parent * local; identity parent
-    // leaves the existing absolute-world body transforms correct -- no double-apply).
-    const entt::entity root = reg.create();
-    reg.emplace<RobotRootComponent>(root, RobotRootComponent{ lr.name, robotId });
-    reg.emplace<TagComponent>(root, lr.name);
-    reg.emplace<TransformComponent>(root, glm::vec3(0.0f),
-                                    glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f));
+    // Named root entity. REUSE an existing root for this robotId if present, so
+    // re-applying an EDITED graph to a live robot is idempotent (no duplicate roots in
+    // the outliner). Identity TransformComponent so parenting is a transform NO-OP
+    // (propagateTransforms composes world = parent * local; identity parent leaves the
+    // existing absolute-world body transforms correct -- no double-apply).
+    entt::entity root = entt::null;
+    for (auto e : reg.view<RobotRootComponent>())
+        if (reg.get<RobotRootComponent>(e).robotId == robotId) { root = e; break; }
+    if (root == entt::null || !reg.valid(root)) {
+        root = reg.create();
+        reg.emplace<TransformComponent>(root, glm::vec3(0.0f),
+                                        glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f));
+    }
+    reg.emplace_or_replace<RobotRootComponent>(root, RobotRootComponent{ lr.name, robotId });
+    reg.emplace_or_replace<TagComponent>(root, lr.name);
     lr.root = root;
 
     // Map chain bodies -> graph body entities using the SAME ordering toRobot() used,
@@ -165,16 +172,86 @@ LiveRobot* instantiateFromGraph(Scene& scene, const krs::rbuild::RobotGraph& g, 
     for (size_t k = 0; k < order.size(); ++k) {
         const int bodyIdx = order[k];
         if (bodyIdx < 0 || bodyIdx >= int(g.bodies.size())) continue;
-        const int eid = g.bodies[bodyIdx].entity;
-        if (eid < 0) continue;
-        const entt::entity e = entt::entity(static_cast<std::uint32_t>(eid));
-        if (!reg.valid(e)) continue;
-        reg.emplace_or_replace<ParentComponent>(e, root);
-        reg.emplace_or_replace<RobotSubcomponentComponent>(e, robotId);
-        if (k >= 1 && int(k - 1) < lr.ndof()) lr.linkEntities[k - 1].push_back(e);
+        // Every solid in this body's link: the primary entity plus any extraEntities
+        // (multi-solid links, e.g. the FANUC). All are parented + driven together.
+        std::vector<int> ids = g.bodies[bodyIdx].extraEntities;
+        ids.insert(ids.begin(), g.bodies[bodyIdx].entity);
+        for (const int eid : ids) {
+            if (eid < 0) continue;
+            const entt::entity e = entt::entity(static_cast<std::uint32_t>(eid));
+            if (!reg.valid(e)) continue;
+            reg.emplace_or_replace<ParentComponent>(e, root);
+            reg.emplace_or_replace<RobotSubcomponentComponent>(e, robotId);
+            if (k >= 1 && int(k - 1) < lr.ndof()) lr.linkEntities[k - 1].push_back(e);
+        }
     }
     captureRobotRest(scene, lr);   // q is still 0 here -> rest = the authored pose
     return &lr;
+}
+
+// Build an EDITABLE authoring RobotGraph that MIRRORS a live robot exactly: one RBBody
+// per link (placement = the link's rest world pose; entity group = that link's solids),
+// one RBJoint per member joint (world frame from jointAxesWorld(); type + limits from the
+// model). Built from the LIVE data (not re-derived from CAD), so toRobot() of the result
+// reproduces the SAME FK -- the basis for routing the FANUC through one editable-graph
+// path. The base body carries no entity (the base link is fixed).
+krs::rbuild::RobotGraph buildGraphFromLiveRobot(const LiveRobot& lr)
+{
+    using krs::rbuild::RBBody; using krs::rbuild::RBJoint; using krs::rbuild::JType;
+    krs::rbuild::RobotGraph g;
+    g.robotId = lr.robotId;
+    g.base    = 0;
+    const int n = lr.ndof();
+
+    RBBody base; base.name = lr.name + "_base"; base.placement = lr.model.basePlacement;
+    g.bodies.push_back(base);
+
+    const auto axes = lr.jointAxesWorld();   // world (pos,dir) of each member joint at q=0
+    for (int k = 0; k < n; ++k) {
+        RBBody b; b.name = lr.name + "_link" + std::to_string(k + 1);
+        if (k < int(lr.restLinkWorld.size())) b.placement = lr.restLinkWorld[k];
+        if (k < int(lr.linkEntities.size())) {
+            for (size_t i = 0; i < lr.linkEntities[k].size(); ++i) {
+                const int eid = int(static_cast<std::uint32_t>(lr.linkEntities[k][i]));
+                if (b.entity < 0) b.entity = eid; else b.extraEntities.push_back(eid);
+            }
+        }
+        g.bodies.push_back(b);
+    }
+    for (int k = 0; k < n; ++k) {
+        RBJoint j; j.parent = k; j.child = k + 1;     // link k -> link k+1
+        const krs::robot::Joint& mj = lr.model.joints[lr.memberJoint[k]];
+        j.type = (mj.type == krs::dyn::JType::Fixed)     ? JType::Fixed
+               : (mj.type == krs::dyn::JType::Prismatic) ? JType::Prismatic
+                                                         : JType::Revolute;
+        if (k < int(axes.size())) {
+            j.axisPos = glm::vec3(float(axes[k].first.x()),  float(axes[k].first.y()),  float(axes[k].first.z()));
+            j.axisDir = glm::vec3(float(axes[k].second.x()), float(axes[k].second.y()), float(axes[k].second.z()));
+        }
+        j.orthonormalizeFrame();
+        j.limits.lower = mj.qLower; j.limits.upper = mj.qUpper; j.limits.enabled = true;
+        j.prov = krs::rbuild::Prov::Inferred;
+        g.joints.push_back(j);
+    }
+    return g;
+}
+
+// Re-apply an EDITED authoring graph to its live robot (the schema<->graph round-trip):
+// snap the robot HOME first (so captureRobotRest re-captures the true rest from the
+// solids' home transforms), then re-instantiate (idempotent root reuse + entity re-map).
+// instantiateFromGraph reuses the existing LiveRobot, so ownsDrive/useRobotFkViz persist.
+LiveRobot* reapplyGraphToRobot(Scene& scene, const krs::rbuild::RobotGraph& g, int robotId)
+{
+    auto& reg = scene.getRegistry();
+    if (RobotRegistry* rr = reg.ctx().find<RobotRegistry>()) {
+        if (LiveRobot* lr = rr->get(robotId)) {
+            if (lr->useRobotFkViz && lr->ndof() > 0) {   // snap solids to home before re-capture
+                lr->q.setZero();
+                writeBackRobotViz(scene, *lr);
+            }
+        }
+    }
+    return instantiateFromGraph(scene, g, robotId);
 }
 
 LiveRobot* instantiateFanucRobot(Scene& scene,
@@ -502,7 +579,44 @@ bool runRobotOwnerGate() {
                wide, narrow, step8 ? "OK" : "FAIL");
     }
 
-    printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only + live-limit-edit honoured)"
+    // ---- STEP 9: a LiveRobot round-trips through an editable RobotGraph with IDENTICAL FK ----
+    // buildGraphFromLiveRobot -> toRobot -> a fresh LiveRobot must reproduce the same FK at
+    // arbitrary q. This is the keystone that lets the FANUC be an editable graph without the
+    // pose drifting on a schema<->graph round-trip.
+    {
+        LiveRobot a;
+        auto mkJ = [](Eigen::Vector3d axis, Eigen::Vector3d ptree, double lo, double hi) {
+            Joint j; j.member = true; j.type = krs::dyn::JType::Revolute;
+            j.axis = axis.normalized(); j.ptree = ptree; j.qLower = lo; j.qUpper = hi; return j;
+        };
+        a.model.joints = { mkJ({0,0,1},{0,0,0.2},-2,2), mkJ({0,1,0},{0.3,0,0},-1,1), mkJ({0,1,0},{0.4,0,0},-2,2) };
+        a.model.nLinks = 4;
+        a.rebuild();
+        { std::vector<krs::dyn::Pose> p; a.chain.fk(Eigen::VectorXd::Zero(a.ndof()), p);
+          a.restLinkWorld.assign(a.ndof(), Eigen::Matrix4d::Identity());
+          for (int k = 0; k < a.ndof(); ++k) a.restLinkWorld[k] = a.model.basePlacement * poseToEig(p[k]);
+          a.linkEntities.assign(a.ndof(), {}); }
+
+        krs::rbuild::RobotGraph g = buildGraphFromLiveRobot(a);
+        LiveRobot b; b.model = g.toRobot(); b.rebuild();
+
+        const int nq = a.ndof();
+        bool dofOk = (b.ndof() == nq) && (int(g.bodies.size()) == nq + 1) && (int(g.joints.size()) == nq);
+        double maxErr = 0;
+        for (int t = 0; t < 5 && dofOk; ++t) {
+            Eigen::VectorXd q(nq); for (int i = 0; i < nq; ++i) q[i] = 0.3 * (i + 1) - 0.1 * t;
+            std::vector<krs::dyn::Pose> pa, pb; a.chain.fk(q, pa); b.chain.fk(q, pb);
+            for (int k = 0; k < nq; ++k)
+                maxErr = std::max(maxErr,
+                    (a.model.basePlacement * poseToEig(pa[k]) - b.model.basePlacement * poseToEig(pb[k])).cwiseAbs().maxCoeff());
+        }
+        const bool step9 = dofOk && maxErr < 1e-9;
+        pass = pass && step9;
+        printf("[robotowner]   STEP9 graph round-trip: bodies=%zu joints=%zu dofOk=%s FKerr=%.2e  %s\n",
+               g.bodies.size(), g.joints.size(), dofOk ? "yes" : "no", maxErr, step9 ? "OK" : "FAIL");
+    }
+
+    printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only + live-limit-edit + graph-round-trip)"
                                      : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;

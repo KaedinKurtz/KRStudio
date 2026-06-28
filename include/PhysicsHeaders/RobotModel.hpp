@@ -329,6 +329,18 @@ LiveRobot* instantiateFanucRobot(Scene& scene,
                                  const std::vector<entt::entity>& allBodies,
                                  int robotId, const std::string& name);
 
+// Build an EDITABLE authoring RobotGraph that mirrors a LiveRobot exactly (one RBBody per
+// link with its solid-entity group, one RBJoint per member joint with world frame + type +
+// limits). toRobot() of the result reproduces the SAME FK, so a robot can round-trip
+// schema <-> graph for structural editing (the keystone behind the editable FANUC).
+// Defined in RobotInstance.cpp; returns by value (complete RobotGraph at the call site).
+krs::rbuild::RobotGraph buildGraphFromLiveRobot(const LiveRobot& lr);
+
+// Re-apply an edited authoring graph to its live robot (schema<->graph round-trip): snaps
+// the robot home, then re-instantiates idempotently (root reuse + entity re-map), so an
+// edit in the builder takes real effect on the live robot. Defined in RobotInstance.cpp.
+LiveRobot* reapplyGraphToRobot(Scene& scene, const krs::rbuild::RobotGraph& g, int robotId);
+
 // --- Outliner grouping (step 7): Robot -> bodies tree, multi-robot ----------------
 // One robot group: the named root + the body entities owned by it (robotId match).
 struct RobotGroup {
