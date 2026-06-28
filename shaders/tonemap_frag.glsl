@@ -21,6 +21,11 @@ vec3 acesFilm(vec3 x)
 void main()
 {
     vec3 hdr = texture(u_hdr, TexCoords).rgb * u_exposure;
+    // Sanitize degenerate values: acesFilm(+inf) = inf/inf = NaN, and NaN survives
+    // the [0,1] clamp, reaching the screen as a CYAN speckle (e.g. on an overflowed
+    // sun). Kill NaN and cap +inf so the tonemap only ever sees finite radiance.
+    if (any(isnan(hdr))) hdr = vec3(0.0);
+    hdr = min(hdr, vec3(1.0e4));
     vec3 color = acesFilm(hdr);
     color = pow(color, vec3(1.0 / 2.2));
     FragColor = vec4(color, 1.0);

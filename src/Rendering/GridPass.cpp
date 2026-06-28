@@ -65,6 +65,9 @@ void GridPass::execute(const RenderFrameContext& context) {
     gl->glDisable(GL_POLYGON_OFFSET_FILL);
 
     gridShader->use(gl);
+    // Display-space overlay: pre-divide by the exposure so the ACES tonemap (which scales the
+    // whole HDR buffer by the same exposure) leaves the grid at its authored LDR colour.
+    gridShader->setFloat(gl, "u_invExposure", 1.0f / context.renderer.exposureMultiplier());
     gl->glBindVertexArray(m_gridVAOs.value(ctx));
 
     for (auto entity : viewG) {

@@ -117,6 +117,8 @@ void CollisionDebugPass::drawBatch(const RenderFrameContext& ctx, const LineBatc
     shader->use(ctx.gl);
     shader->setMat4(ctx.gl, "u_mvp", ctx.projection * ctx.view * model);
     shader->setVec3(ctx.gl, "u_color", color);
+    // Pre-tonemap overlay: compensate exposure so the wireframe colour survives.
+    shader->setFloat(ctx.gl, "u_invExposure", 1.0f / ctx.renderer.exposureMultiplier());
     ctx.gl->glBindVertexArray(batch.vao);
     ctx.gl->glDrawArrays(GL_LINES, 0, batch.vertexCount);
     ctx.gl->glBindVertexArray(0);

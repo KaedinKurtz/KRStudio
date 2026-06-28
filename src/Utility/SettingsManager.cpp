@@ -53,9 +53,15 @@ void SettingsManager::buildRegistry() {
         return d;
     };
 
-    // --- Lighting ---
-    m_defs.push_back(F("render/iblIntensity", "Ambient (IBL) Intensity", "Lighting", 0.40, 0.0, 2.0, 0.05, 2));
-    m_defs.push_back(F("render/sunIntensity", "Sun (Key Light) Intensity", "Lighting", 3.00, 0.0, 10.0, 0.1, 2));
+    // --- Lighting (physically-based: nits / lux, brought to display by the EV exposure) ---
+    // NOTE: keys renamed from render/iblIntensity + render/sunIntensity so old (non-photometric)
+    // persisted values don't fight the new scale; fresh photometric defaults apply.
+    m_defs.push_back(F("render/iblNits", "Ambient (IBL) Luminance [nits]", "Lighting", 50.0, 0.0, 5000.0, 1.0, 1));
+    m_defs.push_back(F("render/sunLux", "Sun (Key Light) [lux]", "Lighting", 2000.0, 0.0, 150000.0, 100.0, 0));
+    m_defs.push_back(F("render/exposureEV", "Camera Exposure [EV100]", "Lighting", 10.0, 0.0, 20.0, 0.25, 2));
+    m_defs.push_back(E("ui/theme", "UI Theme", "Theme", QStringLiteral("dark"),
+        { QStringLiteral("Dark"), QStringLiteral("Light") },
+        { QStringLiteral("dark"), QStringLiteral("light") }));
     m_defs.push_back(C("render/sunColor", "Sun Color", "Lighting", QColor::fromRgbF(1.0, 0.967, 0.9)));
     m_defs.push_back(V3("render/sunDirection", "Sun Direction", "Lighting", glm::vec3(-0.4f, -1.0f, -0.3f)));
 

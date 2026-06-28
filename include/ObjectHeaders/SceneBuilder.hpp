@@ -51,6 +51,19 @@ public:
         const glm::vec3& scale = glm::vec3(1.0f),
         const std::string& name = {});
 
+    // --- Light emitters (primitive-attached) ---
+    // One entity that is BOTH a visible primitive (sphere bulb for point/spot/directional,
+    // quad panel for RectArea) AND a working light (LightComponent) AND a glowing emissive
+    // surface. Selectable + movable via the normal gizmo. Spot/Directional default to
+    // shining straight down (local +Z -> world -Y); RectArea's quad size tracks lc.size.
+    // Used by the Add > Light menu, the viewport "Add here" menu, and the default-scene seed.
+    static entt::entity spawnLightEmitter(Scene& scene,
+        LightComponent::Type type,
+        const glm::vec3& position,
+        const glm::vec3& color = glm::vec3(1.0f),
+        float intensity = 40.0f,
+        const std::string& name = "Light");
+
     // --- Spawning from MeshID (Faster, for instancing) ---
     // These functions assume the mesh is already loaded and work with its ID.
 

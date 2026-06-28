@@ -115,6 +115,9 @@
 #include <DockAreaTitleBar.h> 
 #include <QRandomGenerator>
 #include <QColor>
+#include <QImage>
+#include <QPixmap>
+#include <QSlider>
 #include <QApplication>
 #include <QStyle>
 #include <QAbstractButton>
@@ -218,6 +221,77 @@ const QString sidePanelStyle = R"(
     QFrame[frameShape="HLine"] {
         border: 1px solid #4a5260;
     }
+)";
+
+// Light theme: mirrors sidePanelStyle with a light palette (kept in sync structurally).
+// Swapped in by MainWindow::applyTheme on every dock + the ribbon when the user picks Light.
+const QString lightPanelStyle = R"(
+    QWidget {
+        background-color: #f2f3f5;
+        color: #20242b;
+        font-family: "Segoe UI";
+        font-size: 9pt;
+    }
+    QGroupBox {
+        background-color: #e6e8ec;
+        border: 1px solid #c2c7d0;
+        border-radius: 4px;
+        margin-top: 10px;
+    }
+    QGroupBox::title {
+        subcontrol-origin: margin;
+        subcontrol-position: top center;
+        padding: 0 5px;
+        background-color: #e6e8ec;
+        border: none;
+    }
+    QToolButton, QPushButton {
+        background-color: transparent;
+        border: 1px solid #c2c7d0;
+        border-radius: 4px;
+        padding: 5px;
+        min-width: 65px;
+        min-height: 20px;
+        color: #20242b;
+    }
+    QToolButton:hover, QPushButton:hover {
+        background-color: #dde0e6;
+        border: 1px solid #aab0bc;
+    }
+    QToolButton:pressed, QPushButton:pressed {
+        background-color: #cfd3db;
+    }
+    QToolButton:checked {
+        background-color: #0078d7;
+        color: white;
+        border: 1px solid #0078d7;
+    }
+    QComboBox {
+        background-color: #ffffff;
+        border: 1px solid #c2c7d0;
+        border-radius: 4px;
+        padding: 5px;
+        min-height: 20px;
+    }
+    QComboBox:hover { border: 1px solid #aab0bc; }
+    QComboBox::drop-down { border: none; }
+    QComboBox::down-arrow { image: url(:/icons/chevron-down.png); width: 12px; height: 12px; }
+    QSlider::groove:horizontal {
+        border: 1px solid #c2c7d0;
+        height: 4px;
+        background: #d6dae1;
+        margin: 2px 0;
+        border-radius: 2px;
+    }
+    QSlider::handle:horizontal {
+        background: #0078d7;
+        border: 1px solid #0078d7;
+        width: 14px;
+        margin: -5px 0;
+        border-radius: 7px;
+    }
+    QFrame[frameShape="VLine"] { border: 1px solid #c2c7d0; }
+    QFrame[frameShape="HLine"] { border: 1px solid #c2c7d0; }
 )";
 
 void setNodeEditorStyle()
@@ -498,6 +572,30 @@ MainWindow::MainWindow(QWidget* parent)
                 auto& mat = reg.emplace_or_replace<MaterialComponent>(slab);
                 mat.albedoColor = glm::vec3(0.55f);
             }
+        }
+
+        // --- Default lighting: a soft overhead AREA key + a dim point FILL ---
+        // These primitive-attached emitters replace the legacy orbiting fallback light
+        // (LightingPass injects that ONLY when the scene has no light entities). The
+        // Settings-driven directional sun stays as gentle fill. KRS_NOFALLBACK leaves the
+        // scene unlit for clean light tests; bench/fluid demos stay minimal.
+        if (!qEnvironmentVariableIsSet("KRS_BENCH")
+            && !qEnvironmentVariableIsSet("KRS_FLUID_DEMO")
+            && !qEnvironmentVariableIsSet("KRS_NOFALLBACK")) {
+            auto& reg = m_scene->getRegistry();
+            // Soft overhead AREA key, 8x8 m at ~6 m, facing down. Intensity is LUMINANCE in
+            // nits (the LTC reads it as radiance); exposure brings it to display range.
+            entt::entity key = SceneBuilder::spawnLightEmitter(
+                *m_scene, LightComponent::Type::RectArea, glm::vec3(0.0f, 6.0f, 0.0f),
+                glm::vec3(1.0f, 0.97f, 0.92f), 8000.0f, "Key Light");
+            if (auto* lc = reg.try_get<LightComponent>(key)) lc->size = glm::vec2(8.0f, 8.0f);
+            if (auto* xf = reg.try_get<TransformComponent>(key))
+                xf->scale = glm::vec3(8.0f, 8.0f, 1.0f);   // visible panel matches lc.size
+            // Cool point FILL off to one side. Intensity is luminous power in LUMENS (1/d^2
+            // falloff), so it needs a large value to matter at a few metres.
+            SceneBuilder::spawnLightEmitter(
+                *m_scene, LightComponent::Type::Point, glm::vec3(3.5f, 3.0f, 3.5f),
+                glm::vec3(0.85f, 0.92f, 1.0f), 60000.0f, "Fill Light");
         }
 
         // Default boot content (Phase 5): a RIGID + FEM 6061-aluminium block on the
@@ -1006,6 +1104,7 @@ MainWindow::MainWindow(QWidget* parent)
     combinedNodeDock->setWidget(nodeEditorContainer);
     combinedNodeDock->setStyleSheet(sidePanelStyle);
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, combinedNodeDock, m_propertiesArea);
+    registerPanelDock(QStringLiteral("Node Editor"), combinedNodeDock);
 
     connect(graphModel.get(), &QtNodes::AbstractGraphModel::nodeCreated,
         this, [this, graphModel](QtNodes::NodeId nodeId) {
@@ -1151,6 +1250,16 @@ MainWindow::MainWindow(QWidget* parent)
         this, [this](bool on) { handleMenuToggle(MenuType::GridProperties, on); });
     connect(m_fixedTopToolbar, &StaticToolbar::objectPropertiesMenuToggled,
         this, [this](bool on) { handleMenuToggle(MenuType::ObjectProperties, on); });
+    // Generic always-docked panels (Physics, Lighting, Textures, Outliner, Robot Builder,
+    // Assets, Diagnostics, Fluid, Gas, Robot View, Node Editor): toggle their dock by title.
+    connect(m_fixedTopToolbar, &StaticToolbar::panelToggled, this,
+        [this](const QString& title, bool on) {
+            auto it = m_panelDocks.find(title);
+            if (it != m_panelDocks.end() && it.value()) it.value()->toggleView(on);
+        });
+    // Theme selector: persist via settings; the settings applier drives applyTheme().
+    connect(m_fixedTopToolbar, &StaticToolbar::themeSelected, this,
+        [](const QString& theme) { krs::SettingsManager::instance().set(QStringLiteral("ui/theme"), theme); });
 
     // --- Simulation lifecycle (play/pause checkable button + stop + step) ---
     connect(m_fixedTopToolbar, &StaticToolbar::simulationPlayPauseToggled, this, [this](bool play) {
@@ -1271,13 +1380,15 @@ MainWindow::MainWindow(QWidget* parent)
         auto applySetting = [this](const QString& key, const QVariant& v) {
             RenderingSystem* rs = m_renderingSystem.get();
             if (!rs) return;
-            if      (key == QLatin1String("render/iblIntensity"))     rs->setIblIntensity(v.toFloat());
-            else if (key == QLatin1String("render/sunIntensity"))     rs->setSunIntensity(v.toFloat());
+            if      (key == QLatin1String("render/iblNits"))          rs->setIblIntensity(v.toFloat());
+            else if (key == QLatin1String("render/sunLux"))           rs->setSunIntensity(v.toFloat());
+            else if (key == QLatin1String("render/exposureEV"))       rs->setExposureEV(v.toFloat());
             else if (key == QLatin1String("render/sunColor"))         { QColor c = v.value<QColor>(); rs->setSunColor(glm::vec3(float(c.redF()), float(c.greenF()), float(c.blueF()))); }
             else if (key == QLatin1String("render/sunDirection"))     rs->setSunDirection(krs::SettingsManager::vec3FromVariant(v));
             else if (key == QLatin1String("render/tonemapExposure"))  rs->setTonemapExposure(v.toFloat());
             else if (key == QLatin1String("render/specFireflyClamp")) rs->setSpecFireflyClamp(v.toFloat());
             else if (key == QLatin1String("render/hdrEnabled"))       rs->setHdrEnabled(v.toBool());
+            else if (key == QLatin1String("ui/theme"))                applyTheme(v.toString());
             // Camera prefs are global statics (read by every viewport's camera each frame),
             // so a single set call applies live everywhere — no per-viewport iteration.
             else if (key == QLatin1String("viewport/cameraFovDeg"))     Camera::setFovDeg(v.toFloat());
@@ -1364,9 +1475,156 @@ MainWindow::MainWindow(QWidget* parent)
             QTimer::singleShot(grabDelay, this, [this]() {
                 const QString path = qEnvironmentVariable("KRS_GRAB");
                 this->grab().save(path);
+                if (ViewportWidget* mvp = primaryViewport())   // clean GL of the MAIN viewport
+                    mvp->grab().save(path + QStringLiteral(".vp.png"));
                 qInfo() << "[UI] window grabbed to" << path;
             });
         }
+    }
+
+    // Test hook: KRS_LIGHTUI_SELFTEST=<outDir> opens the Object Properties dock, spawns +
+    // selects a point light, brings the Light tab forward, grabs BEFORE, then drives the REAL
+    // Light controls (colour via Kelvin + intensity) and grabs AFTER -- so a pixel diff proves
+    // the per-object lighting menu hot-updates the live scene.
+    if (qEnvironmentVariableIsSet("KRS_LIGHTUI_SELFTEST")) {
+        const QString outDir = qEnvironmentVariable("KRS_LIGHTUI_SELFTEST");
+        auto lightPanel = [this]() -> ObjectPropertiesWidget* {
+            auto it = m_menus.find(MenuType::ObjectProperties);
+            if (it != m_menus.end())
+                return dynamic_cast<ObjectPropertiesWidget*>(it->menu->widget());
+            return nullptr;
+        };
+        QTimer::singleShot(2000, this, [this]() { handleMenuToggle(MenuType::ObjectProperties, true); });
+        QTimer::singleShot(3000, this, [this, lightPanel]() {
+            addLightFromMenu(int(LightComponent::Type::Point), glm::vec3(1.6f, 1.4f, 0.0f));
+            if (auto* w = lightPanel()) w->selfTestSelectLightTab();
+        });
+        QTimer::singleShot(8000, this, [this, outDir]() {
+            this->grab().save(outDir + QStringLiteral("/lightui_before.png"));
+            qInfo() << "[LIGHTUI] before grabbed";
+        });
+        QTimer::singleShot(8500, this, [this, lightPanel]() {
+            if (auto* w = lightPanel()) w->selfTestNudgeLight();
+        });
+        QTimer::singleShot(9500, this, [this, outDir]() {
+            this->grab().save(outDir + QStringLiteral("/lightui_after.png"));
+            qInfo() << "[LIGHTUI] after grabbed";
+        });
+        // Phase B: prove emissive HOT-UPDATE on a TEXTURED body (the concrete floor uses the
+        // triplanar shader): select it, grab BEFORE, run "Add Light Emitter" + crank a cyan
+        // glow via the menu path, grab AFTER. A pixel diff proves textured emissive hot-updates.
+        QTimer::singleShot(11000, this, [this]() {
+            auto& reg = m_scene->getRegistry();
+            entt::entity floor = entt::null;
+            for (auto e : reg.view<TagComponent>())
+                if (reg.get<TagComponent>(e).tag == std::string("Ground.Slab")) { floor = e; break; }
+            if (floor == entt::null) return;
+            for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+            reg.emplace<SelectedComponent>(floor);
+            refreshGizmoAndProperties();   // -> onSelectionChanged -> setEntity(floor)
+        });
+        QTimer::singleShot(12500, this, [this, outDir]() {
+            this->grab().save(outDir + QStringLiteral("/tex_before.png"));
+        });
+        QTimer::singleShot(13000, this, [this, lightPanel]() {
+            if (auto* w = lightPanel()) w->selfTestAddAndGlowEmitter();
+        });
+        QTimer::singleShot(14000, this, [this, outDir]() {
+            this->grab().save(outDir + QStringLiteral("/tex_after.png"));
+            qInfo() << "[LIGHTUI] textured emissive after grabbed";
+        });
+    }
+
+    // Test hook: KRS_TOOLBAR_SELFTEST=<outDir> simulates clicking each panel toggle button
+    // (hide all, then show all) and records each dock's open/closed state + grabs, to verify
+    // the toolbar buttons actually summon/dismiss their docks.
+    if (qEnvironmentVariableIsSet("KRS_TOOLBAR_SELFTEST")) {
+        const QString outDir = qEnvironmentVariable("KRS_TOOLBAR_SELFTEST");
+        const QStringList panels = { QStringLiteral("Physics"), QStringLiteral("Lighting"),
+            QStringLiteral("Textures"), QStringLiteral("Outliner"), QStringLiteral("Robot Builder"),
+            QStringLiteral("Assets"), QStringLiteral("Diagnostics"), QStringLiteral("Node Editor"),
+            QStringLiteral("Fluid"), QStringLiteral("Gas"), QStringLiteral("Robot View") };
+        auto record = [this, panels, outDir](const QString& phase) {
+            QFile f(outDir + QStringLiteral("/toolbar_result.txt"));
+            if (f.open(QIODevice::Append | QIODevice::Text)) {
+                QTextStream ts(&f); ts << phase << ": ";
+                for (const QString& p : panels) {
+                    auto it = m_panelDocks.find(p);
+                    const bool closed = (it != m_panelDocks.end() && it.value() && it.value()->isClosed());
+                    ts << p << "=" << (closed ? "CLOSED" : "OPEN") << "; ";
+                }
+                ts << "\n";
+            }
+        };
+        QTimer::singleShot(7000, this, [this, outDir, record]() { record(QStringLiteral("initial")); this->grab().save(outDir + QStringLiteral("/panels_initial.png")); });
+        QTimer::singleShot(7600, this, [this, panels]() { for (const QString& p : panels) m_fixedTopToolbar->selfTestClickPanel(p); }); // hide
+        QTimer::singleShot(8400, this, [this, outDir, record]() { record(QStringLiteral("after_hide")); this->grab().save(outDir + QStringLiteral("/panels_hidden.png")); });
+        QTimer::singleShot(9000, this, [this, panels]() { for (const QString& p : panels) m_fixedTopToolbar->selfTestClickPanel(p); }); // show
+        QTimer::singleShot(9800, this, [this, outDir, record]() { record(QStringLiteral("after_show")); this->grab().save(outDir + QStringLiteral("/panels_shown.png")); });
+        // Theme switch verification.
+        QTimer::singleShot(10600, this, [this]() { applyTheme(QStringLiteral("light")); });
+        QTimer::singleShot(11400, this, [this, outDir]() { this->grab().save(outDir + QStringLiteral("/theme_light.png")); });
+        QTimer::singleShot(12000, this, [this]() { applyTheme(QStringLiteral("dark")); });
+        QTimer::singleShot(12800, this, [this, outDir]() { this->grab().save(outDir + QStringLiteral("/theme_dark.png")); qInfo() << "[TOOLBAR] selftest done"; });
+    }
+
+    // Test hook: KRS_ROBOTVIEW_SELFTEST=<outDir> raises the Robot View dock (so its
+    // QOpenGLWidget actually initializes + renders -- a hidden tab never does, which
+    // is why it read "FPS 0.0"), lets it draw several frames, then grabs the widget
+    // (GL grey-room background + the orbit-speed slider child) and the whole window,
+    // and writes pixel samples to robotview_result.txt so the grey room + slider can
+    // be verified by MEASUREMENT, not eyeballing.
+    if (qEnvironmentVariableIsSet("KRS_ROBOTVIEW_SELFTEST")) {
+        const QString outDir = qEnvironmentVariable("KRS_ROBOTVIEW_SELFTEST");
+        // 1) Show + raise the Robot View dock.
+        QTimer::singleShot(2500, this, [this]() {
+            auto it = m_panelDocks.find(QStringLiteral("Robot View"));
+            if (it != m_panelDocks.end() && it.value()) {
+                it.value()->toggleView(true);
+                it.value()->setAsCurrentTab();
+                it.value()->raise();
+            }
+        });
+        // 2) Exercise the slider setter (proves the control + value path) at a known speed.
+        QTimer::singleShot(5000, this, [this]() {
+            if (m_robotViewport) m_robotViewport->setOrbitSpeed(0.75f);
+        });
+        // 3) After GL init + many frames, grab + sample pixels.
+        QTimer::singleShot(8000, this, [this, outDir]() {
+            if (!m_robotViewport) { qInfo() << "[ROBOTVIEW] no viewport"; return; }
+            const QPixmap pm = m_robotViewport->grab();   // GL content + slider child
+            pm.save(outDir + QStringLiteral("/robotview_widget.png"));
+            this->grab().save(outDir + QStringLiteral("/robotview_window.png"));
+            if (ViewportWidget* mvp = primaryViewport())  // clean high-res MAIN viewport
+                mvp->grab().save(outDir + QStringLiteral("/mainvp.png"));
+            const QImage wi = pm.toImage();
+            const int w = wi.width(), h = wi.height();
+            QFile f(outDir + QStringLiteral("/robotview_result.txt"));
+            if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream ts(&f);
+                auto px = [&](int x, int y) {
+                    const QColor c = wi.pixelColor(qBound(0, x, w - 1), qBound(0, y, h - 1));
+                    return QString("(%1,%2,%3)").arg(c.red()).arg(c.green()).arg(c.blue());
+                };
+                ts << "widget_size=" << w << "x" << h << "\n";
+                ts << "center="   << px(w / 2, h / 2)       << "\n";   // grey room or robot
+                ts << "topleft="  << px(w / 8, h / 8)       << "\n";   // upper room (lighter)
+                ts << "botleft="  << px(w / 8, 7 * h / 8)   << "\n";   // lower room (darker)
+                ts << "topright=" << px(7 * w / 8, h / 8)   << "\n";
+                // Orbit slider lives bottom-right: scan that band for the gold handle/groove.
+                int goldHits = 0; int sampled = 0;
+                for (int y = h - 30; y < h - 4 && y > 0; ++y)
+                    for (int x = w - 135; x < w - 8 && x > 0; ++x) {
+                        const QColor c = wi.pixelColor(x, y); ++sampled;
+                        if (c.red() > 150 && c.green() > 110 && c.blue() < 110
+                            && c.red() > c.blue() + 50) ++goldHits;   // gold-ish
+                    }
+                ts << "slider_band_sampled=" << sampled << " goldHits=" << goldHits << "\n";
+                ts << "orbitSpeed=" << m_robotViewport->orbitSpeed() << "\n";
+                ts << "sliderPresent=" << (m_robotViewport->findChild<QSlider*>() ? "yes" : "no") << "\n";
+            }
+            qInfo() << "[ROBOTVIEW] selftest grabbed to" << outDir;
+        });
     }
 
     // Test hook: KRS_TEST_SPAWN_MESH=<path> spawns a mesh asset at the
@@ -1375,6 +1633,80 @@ MainWindow::MainWindow(QWidget* parent)
         QTimer::singleShot(1500, this, [this]() {
             spawnMeshAssetAt(qEnvironmentVariable("KRS_TEST_SPAWN_MESH"),
                              glm::vec3(0.0f, 1.0f, 0.0f));
+        });
+    }
+
+    // Test hook: KRS_TESTLIGHT=point|rect spawns a LIGHT ENTITY shortly after boot, to
+    // verify the ECS->lighting wiring (point) and the LTC rect area light (rect) against
+    // the real rendered scene.
+    if (qEnvironmentVariableIsSet("KRS_TESTLIGHT")) {
+        const QString kind = qEnvironmentVariable("KRS_TESTLIGHT");
+        QTimer::singleShot(1500, this, [this, kind]() {
+            auto& reg = m_scene->getRegistry();
+            entt::entity e = reg.create();
+            auto& xf = reg.emplace<TransformComponent>(e);
+            auto& lc = reg.emplace<LightComponent>(e);
+            reg.emplace<TagComponent>(e, std::string("TestLight"));
+            if (kind == QLatin1String("rect")) {
+                lc.type = LightComponent::Type::RectArea;
+                lc.size = glm::vec2(4.0f, 4.0f);
+                lc.color = glm::vec3(1.0f, 0.95f, 0.9f);
+                lc.intensity = 25.0f;
+                lc.twoSided = false;
+                // Aim the panel's emission normal (+localZ) at the robot from the camera side.
+                glm::vec3 panelPos(3.0f, 1.5f, 3.0f);   // camera-side, robot height -> lights the VISIBLE faces
+                if (qEnvironmentVariableIsSet("KRS_AREAPOS")) {
+                    const QStringList p = qEnvironmentVariable("KRS_AREAPOS").split(',');
+                    if (p.size() == 3) panelPos = glm::vec3(p[0].toFloat(), p[1].toFloat(), p[2].toFloat());
+                }
+                const glm::vec3 target(0.0f, 1.0f, 0.0f);
+                const glm::vec3 d = glm::normalize(target - panelPos);   // desired +localZ
+                const glm::vec3 zAxis(0.0f, 0.0f, 1.0f);
+                const glm::vec3 axis = glm::cross(zAxis, d);
+                const float axisLen = glm::length(axis);
+                xf.translation = panelPos;
+                xf.rotation = (axisLen < 1e-5f)
+                    ? glm::quat(1.0f, 0.0f, 0.0f, 0.0f)
+                    : glm::angleAxis(std::acos(glm::clamp(glm::dot(zAxis, d), -1.0f, 1.0f)), axis / axisLen);
+                // KRS_AREASIZE / KRS_AREAINT / KRS_AREATWO override size / intensity / two-sided live.
+                if (qEnvironmentVariableIsSet("KRS_AREASIZE")) {
+                    const float sz = qEnvironmentVariable("KRS_AREASIZE").toFloat();
+                    lc.size = glm::vec2(sz, sz);
+                }
+                if (qEnvironmentVariableIsSet("KRS_AREAINT")) lc.intensity = qEnvironmentVariable("KRS_AREAINT").toFloat();
+                if (qEnvironmentVariableIsSet("KRS_AREATWO")) lc.twoSided  = (qEnvironmentVariable("KRS_AREATWO").toInt() != 0);
+                // LTC now sizes the rect from the transform scale (unit quad), so mirror size->scale.
+                xf.scale = glm::vec3(lc.size.x, lc.size.y, 1.0f);
+                qInfo() << "[KRS_TESTLIGHT] rect light: size" << lc.size.x << "intensity" << lc.intensity
+                        << "twoSided" << lc.twoSided << "pos" << xf.translation.x << xf.translation.y << xf.translation.z;
+            } else if (kind == QLatin1String("spot")) {
+                lc.type = LightComponent::Type::Spot;
+                lc.color = glm::vec3(0.4f, 1.0f, 0.4f);   // GREEN: obvious spot cone
+                lc.intensity = 300.0f;
+                lc.innerConeDeg = 18.0f; lc.outerConeDeg = 30.0f; lc.range = 0.0f;
+                // Aim local +Z from (2.5,3,2.5) at the origin.
+                const glm::vec3 pos(2.5f, 3.0f, 2.5f), tgt(0.0f, 0.8f, 0.0f);
+                const glm::vec3 d = glm::normalize(tgt - pos), z(0, 0, 1);
+                const glm::vec3 ax = glm::cross(z, d); const float al = glm::length(ax);
+                xf.translation = pos;
+                xf.rotation = (al < 1e-5f) ? glm::quat(1, 0, 0, 0)
+                    : glm::angleAxis(std::acos(glm::clamp(glm::dot(z, d), -1.0f, 1.0f)), ax / al);
+            } else if (kind == QLatin1String("dir")) {
+                lc.type = LightComponent::Type::Directional;
+                lc.color = glm::vec3(0.4f, 0.6f, 1.0f);   // BLUE: obvious directional
+                lc.intensity = 3.0f;
+                // Travel +Z -> aim down-ish (-0.4,-1,-0.3).
+                const glm::vec3 d = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f)), z(0, 0, 1);
+                const glm::vec3 ax = glm::cross(z, d); const float al = glm::length(ax);
+                xf.rotation = (al < 1e-5f) ? glm::quat(1, 0, 0, 0)
+                    : glm::angleAxis(std::acos(glm::clamp(glm::dot(z, d), -1.0f, 1.0f)), ax / al);
+            } else {
+                lc.type = LightComponent::Type::Point;
+                lc.color = glm::vec3(1.0f, 0.1f, 0.1f);   // RED: distinguishes the ECS light from the warm orbit fallback
+                lc.intensity = 80.0f;
+                xf.translation = glm::vec3(2.2f, 2.0f, 2.2f);
+            }
+            qInfo() << "[KRS_TESTLIGHT] spawned" << kind << "light entity";
         });
     }
 
@@ -1482,6 +1814,8 @@ MainWindow::MainWindow(QWidget* parent)
             m_dockManager->addDockWidget(ads::CenterDockWidgetArea, assetDock, diagArea);
         else
             m_dockManager->addDockWidget(ads::BottomDockWidgetArea, assetDock);
+        registerPanelDock(QStringLiteral("Diagnostics"), diagDock);
+        registerPanelDock(QStringLiteral("Assets"),      assetDock);
         diagDock->setAsCurrentTab();
     }
 
@@ -1563,13 +1897,24 @@ MainWindow::MainWindow(QWidget* parent)
             m_dockManager->addDockWidget(ads::RightDockWidgetArea, rbDock);
 
         // Robot-only spinning viewport (isolated 2nd scene), bound to the SAME live
-        // graph the panel edits. Re-mirrors whenever the panel changes the graph.
-        m_robotViewport = new RobotViewport(m_scene.get(), this);
+        // graph the panel edits. It BORROWS the main renderer's baked IBL (does not
+        // bake its own -- a 2nd bake renders black and corrupts the environment).
+        m_robotViewport = new RobotViewport(m_scene.get(), m_renderingSystem.get(), this);
+        m_robotViewport->setMinimumSize(360, 280);   // don't collapse to a thin strip (else GL never inits/paints)
         connect(m_robotBuilderPanel, &RobotBuilderPanel::graphChanged,
                 m_robotViewport, &RobotViewport::refreshFromLive);
         auto* rvDock = new ads::CDockWidget(QStringLiteral("Robot View"), this);
         rvDock->setWidget(m_robotViewport);
-        m_dockManager->addDockWidget(ads::LeftDockWidgetArea, rvDock);
+        m_dockManager->addDockWidget(ads::BottomDockWidgetArea, rvDock);
+
+        // Register these always-docked panels for toolbar toggling (non-destructive).
+        registerPanelDock(QStringLiteral("Physics"),       physDock);
+        registerPanelDock(QStringLiteral("Fluid"),         fluidDock);
+        registerPanelDock(QStringLiteral("Gas"),           smokeDock);
+        registerPanelDock(QStringLiteral("Lighting"),      lightingDock);
+        registerPanelDock(QStringLiteral("Textures"),      texDock);
+        registerPanelDock(QStringLiteral("Robot Builder"), rbDock);
+        registerPanelDock(QStringLiteral("Robot View"),    rvDock);
 
         physDock->setAsCurrentTab();
     }
@@ -1590,7 +1935,16 @@ MainWindow::MainWindow(QWidget* parent)
             m_dockManager->addDockWidget(ads::CenterDockWidgetArea, outDock, rightArea);
         else
             m_dockManager->addDockWidget(ads::RightDockWidgetArea, outDock);
+        registerPanelDock(QStringLiteral("Outliner"), outDock);
     }
+
+    // Seed the toolbar panel-toggle buttons to match each dock's initial (open) visibility.
+    for (auto it = m_panelDocks.constBegin(); it != m_panelDocks.constEnd(); ++it)
+        if (it.value()) m_fixedTopToolbar->setPanelButtonChecked(it.key(), !it.value()->isClosed());
+
+    // Apply the persisted UI theme now that all docks + the ribbon exist (the settings
+    // boot-apply at startup ran before these were created, so it couldn't restyle them).
+    applyTheme(krs::SettingsManager::instance().value(QStringLiteral("ui/theme")).toString());
 
     // --- Application menu bar (File / Add / Simulation) ---
     buildMenuBar();
@@ -2160,6 +2514,30 @@ void MainWindow::destroyCameraRig(entt::entity cameraEntity)
     reg.destroy(cameraEntity);
 }
 
+void MainWindow::applyTheme(const QString& theme)
+{
+    const bool light = (theme.compare(QLatin1String("light"), Qt::CaseInsensitive) == 0);
+    const QString& style = light ? lightPanelStyle : sidePanelStyle;
+    // Restyle ONLY the panel docks' contents. Do NOT touch the dock manager (its default ads
+    // stylesheet draws the tab close 'X' buttons -- our panel sheet's QToolButton rule bloats
+    // them) or the ribbon toolbar (our sheet darkened its dividers). Viewports (GL) untouched.
+    for (auto it = m_panelDocks.constBegin(); it != m_panelDocks.constEnd(); ++it)
+        if (it.value()) it.value()->setStyleSheet(style);
+    for (auto it = m_menus.constBegin(); it != m_menus.constEnd(); ++it)
+        if (it.value().dock) it.value().dock->setStyleSheet(style);
+}
+
+void MainWindow::registerPanelDock(const QString& title, ads::CDockWidget* dock)
+{
+    if (!dock) return;
+    m_panelDocks.insert(title, dock);
+    // Reverse-sync: reflect the dock's open/closed state on its toolbar button (covers the tab
+    // 'x' close + programmatic toggles). setPanelButtonChecked blocks signals to avoid a loop.
+    connect(dock, &ads::CDockWidget::viewToggled, this, [this, title](bool open) {
+        if (m_fixedTopToolbar) m_fixedTopToolbar->setPanelButtonChecked(title, open);
+    });
+}
+
 void MainWindow::handleMenuToggle(MenuType type, bool checked)
 {
     if (checked)   showMenu(type);
@@ -2344,6 +2722,48 @@ entt::entity MainWindow::addObjectFromMenu(int primitive, const QString& baseNam
     return e;
 }
 
+entt::entity MainWindow::addLightFromMenu(int lightType, const glm::vec3& worldPos)
+{
+    auto& reg = m_scene->getRegistry();
+    const auto type = static_cast<LightComponent::Type>(lightType);
+
+    // Blender-style auto-numbering off a per-type base name (Point Light.001, ...).
+    const QString baseName =
+        type == LightComponent::Type::Point       ? QStringLiteral("Point Light")
+      : type == LightComponent::Type::Directional ? QStringLiteral("Directional Light")
+      : type == LightComponent::Type::Spot        ? QStringLiteral("Spot Light")
+                                                  : QStringLiteral("Area Light");
+    // Use max-suffix+1 (not a count) so deleting a middle light never yields a duplicate name.
+    int maxN = 0;
+    const QString prefix = baseName + QLatin1Char('.');
+    for (auto e : reg.view<TagComponent>()) {
+        const QString t = QString::fromStdString(reg.get<TagComponent>(e).tag);
+        if (!t.startsWith(prefix)) continue;
+        bool ok = false; const int n = t.mid(prefix.size()).toInt(&ok);
+        if (ok && n > maxN) maxN = n;
+    }
+    const QString name = QStringLiteral("%1.%2").arg(baseName).arg(maxN + 1, 3, 10, QLatin1Char('0'));
+
+    // Warm/cool defaults; the inspector's Light tab tunes everything afterwards.
+    const glm::vec3 color = (type == LightComponent::Type::RectArea)
+        ? glm::vec3(1.0f, 0.96f, 0.90f) : glm::vec3(1.0f, 0.95f, 0.88f);
+    // Photometric defaults (brought to display by the EV exposure): lumens / candela / lux / nits.
+    const float intensity =
+        type == LightComponent::Type::Point       ? 40000.0f   // lumens
+      : type == LightComponent::Type::Spot        ? 40000.0f   // candela
+      : type == LightComponent::Type::Directional ? 8000.0f    // lux
+                                                  : 6000.0f;   // nits (RectArea)
+
+    entt::entity e = SceneBuilder::spawnLightEmitter(*m_scene, type, worldPos, color,
+                                                     intensity, name.toStdString());
+
+    // Select the new light so the gizmo + Light inspector pick it up.
+    for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+    reg.emplace<SelectedComponent>(e);
+    refreshGizmoAndProperties();
+    return e;
+}
+
 entt::entity MainWindow::duplicateEntity(entt::entity src)
 {
     auto& reg = m_scene->getRegistry();
@@ -2369,6 +2789,10 @@ entt::entity MainWindow::duplicateEntity(entt::entity src)
     if (auto* bc = reg.try_get<BoxCollider>(src)) reg.emplace<BoxCollider>(dst, *bc);
     if (auto* sc = reg.try_get<SphereCollider>(src)) reg.emplace<SphereCollider>(dst, *sc);
     if (auto* ac = reg.try_get<AutoCollisionComponent>(src)) reg.emplace<AutoCollisionComponent>(dst, *ac);
+    // A duplicated light must keep emitting (copy the LightComponent), not just glow.
+    if (auto* lc = reg.try_get<LightComponent>(src)) reg.emplace<LightComponent>(dst, *lc);
+    if (reg.all_of<LightEmitterTag>(src)) reg.emplace<LightEmitterTag>(dst);
+    if (auto* pe = reg.try_get<LightEmitterPrevEmissive>(src)) reg.emplace<LightEmitterPrevEmissive>(dst, *pe);
 
     QString base = QStringLiteral("Object");
     if (auto* tag = reg.try_get<TagComponent>(src))
@@ -2437,6 +2861,23 @@ void MainWindow::onViewportContextMenu(const QPoint& globalPos, const glm::vec3&
     addPrim(QStringLiteral("Cube"), Primitive::Cube, glm::vec3(1.0f));
     addPrim(QStringLiteral("Sphere"), Primitive::IcoSphere, glm::vec3(0.5f));
     addPrim(QStringLiteral("Cylinder"), Primitive::Cylinder, glm::vec3(0.5f, 1.0f, 0.5f));
+
+    QMenu* lightMenu = menu.addMenu(QStringLiteral("Add light here"));
+    struct CtxLightOpt { const char* label; LightComponent::Type type; };
+    const CtxLightOpt ctxLights[] = {
+        { "Point Light",       LightComponent::Type::Point },
+        { "Spot Light",        LightComponent::Type::Spot },
+        { "Area Light",        LightComponent::Type::RectArea },
+        { "Directional Light", LightComponent::Type::Directional },
+    };
+    for (const auto& o : ctxLights) {
+        const auto type = o.type;
+        lightMenu->addAction(QString::fromLatin1(o.label), [this, type, worldPos]() {
+            const float lift = (type == LightComponent::Type::RectArea
+                             || type == LightComponent::Type::Directional) ? 2.0f : 0.5f;
+            addLightFromMenu(int(type), worldPos + glm::vec3(0.0f, lift, 0.0f));
+        });
+    }
 
     QMenu* simMenu = menu.addMenu(QStringLiteral("Add simulation source"));
     simMenu->addAction(QStringLiteral("Water Tap"), [this, worldPos]() {
@@ -2573,6 +3014,23 @@ void MainWindow::buildMenuBar()
     addPrim(QStringLiteral("Cone"), Primitive::Cone, glm::vec3(0.5f, 1.0f, 0.5f));
     addPrim(QStringLiteral("Torus"), Primitive::Torus, glm::vec3(0.6f));
     addPrim(QStringLiteral("Plane"), Primitive::Quad, glm::vec3(2.0f, 1.0f, 2.0f));
+
+    // --- Light emitters (glowing primitive that also illuminates) ---
+    addMenu->addSeparator();
+    QMenu* lightMenu = addMenu->addMenu(QStringLiteral("Light"));
+    struct LightMenuOpt { const char* label; LightComponent::Type type; float y; };
+    const LightMenuOpt lightOpts[] = {
+        { "Point Light",       LightComponent::Type::Point,       1.5f },
+        { "Spot Light",        LightComponent::Type::Spot,        3.0f },
+        { "Area Light",        LightComponent::Type::RectArea,    4.0f },
+        { "Directional Light", LightComponent::Type::Directional, 4.0f },
+    };
+    for (const auto& o : lightOpts) {
+        const auto type = o.type; const float y = o.y;
+        lightMenu->addAction(QString::fromLatin1(o.label), this, [this, type, y]() {
+            addLightFromMenu(int(type), glm::vec3(0.0f, y, 0.0f));
+        });
+    }
 
     addMenu->addSeparator();
     QAction* addEmitter = addMenu->addAction(QStringLiteral("Fluid Emitter"));

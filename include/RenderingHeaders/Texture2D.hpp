@@ -29,11 +29,25 @@ public:
     // full dynamic range needed for correct image-based lighting.
     bool loadHDR(const std::string& path);
 
+    // Analyse an equirectangular HDR (CPU-side) to derive a directional "sun" from the
+    // environment: finds the brightest texel (the sun) -> its world-space TRAVEL direction
+    // (out[3], like u_sunDir) and the normalized colour/temperature of a region around it
+    // (out[3], max channel = 1). Matches loadHDR's vertical flip + the equirect mapping in
+    // equirect_to_cubemap_frag.glsl. Returns false if the file can't be read.
+    static bool analyzeHdrSun(const std::string& path, float outSunDir[3], float outSunColor[3]);
+
     // Generate an empty texture of given size and formats, optionally uploading data.
     void generate(int width, int height,
         GLenum internalFormat = GL_RGBA8,
         GLenum dataFormat = GL_RGBA,
         const void* data = nullptr);
+
+    // Generate a FLOAT texture (e.g. GL_RGBA32F lookup tables) from raw float data,
+    // uploading with GL_FLOAT. Unlike generate() (which hardcodes GL_UNSIGNED_BYTE and
+    // would clamp values to [0,1]), this preserves full float range. CLAMP_TO_EDGE +
+    // LINEAR, no mipmaps — the layout LTC/BRDF LUTs need.
+    void generateFloat(int width, int height,
+        GLenum internalFormat, GLenum dataFormat, const float* data);
 
     // Bind to texture unit slot (0..GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS-1)
     void bind(unsigned int unit = 0) const;

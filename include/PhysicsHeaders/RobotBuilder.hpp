@@ -173,16 +173,20 @@ struct RobotGraph {
         return -1;
     }
 
-    // serial-order the member joints by BFS from base (parent = the already-visited
-    // endpoint) -> a krs::robot::Robot whose FK at q=0 reproduces the parsed placements.
-    krs::robot::Robot toRobot() const {
-        krs::robot::Robot r;
-        r.name = "parsed_robot";
+    // Chain ordering: DFS from base over committed (non-ambiguous) MEMBER joints.
+    // order[0] == base; for k>=1, order[k] becomes chain body (k-1). parentJoint[b]/
+    // parentBody[b] record how body b attaches. toRobot() AND the live-instance
+    // factory (instantiateFromGraph) both consume this, so the chain DOF order, the
+    // krs::robot::Robot joints, and the link->entity map are GUARANTEED to agree.
+    struct ChainOrder { std::vector<int> order; std::vector<int> parentJoint; std::vector<int> parentBody; };
+    ChainOrder chainOrder() const {
+        ChainOrder co;
+        co.parentJoint.assign(bodies.size(), -1);
+        co.parentBody.assign(bodies.size(), -1);
+        if (base < 0 || base >= int(bodies.size())) return co;
         const auto m = members();
-        // BFS order of bodies from base
-        std::vector<int> order; std::set<int> seen{ base }; std::vector<int> stack{ base };
-        std::vector<int> parentJoint(bodies.size(), -1), parentBody(bodies.size(), -1);
-        order.push_back(base);
+        std::set<int> seen{ base }; std::vector<int> stack{ base };
+        co.order.push_back(base);
         while (!stack.empty()) {
             const int b = stack.back(); stack.pop_back();
             for (int ji = 0; ji < int(joints.size()); ++ji) {
@@ -190,17 +194,30 @@ struct RobotGraph {
                 if (j.ambiguous) continue;
                 int o = -1; if (j.parent == b) o = j.child; else if (j.child == b) o = j.parent;
                 if (o >= 0 && m.count(o) && !seen.count(o)) {
-                    seen.insert(o); stack.push_back(o); order.push_back(o);
-                    parentJoint[o] = ji; parentBody[o] = b;
+                    seen.insert(o); stack.push_back(o); co.order.push_back(o);
+                    co.parentJoint[o] = ji; co.parentBody[o] = b;
                 }
             }
         }
+        return co;
+    }
+    // Body indices in chain order (order[0]=base; order[k>=1] = chain body k-1).
+    std::vector<int> chainBodyOrder() const { return chainOrder().order; }
+
+    // serial-order the member joints by DFS from base (parent = the already-visited
+    // endpoint) -> a krs::robot::Robot whose FK at q=0 reproduces the parsed placements.
+    krs::robot::Robot toRobot() const {
+        krs::robot::Robot r;
+        r.name = "parsed_robot";
+        const ChainOrder co = chainOrder();
+        const std::vector<int>& order = co.order;
+        if (order.empty()) return r;
         r.basePlacement = bodies[base].placement;
         r.nLinks = int(order.size());
         for (size_t k = 1; k < order.size(); ++k) {           // skip base (k=0)
             const int body = order[k];
-            const int pj = parentJoint[body];
-            const int pb = parentBody[body];
+            const int pj = co.parentJoint[body];
+            const int pb = co.parentBody[body];
             const Eigen::Matrix4d rel = bodies[pb].placement.inverse() * bodies[body].placement;
             krs::robot::Joint rj;
             rj.type = (joints[pj].type == JType::Fixed) ? krs::dyn::JType::Fixed : krs::dyn::JType::Revolute;

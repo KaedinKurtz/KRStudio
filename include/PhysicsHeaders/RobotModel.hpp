@@ -23,7 +23,12 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <memory>
+#include <entt/entt.hpp>
 #include "RobotDynamics.hpp"
+
+class Scene;
+namespace krs::rbuild { struct RobotGraph; }   // authoring schema (RobotBuilder.hpp)
 
 namespace krs::robot {
 
@@ -75,6 +80,90 @@ struct Robot {
             prevBody = c.addBody(dj, b);
         }
         return c;
+    }
+};
+
+// ===========================================================================
+// THE LIVE ROBOT -- the first-class runtime owner of joint STATE. It wraps the
+// static schema (Robot) + its cached kinematic chain and owns the canonical q
+// (commanded) -- the SINGLE SOURCE OF TRUTH for joint angles. qActual is PhysX
+// feedback (INFLUENCE only; it never overwrites q). The node graph WRITES q
+// (applyCommand), PhysX FOLLOWS q as kinematic targets and reports qActual back,
+// and the RobotGraph is the SCHEMA this is instantiated from. fkLinks() = FK(q).
+// ===========================================================================
+struct LiveRobot {
+    Robot                 model;                  // schema (links/joints/base/limits)
+    krs::dyn::SerialChain chain;                  // built from model member joints
+    Eigen::VectorXd       q;                      // commanded -- SOURCE OF TRUTH
+    Eigen::VectorXd       qActual;                // PhysX feedback (influence)
+    std::vector<int>      memberJoint;            // DOF index -> model.joints index
+    std::vector<std::vector<entt::entity>> linkEntities;  // chain body idx -> entities it drives
+    std::vector<Eigen::Matrix4d> restLinkWorld;   // per chain-body rest world pose (q=0) for delta viz
+    std::vector<std::vector<Eigen::Matrix4d>> linkEntityRestWorld;  // per chain-body, per entity rest world xf
+    entt::entity          root = entt::null;       // the RobotRootComponent entity
+    int                   robotId = -1;
+    bool                  useRobotFkViz = false;   // ON => Robot FK drives viz (steps 3/6)
+    std::string           name = "robot";
+
+    int ndof() const { return int(q.size()); }
+
+    // (Re)build the chain from the schema; resize q/qActual but PRESERVE values when the
+    // DOF count is unchanged, so editing limits/frames never resets the live pose.
+    void rebuild() {
+        chain = model.toChain();
+        memberJoint.clear();
+        for (int i = 0; i < int(model.joints.size()); ++i)
+            if (model.joints[i].member) memberJoint.push_back(i);
+        const int n = chain.nq();
+        if (int(q.size())       != n) q       = Eigen::VectorXd::Zero(n);
+        if (int(qActual.size()) != n) qActual = Eigen::VectorXd::Zero(n);
+    }
+
+    // Clamp one DOF to its member joint's limits.
+    double clampDof(int dof, double v) const {
+        if (dof < 0 || dof >= int(memberJoint.size())) return v;
+        const Joint& j = model.joints[memberJoint[dof]];
+        return std::min(j.qUpper, std::max(j.qLower, v));
+    }
+
+    void setCommandedQ(const Eigen::VectorXd& qc) {
+        const int n = std::min(int(qc.size()), int(q.size()));
+        for (int i = 0; i < n; ++i) q[i] = clampDof(i, qc[i]);
+    }
+
+    // Node-graph command bus -> q. Only DOFs flagged driven are written (undriven rest).
+    void applyCommand(const std::vector<float>& target, const std::vector<char>& driven) {
+        const int n = int(q.size());
+        for (int i = 0; i < n && i < int(target.size()); ++i)
+            if (i < int(driven.size()) && driven[i]) q[i] = clampDof(i, double(target[i]));
+    }
+
+    // Per chain-body world poses for q (chain base frame). World = basePlacement * pose.
+    std::vector<krs::dyn::Pose> fkLinks() const {
+        std::vector<krs::dyn::Pose> poses; chain.fk(q, poses); return poses;
+    }
+
+    Eigen::VectorXd deviation() const {
+        return (q.size() == qActual.size()) ? Eigen::VectorXd(q - qActual) : Eigen::VectorXd();
+    }
+};
+
+// ctx-singleton registry of live robots (multi-robot). Mirrors the existing ctx
+// patterns (RobotGraph, ArticulationCommandComponent). robotId is the stable key.
+struct RobotRegistry {
+    // shared_ptr (not unique_ptr) so the registry is copyable -- entt's registry
+    // context (entt::any) stores values copy/assignably. shared_ptr also keeps each
+    // LiveRobot at a STABLE address, so callers may hold LiveRobot* across frames.
+    std::vector<std::shared_ptr<LiveRobot>> robots;
+    LiveRobot* get(int id) {
+        for (auto& r : robots) if (r && r->robotId == id) return r.get();
+        return nullptr;
+    }
+    LiveRobot& create(int id) {
+        if (LiveRobot* e = get(id)) return *e;
+        robots.push_back(std::make_shared<LiveRobot>());
+        robots.back()->robotId = id;
+        return *robots.back();
     }
 };
 
@@ -188,5 +277,34 @@ inline bool nearlyEqual(const Robot& a, const Robot& b, double tol = 1e-12) {
 // JOINT-FROM-FEATURE / MOUNT-PORT / CHAIN-EXPORT-ROUNDTRIP, each a measured number
 // with a non-vacuous negative control. Pure CPU.
 bool runRobotChainGate();
+
+// GATE ROBOT-OWNER (env KRS_ROBOTOWNER_SELFTEST): the first-class Robot owner.
+// Step 1 (pure CPU): LiveRobot::fkLinks()==SerialChain::fk(q); applyCommand clamps to
+// limits + leaves undriven DOFs at rest; rebuild() sizes q to nq(). Step 2 (ECS):
+// instantiateFromGraph creates a named root + parents bodies + real robotId + link map.
+bool runRobotOwnerGate();
+
+// --- the runtime side of the foundation (defined in src/Physics/RobotInstance.cpp) ---
+// Factory: build a LiveRobot + a named root entity from an authoring RobotGraph. Creates
+// the root (RobotRootComponent + Tag + identity Transform), parents the graph's member
+// body entities under it (ParentComponent), stamps the REAL robotId onto each
+// (RobotSubcomponentComponent), and fills the chain link -> entity map. Returns the
+// registered LiveRobot (owned by the ctx RobotRegistry), or nullptr on failure.
+LiveRobot* instantiateFromGraph(Scene& scene, const krs::rbuild::RobotGraph& g, int robotId);
+
+// Drain the node-graph command bus (registry-ctx ArticulationCommandComponent) INTO each
+// registered LiveRobot::q (clamped to limits, driven DOFs only). LiveRobot::q is THE
+// single source of truth -- PhysX is teleported FROM it separately. Returns #robots
+// updated. Headless-safe (no PhysX), so it is unit-gated. (Step 4.)
+int drainCommandBusIntoRobots(entt::registry& reg);
+
+// Capture each link's rest world pose + each driven entity's rest world transform at
+// the current q (call while q==0). Required before writeBackRobotViz. (Steps 3 / 6.)
+void captureRobotRest(Scene& scene, LiveRobot& lr);
+
+// Drive the link entity TransformComponents from Robot FK(q) (delta-from-rest), making
+// the live Robot the viz source instead of PhysX. Rest poses are captured at q=0 on
+// instantiation. No-op unless useRobotFkViz is set. (Steps 3 / 6.)
+void writeBackRobotViz(Scene& scene, LiveRobot& lr);
 
 } // namespace krs::robot

@@ -10,18 +10,30 @@
 #include "RobotBuilderScene.hpp"   // mirrorGraphIntoScene / turntableCameraPos / gate
 
 #include <QTimer>
+#include <QSlider>
+#include <QLabel>
+#include <QResizeEvent>
+#include <QMouseEvent>
 #include <cstdio>
 #include <cstdint>
 #include <cmath>
 #include <vector>
 #include <algorithm>
 
-RobotViewport::RobotViewport(Scene* mainScene, QWidget* parent)
-    : ViewportWidget(nullptr, nullptr, entt::null, parent), m_mainScene(mainScene)
+RobotViewport::RobotViewport(Scene* mainScene, RenderingSystem* mainRender, QWidget* parent)
+    : ViewportWidget(nullptr, nullptr, entt::null, parent),
+      m_mainScene(mainScene), m_mainRender(mainRender)
 {
     // Self-owned world (PreviewViewport model) so this view shows ONLY the robot.
     m_viewScene  = std::make_unique<Scene>();
     m_viewRender = std::make_unique<RenderingSystem>(this);
+    // CRITICAL: do NOT bake our own IBL. A 2nd equirect->cubemap bake in a shared GL
+    // context renders BLACK and corrupts the environment (it blacked-out the robot +
+    // skybox in BOTH viewports). Borrow the main renderer's baked maps instead.
+    m_viewRender->setSkipEnvironmentBake(true);
+    // Level-editor look: a flat grey room (no horizon) instead of a skybox copy.
+    // IBL is still borrowed (in onSpinTick) so the robot stays lit + metals reflect.
+    m_viewRender->setDrawSkybox(false);
 
     auto& reg = m_viewScene->getRegistry();
     reg.ctx().emplace<SceneProperties>();
@@ -36,7 +48,99 @@ RobotViewport::RobotViewport(Scene* mainScene, QWidget* parent)
     m_spinTimer = new QTimer(this);
     connect(m_spinTimer, &QTimer::timeout, this, &RobotViewport::onSpinTick);
 
+    buildOverlayControls();   // bottom-right orbit-speed slider
+
     refreshFromLive();   // bind + mirror (data path); render begins after initializeGL
+}
+
+// ---------------------------------------------------------------------------
+// Bottom-right orbit-speed slider. 0 = stopped (acceptable). A child widget
+// floating over the GL surface (Qt composites child QWidgets over QOpenGLWidget).
+// ---------------------------------------------------------------------------
+void RobotViewport::buildOverlayControls()
+{
+    m_orbitLabel = new QLabel(QStringLiteral("Orbit"), this);
+    m_orbitLabel->setStyleSheet(QStringLiteral(
+        "QLabel{color:#dddddd;background:transparent;font-size:10px;}"));
+    m_orbitLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+
+    m_orbitSlider = new QSlider(Qt::Horizontal, this);
+    m_orbitSlider->setRange(0, 100);
+    m_orbitSlider->setValue(int(m_orbitSpeed / kMaxOrbitSpeed * 100.0f + 0.5f));
+    m_orbitSlider->setFixedWidth(120);
+    m_orbitSlider->setToolTip(QStringLiteral("Auto-orbit speed (0 = stopped)"));
+    m_orbitSlider->setStyleSheet(QStringLiteral(
+        "QSlider{background:transparent;}"
+        "QSlider::groove:horizontal{height:4px;background:#555;border-radius:2px;}"
+        "QSlider::handle:horizontal{width:12px;margin:-5px 0;background:#d4af34;border-radius:6px;}"
+        "QSlider::sub-page:horizontal{background:#d4af34;border-radius:2px;}"));
+    connect(m_orbitSlider, &QSlider::valueChanged, this, &RobotViewport::onOrbitSliderChanged);
+
+    layoutOverlayControls();
+}
+
+void RobotViewport::layoutOverlayControls()
+{
+    if (!m_orbitSlider) return;
+    const int m = 10;                       // margin from the edges
+    const int sw = m_orbitSlider->width();
+    const int sh = m_orbitSlider->sizeHint().height();
+    const int x  = width()  - sw - m;
+    const int y  = height() - sh - m;
+    m_orbitSlider->move(x, y);
+    if (m_orbitLabel) {
+        m_orbitLabel->adjustSize();
+        m_orbitLabel->move(x, y - m_orbitLabel->height());
+    }
+}
+
+void RobotViewport::resizeEvent(QResizeEvent* ev)
+{
+    ViewportWidget::resizeEvent(ev);
+    layoutOverlayControls();
+}
+
+void RobotViewport::onOrbitSliderChanged(int value)
+{
+    m_orbitSpeed = (float(value) / 100.0f) * kMaxOrbitSpeed;
+}
+
+void RobotViewport::setOrbitSpeed(float radPerSec)
+{
+    m_orbitSpeed = std::clamp(radPerSec, 0.0f, kMaxOrbitSpeed);
+    if (m_orbitSlider) {
+        const QSignalBlocker block(m_orbitSlider);
+        m_orbitSlider->setValue(int(m_orbitSpeed / kMaxOrbitSpeed * 100.0f + 0.5f));
+    }
+}
+
+// While a drag is in progress the auto-orbit is suspended (you cannot auto-orbit
+// while transforming). On release we re-seed the orbit from wherever the camera
+// now is, so resuming continues smoothly from the user's view rather than jumping.
+void RobotViewport::mousePressEvent(QMouseEvent* ev)
+{
+    m_manualNav = true;
+    ViewportWidget::mousePressEvent(ev);
+}
+
+void RobotViewport::mouseReleaseEvent(QMouseEvent* ev)
+{
+    ViewportWidget::mouseReleaseEvent(ev);   // let the base finish its nav first
+    m_manualNav = false;
+    reseedOrbitFromCamera();                 // resume orbit from the current view
+}
+
+void RobotViewport::reseedOrbitFromCamera()
+{
+    const Camera& cam = getCamera();
+    const glm::vec3 pos = cam.getPosition();
+    const glm::vec3 tgt = cam.getFocalPoint();
+    m_base = tgt;                             // honour pans (the target moved)
+    const float dx = pos.x - m_base.x;
+    const float dz = pos.z - m_base.z;
+    m_dist = std::max(0.01f, std::sqrt(dx * dx + dz * dz));
+    m_elev = pos.y - m_base.y;
+    m_spinAngle = std::atan2(dz, dx);
 }
 
 RobotViewport::~RobotViewport()
@@ -86,10 +190,23 @@ void RobotViewport::initializeGL()
 
 void RobotViewport::onSpinTick()
 {
+    // Borrow the main renderer's baked IBL once it is ready (we skipped our own bake).
+    if (m_mainRender && m_viewRender && !m_viewRender->hasBakedEnvironment()
+        && m_mainRender->hasBakedEnvironment()) {
+        m_viewRender->adoptEnvironmentFrom(*m_mainRender);
+    }
     const float dt = std::min(0.05f, float(m_spinClock.restart()) * 0.001f);
-    m_spinAngle += dt * 0.5f;   // ~0.5 rad/s slow spin around the base axis
-    const glm::vec3 pos = krs::rbuild::turntableCameraPos(m_base, m_dist, m_elev, m_spinAngle);
-    getCamera().forceRecalculateView(pos, m_base, m_dist);
+    // Auto-orbit only when not manually navigating AND the slider speed > 0. During
+    // a manual drag the base ViewportWidget owns the camera (orbit/pan/zoom); when
+    // the orbit is stopped (speed 0) the camera simply holds its current pose.
+    if (!m_manualNav && m_orbitSpeed > 1e-4f) {
+        m_spinAngle += dt * m_orbitSpeed;
+        const glm::vec3 pos = krs::rbuild::turntableCameraPos(m_base, m_dist, m_elev, m_spinAngle);
+        getCamera().forceRecalculateView(pos, m_base, m_dist);
+    }
+    // Self-drive the render: this isolated RenderingSystem is not pumped by the main
+    // engine frame (which only renders the main system), so render then present.
+    if (m_viewRender) m_viewRender->renderAllViewports();
     update();
 }
 
@@ -112,12 +229,12 @@ bool runRobotViewportGate()
     Scene mainScene;
     auto& g = mainScene.getRegistry().ctx().emplace<RobotGraph>(buildDemoGraph());
     spawnGraphBodies(mainScene, g, 0);
-    RobotViewport vp(&mainScene);                  // headless construct (no initializeGL)
+    RobotViewport vp(&mainScene, nullptr);         // headless construct (no IBL/initializeGL needed)
     const bool bindLive = (vp.liveGraph() == &g) && (vp.liveGraph() != nullptr);
 
     // NEG-CTRL: a viewport over a scene with NO graph binds nullptr (stale/no-data fails).
     Scene emptyScene;
-    RobotViewport vpEmpty(&emptyScene);
+    RobotViewport vpEmpty(&emptyScene, nullptr);
     const bool negNoData = (vpEmpty.liveGraph() == nullptr);
 
     // ---- SPIN is a real base-axis transform: it MOVES and keeps a constant orbit radius ----

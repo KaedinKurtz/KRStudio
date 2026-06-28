@@ -139,6 +139,16 @@ public:
     // --- Object lighting (live, set from the Lighting menu; read by LightingPass) ---
     float getIblIntensity() const { return m_iblIntensity; }
     void  setIblIntensity(float v) { m_iblIntensity = v; }
+
+    // Robot View uses a self-owned RenderingSystem: turning the skybox OFF makes
+    // it draw a flat grey "room" background (no horizon) instead of the shared
+    // environment cubemap, while still borrowing the baked IBL so the robot stays
+    // lit and metals reflect. Scoped to THIS instance, so the main viewport keeps
+    // its skybox. m_roomColor is the LDR grey (exposure-compensated in the shader).
+    void      setDrawSkybox(bool b) { m_drawSkybox = b; }
+    bool      drawSkybox() const { return m_drawSkybox; }
+    void      setRoomColor(const glm::vec3& c) { m_roomColor = c; }
+    glm::vec3 roomColor() const { return m_roomColor; }
     float getSunIntensity() const { return m_sunIntensity; }
     void  setSunIntensity(float v) { m_sunIntensity = v; }
     glm::vec3 getSunColor() const { return m_sunColor; }
@@ -147,6 +157,15 @@ public:
     void  setSunDirection(const glm::vec3& d) { m_sunDirection = d; }
     float getTonemapExposure() const { return m_tonemapExposure; }
     void  setTonemapExposure(float v) { m_tonemapExposure = v; }
+    // Physically-based camera exposure as EV100. TonemapPass converts this to a linear
+    // multiplier 1/(1.2*2^EV) applied before ACES (times the tonemapExposure trim).
+    // Lower EV => brighter image. Calibrated for the default indoor key+fill scene.
+    float getExposureEV() const { return m_exposureEV; }
+    void  setExposureEV(float v) { m_exposureEV = v; }
+    // The linear exposure multiplier applied before ACES: 1/(1.2*2^EV) * tonemapExposure
+    // (honours the KRS_EV dev override). Shared by TonemapPass and the display-space overlay
+    // passes (grid, selection outline) so they can pre-divide and survive the tonemap.
+    float exposureMultiplier() const;
     float getSpecFireflyClamp() const { return m_specFireflyClamp; }
     void  setSpecFireflyClamp(float v) { m_specFireflyClamp = v; }
     bool  getHdrEnabled() const { return m_hdrEnabled; }
@@ -243,6 +262,27 @@ public:
     std::shared_ptr<Cubemap>   getPrefilteredEnvMap() const;
     std::shared_ptr<Texture2D> getBRDFLUT()           const;
     std::shared_ptr<Cubemap>   getEnvCubemap()           const;
+
+    // LTC (Linearly Transformed Cosines) lookup tables for rectangular area lights.
+    std::shared_ptr<Texture2D> getLtc1() const { return m_ltc1; }
+    std::shared_ptr<Texture2D> getLtc2() const { return m_ltc2; }
+
+    // A secondary RenderingSystem (the robot-only viewport) must NOT bake its own IBL:
+    // a 2nd equirect->cubemap bake in a shared GL context renders BLACK, which corrupts
+    // the environment (black robot + black skybox gaps). Instead it skips the bake and
+    // BORROWS the main renderer's already-baked maps (textures are shared via
+    // AA_ShareOpenGLContexts). One bake, shared.
+    void setSkipEnvironmentBake(bool b) { m_skipEnvBake = b; }
+    bool hasBakedEnvironment() const { return m_irradianceMap && m_prefilteredEnvMap; }
+    void adoptEnvironmentFrom(const RenderingSystem& src) {
+        m_envCubemap        = src.m_envCubemap;
+        m_irradianceMap     = src.m_irradianceMap;
+        m_prefilteredEnvMap = src.m_prefilteredEnvMap;
+        m_brdfLUT           = src.m_brdfLUT;
+        m_ltc1              = src.m_ltc1;
+        m_ltc2              = src.m_ltc2;
+    }
+
     std::shared_ptr<Texture2D> getDefaultAlbedo() const { return m_defaultAlbedo; }
     std::shared_ptr<Texture2D> getDefaultNormal() const { return m_defaultNormal; }
     std::shared_ptr<Texture2D> getDefaultAO() const { return m_defaultAO; }
@@ -294,11 +334,15 @@ private:
     float m_renderScale = 1.0f;
 
     // Object-lighting knobs exposed live via LightingPropertiesWidget.
-    float m_iblIntensity = 0.4f;  // IBL/ambient fill default (0.3 read too dim, 0.6 washed out); persisted via QSettings
-    float m_sunIntensity = 3.0f;  // directional sun (key light) magnitude
+    float m_iblIntensity = 50.0f;   // IBL/ambient fill LUMINANCE scale (nits-ish); physically-based, brought to display by EV exposure
+    float m_sunIntensity = 2000.0f; // directional sun (key light) illuminance in LUX
     glm::vec3 m_sunColor = glm::vec3(1.0f, 0.967f, 0.9f);      // warm-white sun tint
     glm::vec3 m_sunDirection = glm::vec3(-0.4f, -1.0f, -0.3f); // direction sun light travels
-    float m_tonemapExposure = 1.0f;   // ACES exposure (TonemapPass)
+    float m_tonemapExposure = 1.0f;   // ACES exposure fine-trim (TonemapPass), multiplies the EV exposure
+    float m_exposureEV       = 10.0f;  // physically-based camera exposure (EV100); calibrated for the default scene
+
+    bool      m_drawSkybox = true;             // off => flat grey-room background (Robot View)
+    glm::vec3 m_roomColor  = glm::vec3(0.55f); // LDR grey for the room (exposure-compensated in room_frag)
     float m_specFireflyClamp = 4.0f;  // specular IBL luminance clamp (lighting_frag)
     bool  m_hdrEnabled = true;        // ACES HDR pipeline vs legacy Reinhard
 
@@ -358,10 +402,13 @@ private:
     const int m_historySize = 100;
 
     // IBL resources
+    bool                       m_skipEnvBake = false;  // robot viewport borrows main's IBL instead of baking
     std::shared_ptr<Cubemap>   m_envCubemap;
     std::shared_ptr<Cubemap>   m_irradianceMap;
     std::shared_ptr<Cubemap>   m_prefilteredEnvMap;
     std::shared_ptr<Texture2D> m_brdfLUT;
+    std::shared_ptr<Texture2D> m_ltc1;   // LTC inverse-matrix LUT (RGBA32F 64x64)
+    std::shared_ptr<Texture2D> m_ltc2;   // LTC magnitude/Fresnel LUT (RGBA32F 64x64)
 
     std::shared_ptr<Texture2D> m_defaultAlbedo;
     std::shared_ptr<Texture2D> m_cadChecker;   // Phase A.1b: world-scale UV checker for imported CAD bodies

@@ -24,6 +24,7 @@ private:
     RenderingSystem* m_renderer = nullptr;
     bool m_updating = false;  // guard so syncFromSystem() doesn't trigger apply()
 
-    QDoubleSpinBox* m_ibl = nullptr;
-    QDoubleSpinBox* m_sun = nullptr;
+    QDoubleSpinBox* m_ibl = nullptr;   // ambient (IBL) luminance, nits
+    QDoubleSpinBox* m_sun = nullptr;   // sun / key illuminance, lux
+    QDoubleSpinBox* m_exposure = nullptr;  // physically-based camera exposure, EV100
 };

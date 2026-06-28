@@ -144,6 +144,59 @@ entt::entity SceneBuilder::spawnPrimitive(Scene& scene, int primitive,
     return e;
 }
 
+entt::entity SceneBuilder::spawnLightEmitter(Scene& scene,
+    LightComponent::Type type,
+    const glm::vec3& position,
+    const glm::vec3& color,
+    float intensity,
+    const std::string& name)
+{
+    auto& registry = scene.getRegistry();
+
+    // Pick the visible body: a flat quad PANEL for area lights, a small sphere BULB for
+    // point / spot / directional. (Same emissive path the fire emitter uses, so it glows.)
+    int prim; glm::vec3 scale;
+    switch (type) {
+    case LightComponent::Type::RectArea:
+        prim = int(Primitive::Quad);      scale = glm::vec3(2.0f, 2.0f, 1.0f); break;
+    default:
+        prim = int(Primitive::IcoSphere); scale = glm::vec3(0.15f);            break;
+    }
+
+    entt::entity e = spawnPrimitive(scene, prim, position, scale, name);
+
+    // A light is not a physical obstacle: drop the auto-collider spawnPrimitive added.
+    registry.remove<AutoCollisionComponent>(e);
+
+    auto& lc      = registry.emplace<LightComponent>(e);
+    lc.type       = type;
+    lc.color      = color;
+    lc.intensity  = intensity;
+    if (type == LightComponent::Type::RectArea)
+        lc.size = glm::vec2(scale.x, scale.y);   // visible quad == lit rectangle
+
+    // Oriented lights default to shining straight DOWN: local +Z -> world -Y (the
+    // convention LightingPass reads for RectArea facing and spot/directional axes).
+    if (type == LightComponent::Type::Spot
+        || type == LightComponent::Type::Directional
+        || type == LightComponent::Type::RectArea) {
+        auto& xf = registry.get<TransformComponent>(e);
+        xf.rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    }
+
+    // Fresh primitive has no prior material, so the pre-emitter emissive is (0,0).
+    registry.emplace_or_replace<LightEmitterPrevEmissive>(e);
+    // Make the body GLOW its emitted colour (emissiveColor*strength -> scaled to nits in
+    // the lighting pass). Strength ~4 reads as a bright bulb/panel after exposure.
+    auto& mat            = registry.emplace_or_replace<MaterialComponent>(e);
+    mat.albedoColor      = color;
+    mat.emissiveColor    = color;
+    mat.emissiveStrength = 4.0f;
+
+    registry.emplace<LightEmitterTag>(e);
+    return e;
+}
+
 entt::entity SceneBuilder::spawnMeshInstance(Scene& scene, MeshID meshId,
     const glm::vec3& position,
     const glm::quat& rotation,

@@ -78,3 +78,7 @@ assets/ycb/
 # GSO object library (downloaded via scripts/download_gso.py) + CoACD colliders + filter list -- all derived
 assets/gso/
 assets/**/coacd.bin
+
+# sqlite WAL / shared-memory temp files (runtime, never tracked)
+*.db-shm
+*.db-wal

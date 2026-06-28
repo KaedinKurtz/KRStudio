@@ -4,6 +4,7 @@
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <QtGlobal>
+#include <cmath>
 
 void TonemapPass::initialize(RenderingSystem& renderer, QOpenGLFunctions_4_3_Core* gl)
 {
@@ -48,9 +49,11 @@ void TonemapPass::execute(const RenderFrameContext& context)
     gl->glActiveTexture(GL_TEXTURE0);
     gl->glBindTexture(GL_TEXTURE_2D, s.tex);
     shader->setInt(gl, "u_hdr", 0);
-    // Exposure is now a live setting (render/tonemapExposure, default 1.0). 1.0 is
-    // neutral; raising it brightens the whole frame through the ACES shoulder.
-    shader->setFloat(gl, "u_exposure", context.renderer.getTonemapExposure());
+    // Physically-based exposure: convert the camera EV100 to a linear multiplier
+    // (1/(1.2*2^EV)) and apply the tonemapExposure as a neutral fine-trim on top.
+    // Lower EV => brighter. This brings photometric radiance (lux/cd/nits) into the
+    // [0,1] display range before ACES.
+    shader->setFloat(gl, "u_exposure", context.renderer.exposureMultiplier());
 
     gl->glBindVertexArray(m_emptyVao);
     gl->glDrawArrays(GL_TRIANGLES, 0, 3);

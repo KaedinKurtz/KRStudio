@@ -226,6 +226,7 @@ void OpaquePass::execute(const RenderFrameContext& context)
             activeShader->setFloat(gl, "material.metallic", mat ? mat->metallic : 0.0f);
             activeShader->setFloat(gl, "material.roughness", mat ? mat->roughness : 0.5f);
             activeShader->setVec3(gl, "material.emissiveColor", mat ? mat->emissiveColor : glm::vec3(0.0f));
+            activeShader->setFloat(gl, "material.emissiveStrength", mat ? mat->emissiveStrength : 0.0f);
         }
         else {
             unsigned int unit = 0;
@@ -241,6 +242,11 @@ void OpaquePass::execute(const RenderFrameContext& context)
             activeShader->setInt(gl, "material.metallicMap", 3);
             activeShader->setInt(gl, "material.roughnessMap", 4);
             activeShader->setInt(gl, "material.emissiveMap", 5);
+            // Flat emissive added on top of the emissive map so a TEXTURED / CAD body
+            // turned into a light emitter glows (textured + triplanar frag shaders read
+            // material.emissiveColor/Strength; harmless no-op uniforms on shaders that lack them).
+            activeShader->setVec3(gl, "material.emissiveColor", mat ? mat->emissiveColor : glm::vec3(0.0f));
+            activeShader->setFloat(gl, "material.emissiveStrength", mat ? mat->emissiveStrength : 0.0f);
             if (isTessellated) {
                 activeShader->setVec3(gl, "viewPos", context.camera.getPosition());
                 activeShader->setFloat(gl, "minTess", 0.01f);

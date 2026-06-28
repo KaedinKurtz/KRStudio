@@ -71,6 +71,43 @@ struct PulsingLightComponent {
     float speed = 0.50f;
 };
 
+// A scene light as an ENTITY (addable like any object). Position + orientation come
+// from the entity's TransformComponent; this holds the light's photometric + shape
+// parameters. Gathered each frame by LightingPass and uploaded to the lighting shader.
+// RectArea lights are shaded with Linearly Transformed Cosines (Heitz 2016): the
+// rectangle lies in the entity's local XY plane (centred at the transform), faces
+// +local-Z, and its world size is `size` scaled by the transform.
+struct LightComponent {
+    enum class Type : int { Point = 0, Directional = 1, Spot = 2, RectArea = 3 };
+    Type      type        = Type::Point;
+    glm::vec3 color       = glm::vec3(1.0f);        // linear RGB
+    float     intensity   = 1.0f;                   // radiant scale (W-ish; area lights = surface radiance)
+    float     range       = 0.0f;                   // soft cutoff radius for point/spot (0 = pure 1/d^2)
+    // Spot cone (degrees, half-angles):
+    float     innerConeDeg = 20.0f;
+    float     outerConeDeg = 30.0f;
+    // RectArea (LTC): world rectangle = size (w,h in metres) * transform scale, in the
+    // entity's local XY plane facing +local-Z.
+    glm::vec2 size        = glm::vec2(1.0f, 1.0f);
+    bool      twoSided    = false;                  // area light emits from both faces
+    bool      enabled     = true;
+};
+
+// Marks an entity that is a "light emitter": a visible primitive mesh (sphere bulb /
+// quad panel) that ALSO carries a LightComponent and an emissive material, so the one
+// entity renders, glows, illuminates, and is selectable/movable via the normal gizmo.
+// Created by SceneBuilder::spawnLightEmitter and the Add > Light menu; lets the
+// properties inspector show the Light editor and keep RectArea size<->scale in sync.
+struct LightEmitterTag {};
+
+// Captures a body's emissive BEFORE it was turned into a light emitter, so removing the
+// emitter (or the light) restores the original look instead of wiping authored / sim-driven
+// emissive (e.g. a fire emitter or temperature-driven MPM glow).
+struct LightEmitterPrevEmissive {
+    glm::vec3 color    = glm::vec3(0.0f);
+    float     strength = 0.0f;
+};
+
 struct Texture {
     GLuint id = 0;
     std::string path;
@@ -122,7 +159,7 @@ struct MaterialComponent
     glm::vec3  albedoColor = glm::vec3(0.8f, 0.8f, 0.8f);
     glm::vec2  albedoTiling = glm::vec2(1.0f, 1.0f);
     glm::vec2  albedoOffset = glm::vec2(0.0f, 0.0f);
-    float albedoBrightness;
+    float albedoBrightness = 1.0f;   // was uninitialized -> indeterminate brightness
     std::shared_ptr<Texture2D> albedoMap = nullptr;
 
     float      opacity = 1.0f;
@@ -559,8 +596,13 @@ struct ParentComponent {
     entt::entity parent = entt::null;
 };
 
+// The first-class Robot anchor: a NAMED root entity that owns a kinematic chain.
+// robotId is the stable key into the krs::robot::RobotRegistry (ctx singleton) that
+// holds the live Robot (q + FK). Bodies of this robot carry RobotSubcomponentComponent
+// with the SAME robotId, so "all bodies of robot X" is finally queryable.
 struct RobotRootComponent {
     std::string name;
+    int robotId = -1;
 };
 
 inline bool isDescendantOf(const entt::registry& r,

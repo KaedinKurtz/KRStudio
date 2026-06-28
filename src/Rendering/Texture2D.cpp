@@ -7,6 +7,9 @@
 #include <QOpenGLFunctions_4_3_Core>
 #include <QOpenGLVersionFunctionsFactory>
 #include <vector>
+#include <cmath>
+#include <algorithm>
+#include <cstddef>
 
 // Helper to get a fullscreen quad VAO, creating it if necessary.
 static GLuint getFullscreenQuadVAO(QOpenGLFunctions_4_3_Core* gl) {
@@ -134,6 +137,70 @@ bool Texture2D::loadHDR(const std::string& path) {
 
     stbi_image_free(data);
     return true;
+}
+
+bool Texture2D::analyzeHdrSun(const std::string& path, float outSunDir[3], float outSunColor[3]) {
+    int w = 0, h = 0, ch = 0;
+    stbi_set_flip_vertically_on_load(true);            // match loadHDR (row 0 = bottom, +Y = top)
+    float* data = stbi_loadf(path.c_str(), &w, &h, &ch, 3);
+    if (!data || w <= 0 || h <= 0) { if (data) stbi_image_free(data); return false; }
+
+    // 1) Brightest texel = the sun.
+    int bestX = 0, bestY = 0; float bestL = -1.0f;
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x) {
+            const float* p = data + (static_cast<size_t>(y) * w + x) * 3;
+            const float L = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+            if (L > bestL) { bestL = L; bestX = x; bestY = y; }
+        }
+
+    // 2) Direction TO the sun via the inverse of sampleSphericalMap (equirect_to_cubemap_frag):
+    //    u=atan2(z,x)/2pi+0.5, v=asin(y)/pi+0.5. The travel direction is the negative.
+    const float kPi = 3.14159265358979f;
+    const float u = (bestX + 0.5f) / static_cast<float>(w);
+    const float v = (bestY + 0.5f) / static_cast<float>(h);
+    const float phi = (u - 0.5f) * 2.0f * kPi;   // = atan2(z, x)
+    const float lat = (v - 0.5f) * kPi;          // = asin(y)
+    const float cl = std::cos(lat);
+    float dx = cl * std::cos(phi), dy = std::sin(lat), dz = cl * std::sin(phi);
+    float len = std::sqrt(dx * dx + dy * dy + dz * dz); if (len < 1e-6f) len = 1.0f;
+    outSunDir[0] = -dx / len; outSunDir[1] = -dy / len; outSunDir[2] = -dz / len;
+
+    // 3) Sun colour = normalized average of a region (~2.5%) around the brightest texel, so the
+    //    temperature is stable vs a single (often clipped-white) sun pixel. Azimuth wraps.
+    const int rx = std::max(1, w / 40), ry = std::max(1, h / 40);
+    double sr = 0.0, sg = 0.0, sb = 0.0; int n = 0;
+    for (int ddy = -ry; ddy <= ry; ++ddy) {
+        const int yy = bestY + ddy; if (yy < 0 || yy >= h) continue;
+        for (int ddx = -rx; ddx <= rx; ++ddx) {
+            const int xx = ((bestX + ddx) % w + w) % w;
+            const float* p = data + (static_cast<size_t>(yy) * w + xx) * 3;
+            sr += p[0]; sg += p[1]; sb += p[2]; ++n;
+        }
+    }
+    stbi_image_free(data);
+    if (n > 0) { sr /= n; sg /= n; sb /= n; }
+    const double mx = std::max(sr, std::max(sg, sb));
+    if (mx > 1e-6) { outSunColor[0] = float(sr / mx); outSunColor[1] = float(sg / mx); outSunColor[2] = float(sb / mx); }
+    else           { outSunColor[0] = outSunColor[1] = outSunColor[2] = 1.0f; }
+    return true;
+}
+
+void Texture2D::generateFloat(int width, int height, GLenum internalFormat, GLenum dataFormat, const float* data) {
+    _width = width;
+    _height = height;
+    _internalFormat = internalFormat;
+    _dataFormat = dataFormat;
+
+    if (!_id) glGenTextures(1, &_id);
+    glBindTexture(GL_TEXTURE_2D, _id);
+    // GL_FLOAT upload (the key difference from generate(), which uses GL_UNSIGNED_BYTE).
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_FLOAT, data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Texture2D::generate(int width, int height, GLenum internalFormat, GLenum dataFormat, const void* data) {

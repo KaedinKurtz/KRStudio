@@ -6,6 +6,7 @@ struct Material {
     float metallic;
     float roughness;
     vec3  emissiveColor;
+    float emissiveStrength;  // emissive magnitude; color*strength is the glow (scaled to nits in lighting)
 };
 uniform Material material;
 
@@ -22,5 +23,5 @@ void main()
     gNormal     = vec4(normalize(Normal), 1.0);
     gAlbedoAO   = vec4(material.albedoColor, 1.0); // Use color, assume full AO
     gMetalRough = vec4(material.metallic, material.roughness, 0.0, 1.0);
-    gEmissive   = vec4(material.emissiveColor, 1.0);
+    gEmissive   = vec4(material.emissiveColor * material.emissiveStrength, 1.0);
 }

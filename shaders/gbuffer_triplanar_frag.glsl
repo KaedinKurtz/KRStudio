@@ -17,6 +17,8 @@ struct Material {
     sampler2D metallicMap;
     sampler2D roughnessMap;
     sampler2D emissiveMap;
+    vec3      emissiveColor; // flat emissive added on top of the map (light-emitter glow)
+    float     emissiveStrength; // magnitude for the flat emissiveColor
 };
 uniform Material material;
 
@@ -53,7 +55,8 @@ void main()
     float ao       = triplanar_map(material.aoMap, fs_in.WorldPos, baseNormal).r;
     float metallic = triplanar_map(material.metallicMap, fs_in.WorldPos, baseNormal).r;
     float roughness= triplanar_map(material.roughnessMap, fs_in.WorldPos, baseNormal).r;
-    vec3 emissive  = triplanar_map(material.emissiveMap, fs_in.WorldPos, baseNormal);
+    vec3 emissive  = triplanar_map(material.emissiveMap, fs_in.WorldPos, baseNormal)
+                   + material.emissiveColor * material.emissiveStrength;   // flat emissive for light-emitter glow
 
     // Write final values to G-Buffer.
     gPosition   = vec4(fs_in.WorldPos, 1.0);

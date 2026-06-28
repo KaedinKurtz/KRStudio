@@ -1,4 +1,5 @@
 #include "RenderingSystem.hpp"
+#include <cmath>
 #include "Shader.hpp"
 #include "ViewportWidget.hpp"
 #include "Camera.hpp"
@@ -81,6 +82,8 @@
 #include <QOpenGLFunctions_4_5_Core>
 #include <QDebug>
 #include <stdexcept>
+#include <cstdlib>   // std::_Exit (headless gates)
+#include "LtcMatrices.hpp"   // g_ltc_1 / g_ltc_2 LTC lookup tables (rectangle area lights)
 #include <QCoreApplication>
 #include <QFile>
 #include <QRandomGenerator>
@@ -440,6 +443,8 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("flow_vector_compute", std::vector<std::string>{ (shaderDir + "flow_vector_update_comp.glsl").toStdString() });
         loadAndStoreShader("blur", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "gaussian_blur_frag.glsl").toStdString());
         loadAndStoreShader("skybox", (shaderDir + "skybox_vert.glsl").toStdString(), (shaderDir + "skybox_frag.glsl").toStdString());
+        // Flat grey-room background (Robot View): same vert as the skybox, flat-colour frag.
+        loadAndStoreShader("room", (shaderDir + "skybox_vert.glsl").toStdString(), (shaderDir + "room_frag.glsl").toStdString());
         loadAndStoreShader("tonemap", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "tonemap_frag.glsl").toStdString());
         loadAndStoreShader("glass", (shaderDir + "glass_vert.glsl").toStdString(), (shaderDir + "glass_frag.glsl").toStdString());
         loadAndStoreShader("outline_edge", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "outline_edge_frag.glsl").toStdString());
@@ -490,9 +495,12 @@ void RenderingSystem::initializeSharedResources()
     glm::u8vec4 black(0, 0, 0, 255);
     m_defaultMetallic->generate(1, 1, GL_RGBA8, GL_RGBA, &black[0]);
 
-    // Default Roughness (Grey - 0.5 roughness)
+    // Default Roughness (~0.8 = matte). Was 0.5 (semi-glossy), which let the bright
+    // key light cast a broad WHITE specular sheen that lifted G/B and desaturated the
+    // albedo (the "red isn't red" wash). A matte default spreads/dims that specular so
+    // the multiplicative diffuse colour dominates -> saturated surface colours.
     m_defaultRoughness = std::make_shared<Texture2D>();
-    glm::u8vec4 grey(128, 128, 128, 255);
+    glm::u8vec4 grey(205, 205, 205, 255);
     m_defaultRoughness->generate(1, 1, GL_RGBA8, GL_RGBA, &grey[0]);
 
     // Default Emissive (Black - not emissive)
@@ -501,6 +509,11 @@ void RenderingSystem::initializeSharedResources()
 
 
     // --- 2) Build IBL resources ---
+    // Skipped by the robot-only viewport's RenderingSystem (it borrows the main
+    // renderer's baked maps): a 2nd equirect->cubemap bake in a shared GL context
+    // renders an all-black cubemap, which corrupted the environment (black robot +
+    // black skybox gaps). One bake, shared via adoptEnvironmentFrom().
+    if (!m_skipEnvBake)
     {
         QString assetDir = QCoreApplication::applicationDirPath() + QLatin1String("/assets/");
 
@@ -511,13 +524,17 @@ void RenderingSystem::initializeSharedResources()
         if (qEnvironmentVariableIsSet("KRS_ENV")) {
             chosenHdr = qEnvironmentVariable("KRS_ENV");
         } else {
-            const QStringList candidates = { QStringLiteral("env.hdr"),
-                                             QStringLiteral("env2.hdr"),
+            // env.hdr is DELIBERATELY excluded from the auto-rotation: it is a partial/
+            // broken equirect whose lower hemisphere + horizon bake to PURE BLACK (verified:
+            // fromEquirectangular center pixel = 0,0,0, vs ~0.05 for env2/env3), which showed
+            // up as "black void planes attached to the camera" in the skybox. env2/env3 are
+            // full HDRs and bake correctly. env.hdr is still loadable via KRS_ENV=env.hdr.
+            const QStringList candidates = { QStringLiteral("env2.hdr"),
                                              QStringLiteral("env3.hdr") };
             QStringList present;
             for (const QString& c : candidates)
                 if (QFile::exists(assetDir + c)) present.push_back(c);
-            if (present.isEmpty()) present.push_back(QStringLiteral("env.hdr"));
+            if (present.isEmpty()) present.push_back(QStringLiteral("env2.hdr"));
             // Seed a LOCAL generator from the wall clock so the pick varies every
             // boot and can never be pinned by global-RNG state. (Note: if fewer
             // than the full env*.hdr set is deployed next to the exe, 'present'
@@ -525,7 +542,7 @@ void RenderingSystem::initializeSharedResources()
             QRandomGenerator localRng(static_cast<quint32>(QDateTime::currentMSecsSinceEpoch() & 0xffffffffULL));
             chosenHdr = present.at(localRng.bounded(present.size()));
         }
-        if (!QFile::exists(assetDir + chosenHdr)) chosenHdr = QStringLiteral("env.hdr");
+        if (!QFile::exists(assetDir + chosenHdr)) chosenHdr = QStringLiteral("env2.hdr");
         qInfo() << "[IBL] Using environment HDR:" << chosenHdr;
         std::string hdrPath = (assetDir + chosenHdr).toStdString();
 
@@ -535,6 +552,19 @@ void RenderingSystem::initializeSharedResources()
         }
         else {
             qDebug() << "[IBL] HDR loaded successfully.";
+
+            // Derive the directional "sun" (key light) from the skybox: brightest texel ->
+            // direction, surrounding region -> colour/temperature. The IBL already provides the
+            // sky-based AMBIENT; this makes the sun match the visible sun in the environment.
+            {
+                float sd[3], sc[3];
+                if (Texture2D::analyzeHdrSun(hdrPath, sd, sc)) {
+                    m_sunDirection = glm::vec3(sd[0], sd[1], sd[2]);
+                    m_sunColor     = glm::vec3(sc[0], sc[1], sc[2]);
+                    qInfo() << "[IBL] sun from skybox -> dir" << sd[0] << sd[1] << sd[2]
+                            << " colour" << sc[0] << sc[1] << sc[2];
+                }
+            }
 
             std::string vsCube = (shaderDir + "equirect_to_cubemap_vert.glsl").toStdString();
 			std::string dummyVert = (shaderDir + "dummy_vert.glsl").toStdString();
@@ -603,6 +633,56 @@ void RenderingSystem::initializeSharedResources()
             }
         }
     }
+
+    // --- IRRADIANCE-CORRECT analytic gate (headless) -------------------------------
+    // KRS_IRRADIANCE_SELFTEST: convolve a CONSTANT environment of radiance L=1 and
+    // assert the baked diffuse irradiance == PI*L == PI (the closed-form irradiance of
+    // a uniform hemisphere: E = integral_hemisphere L*cos(theta) dw = PI*L for constant L).
+    // The corrected cosine-weighted estimator returns PI; the OLD mis-normalized
+    // convolution returns ~PI/2 (the neg-control proving it was wrong).
+    if (qEnvironmentVariableIsSet("KRS_IRRADIANCE_SELFTEST")) {
+        const QString sdir = shadersRootDir();
+        const std::string vsCube = (sdir + "equirect_to_cubemap_vert.glsl").toStdString();
+        const std::string fsCube = (sdir + "equirect_to_cubemap_frag.glsl").toStdString();
+        const std::string fsIrr  = (sdir + "irradiance_convolution_frag.glsl").toStdString();
+        const float L = 1.0f;
+        float result = -1.0f;
+        unsigned char whitePix[4] = { 255, 255, 255, 255 };   // uniform L=1 equirect source
+        auto constTex = std::make_shared<Texture2D>();
+        constTex->generate(1, 1, GL_RGBA8, GL_RGBA, whitePix);
+        auto cube = Cubemap::fromEquirectangular(*constTex, m_gl, vsCube, fsCube, 64);
+        auto irr  = cube     ? Cubemap::convolveIrradiance(*cube, m_gl, vsCube, fsIrr, 32)       : nullptr;
+        if (irr) {
+            float px[3] = { 0.f, 0.f, 0.f };
+            GLuint tfbo = 0;
+            m_gl->glGenFramebuffers(1, &tfbo);
+            m_gl->glBindFramebuffer(GL_FRAMEBUFFER, tfbo);
+            m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                         GL_TEXTURE_CUBE_MAP_POSITIVE_X, irr->getID(), 0);
+            if (m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
+                m_gl->glReadPixels(16, 16, 1, 1, GL_RGB, GL_FLOAT, px);
+            m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            m_gl->glDeleteFramebuffers(1, &tfbo);
+            result = px[0];
+        }
+        const float expected = 3.14159265f * L;   // PI * L
+        float err = result - expected; if (err < 0.f) err = -err;
+        const bool pass = (result > 0.f) && (err < 0.08f);
+        qInfo().noquote() << QString("[IRRADIANCE-CORRECT GATE] uniform env L=%1 -> baked irradiance=%2  expected PI*L=%3  err=%4  %5")
+            .arg(L, 0, 'f', 3).arg(result, 0, 'f', 5).arg(expected, 0, 'f', 5).arg(err, 0, 'f', 5).arg(pass ? "PASS" : "FAIL");
+        std::_Exit(pass ? 0 : 1);
+    }
+
+    // --- LTC lookup tables (rectangle area lights) -------------------------------------
+    // Data tables (not GPU-baked), so they load regardless of the environment / skip-bake
+    // path. Must use the FLOAT upload (GL_RGBA32F) — the 8-bit generate() would clamp the
+    // m11 coefficients (which exceed 1.0) and ruin the transform. The robot-only viewport
+    // adopts these via adoptEnvironmentFrom(), but creating them here too is cheap + safe.
+    m_ltc1 = std::make_shared<Texture2D>();
+    m_ltc1->generateFloat(64, 64, GL_RGBA32F, GL_RGBA, g_ltc_1);
+    m_ltc2 = std::make_shared<Texture2D>();
+    m_ltc2->generateFloat(64, 64, GL_RGBA32F, GL_RGBA, g_ltc_2);
+    qDebug() << "[IBL] LTC LUTs ready. ids:" << m_ltc1->getID() << m_ltc2->getID();
 
     // 3) Build render?pass pipeline
     qDebug() << "[RenderingSystem] Building render passes...";
@@ -1558,6 +1638,14 @@ void RenderingSystem::initializeSharedResources()
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
+    // Robot-first-class foundation: the LiveRobot owner (q = single source of truth),
+    // instantiate-from-schema factory, Robot-FK viz, command-bus routing. Headless.
+    if (qEnvironmentVariableIntValue("KRS_ROBOTOWNER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ROBOTOWNER_SELFTEST =================\n");
+        const bool ok = krs::robot::runRobotOwnerGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+
     // OMPL sprint Phase 5: E2E -- robot defined via chain -> planned -> executed;
     // every stage's number asserted; severing any stage localizes the break. Pure CPU.
     if (qEnvironmentVariableIntValue("KRS_E2E_SELFTEST") != 0) {
@@ -2430,11 +2518,14 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
         viewport
     };
 
-    // --- C1) Skybox ---
+    // --- C1) Skybox, or flat grey room (Robot View) ---
     {
-        Shader* skyboxShader = getShader("skybox");
-        auto   envCubemap = getEnvCubemap();
-        if (skyboxShader && envCubemap) {
+        // KRS_NOSKYBOX: debug toggle to force the grey room on EVERY viewport (used to
+        // bisect whether on-screen black artifacts are the skybox vs scene geometry).
+        const bool drawSky = m_drawSkybox && !qEnvironmentVariableIsSet("KRS_NOSKYBOX");
+        auto envCubemap = getEnvCubemap();
+        Shader* skyboxShader = drawSky ? getShader("skybox") : nullptr;
+        if (drawSky && skyboxShader && envCubemap) {
             m_gl->glDepthFunc(GL_LEQUAL);
 
             skyboxShader->use(m_gl);
@@ -2444,12 +2535,30 @@ void RenderingSystem::overlayPass(ViewportWidget* viewport)
             m_gl->glActiveTexture(GL_TEXTURE0);
             m_gl->glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap->getID());
             skyboxShader->setInt(m_gl, "skybox", 0);
+            // Scale the visible sky into nits so it sits in the physically-based world and
+            // survives the EV exposure (tied to the ambient/IBL luminance control).
+            skyboxShader->setFloat(m_gl, "u_skyNits", getIblIntensity());
 
             m_gl->glBindVertexArray(GLUtils::getUnitCubeVAO(m_gl));
             m_gl->glDrawArrays(GL_TRIANGLES, 0, 36);
             m_gl->glBindVertexArray(0);
 
             m_gl->glDepthFunc(GL_LESS);
+        } else if (!drawSky) {
+            // Grey room: fill the far plane with a flat, exposure-compensated grey
+            // (no horizon), so the robot composites over a clean studio background.
+            if (Shader* roomShader = getShader("room")) {
+                m_gl->glDepthFunc(GL_LEQUAL);
+                roomShader->use(m_gl);
+                roomShader->setMat4(m_gl, "view", ctx.view);
+                roomShader->setMat4(m_gl, "projection", ctx.projection);
+                roomShader->setVec3(m_gl, "u_roomColor", m_roomColor);
+                roomShader->setFloat(m_gl, "u_invExposure", 1.0f / exposureMultiplier());
+                m_gl->glBindVertexArray(GLUtils::getUnitCubeVAO(m_gl));
+                m_gl->glDrawArrays(GL_TRIANGLES, 0, 36);
+                m_gl->glBindVertexArray(0);
+                m_gl->glDepthFunc(GL_LESS);
+            }
         }
     }
 
@@ -2741,6 +2850,13 @@ bool RenderingSystem::hdrEnabled()
     // KRS_HDR=0 reverts to the legacy in-lighting Reinhard (bring-up aid).
     static const bool on = qEnvironmentVariable("KRS_HDR") != QLatin1String("0");
     return on;
+}
+
+float RenderingSystem::exposureMultiplier() const
+{
+    float ev = m_exposureEV;
+    if (qEnvironmentVariableIsSet("KRS_EV")) ev = qEnvironmentVariable("KRS_EV").toFloat();
+    return (1.0f / (1.2f * std::exp2(ev))) * m_tonemapExposure;
 }
 
 Shader* RenderingSystem::getShader(const std::string& name) {

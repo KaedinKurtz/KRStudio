@@ -35,6 +35,11 @@ uniform vec3  u_fogColor;
 uniform float u_fogStartDistance;
 uniform float u_fogEndDistance;
 
+// The grid is a DISPLAY-space overlay drawn into the HDR buffer before the ACES tonemap.
+// Pre-divide by the exposure so the tonemap's *exposure cancels and the grid keeps its
+// authored colour (otherwise the physically-based exposure crushes it to black).
+uniform float u_invExposure;
+
 // Anti-aliasing constants
 const float DEFAULT_AA_EXTENSION_PIXELS = 1.0; // A 1-pixel feather provides a nice soft edge.
 const float MIN_AA_EXTENSION_PIXELS     = 0.0;
@@ -155,10 +160,10 @@ void main() {
         outColor = mix(outColor, u_fogColor, fd);
     }
 
-    // 4) Final Output
+    // 4) Final Output (pre-divide by exposure so the overlay survives the ACES tonemap)
     if (outAlpha < 0.001) {
         discard;
     } else {
-        FragColor = vec4(outColor, outAlpha);
+        FragColor = vec4(outColor * u_invExposure, outAlpha);
     }
 }

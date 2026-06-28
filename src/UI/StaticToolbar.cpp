@@ -3,6 +3,8 @@
 #include "MenuFactory.hpp" // Include for MenuType enum
 #include <QMenu>
 #include <QHBoxLayout>
+#include <QFrame>
+#include <QEvent>
 #include <QDebug>
 
 StaticToolbar::StaticToolbar(QWidget* parent) :
@@ -28,6 +30,76 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
     connect(ui->databaseManagerButton, &QToolButton::toggled, this, &StaticToolbar::databaseMenuToggled); // This signal shows/hides the Database management panel.
     connect(ui->gridPropertiesButton, &QToolButton::toggled, this, &StaticToolbar::gridMenuToggled); // This signal shows/hides the Grid Properties panel.
     connect(ui->show_object_properties, &QToolButton::toggled, this, &StaticToolbar::objectPropertiesMenuToggled);
+
+    // --- Generic always-docked panel toggles ---
+    // Keyed by the panel's dock TITLE (the CDockWidget ctor arg in MainWindow). Each button is
+    // made checkable and emits panelToggled(title, on); MainWindow looks the title up in
+    // m_panelDocks and calls dock->toggleView(on) (non-destructive show/hide). The button-text
+    // "Scene Lighting" maps to the dock titled "Lighting".
+    m_panelButtons = {
+        { QStringLiteral("Lighting"),       ui->toolButton },                 // "Scene Lighting" button
+        { QStringLiteral("Physics"),        ui->physics_settings_button },
+        { QStringLiteral("Textures"),       ui->material_properties_button },
+        { QStringLiteral("Outliner"),       ui->scene_manager_button },
+        { QStringLiteral("Robot Builder"),  ui->robot_visual_editor_button },
+        { QStringLiteral("Assets"),         ui->part_library_button },
+        { QStringLiteral("Diagnostics"),    ui->sensor_diagnostics_button },
+    };
+    for (auto it = m_panelButtons.constBegin(); it != m_panelButtons.constEnd(); ++it) {
+        const QString dockTitle = it.key();
+        QToolButton* btn = it.value();
+        if (!btn) continue;
+        btn->setCheckable(true);
+        connect(btn, &QToolButton::toggled, this, [this, dockTitle](bool on) {
+            emit panelToggled(dockTitle, on);
+        });
+    }
+
+    // --- "Panels" ribbon tab: toggle buttons for docks that have no dedicated ribbon button
+    //     (Fluid, Gas, Robot View, Node Editor). Added programmatically to avoid editing the
+    //     ribbon grid. Each is checkable + drives the same generic panelToggled path. ---
+    {
+        auto* panelsTab = new QWidget(ui->toolbar_tabs);
+        auto* lay = new QHBoxLayout(panelsTab);
+        lay->setContentsMargins(10, 6, 10, 6);
+        lay->setSpacing(8);
+        struct ExtraPanel { const char* title; const char* label; };
+        const ExtraPanel extra[] = {
+            { "Fluid", "Fluid" }, { "Gas", "Gas" },
+            { "Robot View", "Robot\nView" }, { "Node Editor", "Node\nEditor" },
+        };
+        for (const auto& e : extra) {
+            const QString title = QString::fromLatin1(e.title);
+            auto* b = new QToolButton(panelsTab);
+            b->setText(QString::fromLatin1(e.label));
+            b->setCheckable(true);
+            b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+            b->setMinimumSize(72, 56);
+            m_panelButtons.insert(title, b);
+            connect(b, &QToolButton::toggled, this, [this, title](bool on) { emit panelToggled(title, on); });
+            lay->addWidget(b);
+        }
+        lay->addStretch(1);
+        ui->toolbar_tabs->addTab(panelsTab, QStringLiteral("Panels"));
+    }
+
+    // --- Theme swatches: QFrame has no clicked() signal, so detect clicks via an event filter.
+    //     The audit identified swatch2 as the light palette and swatch7 as the dark palette;
+    //     wire them as the Light/Dark theme selector (emits themeSelected). ---
+    {
+        const QVector<QPair<QFrame*, QString>> themeSwatches = {
+            { ui->swatch2, QStringLiteral("light") },
+            { ui->swatch7, QStringLiteral("dark")  },
+        };
+        for (const auto& sw : themeSwatches) {
+            if (!sw.first) continue;
+            m_swatchThemes.insert(sw.first, sw.second);
+            sw.first->installEventFilter(this);
+            sw.first->setCursor(Qt::PointingHandCursor);
+            sw.first->setToolTip(sw.second == QLatin1String("light")
+                ? QStringLiteral("Light theme") : QStringLiteral("Dark theme"));
+        }
+    }
 
     // --- Simulation lifecycle buttons ---
     // play_pause_simulation_button is checkable: checked = playing.
@@ -90,6 +162,9 @@ void StaticToolbar::uncheckButtonForMenu(MenuType type)
     case MenuType::GridProperties:
         button = ui->gridPropertiesButton;
         break;
+    case MenuType::ObjectProperties:
+        button = ui->show_object_properties;
+        break;
     default:
         break;
     }
@@ -118,9 +193,37 @@ void StaticToolbar::checkButtonForMenu(MenuType type)
     case MenuType::GridProperties:
         button = ui->gridPropertiesButton;
         break;
+    case MenuType::ObjectProperties:
+        button = ui->show_object_properties;
+        break;
     }
     if (button && !button->isChecked()) {
         QSignalBlocker block(button);
         button->setChecked(true);
     }
+}
+
+void StaticToolbar::setPanelButtonChecked(const QString& panelId, bool checked)
+{
+    auto it = m_panelButtons.constFind(panelId);
+    if (it == m_panelButtons.constEnd() || !it.value()) return;
+    QToolButton* btn = it.value();
+    if (btn->isChecked() == checked) return;
+    const QSignalBlocker block(btn);   // don't re-emit panelToggled -> avoid a feedback loop
+    btn->setChecked(checked);
+}
+
+void StaticToolbar::selfTestClickPanel(const QString& panelId)
+{
+    auto it = m_panelButtons.constFind(panelId);
+    if (it != m_panelButtons.constEnd() && it.value()) it.value()->click(); // toggles + emits
+}
+
+bool StaticToolbar::eventFilter(QObject* obj, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonRelease) {
+        auto it = m_swatchThemes.constFind(obj);
+        if (it != m_swatchThemes.constEnd()) { emit themeSelected(it.value()); return true; }
+    }
+    return QWidget::eventFilter(obj, event);
 }

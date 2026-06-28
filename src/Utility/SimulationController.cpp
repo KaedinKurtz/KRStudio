@@ -4,6 +4,7 @@
 #include "CollisionCookingService.hpp"
 #include "HardwareCaps.hpp"
 #include "RobotDynamics.hpp"   // planned-config FK for the glass/ghost robot (independent of live state)
+#include "RobotModel.hpp"      // krs::robot::RobotRegistry / LiveRobot (first-class Robot owner)
 #include "SettingsManager.hpp" // user-set physics knobs (gravity, solver, CCD, GPU gate, rate)
 
 #include <QDebug>
@@ -594,6 +595,28 @@ void SimulationController::applyArticulationCommands()
     auto& reg = m_scene->getRegistry();
     const ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
     if (!cmd) return;
+
+    // ROBOT-OWNED PATH (once a first-class Robot is registered): the bus drains INTO
+    // LiveRobot::q -- the SINGLE SOURCE OF TRUTH for joint angles -- and PhysX is then
+    // teleported FROM that q as a kinematic FOLLOWER (it never owns the angles). Viz is
+    // driven by Robot FK when the robot opts in (useRobotFkViz), else the legacy PhysX viz.
+    krs::robot::RobotRegistry* rr = reg.ctx().find<krs::robot::RobotRegistry>();
+    if (rr && !rr->robots.empty()) {
+        krs::robot::drainCommandBusIntoRobots(reg);        // bus -> each LiveRobot::q
+        for (auto& rp : rr->robots) {
+            if (!rp) continue;
+            krs::robot::LiveRobot& lr = *rp;
+            std::vector<float> q(nDof, 0.0f);              // member-joint order == PhysX DOF order (FANUC)
+            for (int d = 0; d < nDof && d < lr.ndof(); ++d) q[d] = float(lr.q[d]);
+            setArticJointPositions(q);                     // PhysX FOLLOWS the Robot's q
+            if (lr.useRobotFkViz) krs::robot::writeBackRobotViz(*m_scene, lr);
+            else                  writeBackArticulationViz();
+        }
+        return;
+    }
+
+    // LEGACY PATH (no Robot owner yet): bus -> PhysX directly (pre-foundation behaviour,
+    // keeps the FANUC sweeping until step 6 registers it as a first-class Robot).
     std::vector<float> q = articJointPositions();          // start from the live config
     if (int(q.size()) != nDof) q.assign(nDof, 0.0f);
     bool any = false;

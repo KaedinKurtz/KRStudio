@@ -5,9 +5,41 @@
 #include "components.hpp"
 #include "QtHelpers.hpp" // Your helper functions for setting up widgets
 #include "SettingsManager.hpp" // display-units (units/*) for the transform fields
+#include "PrimitiveBuilders.hpp" // buildQuad / buildIcoSphere for light-type mesh swap
+#include <limits>
+#include <cmath>
+#include <glm/gtc/quaternion.hpp> // glm::angleAxis for the emitter down-orientation
+
+// Approximate blackbody colour (Tanner Helland fit) for a temperature in Kelvin -> RGB 0..1.
+// Used by the Light tab's colour-temperature control to set lc.color.
+static glm::vec3 kelvinToRgb(double kelvin)
+{
+    const double t = glm::clamp(kelvin, 1000.0, 40000.0) / 100.0;
+    double r, g, b;
+    if (t <= 66.0) { r = 255.0; }
+    else           { r = 329.698727446 * std::pow(t - 60.0, -0.1332047592); }
+    if (t <= 66.0) { g = 99.4708025861 * std::log(t) - 161.1195681661; }
+    else           { g = 288.1221695283 * std::pow(t - 60.0, -0.0755148492); }
+    if (t >= 66.0)      { b = 255.0; }
+    else if (t <= 19.0) { b = 0.0; }
+    else                { b = 138.5177312231 * std::log(t - 10.0) - 305.0447927307; }
+    auto cl = [](double v) { return float(glm::clamp(v, 0.0, 255.0) / 255.0); };
+    return glm::vec3(cl(r), cl(g), cl(b));
+}
 
 #include <QSignalBlocker>
 #include <QColorDialog>
+#include <QComboBox>
+#include <QCheckBox>
+#include <QDoubleSpinBox>
+#include <QToolButton>
+#include <QPushButton>
+#include <QFormLayout>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QFrame>
+#include <QTabWidget>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
@@ -86,6 +118,9 @@ void ObjectPropertiesWidget::initializeUI()
 
     // Set initial state for stacked widgets
     ui->stackedWidget->setCurrentWidget(ui->eulerRotationStackPage);
+
+    // Build the per-entity Light editor and add it as a tab (done in code, not the .ui).
+    buildLightTab();
 }
 
 void ObjectPropertiesWidget::applyUnitFormatting()
@@ -205,8 +240,18 @@ void ObjectPropertiesWidget::setupConnections()
 
 void ObjectPropertiesWidget::setEntity(entt::entity entity)
 {
+    const bool changed = (entity != m_currentEntity);
     m_currentEntity = entity;
     populateAllTabs();
+
+    // When the user selects a (different) light, jump straight to the Light tab so its emitter
+    // properties are immediately visible -- otherwise the "Light" tab is easy to miss among the
+    // Object/Physics/Material tabs.
+    if (changed && m_lightTab && ui && ui->objectPropertiesTabWidget && m_scene
+        && m_scene->getRegistry().valid(entity)
+        && m_scene->getRegistry().all_of<LightComponent>(entity)) {
+        ui->objectPropertiesTabWidget->setCurrentWidget(m_lightTab);
+    }
 }
 
 
@@ -370,6 +415,7 @@ void ObjectPropertiesWidget::populateAllTabs()
         // ... clear all other inputs ...
     }
 
+    populateLightTab();   // handles both valid (Add button / editor) and invalid (hidden)
     m_isUpdatingUI = false;
 }
 
@@ -581,4 +627,366 @@ void ObjectPropertiesWidget::setUIColor(const glm::vec3& color, QFrame* frame, Q
     r->setValue(qColor.red());
     g->setValue(qColor.green());
     b->setValue(qColor.blue());
+}
+
+// ============================== LIGHT TAB ==============================
+// A per-entity Light editor, built in code and added as a tab to the existing
+// objectPropertiesTabWidget. When the selected entity is not a light it shows a single
+// "Add Light Emitter" button (turn ANY body into an emitter); otherwise it edits the
+// entity's LightComponent and keeps the emissive glow + RectArea quad in sync.
+
+void ObjectPropertiesWidget::buildLightTab()
+{
+    m_lightTab = new QWidget(this);
+    auto* outer = new QVBoxLayout(m_lightTab);
+    outer->setContentsMargins(8, 8, 8, 8);
+
+    // Shown when the entity has NO LightComponent: one-click "make this body a light".
+    m_addLightBtn = new QPushButton(QStringLiteral("Add Light Emitter to this Object"), m_lightTab);
+    outer->addWidget(m_addLightBtn);
+    connect(m_addLightBtn, &QPushButton::clicked, this, &ObjectPropertiesWidget::onAddLightEmitterClicked);
+
+    // The editor (shown when the entity IS a light).
+    m_lightControls = new QWidget(m_lightTab);
+    m_lightForm = new QFormLayout(m_lightControls);
+    m_lightForm->setLabelAlignment(Qt::AlignRight);
+
+    m_lightTypeCombo = new QComboBox(m_lightControls);
+    m_lightTypeCombo->addItems({ QStringLiteral("Point"), QStringLiteral("Directional"),
+                                 QStringLiteral("Spot"),  QStringLiteral("Rect Area") });
+    m_lightForm->addRow(QStringLiteral("Type"), m_lightTypeCombo);
+
+    m_lightEnabled = new QCheckBox(QStringLiteral("Light on"), m_lightControls);
+    m_lightForm->addRow(QStringLiteral("Enabled"), m_lightEnabled);
+
+    // Colour: pick button + swatch preview.
+    {
+        auto* row = new QWidget(m_lightControls);
+        auto* h = new QHBoxLayout(row);
+        h->setContentsMargins(0, 0, 0, 0);
+        m_lightColorBtn = new QToolButton(row);
+        m_lightColorBtn->setText(QStringLiteral("Pick…"));
+        m_lightColorSwatch = new QFrame(row);
+        m_lightColorSwatch->setMinimumSize(40, 18);
+        m_lightColorSwatch->setFrameShape(QFrame::StyledPanel);
+        h->addWidget(m_lightColorBtn);
+        h->addWidget(m_lightColorSwatch, 1);
+        m_lightForm->addRow(QStringLiteral("Colour"), row);
+        connect(m_lightColorBtn, &QToolButton::clicked, this, &ObjectPropertiesWidget::onLightColorPickerClicked);
+    }
+
+    // Colour temperature (blackbody): a convenience that sets the colour from Kelvin.
+    m_lightKelvin = new QDoubleSpinBox(m_lightControls);
+    m_lightKelvin->setRange(1500.0, 12000.0);
+    m_lightKelvin->setSingleStep(100.0);
+    m_lightKelvin->setDecimals(0);
+    m_lightKelvin->setValue(6500.0);
+    m_lightKelvin->setToolTip(QStringLiteral("Set the colour from a blackbody temperature: 2700K warm, 6500K daylight, 10000K cool."));
+    m_lightForm->addRow(QStringLiteral("Temperature (K)"), m_lightKelvin);
+
+    auto makeSpin = [&](double mn, double mx, double step, int dec) {
+        auto* s = new QDoubleSpinBox(m_lightControls);
+        s->setRange(mn, mx); s->setSingleStep(step); s->setDecimals(dec);
+        return s;
+    };
+    // Intensity range is wide: lumens (point) can reach 10^6; the row label shows the unit per type.
+    m_lightIntensity = makeSpin(0.0, 2000000.0, 100.0, 1);
+    m_lightForm->addRow(QStringLiteral("Intensity"), m_lightIntensity);
+    m_lightRange = makeSpin(0.0, 1000.0, 0.1, 2);
+    m_lightForm->addRow(QStringLiteral("Range (m)"), m_lightRange);
+    m_lightInner = makeSpin(0.0, 89.0, 1.0, 1);
+    m_lightForm->addRow(QStringLiteral("Inner cone (deg)"), m_lightInner);
+    m_lightOuter = makeSpin(0.0, 90.0, 1.0, 1);
+    m_lightForm->addRow(QStringLiteral("Outer cone (deg)"), m_lightOuter);
+    m_lightSizeX = makeSpin(0.01, 1000.0, 0.1, 2);
+    m_lightForm->addRow(QStringLiteral("Width (m)"), m_lightSizeX);
+    m_lightSizeY = makeSpin(0.01, 1000.0, 0.1, 2);
+    m_lightForm->addRow(QStringLiteral("Height (m)"), m_lightSizeY);
+    m_lightTwoSided = new QCheckBox(QStringLiteral("Emit from both faces"), m_lightControls);
+    m_lightForm->addRow(QStringLiteral("Two-sided"), m_lightTwoSided);
+
+    m_removeLightBtn = new QPushButton(QStringLiteral("Remove Light Emitter"), m_lightControls);
+    m_lightForm->addRow(QString(), m_removeLightBtn);
+
+    outer->addWidget(m_lightControls);
+    outer->addStretch(1);
+
+    connect(m_lightTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &ObjectPropertiesWidget::onLightTypeChanged);
+    connect(m_lightEnabled,  &QCheckBox::toggled, this, &ObjectPropertiesWidget::onLightPropertyChanged);
+    connect(m_lightTwoSided, &QCheckBox::toggled, this, &ObjectPropertiesWidget::onLightPropertyChanged);
+    for (QDoubleSpinBox* s : { m_lightIntensity, m_lightRange, m_lightInner, m_lightOuter })
+        connect(s, &QDoubleSpinBox::valueChanged, this, &ObjectPropertiesWidget::onLightPropertyChanged);
+    // Width/Height drive the transform's XY scale on a SEPARATE path, so editing colour/
+    // intensity/etc. never rewrites (and resets) a gizmo- or field-set scale.
+    connect(m_lightSizeX, &QDoubleSpinBox::valueChanged, this, &ObjectPropertiesWidget::onLightSizeChanged);
+    connect(m_lightSizeY, &QDoubleSpinBox::valueChanged, this, &ObjectPropertiesWidget::onLightSizeChanged);
+    connect(m_lightKelvin, &QDoubleSpinBox::valueChanged, this, &ObjectPropertiesWidget::onLightKelvinChanged);
+    connect(m_removeLightBtn, &QPushButton::clicked, this, &ObjectPropertiesWidget::onRemoveLightEmitterClicked);
+
+    ui->objectPropertiesTabWidget->addTab(m_lightTab, QStringLiteral("Light"));
+}
+
+void ObjectPropertiesWidget::updateLightColorPreview()
+{
+    if (!m_lightColorSwatch) return;
+    QColor c;
+    c.setRgbF(glm::clamp(m_lightColor.r, 0.0f, 1.0f),
+              glm::clamp(m_lightColor.g, 0.0f, 1.0f),
+              glm::clamp(m_lightColor.b, 0.0f, 1.0f));
+    m_lightColorSwatch->setStyleSheet(QString("background-color: %1;").arg(c.name()));
+}
+
+void ObjectPropertiesWidget::updateLightFieldVisibility(int type)
+{
+    using T = LightComponent::Type;
+    const T t = static_cast<T>(type);
+    const bool isPoint = (t == T::Point);
+    const bool isSpot  = (t == T::Spot);
+    const bool isRect  = (t == T::RectArea);
+    // Show only the rows that matter for this light type (label + field together).
+    auto setRow = [&](QWidget* field, bool vis) {
+        if (!field) return;
+        field->setVisible(vis);
+        if (QWidget* lbl = m_lightForm->labelForField(field)) lbl->setVisible(vis);
+    };
+    setRow(m_lightRange,    isPoint || isSpot);
+    setRow(m_lightInner,    isSpot);
+    setRow(m_lightOuter,    isSpot);
+    setRow(m_lightSizeX,    isRect);
+    setRow(m_lightSizeY,    isRect);
+    setRow(m_lightTwoSided, isRect);
+    // The intensity unit depends on the light type (photometric).
+    if (auto* il = qobject_cast<QLabel*>(m_lightForm->labelForField(m_lightIntensity))) {
+        il->setText(isRect ? QStringLiteral("Luminance [nits]")
+                  : isSpot ? QStringLiteral("Intensity [cd]")
+                  : (t == T::Directional) ? QStringLiteral("Illuminance [lux]")
+                                          : QStringLiteral("Power [lm]"));
+    }
+}
+
+void ObjectPropertiesWidget::populateLightTab()
+{
+    if (!m_lightTab) return;
+    auto& reg = m_scene->getRegistry();
+    const bool valid = reg.valid(m_currentEntity);
+    LightComponent* lc = valid ? reg.try_get<LightComponent>(m_currentEntity) : nullptr;
+
+    m_addLightBtn->setVisible(valid && lc == nullptr);
+    m_lightControls->setVisible(lc != nullptr);
+    if (!lc) return;
+
+    m_lightTypeCombo->setCurrentIndex(static_cast<int>(lc->type));
+    m_lightEnabled->setChecked(lc->enabled);
+    m_lightColor = lc->color;
+    updateLightColorPreview();
+    m_lightIntensity->setValue(lc->intensity);
+    m_lightRange->setValue(lc->range);
+    m_lightInner->setValue(lc->innerConeDeg);
+    m_lightOuter->setValue(lc->outerConeDeg);
+    // Width/Height reflect the LIVE transform scale (so gizmo-scaling shows here and a later
+    // colour edit can't reset it); fall back to lc.size if the entity has no transform.
+    if (auto* xf = reg.try_get<TransformComponent>(m_currentEntity)) {
+        m_lightSizeX->setValue(xf->scale.x);
+        m_lightSizeY->setValue(xf->scale.y);
+    } else {
+        m_lightSizeX->setValue(lc->size.x);
+        m_lightSizeY->setValue(lc->size.y);
+    }
+    m_lightTwoSided->setChecked(lc->twoSided);
+    updateLightFieldVisibility(static_cast<int>(lc->type));
+}
+
+void ObjectPropertiesWidget::updateLightComponent()
+{
+    auto& reg = m_scene->getRegistry();
+    if (!reg.valid(m_currentEntity)) return;
+    auto& lc = reg.get_or_emplace<LightComponent>(m_currentEntity);
+    lc.type        = static_cast<LightComponent::Type>(m_lightTypeCombo->currentIndex());
+    lc.enabled     = m_lightEnabled->isChecked();
+    lc.color       = m_lightColor;
+    lc.intensity   = static_cast<float>(m_lightIntensity->value());
+    lc.range       = static_cast<float>(m_lightRange->value());
+    lc.innerConeDeg= static_cast<float>(m_lightInner->value());
+    lc.outerConeDeg= static_cast<float>(m_lightOuter->value());
+    lc.twoSided    = m_lightTwoSided->isChecked();
+    // NOTE: deliberately does NOT touch lc.size or the transform scale -- the RectArea size is
+    // owned by the transform (gizmo) + onLightSizeChanged, so colour/intensity edits preserve it.
+
+    // Keep the glowing bulb colour in sync with the emitted colour (lighting pass x10).
+    auto& mat = reg.get_or_emplace<MaterialComponent>(m_currentEntity);
+    mat.emissiveColor = lc.color;
+
+    emit entityComponentsChanged(m_currentEntity);
+}
+
+void ObjectPropertiesWidget::onLightSizeChanged()
+{
+    if (m_isUpdatingUI) return;
+    auto& reg = m_scene->getRegistry();
+    if (!reg.valid(m_currentEntity)) return;
+    // The RectArea world size IS the transform's XY scale (LightingPass builds the LTC corners
+    // from the unit quad * transform). Only this handler writes it.
+    if (auto* xf = reg.try_get<TransformComponent>(m_currentEntity)) {
+        xf->scale.x = static_cast<float>(m_lightSizeX->value());
+        xf->scale.y = static_cast<float>(m_lightSizeY->value());
+    }
+    if (auto* lc = reg.try_get<LightComponent>(m_currentEntity))
+        lc->size = glm::vec2(float(m_lightSizeX->value()), float(m_lightSizeY->value()));
+    emit entityComponentsChanged(m_currentEntity);
+}
+
+void ObjectPropertiesWidget::onLightTypeChanged(int)
+{
+    if (m_isUpdatingUI) return;
+    auto& reg = m_scene->getRegistry();
+    if (!reg.valid(m_currentEntity)) return;
+    const int t = m_lightTypeCombo->currentIndex();
+    // Set the new type, then (for dedicated light primitives only) swap the visible mesh +
+    // reset scale/orientation. Re-read the whole panel because size/scale may have changed.
+    reg.get_or_emplace<LightComponent>(m_currentEntity).type = static_cast<LightComponent::Type>(t);
+    rebuildEmitterMeshForType(m_currentEntity, t);
+    populateAllTabs();
+    emit entityComponentsChanged(m_currentEntity);
+}
+
+void ObjectPropertiesWidget::rebuildEmitterMeshForType(entt::entity e, int type)
+{
+    auto& reg = m_scene->getRegistry();
+    // ONLY dedicated light primitives (spawned bulbs/panels) get their mesh swapped. A body
+    // the user merely turned into a light (no LightEmitterTag) keeps its own geometry.
+    if (!reg.valid(e) || !reg.all_of<LightEmitterTag>(e)) return;
+    auto* meshC = reg.try_get<RenderableMeshComponent>(e);
+    if (!meshC) return;
+
+    using T = LightComponent::Type;
+    const T t = static_cast<T>(type);
+    std::vector<uint32_t> idx;
+    if (t == T::RectArea) buildQuad(meshC->vertices, idx);
+    else                  buildIcoSphere(meshC->vertices, idx, 2);
+    meshC->indices.assign(idx.begin(), idx.end());
+    meshC->hasUVs = false;
+    meshC->hasTangents = false;
+
+    glm::vec3 mn(std::numeric_limits<float>::max());
+    glm::vec3 mx(std::numeric_limits<float>::lowest());
+    for (const auto& v : meshC->vertices) { mn = glm::min(mn, v.position); mx = glm::max(mx, v.position); }
+    meshC->aabbMin = mn;
+    meshC->aabbMax = mx;
+
+    if (auto* xf = reg.try_get<TransformComponent>(e)) {
+        if (t == T::RectArea) {
+            xf->scale = glm::vec3(2.0f, 2.0f, 1.0f);
+            xf->rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)); // face down
+            reg.get_or_emplace<LightComponent>(e).size = glm::vec2(2.0f, 2.0f); // size mirrors scale
+        } else {
+            xf->scale = glm::vec3(0.15f);
+            if (t == T::Spot || t == T::Directional)
+                xf->rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        }
+    }
+    // Force the GPU buffers to be rebuilt from the new vertex data next frame.
+    reg.remove<RenderResourceComponent>(e);
+}
+
+void ObjectPropertiesWidget::onLightPropertyChanged()
+{
+    if (m_isUpdatingUI) return;
+    updateLightComponent();
+}
+
+void ObjectPropertiesWidget::onLightColorPickerClicked()
+{
+    if (m_isUpdatingUI) return;
+    QColor init;
+    init.setRgbF(glm::clamp(m_lightColor.r, 0.0f, 1.0f),
+                 glm::clamp(m_lightColor.g, 0.0f, 1.0f),
+                 glm::clamp(m_lightColor.b, 0.0f, 1.0f));
+    const QColor c = QColorDialog::getColor(init, this, QStringLiteral("Select Light Colour"));
+    if (!c.isValid()) return;
+    m_lightColor = glm::vec3(float(c.redF()), float(c.greenF()), float(c.blueF()));
+    updateLightColorPreview();
+    updateLightComponent();
+}
+
+void ObjectPropertiesWidget::selfTestSelectLightTab()
+{
+    if (m_lightTab && ui && ui->objectPropertiesTabWidget)
+        ui->objectPropertiesTabWidget->setCurrentWidget(m_lightTab);
+}
+
+void ObjectPropertiesWidget::selfTestNudgeLight()
+{
+    // Drive the REAL controls (NOT under the m_isUpdatingUI guard) so the same slots a user
+    // interaction fires run end-to-end: spinbox valueChanged -> updateLightComponent ->
+    // registry -> next frame renders. A before/after grab then pixel-proves the hot-update.
+    if (m_lightTab && ui && ui->objectPropertiesTabWidget)
+        ui->objectPropertiesTabWidget->setCurrentWidget(m_lightTab);
+    if (m_lightKelvin)    m_lightKelvin->setValue(2000.0);   // -> deep orange via onLightKelvinChanged
+    if (m_lightIntensity) m_lightIntensity->setValue(m_lightIntensity->value() * 6.0 + 80000.0);
+}
+
+void ObjectPropertiesWidget::selfTestAddAndGlowEmitter()
+{
+    onAddLightEmitterClicked();   // the real "Add Light Emitter to this Object" path
+    auto& reg = m_scene->getRegistry();
+    if (!reg.valid(m_currentEntity)) return;
+    if (auto* mat = reg.try_get<MaterialComponent>(m_currentEntity)) {
+        mat->emissiveColor    = glm::vec3(0.0f, 1.0f, 1.0f);  // obvious cyan glow on the textured surface
+        mat->emissiveStrength = 8.0f;
+    }
+    emit entityComponentsChanged(m_currentEntity);
+}
+
+void ObjectPropertiesWidget::onLightKelvinChanged(double kelvin)
+{
+    if (m_isUpdatingUI) return;
+    m_lightColor = kelvinToRgb(kelvin);
+    updateLightColorPreview();
+    updateLightComponent();
+}
+
+void ObjectPropertiesWidget::onAddLightEmitterClicked()
+{
+    if (m_isUpdatingUI) return;
+    auto& reg = m_scene->getRegistry();
+    if (!reg.valid(m_currentEntity)) return;
+    // Capture the body's CURRENT emissive so removing the light can restore it.
+    LightEmitterPrevEmissive prev;
+    if (auto* m = reg.try_get<MaterialComponent>(m_currentEntity)) { prev.color = m->emissiveColor; prev.strength = m->emissiveStrength; }
+    reg.emplace_or_replace<LightEmitterPrevEmissive>(m_currentEntity, prev);
+
+    auto& lc     = reg.get_or_emplace<LightComponent>(m_currentEntity);
+    lc.type      = LightComponent::Type::Point;
+    lc.color     = glm::vec3(1.0f, 0.95f, 0.88f);
+    lc.intensity = 60.0f;
+    lc.enabled   = true;
+    // Glow the body in its light colour. NOTE: deliberately NOT adding LightEmitterTag -- this
+    // is an existing body, not a dedicated light primitive, so its mesh must never be swapped
+    // when the type changes.
+    auto& mat = reg.get_or_emplace<MaterialComponent>(m_currentEntity);
+    mat.emissiveColor = lc.color;
+    if (mat.emissiveStrength <= 0.0f) mat.emissiveStrength = 4.0f;
+    emit entityComponentsChanged(m_currentEntity);
+    populateAllTabs();   // re-read: the editor replaces the Add button
+}
+
+void ObjectPropertiesWidget::onRemoveLightEmitterClicked()
+{
+    if (m_isUpdatingUI) return;
+    auto& reg = m_scene->getRegistry();
+    if (!reg.valid(m_currentEntity)) return;
+    reg.remove<LightComponent>(m_currentEntity);
+    reg.remove<LightEmitterTag>(m_currentEntity);
+    // Restore the emissive the body had BEFORE it became an emitter (don't wipe authored or
+    // simulation-driven glow). Leave the material untouched if we never captured one.
+    if (auto* prev = reg.try_get<LightEmitterPrevEmissive>(m_currentEntity)) {
+        if (auto* mat = reg.try_get<MaterialComponent>(m_currentEntity)) {
+            mat->emissiveColor    = prev->color;
+            mat->emissiveStrength = prev->strength;
+        }
+        reg.remove<LightEmitterPrevEmissive>(m_currentEntity);
+    }
+    emit entityComponentsChanged(m_currentEntity);
+    populateAllTabs();
 }

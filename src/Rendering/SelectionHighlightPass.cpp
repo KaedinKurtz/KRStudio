@@ -74,6 +74,9 @@ void SelectionHighlightPass::drawLines(const RenderFrameContext& ctx,
     // indicator vertices are already in WORLD space -> model is identity.
     shader->setMat4(gl, "u_mvp", ctx.projection * ctx.view);
     shader->setVec3(gl, "u_color", color);
+    // Overlay drawn pre-tonemap: compensate the photometric exposure so the
+    // highlight is not crushed to black (matches GridPass / SelectionGlowPass).
+    shader->setFloat(gl, "u_invExposure", 1.0f / ctx.renderer.exposureMultiplier());
     gl->glDrawArrays(GL_LINES, 0, GLsizei(lines.size()));
     gl->glBindVertexArray(0);
 }

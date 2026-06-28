@@ -90,6 +90,12 @@ private:
 
     QMap<MenuType, MenuEntry>   m_menus;
 
+    // Always-docked panels (not IMenu): keyed by dock title, toggled non-destructively via
+    // the toolbar's panelToggled signal (ads CDockWidget::toggleView). See registerPanelDock.
+    QMap<QString, ads::CDockWidget*> m_panelDocks;
+    void registerPanelDock(const QString& title, ads::CDockWidget* dock);
+    void applyTheme(const QString& theme);
+
     void handleMenuToggle(MenuType type, bool checked);
     void showMenu(MenuType type);
     void hideMenu(MenuType type);
@@ -127,6 +133,9 @@ private:
     void buildMenuBar();
     entt::entity addObjectFromMenu(int primitive, const QString& baseName,
                                    const glm::vec3& pos, const glm::vec3& scale);
+    // Spawn a primitive-attached light emitter (lightType = LightComponent::Type as int),
+    // auto-named, selected, with the gizmo + inspector refreshed. Mirrors addObjectFromMenu.
+    entt::entity addLightFromMenu(int lightType, const glm::vec3& worldPos);
     entt::entity duplicateEntity(entt::entity src);
 
     // --- Engineering toolbar (Phase 4) ---

@@ -9,6 +9,8 @@ struct Material {
     sampler2D roughnessMap;
     sampler2D emissiveMap;
     float     normalScale; // Added for adjustable normal map strength
+    vec3      emissiveColor; // flat emissive added on top of the map (light-emitter glow)
+    float     emissiveStrength; // magnitude for the flat emissiveColor
 };
 uniform Material material;
 
@@ -32,35 +34,31 @@ void main()
     // --- Position ---
     gPosition = vec4(FragPos, 1.0);
 
-    // --- Normal Mapping (Robust Version) ---
-    // 1. Normalize the interpolated input vectors.
+    // --- Normal (geometric, with optional tangent-space normal mapping) ---
+    // 1. The interpolated geometric vertex normal. This is ALWAYS valid (the mesh
+    //    importer guarantees it); it is the ground truth we must preserve.
     vec3 N = normalize(Normal);
-    vec3 T = normalize(Tangent);
-    vec3 B = normalize(Bitangent);
 
-    // 2. Re-orthogonalize T with respect to N (Gram-Schmidt process).
-    // This corrects for interpolation errors and ensures the TBN basis is perpendicular.
-    T = normalize(T - dot(T, N) * N);
-
-    // 3. Re-calculate the Bitangent to be perfectly perpendicular to the new T and N.
-    // We also check the handedness to prevent flipped normals.
-    B = cross(N, T);
-    if (dot(cross(N, T), B) < 0.0){
-        T = T * -1.0;
+    // 2. Decide whether a usable tangent basis exists. CAD/BRep-imported meshes
+    //    carry ZERO tangents/bitangents and have NO normal map. Running them through
+    //    the TBN normal-mapping path below built a degenerate (NaN/zero) basis and
+    //    wrote a zero-length normal to the G-buffer -> the deferred lighting pass then
+    //    treated every such fragment as a silhouette/background pixel (no shading, no
+    //    area light). Gate on the tangent length so meshes without a tangent basis
+    //    fall back to the geometric normal instead of corrupting it.
+    vec3 worldSpaceNormal;
+    if (dot(Tangent, Tangent) < 1e-8) {
+        // No tangent basis (CAD/BRep): use the geometric normal directly.
+        worldSpaceNormal = N;
+    } else {
+        // Full normal mapping. Re-orthogonalize T against N (Gram-Schmidt), rebuild B.
+        vec3 T = normalize(Tangent);
+        T = normalize(T - dot(T, N) * N);
+        vec3 B = cross(N, T);
+        mat3 TBN = mat3(T, B, N);
+        vec3 tangentSpaceNormal = texture(material.normalMap, uv).rgb * 2.0 - 1.0;
+        worldSpaceNormal = normalize(TBN * tangentSpaceNormal);
     }
-
-    // 4. Construct the robust TBN matrix.
-    mat3 TBN = mat3(T, B, N);
-
-    // 5. Sample the normal map and unpack the normal from [0,1] to [-1,1].
-    vec3 tangentSpaceNormal = texture(material.normalMap, uv).rgb * 2.0 - 1.0;
-    
-    // Optional: If your normal map still looks wrong (e.g., light is inverted),
-    // it might be a DirectX-style normal map. Uncomment the line below to fix it.
-    // tangentSpaceNormal.y = -tangentSpaceNormal.y;
-
-    // 6. Transform the tangent-space normal to world space using the TBN matrix.
-    vec3 worldSpaceNormal = normalize(TBN * tangentSpaceNormal);
     gNormal = vec4(worldSpaceNormal, 1.0);
 
 
@@ -81,6 +79,9 @@ void main()
     gMetalRough = vec4(metallic, roughness, 0.0, 1.0);
 
     // --- Emissive ---
-    vec3 emissive = texture(material.emissiveMap, uv).rgb;
+    // Sampled emissive MAP plus the flat emissiveColor*strength (so a textured/CAD body
+    // turned into a light emitter glows even with no emissive texture). The lighting pass
+    // scales the result to nits.
+    vec3 emissive = texture(material.emissiveMap, uv).rgb + material.emissiveColor * material.emissiveStrength;
     gEmissive = vec4(emissive, 1.0);
 }

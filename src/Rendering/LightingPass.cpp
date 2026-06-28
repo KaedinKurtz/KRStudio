@@ -4,10 +4,13 @@
 #include "PrimitiveBuilders.hpp" // For setupFullscreenQuadAttribs
 #include "Texture2D.hpp"
 
+#include "components.hpp"   // LightComponent, TransformComponent
+#include <glm/gtc/quaternion.hpp>  // glm::mat3_cast for spot/directional facing
 #include <QOpenGLContext>
 #include <QOpenGLFunctions_4_3_Core>
 #include <QtGlobal>
 #include <QString>
+#include <string>
 
 LightingPass::~LightingPass() {}
 
@@ -35,40 +38,101 @@ void LightingPass::execute(const RenderFrameContext& context) {
     gl->glDisable(GL_DEPTH_TEST);
     gl->glClear(GL_COLOR_BUFFER_BIT);
 
-    // --- Orbiting point light (RESTORED to the pre-sprint behaviour) ---
-    // The settings sprint replaced this moving key light with a static directional
-    // sun and set activeLightCount=0. With a dim/wrong sun colour that left the
-    // scene lit ONLY by the blue-sky IBL -> cyan ground + void-black robot + no
-    // moving light. Restoring the orbiting point light brings the key illumination
-    // (and the motion) back; the directional sun + IBL below remain Settings-driven.
-    // NEAR orbiting key light: a tight orbit (was radius 10 -> ~1.6 radiance at the
-    // robot with 1/d^2, too dim to light the textures) brought in close + brightened
-    // so it actually illuminates the robot (the directional sun + IBL are fill).
-    // Orbit at ROBOT HEIGHT (was y=4, above the arm -> only lit the tops like the sun,
-    // leaving the vertical faces the camera sees dark under a dark-horizon env). At
-    // y~2 / radius 3.5 the key light sweeps the SIDES of the robot, so its visible
-    // faces get a bright, hue-preserving white key as it orbits.
-    const float lightRadius = 3.5f;
-    const float lightSpeed  = 1.5f;
-    const float lx = lightRadius * cos(context.elapsedTime * lightSpeed);
-    const float lz = lightRadius * sin(context.elapsedTime * lightSpeed);
-    glm::vec3 animatedLightPos = glm::vec3(lx, 2.0f, lz);
-    // Dev aid: KRS_LIGHTPOS="x,y,z" pins the key light (deterministic lighting for
-    // verification grabs, instead of the nondeterministic orbit phase at grab time).
-    if (qEnvironmentVariableIsSet("KRS_LIGHTPOS")) {
-        const QStringList p = qEnvironmentVariable("KRS_LIGHTPOS").split(',');
-        if (p.size() == 3) animatedLightPos = glm::vec3(p[0].toFloat(), p[1].toFloat(), p[2].toFloat());
-    }
-
-    // --- Static directional sun (Settings-controlled supplementary key light) ---
-    const glm::vec3 sunDir   = renderer.getSunDirection();                      // live (Settings)
-    const glm::vec3 sunColor = renderer.getSunColor() * renderer.getSunIntensity(); // live tint * intensity
+    // --- Static directional sun (Settings-controlled key light, in LUX) ---
+    // The legacy orbiting fallback light is GONE: scenes are lit by ECS light entities
+    // (seeded by default) plus this sun and the IBL. The sun intensity is illuminance
+    // in lux (physically-based); the global exposure (TonemapPass) brings it to display.
+    const glm::vec3 sunDir   = renderer.getSunDirection();
+    const glm::vec3 sunColor = renderer.getSunColor() * renderer.getSunIntensity(); // lux
 
     lightingShd->use(gl);
     lightingShd->setVec3(gl, "viewPos", context.camera.getPosition());
-    lightingShd->setVec3(gl, "lightPositions[0]", animatedLightPos);
-    lightingShd->setVec3(gl, "lightColors[0]", glm::vec3(300.0f, 270.0f, 240.0f)); // fairly bright warm key (1/d^2 -> ~8 radiance at the robot)
-    lightingShd->setInt(gl, "activeLightCount", 1);  // orbiting point light RESTORED
+
+    // --- Gather lights from the ECS (addable light entities) ---
+    // A light is an entity with LightComponent + TransformComponent. Point lights fill
+    // lightPositions[]/lightColors[] (<=8). Rect AREA lights fill areaLights[] (<=8, LTC):
+    // world corners from the transform (unit rect in the local XY plane, half-size =
+    // lc.size*0.5, facing +localZ, CCW from the front). The legacy orbiting key light is
+    // used ONLY as a fallback when the scene has NO light entities of ANY type.
+    int pointCount = 0, areaCount = 0, dirCount = 0, spotCount = 0;
+    {
+        auto& registry = context.registry;
+        auto lightView = registry.view<LightComponent, TransformComponent>();
+        for (auto ent : lightView) {
+            const auto& lc = lightView.get<LightComponent>(ent);
+            if (!lc.enabled) continue;
+            const auto& xf = lightView.get<TransformComponent>(ent);
+            if (lc.type == LightComponent::Type::Point && pointCount < 8) {
+                const std::string pn = "lightPositions[" + std::to_string(pointCount) + "]";
+                const std::string cn = "lightColors["    + std::to_string(pointCount) + "]";
+                lightingShd->setVec3(gl, pn.c_str(), xf.translation);
+                // Point intensity is luminous power in LUMENS; convert to luminous
+                // intensity (candela) for an isotropic emitter: I = lm / (4*pi). The
+                // shader then applies 1/d^2 to get illuminance (lux) at the surface.
+                const float candela = lc.intensity * (1.0f / (4.0f * 3.14159265358979f));
+                lightingShd->setVec3(gl, cn.c_str(), lc.color * candela);
+                ++pointCount;
+            }
+            else if (lc.type == LightComponent::Type::RectArea && areaCount < 8) {
+                // The visible quad is the UNIT quad (+-0.5) scaled by the transform, so the
+                // LTC rectangle must use the same unit half-extent -- the transform's scale
+                // sets the world size. (Emitters keep transform.scale.xy == lc.size, so the
+                // lit rectangle == the editor's Width/Height == the glowing panel.) Using
+                // lc.size*0.5 here too would apply the size twice (size*scale).
+                const glm::mat4 M = xf.getTransform();
+                const float hw = 0.5f, hh = 0.5f;
+                const glm::vec3 c0 = glm::vec3(M * glm::vec4(-hw, -hh, 0.0f, 1.0f));
+                const glm::vec3 c1 = glm::vec3(M * glm::vec4( hw, -hh, 0.0f, 1.0f));
+                const glm::vec3 c2 = glm::vec3(M * glm::vec4( hw,  hh, 0.0f, 1.0f));
+                const glm::vec3 c3 = glm::vec3(M * glm::vec4(-hw,  hh, 0.0f, 1.0f));
+                const std::string b = "areaLights[" + std::to_string(areaCount) + "].";
+                lightingShd->setVec3(gl, (b + "p0").c_str(), c0);
+                lightingShd->setVec3(gl, (b + "p1").c_str(), c1);
+                lightingShd->setVec3(gl, (b + "p2").c_str(), c2);
+                lightingShd->setVec3(gl, (b + "p3").c_str(), c3);
+                lightingShd->setVec3(gl, (b + "color").c_str(), lc.color);
+                lightingShd->setFloat(gl, (b + "intensity").c_str(), lc.intensity);
+                lightingShd->setInt(gl, (b + "twoSided").c_str(), lc.twoSided ? 1 : 0);
+                ++areaCount;
+            }
+            else if (lc.type == LightComponent::Type::Directional && dirCount < 4) {
+                // Travel direction = the entity's local +Z, rotated into world space
+                // (rotation only, no scale skew). Same convention as RectArea facing.
+                const glm::vec3 fwd = glm::normalize(glm::mat3_cast(xf.rotation) * glm::vec3(0.0f, 0.0f, 1.0f));
+                const std::string dn = "dirLightDirections[" + std::to_string(dirCount) + "]";
+                const std::string dc = "dirLightColors["     + std::to_string(dirCount) + "]";
+                lightingShd->setVec3(gl, dn.c_str(), fwd);
+                lightingShd->setVec3(gl, dc.c_str(), lc.color * lc.intensity);
+                ++dirCount;
+            }
+            else if (lc.type == LightComponent::Type::Spot && spotCount < 8) {
+                const glm::vec3 fwd = glm::normalize(glm::mat3_cast(xf.rotation) * glm::vec3(0.0f, 0.0f, 1.0f));
+                const std::string b = "spotLights[" + std::to_string(spotCount) + "].";
+                lightingShd->setVec3(gl, (b + "position").c_str(),  xf.translation);
+                lightingShd->setVec3(gl, (b + "direction").c_str(), fwd);
+                lightingShd->setVec3(gl, (b + "color").c_str(),     lc.color * lc.intensity);
+                lightingShd->setFloat(gl, (b + "range").c_str(),    lc.range);
+                // cos is monotonically DECREASING, so a smaller half-angle -> larger cosine.
+                // Guarantee cosInner >= cosOuter even if the user sets inner > outer, else the
+                // shader's smoothing denominator inverts into a razor-thin hard edge.
+                float ci = glm::cos(glm::radians(lc.innerConeDeg));
+                float co = glm::cos(glm::radians(lc.outerConeDeg));
+                if (ci < co) { const float t = ci; ci = co; co = t; }
+                lightingShd->setFloat(gl, (b + "cosInner").c_str(), ci);
+                lightingShd->setFloat(gl, (b + "cosOuter").c_str(), co);
+                ++spotCount;
+            }
+        }
+        // No orbiting fallback light any more: a scene with no light entities is lit by
+        // the directional sun + IBL only (the default scene seeds a key + fill).
+        lightingShd->setInt(gl, "activeLightCount", pointCount);
+        lightingShd->setInt(gl, "activeAreaLightCount", areaCount);
+        lightingShd->setInt(gl, "activeDirLightCount", dirCount);
+        lightingShd->setInt(gl, "activeSpotLightCount", spotCount);
+        static int s_loggedArea = -99;
+        if (areaCount != s_loggedArea) { qDebug() << "[LightingPass] activeAreaLightCount =" << areaCount << " activeLightCount =" << pointCount; s_loggedArea = areaCount; }
+    }
+
     lightingShd->setVec3(gl, "u_sunDir", sunDir);
     lightingShd->setVec3(gl, "u_sunColor", sunColor);
     // Per-pixel view-ray reconstruction so the lighting pass can blend silhouette
@@ -139,6 +203,12 @@ void LightingPass::execute(const RenderFrameContext& context) {
     else {
         bindTex(renderer.getDefaultEmissive()->getID(), "brdfLUT", GL_TEXTURE_2D); // Bind default black
     }
+
+    // Bind LTC LUTs for rectangle area lights (units 8-9)
+    if (auto l1 = renderer.getLtc1()) bindTex(l1->getID(), "ltc_1", GL_TEXTURE_2D);
+    else                              bindTex(renderer.getDefaultEmissive()->getID(), "ltc_1", GL_TEXTURE_2D);
+    if (auto l2 = renderer.getLtc2()) bindTex(l2->getID(), "ltc_2", GL_TEXTURE_2D);
+    else                              bindTex(renderer.getDefaultEmissive()->getID(), "ltc_2", GL_TEXTURE_2D);
 
 
     // --- Draw full-screen triangle ---

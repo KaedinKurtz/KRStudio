@@ -174,6 +174,11 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
         gl->glDisable(GL_DEPTH_TEST);
         gl->glBindVertexArray(fsVAO);
 
+        // The outline is composited into the HDR buffer before the ACES tonemap, so pre-divide
+        // its colour by the exposure (else the physically-based exposure crushes the gold to black).
+        const float invExp = 1.0f / ctx.renderer.exposureMultiplier();
+        const glm::vec3 kOutlineGold = glm::vec3(1.0f, 0.84f, 0.20f) * invExp;
+
         // Now, choose which filter to apply to our scene data.
         if (isInternal)
         {
@@ -190,7 +195,7 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
             advOutlineShader->setInt(gl, "gPosition", 0);
             advOutlineShader->setInt(gl, "gNormal", 1);
             advOutlineShader->setInt(gl, "uSelectionMask", 2); // Pass in the new selection mask
-            advOutlineShader->setVec3(gl, "uOutlineColor", glm::vec3(1.0f, 0.84f, 0.20f));
+            advOutlineShader->setVec3(gl, "uOutlineColor", kOutlineGold);
             advOutlineShader->setFloat(gl, "uNormalThreshold", 0.25f);
             advOutlineShader->setFloat(gl, "uDepthThreshold", 0.1f);
             advOutlineShader->setVec2(gl, "uTexelSize", 1.0f / glm::vec2(pp[1].w, pp[1].h));
@@ -218,7 +223,7 @@ void SelectionGlowPass::execute(const RenderFrameContext& ctx)
 
             outlineShader->use(gl);
             outlineShader->setInt(gl, "uMaskTexture", 0);
-            outlineShader->setVec3(gl, "uOutlineColor", glm::vec3(1.0f, 0.84f, 0.20f));
+            outlineShader->setVec3(gl, "uOutlineColor", kOutlineGold);
             outlineShader->setFloat(gl, "uThickness", 1.5f);
             outlineShader->setVec2(gl, "uTexelSize", 1.0f / glm::vec2(pp[0].w, pp[0].h));
 
