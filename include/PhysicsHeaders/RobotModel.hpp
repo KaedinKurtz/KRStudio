@@ -307,6 +307,23 @@ LiveRobot* instantiateFanucRobot(Scene& scene,
                                  const std::vector<entt::entity>& allBodies,
                                  int robotId, const std::string& name);
 
+// --- Outliner grouping (step 7): Robot -> bodies tree, multi-robot ----------------
+// One robot group: the named root + the body entities owned by it (robotId match).
+struct RobotGroup {
+    entt::entity              root = entt::null;
+    int                       robotId = -1;
+    std::string               name;
+    std::vector<entt::entity> bodies;
+};
+struct SceneGrouping {
+    std::vector<RobotGroup>   robots;   // one per RobotRootComponent (any count)
+    std::vector<entt::entity> loose;    // named entities not owned by any robot
+};
+// Partition the scene's named entities into robot groups + loose objects, so the
+// outliner can render a Robot->bodies tree and selection can resolve to the owning
+// robot. Headless-safe (pure registry walk), so it is unit-gated. (Step 7.)
+SceneGrouping groupByRobot(entt::registry& reg);
+
 // Drain the node-graph command bus (registry-ctx ArticulationCommandComponent) INTO each
 // registered LiveRobot::q (clamped to limits, driven DOFs only). LiveRobot::q is THE
 // single source of truth -- PhysX is teleported FROM it separately. Returns #robots

@@ -14,8 +14,11 @@
 #include "RobotBuilderScene.hpp"   // buildDemoGraph / spawnGraphBodies (gate)
 #include "ArticulationSpec.hpp"    // krs::dyn::RobotArticSpec (FANUC canonical spec)
 #include "FanucArticulation.hpp"   // krs::fanuc::canonicalSpec
+#include "GizmoSystem.hpp"         // GizmoHandleComponent (filtered from the outliner)
 #include "Scene.hpp"
 #include "components.hpp"
+
+#include <unordered_map>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -211,6 +214,29 @@ LiveRobot* instantiateFanucRobot(Scene& scene,
     return &lr;
 }
 
+SceneGrouping groupByRobot(entt::registry& reg)
+{
+    SceneGrouping out;
+    std::unordered_map<int, size_t> idToIdx;
+    for (auto e : reg.view<RobotRootComponent>()) {
+        const auto& rr = reg.get<RobotRootComponent>(e);
+        RobotGroup g;
+        g.root = e; g.robotId = rr.robotId;
+        g.name = rr.name.empty() ? ("Robot " + std::to_string(rr.robotId)) : rr.name;
+        idToIdx[rr.robotId] = out.robots.size();
+        out.robots.push_back(std::move(g));
+    }
+    for (auto e : reg.view<TagComponent>()) {
+        if (reg.any_of<RobotRootComponent>(e)) continue;          // the root itself
+        if (reg.any_of<GizmoHandleComponent>(e)) continue;        // internal gizmo handle
+        const auto* sc = reg.try_get<RobotSubcomponentComponent>(e);
+        const auto it = (sc ? idToIdx.find(sc->robotId) : idToIdx.end());
+        if (sc && it != idToIdx.end()) out.robots[it->second].bodies.push_back(e);
+        else                           out.loose.push_back(e);
+    }
+    return out;
+}
+
 int drainCommandBusIntoRobots(entt::registry& reg)
 {
     RobotRegistry* rr = reg.ctx().find<RobotRegistry>();
@@ -376,6 +402,47 @@ bool runRobotOwnerGate() {
         pass = pass && busOk;
         printf("[robotowner]   STEP4 bus->q: drained=%d q=[%.3f %.3f] (q0=0.5 driven, q1=0 undriven)  %s\n",
                n, rb ? rb->q[0] : -9.0, rb ? rb->q[1] : -9.0, busOk ? "OK" : "FAIL");
+    }
+
+    // ---- STEP 7: groupByRobot nests bodies under the right robot; multi-robot; loose excluded ----
+    {
+        Scene scene;
+        auto& reg = scene.getRegistry();
+        // robot 0: demo graph; robot 1: a second demo graph -> two named roots.
+        krs::rbuild::RobotGraph g0 = krs::rbuild::buildDemoGraph();
+        krs::rbuild::spawnGraphBodies(scene, g0, -1);
+        instantiateFromGraph(scene, g0, 0);
+        krs::rbuild::RobotGraph g1 = krs::rbuild::buildDemoGraph();
+        krs::rbuild::spawnGraphBodies(scene, g1, -1);
+        instantiateFromGraph(scene, g1, 1);
+        // a loose named object (no robot affiliation)
+        const entt::entity loose = reg.create();
+        reg.emplace<TagComponent>(loose, std::string("LooseCube"));
+
+        const SceneGrouping sg = groupByRobot(reg);
+        const bool twoRobots = (sg.robots.size() == 2);
+        bool idsOk = false, bodiesOwned = true, looseOk = false;
+        if (twoRobots) {
+            idsOk = ((sg.robots[0].robotId == 0 && sg.robots[1].robotId == 1) ||
+                     (sg.robots[0].robotId == 1 && sg.robots[1].robotId == 0));
+            for (const auto& rb : sg.robots) {
+                if (rb.bodies.empty()) bodiesOwned = false;
+                for (auto e : rb.bodies) {
+                    const auto* sc = reg.try_get<RobotSubcomponentComponent>(e);
+                    if (!sc || sc->robotId != rb.robotId) bodiesOwned = false;
+                }
+            }
+        }
+        // loose object present in loose, and NOT under any robot
+        for (auto e : sg.loose) if (e == loose) looseOk = true;
+        bool looseNotInRobot = true;
+        for (const auto& rb : sg.robots) for (auto e : rb.bodies) if (e == loose) looseNotInRobot = false;
+
+        const bool step7 = twoRobots && idsOk && bodiesOwned && looseOk && looseNotInRobot;
+        pass = pass && step7;
+        printf("[robotowner]   STEP7 groupByRobot: robots=%zu ids=%s bodiesOwned=%s loose=%s(notInRobot=%s)  %s\n",
+               sg.robots.size(), idsOk ? "yes" : "no", bodiesOwned ? "yes" : "no",
+               looseOk ? "yes" : "no", looseNotInRobot ? "yes" : "no", step7 ? "OK" : "FAIL");
     }
 
     printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only honoured)"

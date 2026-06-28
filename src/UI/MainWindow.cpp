@@ -1587,13 +1587,15 @@ MainWindow::MainWindow(QWidget* parent)
     // be verified by MEASUREMENT, not eyeballing.
     if (qEnvironmentVariableIsSet("KRS_ROBOTVIEW_SELFTEST")) {
         const QString outDir = qEnvironmentVariable("KRS_ROBOTVIEW_SELFTEST");
-        // 1) Show + raise the Robot View dock.
+        // 1) Show + raise the Robot View dock (and the Outliner, to capture its tree).
         QTimer::singleShot(2500, this, [this]() {
-            auto it = m_panelDocks.find(QStringLiteral("Robot View"));
-            if (it != m_panelDocks.end() && it.value()) {
-                it.value()->toggleView(true);
-                it.value()->setAsCurrentTab();
-                it.value()->raise();
+            for (const QString& name : { QStringLiteral("Robot View"), QStringLiteral("Outliner") }) {
+                auto it = m_panelDocks.find(name);
+                if (it != m_panelDocks.end() && it.value()) {
+                    it.value()->toggleView(true);
+                    it.value()->setAsCurrentTab();
+                    it.value()->raise();
+                }
             }
         });
         // 2) Exercise the slider setter (proves the control + value path) at a known speed.
@@ -1608,6 +1610,8 @@ MainWindow::MainWindow(QWidget* parent)
             this->grab().save(outDir + QStringLiteral("/robotview_window.png"));
             if (ViewportWidget* mvp = primaryViewport())  // clean high-res MAIN viewport
                 mvp->grab().save(outDir + QStringLiteral("/mainvp.png"));
+            if (OutlinerWidget* ow = findChild<OutlinerWidget*>())  // the Robot->bodies tree
+                ow->grab().save(outDir + QStringLiteral("/outliner.png"));
             const QImage wi = pm.toImage();
             const int w = wi.width(), h = wi.height();
             QFile f(outDir + QStringLiteral("/robotview_result.txt"));
