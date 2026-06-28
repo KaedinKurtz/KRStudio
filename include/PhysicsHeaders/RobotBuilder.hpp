@@ -57,16 +57,47 @@ struct JointLimits {
 };
 
 // ---- a joint connecting two bodies, frame DERIVED from feature geometry -----
+// MATE-CONNECTOR MODEL: the joint owns a PERSISTED coordinate FRAME (axisPos origin +
+// axisDir=Z + refDir=X), NOT a live reference to a B-Rep face. Bore-picking only AUTHORS
+// the frame at definition time; afterwards the frame is an independent, editable datum
+// (placeable/flippable -- Phase 5), so re-importing/editing the CAD never silently
+// rebinds or breaks the joint (the topological-naming fragility of "2 live faces").
 struct RBJoint {
     int parent = -1;
     int child  = -1;
     JType type = JType::Revolute;
-    glm::vec3 axisPos{ 0.0f };               // world-frame point on the joint axis
-    glm::vec3 axisDir{ 0.0f, 0.0f, 1.0f };   // world-frame unit axis
+    glm::vec3 axisPos{ 0.0f };               // frame origin: a point on the joint axis (world m)
+    glm::vec3 axisDir{ 0.0f, 0.0f, 1.0f };   // frame Z: unit joint axis
+    glm::vec3 refDir { 1.0f, 0.0f, 0.0f };   // frame X: secondary axis, kept perpendicular to Z
     Prov prov = Prov::Inferred;
     bool ambiguous = false;                  // flagged low-confidence -> NOT a committed joint
     double residual = 0.0;                   // coaxiality residual (diagnostic)
     JointLimits limits;                      // position/effort/velocity bounds (Revolute/Prismatic)
+
+    // Re-derive refDir as a UNIT vector perpendicular to axisDir (a stable frame basis).
+    // Call after setting axisDir from inference/snap; picks any perpendicular if refDir
+    // is parallel to the axis.
+    void orthonormalizeFrame() {
+        glm::vec3 z = (glm::length(axisDir) > 1e-9f) ? glm::normalize(axisDir) : glm::vec3(0, 0, 1);
+        glm::vec3 x = refDir - glm::dot(refDir, z) * z;
+        if (glm::length(x) < 1e-6f) {                    // refDir parallel to z -> any perpendicular
+            const glm::vec3 seed = (std::abs(z.x) < 0.9f) ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+            x = seed - glm::dot(seed, z) * z;
+        }
+        axisDir = z; refDir = glm::normalize(x);
+    }
+    // Reverse the joint axis, keeping the frame right-handed (Y = Z x X unchanged).
+    void flipAxis() { axisDir = -axisDir; refDir = -refDir; }
+    // The full orthonormal mate frame basis as columns {X, Y, Z}.
+    glm::mat3 frameBasis() const {
+        const glm::vec3 z = glm::normalize(axisDir);
+        glm::vec3 x = refDir - glm::dot(refDir, z) * z;
+        x = (glm::length(x) > 1e-6f) ? glm::normalize(x)
+                                     : glm::normalize((std::abs(z.x) < 0.9f ? glm::vec3(1,0,0) : glm::vec3(0,1,0))
+                                                      - glm::dot((std::abs(z.x) < 0.9f ? glm::vec3(1,0,0) : glm::vec3(0,1,0)), z) * z);
+        const glm::vec3 y = glm::cross(z, x);
+        return glm::mat3(x, y, z);
+    }
 };
 
 // ---- transform an analytic BRepFace from local to world by a placement ------
@@ -116,6 +147,7 @@ inline bool inferRevolute(const RBBody& A, const RBBody& B, RBJoint& out,
                 best = res; found = true;
                 cand.parent = -1; cand.child = -1; cand.type = JType::Revolute;
                 cand.axisPos = jf.axisPos; cand.axisDir = jf.axisDir;
+                cand.orthonormalizeFrame();                     // persist a full mate frame
                 cand.prov = Prov::Inferred; cand.residual = res;
             }
         }
@@ -280,6 +312,7 @@ inline bool defineRevoluteFromSelection(const BRepFace& worldFaceA, const BRepFa
     if (!krs::joint::deriveRevoluteFromBores(worldFaceA, worldFaceB, jf, coaxTol, &ang, &off)) return false;
     out.parent = bodyA; out.child = bodyB; out.type = JType::Revolute;
     out.axisPos = jf.axisPos; out.axisDir = jf.axisDir;
+    out.orthonormalizeFrame();                              // persist a full mate frame (decoupled from the faces)
     out.prov = Prov::Manual; out.residual = std::max(ang, off); out.ambiguous = false;
     return true;
 }

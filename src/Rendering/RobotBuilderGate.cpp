@@ -203,8 +203,31 @@ bool runJointEditGate()
     krs::joint::deriveRevoluteFromBores(offA, offB, jf, 1e-4, &ang, &off);  // capture WHY
     const bool rejectReason = degRejected && off > 1e-4;        // rejected because off-axis, not arbitrarily
 
-    const bool pass = frameOk && rederives && degRejected && rejectReason;
+    // PHASE 2: mate-connector frame -- the joint owns a PERSISTED orthonormal frame,
+    // decoupled from the source faces; flipAxis reverses it.
+    bool frameOrtho = false, decoupled = false, flips = false;
+    {
+        const float perpDot = std::abs(glm::dot(glm::normalize(manual.axisDir), glm::normalize(manual.refDir)));
+        frameOrtho = (std::abs(glm::length(manual.refDir) - 1.0f) < 1e-4f) && (perpDot < 1e-4f);
+        // CONTRACT/regression guard: corrupt the SOURCE faces, re-derive -> joint axis
+        // unchanged (toRobot reads the stored frame, never the live faces).
+        krs::robot::Robot rb0 = g.toRobot();
+        for (auto& f : g.bodies[0].faces) { f.axisDir = glm::vec3(1,1,1); f.axisPos = glm::vec3(9,9,9); }
+        for (auto& f : g.bodies[1].faces) { f.axisDir = glm::vec3(1,1,1); f.axisPos = glm::vec3(9,9,9); }
+        krs::robot::Robot rb1 = g.toRobot();
+        decoupled = (!rb0.joints.empty() && rb0.joints.size() == rb1.joints.size());
+        for (size_t k = 0; k < rb0.joints.size() && decoupled; ++k)
+            if ((rb0.joints[k].axis - rb1.joints[k].axis).norm() > 1e-9) decoupled = false;
+        RBJoint cp = manual; const glm::vec3 a0 = cp.axisDir; cp.flipAxis();
+        flips = glm::length(cp.axisDir + a0) < 1e-5f;
+    }
 
+    const bool pass = frameOk && rederives && degRejected && rejectReason
+                    && frameOrtho && decoupled && flips;
+
+    printf("[rbuild]   mate-frame: orthonormal=%s decoupled-from-faces=%s flip-reverses=%s  %s\n",
+           frameOrtho ? "yes" : "no", decoupled ? "yes" : "no", flips ? "yes" : "no",
+           (frameOrtho && decoupled && flips) ? "PASS" : "FAIL");
     printf("[rbuild]   manual joint frame == selected features: %s (res=%.2e, prov=Manual=%s)  %s\n",
            frameOk ? "ok" : "BAD", manual.residual, manual.prov == Prov::Manual ? "yes" : "no",
            frameOk ? "PASS" : "FAIL");
