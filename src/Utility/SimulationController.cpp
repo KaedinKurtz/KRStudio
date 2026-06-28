@@ -596,22 +596,24 @@ void SimulationController::applyArticulationCommands()
     const ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
     if (!cmd) return;
 
-    // ROBOT-OWNED PATH (once a first-class Robot is registered): the bus drains INTO
-    // LiveRobot::q -- the SINGLE SOURCE OF TRUTH for joint angles -- and PhysX is then
-    // teleported FROM that q as a kinematic FOLLOWER (it never owns the angles). Viz is
-    // driven by Robot FK when the robot opts in (useRobotFkViz), else the legacy PhysX viz.
+    // ROBOT-OWNED PATH: a Robot drives the articulation ONLY when it opts in via
+    // ownsDrive. The bus drains INTO LiveRobot::q (the SINGLE SOURCE OF TRUTH) for
+    // every registered robot, then PhysX is teleported FROM the driving robot's q as a
+    // kinematic FOLLOWER. A robot registered with ownsDrive=false is first-class for
+    // hierarchy/selection but leaves the drive on the legacy path (so registering the
+    // FANUC never freezes its sweep -- step 6a). Viz: Robot FK if useRobotFkViz, else legacy.
     krs::robot::RobotRegistry* rr = reg.ctx().find<krs::robot::RobotRegistry>();
-    if (rr && !rr->robots.empty()) {
-        krs::robot::drainCommandBusIntoRobots(reg);        // bus -> each LiveRobot::q
-        for (auto& rp : rr->robots) {
-            if (!rp) continue;
-            krs::robot::LiveRobot& lr = *rp;
-            std::vector<float> q(nDof, 0.0f);              // member-joint order == PhysX DOF order (FANUC)
-            for (int d = 0; d < nDof && d < lr.ndof(); ++d) q[d] = float(lr.q[d]);
-            setArticJointPositions(q);                     // PhysX FOLLOWS the Robot's q
-            if (lr.useRobotFkViz) krs::robot::writeBackRobotViz(*m_scene, lr);
-            else                  writeBackArticulationViz();
-        }
+    krs::robot::LiveRobot* driver = nullptr;
+    if (rr) {
+        krs::robot::drainCommandBusIntoRobots(reg);        // keep every robot's q in sync
+        for (auto& rp : rr->robots) if (rp && rp->ownsDrive) { driver = rp.get(); break; }
+    }
+    if (driver) {
+        std::vector<float> q(nDof, 0.0f);                  // member-joint order == PhysX DOF order (FANUC)
+        for (int d = 0; d < nDof && d < driver->ndof(); ++d) q[d] = float(driver->q[d]);
+        setArticJointPositions(q);                         // PhysX FOLLOWS the Robot's q
+        if (driver->useRobotFkViz) krs::robot::writeBackRobotViz(*m_scene, *driver);
+        else                       writeBackArticulationViz();
         return;
     }
 

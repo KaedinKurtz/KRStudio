@@ -12,6 +12,8 @@
 #include "RobotModel.hpp"
 #include "RobotBuilder.hpp"        // krs::rbuild::RobotGraph (the authoring schema)
 #include "RobotBuilderScene.hpp"   // buildDemoGraph / spawnGraphBodies (gate)
+#include "ArticulationSpec.hpp"    // krs::dyn::RobotArticSpec (FANUC canonical spec)
+#include "FanucArticulation.hpp"   // krs::fanuc::canonicalSpec
 #include "Scene.hpp"
 #include "components.hpp"
 
@@ -56,6 +58,26 @@ void setTransformFromEig(TransformComponent& tc, const Eigen::Matrix4d& M) {
     for (int c = 0; c < 3; ++c) for (int r = 0; r < 3; ++r) gR[c][r] = float(M(r, c));
     tc.rotation = glm::normalize(glm::quat_cast(gR));
     // scale left untouched (links are rigid, scale stays 1)
+}
+
+// Convert a POD articulation spec (FANUC canonicalSpec) into the krs::robot schema.
+// All joints are MEMBERs so nq() == the PhysX DOF count and the member-joint order
+// matches the PhysX DOF order 1:1 (no permutation needed for the FANUC).
+Robot robotFromArticSpec(const krs::dyn::RobotArticSpec& spec) {
+    Robot r; r.name = "articulated";
+    r.nLinks = int(spec.joints.size()) + 1;     // fixed base + one link per joint
+    for (const auto& j : spec.joints) {
+        Joint rj;
+        rj.type   = j.revolute ? krs::dyn::JType::Revolute : krs::dyn::JType::Prismatic;
+        rj.member = true;
+        Eigen::Matrix3d R;                       // spec.Rtree is ROW-major 3x3
+        for (int rr = 0; rr < 3; ++rr) for (int cc = 0; cc < 3; ++cc) R(rr, cc) = double(j.Rtree[rr * 3 + cc]);
+        rj.Rtree = R;
+        rj.ptree = Eigen::Vector3d(j.ptree[0], j.ptree[1], j.ptree[2]);
+        rj.axis  = Eigen::Vector3d(j.axis[0], j.axis[1], j.axis[2]).normalized();
+        r.joints.push_back(rj);
+    }
+    return r;
 }
 } // namespace
 
@@ -144,6 +166,48 @@ LiveRobot* instantiateFromGraph(Scene& scene, const krs::rbuild::RobotGraph& g, 
         if (k >= 1 && int(k - 1) < lr.ndof()) lr.linkEntities[k - 1].push_back(e);
     }
     captureRobotRest(scene, lr);   // q is still 0 here -> rest = the authored pose
+    return &lr;
+}
+
+LiveRobot* instantiateFanucRobot(Scene& scene,
+                                 const std::vector<std::vector<entt::entity>>& movingLinkEntities,
+                                 const std::vector<entt::entity>& allBodies,
+                                 int robotId, const std::string& name)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rrp = reg.ctx().find<RobotRegistry>();
+    if (!rrp) rrp = &reg.ctx().emplace<RobotRegistry>();
+    LiveRobot& lr = rrp->create(robotId);
+
+    lr.model      = robotFromArticSpec(krs::fanuc::canonicalSpec());
+    lr.model.name = name;
+    lr.name       = name;
+    lr.robotId    = robotId;
+    lr.rebuild();
+
+    // Named root (identity transform -> parenting is a transform no-op).
+    const entt::entity root = reg.create();
+    reg.emplace<RobotRootComponent>(root, RobotRootComponent{ name, robotId });
+    reg.emplace<TagComponent>(root, name);
+    reg.emplace<TransformComponent>(root, glm::vec3(0.0f),
+                                    glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f));
+    lr.root = root;
+
+    // Chain body k == moving link k (J1..J4 -> the 4 moving link entity groups).
+    lr.linkEntities.assign(lr.ndof(), {});
+    for (int k = 0; k < lr.ndof() && k < int(movingLinkEntities.size()); ++k)
+        lr.linkEntities[k] = movingLinkEntities[k];
+
+    // Parent + stamp robotId on ALL the FANUC body entities (base + moving + shells).
+    for (entt::entity e : allBodies) {
+        if (e == entt::null || !reg.valid(e)) continue;
+        reg.emplace_or_replace<ParentComponent>(e, root);
+        reg.emplace_or_replace<RobotSubcomponentComponent>(e, robotId);
+    }
+
+    captureRobotRest(scene, lr);   // rest at q=0 (ready for when useRobotFkViz turns on)
+    lr.ownsDrive     = false;      // step 6a: hierarchy/selection only; legacy drive keeps the sweep
+    lr.useRobotFkViz = false;
     return &lr;
 }
 

@@ -51,6 +51,7 @@
 #include "PhysicsPropertiesWidget.hpp"
 #include "RobotBuilderPanel.hpp"   // robot-builder editing panel (invokes proven krs::rbuild ops)
 #include "RobotViewport.hpp"       // robot-only spinning viewport bound to the live graph
+#include "RobotModel.hpp"          // krs::robot::instantiateFanucRobot (first-class Robot)
 #include "OutlinerWidget.hpp"
 #include "FluidPropertiesWidget.hpp"
 #include "SmokePropertiesWidget.hpp"
@@ -885,6 +886,16 @@ MainWindow::MainWindow(QWidget* parent)
             // below (time_source -> gen_sine -> physics_articulation_drive) -- the single joint driver.
             qInfo() << "[FANUC] visible articulated robot booted:" << fs.solids
                     << "bodies (solids+shells); assignment" << QString::fromStdString(fs.fingerprint);
+            // STEP 6a: make the FANUC a FIRST-CLASS Robot -- a named root entity with all
+            // its bodies nested under it + a real robotId + the chain link->entity map.
+            // ownsDrive=false, so the legacy node-graph drive keeps the sweep intact; this
+            // only adds outliner hierarchy + robot selection (drive ownership is step 6b).
+            if (krs::robot::LiveRobot* lr = krs::robot::instantiateFanucRobot(
+                    *m_scene, fs.movingLinkEntities, fs.solidEntity, /*robotId*/ 0,
+                    QStringLiteral("FANUC-430").toStdString())) {
+                qInfo() << "[FANUC] registered as first-class Robot 'FANUC-430' (robotId 0, dof"
+                        << lr->ndof() << ")";
+            }
         } else {
             qWarning() << "[FANUC] setup failed:" << QString::fromStdString(fs.message);
         }

@@ -103,6 +103,11 @@ struct LiveRobot {
     entt::entity          root = entt::null;       // the RobotRootComponent entity
     int                   robotId = -1;
     bool                  useRobotFkViz = false;   // ON => Robot FK drives viz (steps 3/6)
+    bool                  ownsDrive = false;       // ON => this Robot's q drives the PhysX
+                                                   // articulation; OFF => legacy drive path
+                                                   // (lets a robot be first-class for
+                                                   // hierarchy/selection without hijacking
+                                                   // the working FANUC sweep -- step 6a).
     std::string           name = "robot";
 
     int ndof() const { return int(q.size()); }
@@ -291,6 +296,16 @@ bool runRobotOwnerGate();
 // (RobotSubcomponentComponent), and fills the chain link -> entity map. Returns the
 // registered LiveRobot (owned by the ctx RobotRegistry), or nullptr on failure.
 LiveRobot* instantiateFromGraph(Scene& scene, const krs::rbuild::RobotGraph& g, int robotId);
+
+// Bridge the boot FANUC into a first-class Robot (step 6a): build the schema from
+// krs::fanuc::canonicalSpec(), create the named root, parent all the FANUC body
+// entities under it (real robotId), and map the chain links to the moving-link
+// entity groups. Registered with ownsDrive=false + useRobotFkViz=false so it is
+// first-class for outliner/selection WITHOUT hijacking the legacy PhysX sweep.
+LiveRobot* instantiateFanucRobot(Scene& scene,
+                                 const std::vector<std::vector<entt::entity>>& movingLinkEntities,
+                                 const std::vector<entt::entity>& allBodies,
+                                 int robotId, const std::string& name);
 
 // Drain the node-graph command bus (registry-ctx ArticulationCommandComponent) INTO each
 // registered LiveRobot::q (clamped to limits, driven DOFs only). LiveRobot::q is THE
