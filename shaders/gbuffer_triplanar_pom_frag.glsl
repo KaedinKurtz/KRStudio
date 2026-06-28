@@ -24,8 +24,8 @@ uniform float u_texture_scale;
 uniform float u_height_scale;
 
 // ----------------------- Tunables (no new uniforms) -----------------------
-const float HEIGHT_CONTRAST   = 2.4;   // 2.0–3.0 hardens edges
-const float HEIGHT_GAMMA      = 1.0;   // keep 1.0; 0.85–1.0 can help
+const float HEIGHT_CONTRAST   = 2.4;   // 2.0ï¿½3.0 hardens edges
+const float HEIGHT_GAMMA      = 1.0;   // keep 1.0; 0.85ï¿½1.0 can help
 const int   BINSEARCH_ITERS   = 5;
 
 const float SHADOW_STRENGTH   = 0.65;  // 0=no extra darkening, 1=full
@@ -210,11 +210,16 @@ void main()
     float roughness = sample_triplanar(material.roughnessMap, fs_WorldPos, N, off_x, off_y, off_z).r;
     vec3  emissive  = sample_triplanar(material.emissiveMap,  fs_WorldPos, N, off_x, off_y, off_z);
 
-    // Parallaxed world-space normal
-    vec3 Np = sample_triplanar_normal(material.normalMap, fs_WorldPos, N, off_x, off_y, off_z);
-
-    // Combine AO with self-occlusion
+    // Combine AO with the parallax self-occlusion shadow.
     float ao_out = clamp(ao_tex * selfOcc, 0.0, 1.0);
+
+    // NORMAL: use the GEOMETRIC world normal (matching the working gbuffer_triplanar path).
+    // The previous tri-planar normal-MAP path (sample_triplanar_normal/orient_plane_normal)
+    // produced normals that pointed away from the light (NdotL <= 0) -> zero diffuse, so the
+    // surface rendered black and ONLY the additive emissive showed. Geometric normal lights
+    // correctly; the POM still gives real depth via the parallax-offset albedo/AO/self-shadow.
+    // (A correct tri-planar normal-map blend can be re-added later as a polish.)
+    vec3 Np = N;
 
     // G-buffer
     gPosition   = vec4(fs_WorldPos, 1.0);
