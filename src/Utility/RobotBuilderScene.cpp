@@ -48,7 +48,7 @@ entt::entity spawnOneBody(entt::registry& reg, const RBBody& b, int robotId) {
     auto& mesh = reg.emplace<RenderableMeshComponent>(e);
     std::vector<uint32_t> idx;
     buildUnitCube(mesh.vertices, idx);
-    const float vis = 0.12f;
+    const glm::vec3 vis = b.visSize;   // per-axis size -> proper-looking links, not equal cubes
     glm::vec3 mn(std::numeric_limits<float>::max());
     glm::vec3 mx(std::numeric_limits<float>::lowest());
     for (auto& v : mesh.vertices) { v.position *= vis; mn = glm::min(mn, v.position); mx = glm::max(mx, v.position); }
@@ -68,18 +68,23 @@ entt::entity spawnOneBody(entt::registry& reg, const RBBody& b, int robotId) {
 RobotGraph buildDemoGraph() {
     RobotGraph g; g.base = 0;
     g.bodies.resize(4);
-    for (int i = 0; i < 4; ++i) {
-        g.bodies[i].name = "DemoLink" + std::to_string(i);
-        g.bodies[i].placement = trans(0.4 * double(i), 0.0, 0.0);
-    }
-    // B2 & B3 share a COAXIAL bore (world axis at x=1.0 along Z): define-from-features
-    // (selecting both bores) adds J2 -> DOF 2->3, frame at (1.0,0,*) dir (0,0,1).
-    addBore(g.bodies[2], glm::vec3(0.2f, 0.0f, 0.0f), glm::vec3(0, 0, 1), 0.05f);   // world 0.8+0.2 = 1.0
-    addBore(g.bodies[3], glm::vec3(-0.2f, 0.0f, 0.0f), glm::vec3(0, 0, 1), 0.05f);  // world 1.2-0.2 = 1.0
-    // Committed serial joints J0 (B0-B1), J1 (B1-B2) -> DOF 2. Deleting J1 detaches
-    // the B2(-B3 once defined) subtree intact.
-    { RBJoint j; j.parent = 0; j.child = 1; j.type = JType::Revolute; j.axisDir = glm::vec3(0, 0, 1); j.axisPos = glm::vec3(0.2f, 0, 0); g.addJoint(j); }
-    { RBJoint j; j.parent = 1; j.child = 2; j.type = JType::Revolute; j.axisDir = glm::vec3(0, 0, 1); j.axisPos = glm::vec3(0.6f, 0, 0); g.addJoint(j); }
+    // A small but RECOGNISABLE articulated arm (base -> shoulder -> upper arm -> wrist),
+    // not 4 identical cubes. Per-link visSize gives proper proportions; the joint
+    // structure + the coaxial B2/B3 bores (for define-from-features) are preserved so
+    // the krs::rbuild gates still pass.
+    g.bodies[0].name = "Base";      g.bodies[0].placement = trans(0.0, 0.00, 0.00); g.bodies[0].visSize = { 0.32f, 0.10f, 0.32f };
+    g.bodies[1].name = "Shoulder";  g.bodies[1].placement = trans(0.0, 0.30, 0.00); g.bodies[1].visSize = { 0.16f, 0.45f, 0.16f };
+    g.bodies[2].name = "UpperArm";  g.bodies[2].placement = trans(0.0, 0.62, 0.22); g.bodies[2].visSize = { 0.16f, 0.16f, 0.50f };
+    g.bodies[3].name = "Wrist";     g.bodies[3].placement = trans(0.0, 0.62, 0.58); g.bodies[3].visSize = { 0.18f, 0.18f, 0.18f };
+
+    // B2 & B3 share a COAXIAL bore (world axis at (0,0.62,0.40) along X): selecting both
+    // bores defines a revolute J2 -> DOF 2->3, frame at that axis.
+    addBore(g.bodies[2], glm::vec3(0.0f, 0.0f, 0.18f),  glm::vec3(1, 0, 0), 0.05f);  // world (0,0.62,0.40)
+    addBore(g.bodies[3], glm::vec3(0.0f, 0.0f, -0.18f), glm::vec3(1, 0, 0), 0.05f);  // world (0,0.62,0.40)
+
+    // Committed serial joints: J0 base-yaw (Y) at the base, J1 shoulder-pitch (X). DOF 2.
+    { RBJoint j; j.parent = 0; j.child = 1; j.type = JType::Revolute; j.axisDir = glm::vec3(0, 1, 0); j.axisPos = glm::vec3(0, 0.20f, 0); g.addJoint(j); }
+    { RBJoint j; j.parent = 1; j.child = 2; j.type = JType::Revolute; j.axisDir = glm::vec3(1, 0, 0); j.axisPos = glm::vec3(0, 0.55f, 0); g.addJoint(j); }
     return g;
 }
 

@@ -39,6 +39,8 @@ struct ParsedPart {
     Eigen::Matrix4d placement = Eigen::Matrix4d::Identity();
     std::vector<BRepFace> faces;
     int entity = -1;                 // scene entity once spawned (-1 = not spawned)
+    glm::vec3 visSize{ 0.12f, 0.12f, 0.12f };  // per-axis size of the placeholder box mesh
+                                               // (lets the demo build proper-looking links)
 };
 using RBBody = ParsedPart;
 
