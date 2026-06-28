@@ -60,23 +60,22 @@ bool Texture2D::loadFromFile(const std::string& path, bool gammaCorrection) {
     }
 
     GLenum internalFormat = 0, dataFormat = 0;
-    if (channels == 1) {
-        internalFormat = GL_RED;
-        dataFormat = GL_RED;
-    }
-    else if (channels == 3) {
-        internalFormat = gammaCorrection ? GL_SRGB : GL_RGB;
-        dataFormat = GL_RGB;
-    }
-    else if (channels == 4) {
-        internalFormat = gammaCorrection ? GL_SRGB_ALPHA : GL_RGBA;
-        dataFormat = GL_RGBA;
+    if (channels == 1)      { internalFormat = GL_RED;  dataFormat = GL_RED; }
+    else if (channels == 2) { internalFormat = GL_RG;   dataFormat = GL_RG; }   // grey+alpha / packed
+    else if (channels == 3) { internalFormat = gammaCorrection ? GL_SRGB : GL_RGB;        dataFormat = GL_RGB; }
+    else if (channels == 4) { internalFormat = gammaCorrection ? GL_SRGB_ALPHA : GL_RGBA; dataFormat = GL_RGBA; }
+    else {
+        qWarning() << "Texture2D: unsupported channel count" << channels << "for"
+                   << QString::fromStdString(path);
+        stbi_image_free(data);
+        return false;
     }
 
-    generate(w, h, internalFormat, dataFormat, data);
-
+    const bool ok = generate(w, h, internalFormat, dataFormat, data);
     stbi_image_free(data);
-    return true;
+    if (!ok) qWarning() << "Texture2D: GL upload failed for" << QString::fromStdString(path)
+                        << "(" << channels << "ch)";
+    return ok;   // false -> caller falls back to a default texture instead of binding black
 }
 
 bool Texture2D::loadFromMemory(const unsigned char* bytes, size_t size, bool gammaCorrection) {
@@ -89,23 +88,19 @@ bool Texture2D::loadFromMemory(const unsigned char* bytes, size_t size, bool gam
     }
 
     GLenum internalFormat = 0, dataFormat = 0;
-    if (channels == 1) {
-        internalFormat = GL_RED;
-        dataFormat = GL_RED;
-    }
-    else if (channels == 3) {
-        internalFormat = gammaCorrection ? GL_SRGB : GL_RGB;
-        dataFormat = GL_RGB;
-    }
-    else if (channels == 4) {
-        internalFormat = gammaCorrection ? GL_SRGB_ALPHA : GL_RGBA;
-        dataFormat = GL_RGBA;
+    if (channels == 1)      { internalFormat = GL_RED;  dataFormat = GL_RED; }
+    else if (channels == 2) { internalFormat = GL_RG;   dataFormat = GL_RG; }
+    else if (channels == 3) { internalFormat = gammaCorrection ? GL_SRGB : GL_RGB;        dataFormat = GL_RGB; }
+    else if (channels == 4) { internalFormat = gammaCorrection ? GL_SRGB_ALPHA : GL_RGBA; dataFormat = GL_RGBA; }
+    else {
+        qWarning() << "Texture2D: unsupported in-memory channel count" << channels;
+        stbi_image_free(data);
+        return false;
     }
 
-    generate(w, h, internalFormat, dataFormat, data);
-
+    const bool ok = generate(w, h, internalFormat, dataFormat, data);
     stbi_image_free(data);
-    return true;
+    return ok;
 }
 
 bool Texture2D::loadHDR(const std::string& path) {
@@ -203,7 +198,15 @@ void Texture2D::generateFloat(int width, int height, GLenum internalFormat, GLen
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void Texture2D::generate(int width, int height, GLenum internalFormat, GLenum dataFormat, const void* data) {
+bool Texture2D::generate(int width, int height, GLenum internalFormat, GLenum dataFormat, const void* data) {
+    // Reject invalid args up front. A 0 format (e.g. an unsupported channel count from
+    // loadFromFile) would make glTexImage2D fail silently and leave a black/broken texture
+    // that still has a non-zero _id -- the cause of "applied texture -> object black".
+    if (width <= 0 || height <= 0 || internalFormat == 0 || dataFormat == 0) {
+        qWarning() << "Texture2D::generate invalid args w=" << width << "h=" << height
+                   << "internal=" << internalFormat << "data=" << dataFormat;
+        return false;
+    }
     _width = width;
     _height = height;
     _internalFormat = internalFormat;
@@ -211,7 +214,16 @@ void Texture2D::generate(int width, int height, GLenum internalFormat, GLenum da
 
     if (!_id) glGenTextures(1, &_id);
     glBindTexture(GL_TEXTURE_2D, _id);
+    while (glGetError() != GL_NO_ERROR) {}          // drain stale errors
     glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_UNSIGNED_BYTE, data);
+    const GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        qWarning() << "Texture2D::generate glTexImage2D failed err=" << err
+                   << "internal=" << internalFormat << "data=" << dataFormat;
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glDeleteTextures(1, &_id); _id = 0;          // 0 -> callers fall back instead of binding black
+        return false;
+    }
 
     // Default parameters
     glGenerateMipmap(GL_TEXTURE_2D);
@@ -221,6 +233,7 @@ void Texture2D::generate(int width, int height, GLenum internalFormat, GLenum da
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     glBindTexture(GL_TEXTURE_2D, 0);
+    return true;
 }
 
 void Texture2D::bind(unsigned int unit) const {

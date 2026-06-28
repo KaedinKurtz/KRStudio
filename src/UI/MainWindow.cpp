@@ -53,6 +53,7 @@
 #include "RobotViewport.hpp"       // robot-only spinning viewport bound to the live graph
 #include "RobotModel.hpp"          // krs::robot::instantiateFanucRobot (first-class Robot)
 #include "RobotBuilder.hpp"        // krs::rbuild::RobotGraph (re-apply edits to the live robot)
+#include "MaterialApply.hpp"       // krs::material::applyPackTags (texture-apply repro hook)
 #include "OutlinerWidget.hpp"
 #include "FluidPropertiesWidget.hpp"
 #include "SmokePropertiesWidget.hpp"
@@ -1494,6 +1495,37 @@ MainWindow::MainWindow(QWidget* parent)
                 qInfo() << "[UI] window grabbed to" << path;
             });
         }
+    }
+
+    // Test hook: KRS_TEXTEST=<outDir> reproduces "apply texture -> black": applies a
+    // PARALLAX pack (lava, has height map) to the Ground.Slab and a PLAIN pack (no height
+    // map) to the aluminium block, via the REAL applyPackTags path, then grabs + logs tags.
+    if (qEnvironmentVariableIsSet("KRS_TEXTEST")) {
+        const QString outDir = qEnvironmentVariable("KRS_TEXTEST");
+        QTimer::singleShot(3000, this, [this]() {
+            auto& reg = m_scene->getRegistry();
+            auto findTag = [&](const char* t) {
+                for (auto e : reg.view<TagComponent>()) if (reg.get<TagComponent>(e).tag == t) return e;
+                return entt::entity(entt::null);
+            };
+            auto applyPack = [&](entt::entity e, const std::string& dir, bool hasHeight, float tiling) {
+                if (e == entt::null) return;
+                reg.remove<TriPlanarMaterialTag>(e); reg.remove<ParallaxMaterialTag>(e);
+                reg.emplace_or_replace<MaterialDirectoryTag>(e, dir);
+                auto& req = reg.emplace_or_replace<MaterialReloadRequest>(e);
+                req.tilingOverride = tiling; req.heightScaleOverride = hasHeight ? 0.05f : -1.0f;
+                krs::material::applyPackTags(reg, e, hasHeight);
+                qInfo() << "[TEXTEST] applied" << QString::fromStdString(dir) << "-> UV="
+                        << reg.all_of<UVTexturedMaterialTag>(e) << "TriPlanar=" << reg.all_of<TriPlanarMaterialTag>(e)
+                        << "Parallax=" << reg.all_of<ParallaxMaterialTag>(e);
+            };
+            applyPack(findTag("Ground.Slab"), "assets/Textures/ground-bl/columned-lava-rock-bl", true, 0.5f);   // parallax (height)
+            applyPack(findTag("Aluminium Block (FEM)"), "assets/Textures/bonus-bl/boulder1", false, 2.0f);       // PLAIN (no height)
+        });
+        QTimer::singleShot(9000, this, [this, outDir]() {
+            if (ViewportWidget* mvp = primaryViewport()) mvp->grab().save(outDir + QStringLiteral("/textest.png"));
+            qInfo() << "[TEXTEST] grabbed to" << outDir;
+        });
     }
 
     // Test hook: KRS_LIGHTUI_SELFTEST=<outDir> opens the Object Properties dock, spawns +

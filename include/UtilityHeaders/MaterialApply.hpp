@@ -29,8 +29,14 @@ inline void applyPackTags(entt::registry& reg, entt::entity e, bool packHasHeigh
             reg.emplace_or_replace<TriPlanarMaterialTag>(e);
         }
     } else {
-        // Plain pack: no parallax. Leave UV/triplanar tags as authored by the importer/builder.
+        // Plain pack: no parallax.
         reg.remove<ParallaxMaterialTag>(e);
+        // A no-UV primitive must STILL take the world-space triplanar path. Without this it
+        // falls through to the UV shader (selectGBufferShaderKind's hasTexture fallback) and
+        // samples its nonexistent per-vertex UVs -> the object renders BLACK. Real-UV bodies
+        // (UVTexturedMaterialTag) keep their object-space UV mapping.
+        if (!reg.all_of<UVTexturedMaterialTag>(e))
+            reg.emplace_or_replace<TriPlanarMaterialTag>(e);
     }
 }
 

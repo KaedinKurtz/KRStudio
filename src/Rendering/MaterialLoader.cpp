@@ -28,11 +28,11 @@ static const std::vector<MapDesc> kMaps = {
     { "normal",   [](auto& m, auto t) { m.normalMap = t; } },
     { "roughness",[](auto& m, auto t) { m.roughnessMap = t; } },
     { "metallic", [](auto& m, auto t) { m.metallicMap = t; } },
-    { "metalness",[](auto& m, auto t) { m.metallicMap = t; } }, // some packs use “metalness”
+    { "metalness",[](auto& m, auto t) { m.metallicMap = t; } }, // some packs use ï¿½metalnessï¿½
     { "ao",       [](auto& m, auto t) { m.aoMap = t; } },
     { "height",   [](auto& m, auto t) { m.heightMap = t; } },
     { "emissive", [](auto& m, auto t) { m.emissiveMap = t; } },
-    // you can add “emissive”, “sheen”, etc. as needed
+    // you can add ï¿½emissiveï¿½, ï¿½sheenï¿½, etc. as needed
 };
 
 MaterialComponent loadMaterialFromDirectory(const std::string& dirPath)
@@ -60,7 +60,7 @@ MaterialComponent loadMaterialFromDirectory(const std::string& dirPath)
         // e.g. "dragon-scales_albedo" or "dragon-scales_normal-ogl"
 
         for (auto const& map : kMaps) {
-            // look for a “_key” or “-key” or ending in key
+            // look for a ï¿½_keyï¿½ or ï¿½-keyï¿½ or ending in key
             // we require something like stem ends_with "_albedo" or contains "_albedo-"
             std::string tag1 = std::string("_") + map.key;
             std::string tag2 = std::string("-") + map.key;
@@ -72,11 +72,13 @@ MaterialComponent loadMaterialFromDirectory(const std::string& dirPath)
                 // load a Texture2D (gamma for albedo only)
                 auto tex = std::make_shared<Texture2D>();
                 bool gamma = (std::string(map.key) == "albedo" || std::string(map.key) == "emissive");
-                if (tex->loadFromFile(entry.path().string(), gamma)) {
+                if (tex->loadFromFile(entry.path().string(), gamma) && tex->getID() != 0) {
                     map.setter(mat, tex);
                 }
                 else {
-                    qWarning() << "[MaterialLoader] Failed to load"
+                    // Leave the map UNSET so the renderer uses its default (white albedo,
+                    // flat normal, ...) instead of binding a broken/black texture.
+                    qWarning() << "[MaterialLoader] Failed/invalid texture"
                         << QString::fromStdString(entry.path().string());
                 }
                 break; // done with this file

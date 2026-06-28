@@ -24,20 +24,20 @@ void main()
     fs_WorldPos   = vec3(model * vec4(aPos, 1.0));
     fs_WorldNormal = mat3(transpose(inverse(model))) * aNormal;
 
-    // Calculate view direction in world space. The camera position is in the 4th column of the inverse view matrix.
+    // Calculate view direction in WORLD space. The camera position is in the 4th column of the inverse view matrix.
     vec3 viewPos_world = vec3(inverse(view)[3]);
     vec3 viewDir_world = normalize(viewPos_world - fs_WorldPos);
 
-    // Create TBN matrix to transform view direction into tangent space
-    // NOTE: This is a simplified TBN calculation. For models with real tangents,
-    // you would pass aTangent and aBitangent and use them here.
-    vec3 N = normalize(fs_WorldNormal);
-    vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N));
-    vec3 B = cross(N, T);
-    mat3 TBN = transpose(mat3(T, B, N));
-
-    // Pass the tangent-space view direction to the fragment shader
-    fs_ViewDir_tangent = TBN * viewDir_world;
+    // The triplanar-POM fragment shader uses the view direction in WORLD space (it projects
+    // V onto the three world-aligned planes: vp_x=(V.z,V.y), vNormal=V.x, etc). Pass it
+    // straight through. The old code transformed it into a per-vertex tangent frame built as
+    // T = normalize(cross((0,1,0), N)) -- which is BOTH the wrong space AND degenerate: on a
+    // horizontal floor's top/bottom face N is (0,+/-1,0), so the cross is the zero vector and
+    // normalize() yields NaN. That NaN poisoned the POM march -> NaN albedo AND NaN gNormal
+    // -> the deferred lighting pass treated the whole top face as background -> it rendered
+    // BLACK (while the non-degenerate side faces still showed). Passing world-space V fixes
+    // both the space mismatch and the black-floor NaN.
+    fs_ViewDir_tangent = viewDir_world;
 
     // Calculate the final clip-space position
     gl_Position = projection * view * model * vec4(aPos, 1.0);

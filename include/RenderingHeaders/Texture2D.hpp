@@ -37,7 +37,9 @@ public:
     static bool analyzeHdrSun(const std::string& path, float outSunDir[3], float outSunColor[3]);
 
     // Generate an empty texture of given size and formats, optionally uploading data.
-    void generate(int width, int height,
+    // Returns false (and leaves _id == 0) on invalid args or a failed GL upload, so callers
+    // can reject the texture and fall back instead of binding a black/broken one.
+    bool generate(int width, int height,
         GLenum internalFormat = GL_RGBA8,
         GLenum dataFormat = GL_RGBA,
         const void* data = nullptr);
