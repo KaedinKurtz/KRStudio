@@ -44,22 +44,21 @@ struct Selection {
 // Resolve a world-space ray to the specific B-Rep face it hits + its exact
 // analytic parameters. Returns an invalid Selection on a miss or a non-B-Rep
 // body (e.g. a raw mesh with no BRepFaceComponent).
-inline Selection pick(entt::registry& reg, const krs::pick::Ray& ray) {
+// Resolve a single ray-hit (entity + triangle) into a Selection with analytic B-Rep params.
+inline Selection resolveHit(entt::registry& reg, const krs::pick::PickHit& hit) {
     Selection s;
-    const auto hit = krs::pick::pickMesh(reg, ray);
-    if (!hit) return s;                                  // miss -> no selection
-    s.entity = hit->entity;
-    s.hitPoint = hit->worldPos;
-    if (!reg.all_of<RenderableMeshComponent, BRepFaceComponent>(hit->entity)) return s;
-    const auto& mesh = reg.get<RenderableMeshComponent>(hit->entity);
-    const auto& brep = reg.get<BRepFaceComponent>(hit->entity);
-    if (hit->tri < 0 || hit->tri >= int(mesh.triFace.size())) return s;
-    const int fid = mesh.triFace[hit->tri];
+    s.entity = hit.entity;
+    s.hitPoint = hit.worldPos;
+    if (!reg.all_of<RenderableMeshComponent, BRepFaceComponent>(hit.entity)) return s;
+    const auto& mesh = reg.get<RenderableMeshComponent>(hit.entity);
+    const auto& brep = reg.get<BRepFaceComponent>(hit.entity);
+    if (hit.tri < 0 || hit.tri >= int(mesh.triFace.size())) return s;
+    const int fid = mesh.triFace[hit.tri];
     if (fid < 0 || fid >= int(brep.faces.size())) return s;
     const BRepFace& bf = brep.faces[fid];
 
     glm::mat4 M(1.0f);
-    if (const auto* xf = reg.try_get<TransformComponent>(hit->entity)) M = xf->getTransform();
+    if (const auto* xf = reg.try_get<TransformComponent>(hit.entity)) M = xf->getTransform();
     const glm::mat3 R = glm::mat3(glm::inverseTranspose(M));   // normals/directions
 
     s.valid = true;
@@ -70,6 +69,25 @@ inline Selection pick(entt::registry& reg, const krs::pick::Ray& ray) {
     s.axisDir = glm::normalize(R * bf.axisDir);
     s.normal = glm::normalize(R * bf.normal);
     return s;
+}
+
+inline Selection pick(entt::registry& reg, const krs::pick::Ray& ray) {
+    const auto hit = krs::pick::pickMesh(reg, ray);
+    if (!hit) return Selection{};                        // miss -> no selection
+    return resolveHit(reg, *hit);
+}
+
+// X-RAY feature pick: resolve the cycleIndex-th body the ray pierces (near->far), so repeated clicks
+// at the same pixel walk DEEPER and can select a bore OCCLUDED behind the component in front of it.
+// cycleIndex is taken modulo the hit count; an empty result yields an invalid Selection. hitCount (if
+// non-null) returns how many bodies the ray pierced, so the UI can show "feature 2/5" and know when to wrap.
+inline Selection pickCycled(entt::registry& reg, const krs::pick::Ray& ray, int cycleIndex, int* hitCount = nullptr) {
+    const auto hits = krs::pick::pickMeshAll(reg, ray);
+    if (hitCount) *hitCount = int(hits.size());
+    if (hits.empty()) return Selection{};
+    const int n = int(hits.size());
+    const int idx = ((cycleIndex % n) + n) % n;
+    return resolveHit(reg, hits[idx]);
 }
 
 // Selection-indicator GEOMETRY as DATA (no rendering). For a cylinder/cone the
@@ -156,6 +174,25 @@ inline Selection commitSelection(SelectionState& st, entt::registry& reg,
                                  const krs::pick::Ray& ray, bool additive = true) {
     const Selection s = pick(reg, ray);
     if (!s.valid) return s;                              // miss -> no change to the set
+    for (std::size_t i = 0; i < st.selected.size(); ++i) {
+        if (sameFeature(st.selected[i], s)) {            // toggle off if re-picked
+            st.selected.erase(st.selected.begin() + std::ptrdiff_t(i));
+            return s;
+        }
+    }
+    if (!additive) st.selected.clear();
+    st.selected.push_back(s);
+    return s;
+}
+
+// X-RAY commit: like commitSelection but resolves the cycleIndex-th body the ray pierces
+// (near->far via pickCycled), so an occluded bore behind a front component can be committed by
+// clicking the same pixel repeatedly. Behaviour on the resolved feature is identical (accumulate /
+// toggle / replace).
+inline Selection commitSelectionCycled(SelectionState& st, entt::registry& reg,
+                                       const krs::pick::Ray& ray, int cycleIndex, bool additive = true) {
+    const Selection s = pickCycled(reg, ray, cycleIndex);
+    if (!s.valid) return s;                              // miss / non-B-Rep at this depth -> no change
     for (std::size_t i = 0; i < st.selected.size(); ++i) {
         if (sameFeature(st.selected[i], s)) {            // toggle off if re-picked
             st.selected.erase(st.selected.begin() + std::ptrdiff_t(i));

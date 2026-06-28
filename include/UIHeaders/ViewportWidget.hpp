@@ -104,6 +104,12 @@ private:
     bool   m_suppressClickThisRelease = false;
     QPoint m_rightPressPos;
 
+    // X-RAY selection cycle: a click within m_ClickSlop of the previous click pixel walks DEEPER
+    // through the bodies the pick ray pierces (so an occluded bore behind a front component is
+    // reachable). Reset to the front-most body on any click at a new pixel.
+    QPoint m_xrayLastPx{ -9999, -9999 };
+    int    m_xrayIdx = 0;
+
     // Smooth fly camera: keys feed a target velocity, a 60 Hz tick eases the
     // actual velocity toward it (keypress autorepeat felt like teleporting).
     void tickFlyCamera();

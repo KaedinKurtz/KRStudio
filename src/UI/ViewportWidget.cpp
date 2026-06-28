@@ -184,6 +184,18 @@ static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int v
     krs::sel::commitSelection(*st, reg, ray, additive);
 }
 
+// X-RAY feature commit: same as featureCommit but resolves the cycleIndex-th body the ray pierces
+// (near->far), so a bore OCCLUDED behind a front component is committed by clicking the same pixel
+// again. The ray is shared with the body-pick cycle so both walk to the SAME depth.
+static void featureCommitCycled(Scene& scene, const krs::pick::Ray& ray, int cycleIndex, bool additive)
+{
+    auto& reg = scene.getRegistry();
+    auto* st = reg.ctx().find<krs::sel::SelectionState>();
+    if (!st || !st->enabled) return;
+    if (!std::isfinite(ray.dir.x)) return;
+    krs::sel::commitSelectionCycled(*st, reg, ray, cycleIndex, additive);
+}
+
 void ViewportWidget::propagateTransforms(entt::registry& r)
 {
     auto viewParents = r.view<ParentComponent>(); // cache once
@@ -506,7 +518,33 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
             auto& reg = m_scene->getRegistry();
             const bool isShiftPressed = ev->modifiers() & Qt::ShiftModifier;
 
-            auto hit = cpuPickAABB(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(), width(), height());
+            // X-RAY CYCLE: build the pick ray once and gather EVERY body it pierces (near->far). A
+            // click within m_ClickSlop of the previous one walks DEEPER (occluded bore behind a front
+            // component); a click at a new pixel resets to the front-most body.
+            const Camera& cam = getCamera();
+            const glm::mat4 P = cam.getProjectionMatrix(float(width()) / float(height()));
+            const glm::mat4 V = cam.getViewMatrix();
+            const krs::pick::Ray ray =
+                krs::pick::makeRayFromScreen(P, V, ev->pos().x(), ev->pos().y(), width(), height());
+            std::vector<krs::pick::PickHit> allHits;
+            if (std::isfinite(ray.dir.x)) allHits = krs::pick::pickMeshAll(reg, ray);
+
+            const bool samePixel =
+                std::abs(ev->pos().x() - m_xrayLastPx.x()) <= m_ClickSlop &&
+                std::abs(ev->pos().y() - m_xrayLastPx.y()) <= m_ClickSlop;
+            if (samePixel && allHits.size() > 1) m_xrayIdx = (m_xrayIdx + 1);
+            else m_xrayIdx = 0;
+            m_xrayLastPx = ev->pos();
+
+            std::optional<CpuPickHit> hit;
+            if (!allHits.empty()) {
+                const int n = int(allHits.size());
+                const int idx = ((m_xrayIdx % n) + n) % n;
+                const auto& h = allHits[idx];
+                CpuPickHit b; b.entity = h.entity; b.worldPos = h.worldPos; b.worldT = h.t; hit = b;
+                if (n > 1)
+                    qDebug() << "[XRay] body" << (idx + 1) << "/" << n << "(click same spot to go deeper)";
+            }
 
             if (!isShiftPressed) {
                 for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
@@ -521,11 +559,10 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
                 }
             }
 
-            // SUB-FEATURE SELECT: commit the clicked face into the accumulating set
-            // (Shift = additive multi-select; plain click replaces). The highlight is
-            // OPERATOR-VISUAL-CONFIRM; the resolved identity is gated.
-            featureCommit(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(),
-                          width(), height(), isShiftPressed);
+            // SUB-FEATURE SELECT: commit the clicked face into the accumulating set, cycled to the
+            // SAME depth as the body pick (Shift = additive multi-select; plain click replaces). The
+            // highlight is OPERATOR-VISUAL-CONFIRM; the resolved identity is gated.
+            featureCommitCycled(*m_scene, ray, m_xrayIdx, isShiftPressed);
 
             QVector<entt::entity> currentSelection;
             for (auto eSel : reg.view<SelectedComponent>()) currentSelection.push_back(eSel);

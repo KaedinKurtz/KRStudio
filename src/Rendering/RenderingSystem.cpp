@@ -924,6 +924,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Phase 6 GATE 6: occluded-body x-ray cycle (pickMeshAll surfaces all N; pickCycled walks depth).
+    if (qEnvironmentVariableIntValue("KRS_XRAY_SELFTEST") != 0) {
+        std::printf("\n================= KRS_XRAY_SELFTEST =================\n");
+        const bool ok = krs::pick::runXRayGate6();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Phase 3 GATE F: B-Rep feature selector (ray-pick -> exact analytic axis/radius <1e-9).
     if (qEnvironmentVariableIntValue("KRS_BREPSEL_SELFTEST") != 0) {
         std::printf("\n================= KRS_BREPSEL_SELFTEST =================\n");
@@ -1733,6 +1741,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE 1.5 FEM static equilibrium (net reaction == applied load + neg-ctrls)", krs::fem::FemSolver::runEquilibriumGate1_5() },
             { "GATE 2 canonical chain cmd->FK->push->cube->fluid (severed-stage localization)", runCanonicalChainGate2() },
             { "GATE 3.1 raycast ray-triangle pick >=99% (AABB-only neg-ctrl)", krs::pick::runRaycastGate3_1() },
+            { "GATE 6 x-ray cycle (pickMeshAll surfaces all occluded bodies; pickCycled walks depth+wraps; nearest-pick-stuck neg-ctrl)", krs::pick::runXRayGate6() },
             { "GATE F B-Rep selector (ray-pick -> analytic axis/radius <1e-9 + mesh-fit neg-ctrl)", krs::cad::runBRepSelectorGateF() },
             { "GATE SUBFEAT (selection backend: ray->exact B-Rep params <1e-9 + indicator-geometry on-surface + small-bore disambiguation; miss & centroid neg-ctrls)", krs::cad::runSubFeatSelectionGate() },
             { "GATE HIGHLIGHT-MATCHES (stored hover/selected feature == ray-resolved feature; neighbour & dominant-face highlight neg-ctrls)", krs::sel::runHighlightMatchesGate() },

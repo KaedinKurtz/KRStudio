@@ -11,6 +11,8 @@
 #include "components.hpp"   // Vertex, TransformComponent, RenderableMeshComponent
 
 #include <optional>
+#include <vector>
+#include <algorithm>
 #include <cmath>
 
 namespace krs::pick {
@@ -99,6 +101,41 @@ inline std::optional<PickHit> pickMesh(entt::registry& reg, const Ray& ray)
     return std::nullopt;
 }
 
+// X-RAY pick: the nearest-triangle hit PER ENTITY along the ray, sorted near->far. Unlike pickMesh
+// (which keeps only the single front-most body), this returns one hit for every body the ray pierces,
+// so the caller can cycle through depth to reach an OCCLUDED feature (e.g. a bore hidden behind the
+// component in front of it). Each entity appears at most once, at its own nearest surface intersection.
+inline std::vector<PickHit> pickMeshAll(entt::registry& reg, const Ray& ray)
+{
+    std::vector<PickHit> hits;
+    for (auto e : reg.view<TransformComponent, RenderableMeshComponent>()) {
+        const auto& xf = reg.get<TransformComponent>(e);
+        const auto& mesh = reg.get<RenderableMeshComponent>(e);
+        if (mesh.indices.size() < 3 || mesh.vertices.empty()) continue;
+        const glm::mat4 M = xf.getTransform();
+        const glm::mat4 invM = glm::inverse(M);
+        const glm::vec3 roL = glm::vec3(invM * glm::vec4(ray.origin, 1.0f));
+        const glm::vec3 rdL = glm::normalize(glm::vec3(invM * glm::vec4(ray.dir, 0.0f)));
+        PickHit eBest;                                    // nearest hit on THIS entity only
+        for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
+            const glm::vec3& a = mesh.vertices[mesh.indices[i]].position;
+            const glm::vec3& b = mesh.vertices[mesh.indices[i + 1]].position;
+            const glm::vec3& c = mesh.vertices[mesh.indices[i + 2]].position;
+            float tL;
+            if (!rayTriangle(roL, rdL, a, b, c, tL)) continue;
+            if (tL <= 1e-6f) continue;
+            const glm::vec3 worldHit = glm::vec3(M * glm::vec4(roL + rdL * tL, 1.0f));
+            const float worldT = glm::dot(worldHit - ray.origin, ray.dir);
+            if (worldT > 1e-5f && worldT < eBest.t) {
+                eBest.entity = e; eBest.worldPos = worldHit; eBest.t = worldT; eBest.tri = int(i / 3);
+            }
+        }
+        if (eBest.entity != entt::null) hits.push_back(eBest);
+    }
+    std::sort(hits.begin(), hits.end(), [](const PickHit& a, const PickHit& b) { return a.t < b.t; });
+    return hits;
+}
+
 // GATE 3.1 -- raycast accuracy: pickMesh selects the analytically-correct body for >=99% of a grid of
 // ground-truth rays over a wall of spheres (front-most on occlusion, miss in gaps). NEG-CTRL: the old
 // ray-AABB-only pick is materially less accurate (it over-selects at the bounding-box corners), and a
@@ -108,5 +145,11 @@ bool runRaycastGate3_1();
 // GATE F5 (KRS_DENSE_SELFTEST) -- dense-scene pick stress: >=20 bodies / >=100k triangles, batch of
 // ground-truth rays, asserts >=99% correctness at scale and REPORTS picking latency (avg/max per pick).
 bool runDenseSceneGateF5();
+
+// GATE 6 (KRS_XRAY_SELFTEST) -- occluded-body x-ray cycle: a ray through N stacked coaxial bodies must
+// surface ALL N via pickMeshAll (one per entity, sorted near->far), and pickCycled(idx) must walk
+// front->...->back->wrap. NEG-CTRL: plain pickMesh can only ever return the front-most body, so it
+// can NEVER select an occluded one -- proving the x-ray cycle is what earns occluded selection.
+bool runXRayGate6();
 
 } // namespace krs::pick
