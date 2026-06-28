@@ -186,6 +186,8 @@ void RobotBuilderPanel::setStatus(const QString& msg)
 
 void RobotBuilderPanel::refresh()
 {
+    if (refreshFromLiveRobot()) return;   // bound to a LiveRobot (e.g. the FANUC) -> live-edit path
+
     const QSignalBlocker blocker(this);
     m_isUpdatingUI = true;
 
@@ -254,8 +256,114 @@ void RobotBuilderPanel::onLoadDemo()
             reg.emplace_or_replace<TagComponent>(lr->root, std::string("Demo Robot"));
         }
     }
+    m_editRobotId = -1;   // authoring the demo's RobotGraph (full feature editing), not a live-robot bind
     setStatus(QStringLiteral("Loaded demo robot (robotId %1): %2 bodies, DOF %3. Select two bores to define J2.")
                   .arg(demoId).arg(int(gp->bodies.size())).arg(gp->dof()));
+    refresh();
+    emit graphChanged();
+}
+
+// Bind the builder to a first-class robot selected elsewhere (the outliner). If the
+// authoring graph already represents that robot (the demo), stay in graph-authoring
+// mode (define/delete/snap). Otherwise -- the boot FANUC, which is a LiveRobot with no
+// authoring graph -- bind to its live model for joint-LIMIT editing. The user's ask
+// "the default loaded robot is not editable" is met: select the FANUC, its joints +
+// limits populate, and edits write straight into the live model (see onApplyLimitLive).
+void RobotBuilderPanel::editRobot(int robotId)
+{
+    if (m_isUpdatingUI || !m_scene) return;
+    auto& reg = m_scene->getRegistry();
+
+    // Authoring graph already owns this robot -> edit it as a graph (richest path).
+    if (auto* g = reg.ctx().find<krs::rbuild::RobotGraph>(); g && g->robotId == robotId) {
+        m_editRobotId = -1;
+        refresh();
+        setStatus(QStringLiteral("Editing authored robot %1: define/delete joints, snap axes.").arg(robotId));
+        return;
+    }
+
+    // Otherwise bind to the LiveRobot (e.g. the FANUC) for limit editing.
+    auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
+    krs::robot::LiveRobot* lr = rr ? rr->get(robotId) : nullptr;
+    if (!lr) { setStatus(QStringLiteral("Robot %1 not found in the live registry.").arg(robotId)); return; }
+    m_editRobotId = robotId;
+    refresh();
+    setStatus(QStringLiteral("Editing %1 (live robot %2): %3 DOF. Pick a DOF, set [lo, hi], Apply Limit.")
+                  .arg(QString::fromStdString(lr->name)).arg(robotId).arg(lr->ndof()));
+}
+
+// Fill the controls from a bound LiveRobot's model (no RobotGraph round-trip, so the
+// FANUC's CAD-derived kinematics are never re-synthesized/perturbed). Returns true iff
+// it handled the refresh (m_editRobotId>=0 and the robot still exists).
+bool RobotBuilderPanel::refreshFromLiveRobot()
+{
+    if (m_editRobotId < 0 || !m_scene) return false;
+    auto& reg = m_scene->getRegistry();
+    auto* rr  = reg.ctx().find<krs::robot::RobotRegistry>();
+    krs::robot::LiveRobot* lr = rr ? rr->get(m_editRobotId) : nullptr;
+    if (!lr) { m_editRobotId = -1; return false; }   // robot gone -> fall back to graph mode
+
+    const QSignalBlocker blocker(this);
+    m_isUpdatingUI = true;
+    m_jointsList->clear();
+
+    // Bind the proven hot-swap config straight to the live model (a copy; Apply writes the
+    // live model directly in onApplyLimitLive). ensureNames() gives the joints stable labels.
+    m_cfg = std::make_unique<krs::rcfg::RobotConfig>();
+    m_cfg->robot = lr->model;
+    m_cfg->ensureNames();
+
+    static const char* kJTypeName[] = { "Revolute", "Prismatic", "Fixed" };
+    int dofSeen = 0;
+    for (int i = 0; i < int(lr->model.joints.size()); ++i) {
+        const auto& j = lr->model.joints[i];
+        const int t = int(j.type);
+        const bool isDof = j.member && j.type != krs::dyn::JType::Fixed;
+        m_jointsList->addItem(QStringLiteral("J%1: %2%3  limits [%4, %5]")
+            .arg(i)
+            .arg(QString::fromLatin1((t >= 0 && t <= 2) ? kJTypeName[t] : "?"))
+            .arg(isDof ? QStringLiteral(" (dof %1)").arg(dofSeen) : QStringLiteral(" (fixed)"))
+            .arg(j.qLower, 0, 'f', 2).arg(j.qUpper, 0, 'f', 2));
+        if (isDof) ++dofSeen;
+    }
+    const int dof = dofSeen;
+    m_dofLabel->setText(QStringLiteral("DOF: %1   (live robot \"%2\", %3 joints)")
+                            .arg(dof).arg(QString::fromStdString(lr->name)).arg(int(lr->model.joints.size())));
+    m_dofIndex->setRange(0, dof > 0 ? dof - 1 : 0);
+
+    m_isUpdatingUI = false;
+    return true;
+}
+
+// Limit edit on a bound LiveRobot (the FANUC): write the new [lo,hi] straight into the
+// live model joint, then rebuild() (DOF count unchanged -> q PRESERVED, no pose jump;
+// the new limits are used by clampDof for every subsequent applyCommand).
+void RobotBuilderPanel::onApplyLimitLive()
+{
+    auto& reg = m_scene->getRegistry();
+    auto* rr  = reg.ctx().find<krs::robot::RobotRegistry>();
+    krs::robot::LiveRobot* lr = rr ? rr->get(m_editRobotId) : nullptr;
+    if (!lr) { setStatus(QStringLiteral("Live robot gone.")); m_editRobotId = -1; refresh(); return; }
+
+    const int idx = m_dofIndex->value();
+    // Map chain-DOF index -> model.joints[] array index (skip fixed / non-member).
+    int arrIdx = -1, dofSeen = 0;
+    for (int ji = 0; ji < int(lr->model.joints.size()); ++ji) {
+        const auto& jt = lr->model.joints[ji];
+        if (!jt.member || jt.type == krs::dyn::JType::Fixed) continue;
+        if (dofSeen == idx) { arrIdx = ji; break; }
+        ++dofSeen;
+    }
+    if (arrIdx < 0) { setStatus(QStringLiteral("DOF index out of range.")); return; }
+
+    const double lo = m_limitLo->value(), hi = m_limitHi->value();
+    if (hi < lo) { setStatus(QStringLiteral("Upper limit must be >= lower limit.")); return; }
+    lr->model.joints[arrIdx].qLower  = lo;
+    lr->model.joints[arrIdx].qUpper  = hi;
+    lr->model.joints[arrIdx].engProv = krs::robot::Provenance::UserSupplied;
+    lr->rebuild();   // DOF count unchanged -> q preserved; clampDof now honours the new limits
+    setStatus(QStringLiteral("Live robot %1 J%2 limits set [%3, %4] (now clamps the drive).")
+                  .arg(m_editRobotId).arg(arrIdx).arg(lo, 0, 'f', 3).arg(hi, 0, 'f', 3));
     refresh();
     emit graphChanged();
 }
@@ -263,6 +371,11 @@ void RobotBuilderPanel::onLoadDemo()
 void RobotBuilderPanel::onDeleteJoint()
 {
     if (m_isUpdatingUI) return;
+    if (m_editRobotId >= 0) {   // FANUC bind: structural joint edits are an authoring-graph op
+        setStatus(QStringLiteral("Delete/define joints applies to builder-authored robots. "
+                                 "Load Demo to author, or edit this robot's limits."));
+        return;
+    }
     auto* g = graph();
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
@@ -285,6 +398,10 @@ void RobotBuilderPanel::onDeleteJoint()
 void RobotBuilderPanel::onDefineFromFeatures()
 {
     if (m_isUpdatingUI) return;
+    if (m_editRobotId >= 0) {   // FANUC bind: feature-define is an authoring-graph op
+        setStatus(QStringLiteral("Define-from-features applies to builder-authored robots. Load Demo to author."));
+        return;
+    }
     auto* g = graph();
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     auto& reg = m_scene->getRegistry();
@@ -327,7 +444,30 @@ void RobotBuilderPanel::onDefineFromFeatures()
 
 void RobotBuilderPanel::onJointSelected(int row)
 {
-    // Reflect the selected joint's axis origin into the adjust spin boxes.
+    // Live-robot bind (FANUC): the row is a model.joints[] index. Reflect that joint's
+    // limits into the limit spins and point the DOF index at it, so Apply Limit acts on
+    // the joint the user clicked.
+    if (m_editRobotId >= 0 && m_scene) {
+        auto& reg = m_scene->getRegistry();
+        auto* rr  = reg.ctx().find<krs::robot::RobotRegistry>();
+        krs::robot::LiveRobot* lr = rr ? rr->get(m_editRobotId) : nullptr;
+        if (!lr || row < 0 || row >= int(lr->model.joints.size())) return;
+        const auto& j = lr->model.joints[row];
+        int dofIdx = -1, dofSeen = 0;
+        for (int ji = 0; ji <= row; ++ji) {
+            const auto& jt = lr->model.joints[ji];
+            if (!jt.member || jt.type == krs::dyn::JType::Fixed) continue;
+            if (ji == row) dofIdx = dofSeen;
+            ++dofSeen;
+        }
+        const QSignalBlocker bl(m_limitLo), bh(m_limitHi), bd(m_dofIndex);
+        if (dofIdx >= 0) m_dofIndex->setValue(dofIdx);
+        m_limitLo->setValue(j.qLower);
+        m_limitHi->setValue(j.qUpper);
+        return;
+    }
+
+    // Authoring graph: reflect the selected joint's axis origin into the adjust spin boxes.
     auto* g = graph();
     if (!g || row < 0 || row >= int(g->joints.size()) || !m_axisX) return;
     const auto& j = g->joints[row];
@@ -340,6 +480,11 @@ void RobotBuilderPanel::onJointSelected(int row)
 void RobotBuilderPanel::onApplyAxisOrigin()
 {
     if (m_isUpdatingUI) return;
+    if (m_editRobotId >= 0) {   // FANUC bind: axes are CAD-derived; only limits are live-editable here
+        setStatus(QStringLiteral("Axis origin editing applies to builder-authored joints. "
+                                 "The live robot's axes are CAD-derived -- edit its limits instead."));
+        return;
+    }
     auto* g = graph();
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
@@ -356,6 +501,10 @@ void RobotBuilderPanel::onApplyAxisOrigin()
 void RobotBuilderPanel::onSnapAxisToBore()
 {
     if (m_isUpdatingUI) return;
+    if (m_editRobotId >= 0) {   // FANUC bind: see onApplyAxisOrigin
+        setStatus(QStringLiteral("Snap-to-bore applies to builder-authored joints, not the CAD-derived live robot."));
+        return;
+    }
     auto* g = graph();
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
@@ -381,6 +530,7 @@ void RobotBuilderPanel::onSnapAxisToBore()
 void RobotBuilderPanel::onApplyLimit()
 {
     if (m_isUpdatingUI) return;
+    if (m_editRobotId >= 0) { onApplyLimitLive(); return; }   // bound to a LiveRobot (the FANUC)
     auto* g = graph();
     if (!g || !m_cfg) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int dof = g->dof();

@@ -474,7 +474,30 @@ bool runRobotOwnerGate() {
                looseOk ? "yes" : "no", looseNotInRobot ? "yes" : "no", step7 ? "OK" : "FAIL");
     }
 
-    printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only honoured)"
+    // ---- STEP 8: live joint-LIMIT edit re-clamps the drive (the editable-FANUC path) ----
+    // onApplyLimitLive() writes new [lo,hi] into model.joints[k] then rebuild()s; the new
+    // limit must govern subsequent commands. NEG-CTRL: under the wide limit the same
+    // command is accepted unclamped, so the clamp is a genuine effect of the edit.
+    {
+        LiveRobot lr;
+        Joint j; j.type = krs::dyn::JType::Revolute; j.member = true;
+        j.qLower = -3.0; j.qUpper = 3.0; j.axis = Eigen::Vector3d::UnitZ();
+        lr.model.joints.push_back(j);
+        lr.model.nLinks = 1;
+        lr.rebuild();
+        lr.setCommandedQ((Eigen::VectorXd(1) << 2.5).finished());
+        const double wide = lr.q[0];                       // wide limit -> 2.5 accepted (NEG-CTRL)
+        lr.model.joints[0].qLower = -1.0; lr.model.joints[0].qUpper = 1.0;   // the edit
+        lr.rebuild();                                      // DOF unchanged -> q preserved
+        lr.setCommandedQ((Eigen::VectorXd(1) << 2.5).finished());
+        const double narrow = lr.q[0];                     // new limit -> clamped to 1.0
+        const bool step8 = std::abs(wide - 2.5) < 1e-9 && std::abs(narrow - 1.0) < 1e-9;
+        pass = pass && step8;
+        printf("[robotowner]   STEP8 live-limit-edit: wide cmd2.5->%.3f ; after narrow[-1,1] cmd2.5->%.3f (clamped)  %s\n",
+               wide, narrow, step8 ? "OK" : "FAIL");
+    }
+
+    printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only + live-limit-edit honoured)"
                                      : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;

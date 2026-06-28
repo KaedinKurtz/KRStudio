@@ -40,6 +40,12 @@ public:
 
 public slots:
     void refresh();   // re-read the live graph into the controls (guarded)
+    // Bind the panel to a first-class robot for editing. If that robot IS the one the
+    // authoring graph represents (the demo), edits go through the full graph path
+    // (define/delete/snap). Otherwise (the boot FANUC, which has no authoring graph) the
+    // panel binds to its LiveRobot for joint-LIMIT editing -- limits don't move FK frames,
+    // so they can never displace the arm. Wired from OutlinerWidget::robotSelected.
+    void editRobot(int robotId);
 
 signals:
     void graphChanged();   // emitted after every edit so MainWindow re-syncs viewport/sim
@@ -58,9 +64,14 @@ private:
     void setupConnections();
     krs::rbuild::RobotGraph* graph() const;   // discover from Scene registry ctx (nullptr if none)
     void setStatus(const QString& msg);
+    bool refreshFromLiveRobot();   // when bound to a LiveRobot (m_editRobotId>=0): fill controls from its model; true if it handled refresh
+    void onApplyLimitLive();       // write the edited limit straight into the bound LiveRobot's model + rebuild
 
     Scene* m_scene = nullptr;
     bool   m_isUpdatingUI = false;
+    // >=0 when the panel is bound to a LiveRobot (e.g. the FANUC) for live limit editing;
+    // -1 when authoring the ctx RobotGraph (the demo). Set by editRobot().
+    int    m_editRobotId = -1;
 
     // controls (objectName set on each for the inventory/gate)
     QPushButton*    m_loadDemoBtn   = nullptr;

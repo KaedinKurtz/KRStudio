@@ -113,6 +113,8 @@
 #include "DockSplitter.h" 
 #include <QOpenGLVersionFunctionsFactory>
 #include <QPushButton>
+#include <QListWidget>
+#include <QSpinBox>
 #include <DockAreaTitleBar.h> 
 #include <QRandomGenerator>
 #include <QColor>
@@ -1610,6 +1612,34 @@ MainWindow::MainWindow(QWidget* parent)
             qInfo() << "[MULTIROBOT] load-demo: panel=" << (rbp != nullptr) << "button=" << (btn != nullptr);
             if (btn) btn->click();
         });
+        // 2a3) Editable FANUC: bind the builder to the boot FANUC (robotId 0) and edit a
+        //      joint LIMIT through the panel; confirm the live model reflects the edit.
+        QTimer::singleShot(6500, this, [this]() {
+            if (!m_robotBuilderPanel) { qInfo() << "[EDITFANUC] no builder panel"; return; }
+            m_robotBuilderPanel->editRobot(0);   // bind to the FANUC (the wired outliner path)
+            auto* jl = m_robotBuilderPanel->findChild<QListWidget*>(QStringLiteral("rbJointsList"));
+            auto* dofSpin = m_robotBuilderPanel->findChild<QSpinBox*>(QStringLiteral("rbLimitDofSpin"));
+            auto* loSpin  = m_robotBuilderPanel->findChild<QDoubleSpinBox*>(QStringLiteral("rbLimitLoSpin"));
+            auto* hiSpin  = m_robotBuilderPanel->findChild<QDoubleSpinBox*>(QStringLiteral("rbLimitHiSpin"));
+            auto* applyBtn = m_robotBuilderPanel->findChild<QPushButton*>(QStringLiteral("rbApplyLimitButton"));
+            const int jointRows = jl ? jl->count() : -1;
+            auto& reg = m_scene->getRegistry();
+            auto* rr  = reg.ctx().find<krs::robot::RobotRegistry>();
+            krs::robot::LiveRobot* lr = rr ? rr->get(0) : nullptr;
+            double beforeLo = -99, beforeHi = -99, afterLo = -99, afterHi = -99;
+            int memberArr = -1;
+            if (lr) for (int ji = 0; ji < int(lr->model.joints.size()); ++ji)
+                if (lr->model.joints[ji].member && lr->model.joints[ji].type != krs::dyn::JType::Fixed) { memberArr = ji; break; }
+            if (lr && memberArr >= 0) { beforeLo = lr->model.joints[memberArr].qLower; beforeHi = lr->model.joints[memberArr].qUpper; }
+            if (dofSpin && loSpin && hiSpin && applyBtn) {
+                dofSpin->setValue(0); loSpin->setValue(-0.5); hiSpin->setValue(0.5);
+                applyBtn->click();   // -> onApplyLimit -> onApplyLimitLive -> writes lr.model + rebuild
+            }
+            if (lr && memberArr >= 0) { afterLo = lr->model.joints[memberArr].qLower; afterHi = lr->model.joints[memberArr].qUpper; }
+            qInfo() << "[EDITFANUC] jointRows=" << jointRows << "memberArr=" << memberArr
+                    << "before=[" << beforeLo << "," << beforeHi << "] after=[" << afterLo << "," << afterHi << "]"
+                    << "editApplied=" << (afterLo > -0.51 && afterLo < -0.49 && afterHi > 0.49 && afterHi < 0.51);
+        });
         // 2b) Select a robot body in the MAIN scene so the grab shows it gold-outlined in
         //     BOTH viewports (cross-viewport selection).
         QTimer::singleShot(5500, this, [this]() {
@@ -2044,6 +2074,12 @@ MainWindow::MainWindow(QWidget* parent)
         auto* outliner = new OutlinerWidget(m_scene.get(), this);
         connect(outliner, &OutlinerWidget::selectionEdited, this,
                 [this]() { refreshGizmoAndProperties(); });
+        // Selecting a robot in the outliner binds the Robot Builder to it for editing
+        // (the FANUC -> live limit editing; the demo -> graph authoring). Raises the
+        // Builder panel so the edit controls are visible.
+        connect(outliner, &OutlinerWidget::robotSelected, this, [this](int robotId) {
+            if (robotId >= 0 && m_robotBuilderPanel) m_robotBuilderPanel->editRobot(robotId);
+        });
         auto* outDock = new ads::CDockWidget(QStringLiteral("Outliner"), this);
         outDock->setWidget(outliner);
         outDock->setStyleSheet(sidePanelStyle);
