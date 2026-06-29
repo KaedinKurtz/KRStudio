@@ -278,11 +278,11 @@ struct RobotGraph {
         return out;
     }
 
-    // Rigid world transform that mates child bore frame jB CONCENTRIC onto parent bore frame
-    // jA: rotate jB's axis parallel to jA's (shortest arc) and slide the child laterally onto
-    // jA's axis LINE. Axial slide + spin about the axis are left FREE (the revolute DOF + the
-    // designed seat depth), so it is a true concentric mate, not an over-seat. Left-multiplied
-    // onto the child subtree's world placements.
+    // Rigid world transform that MATES child bore frame jB onto parent bore frame jA: rotate jB's
+    // axis parallel to jA's (shortest arc) and translate so jB's mate POINT (axisPos -- pass the
+    // selected bore RIM) COINCIDES with jA's. Result: the two selected faces meet at jA's point (the
+    // joint interface / origin) with their axes concentric. Left-multiplied onto the child subtree's
+    // world placements.
     static Eigen::Matrix4d mateTransformConcentric(const RBJoint& jA, const RBJoint& jB) {
         RBJoint a = jA, b = jB; a.orthonormalizeFrame(); b.orthonormalizeFrame();
         const Eigen::Vector3d dA(a.axisDir.x, a.axisDir.y, a.axisDir.z);
@@ -300,9 +300,8 @@ struct RobotGraph {
             R = Eigen::Matrix3d::Identity() + s * K + (1.0 - c) * K * K;   // Rodrigues
         }
         const Eigen::Vector3d RpB = R * pB;
-        const Eigen::Vector3d onLine = pA + ((RpB - pA).dot(dA)) * dA;     // nearest point on A's axis line
         Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
-        T.block<3, 3>(0, 0) = R; T.block<3, 1>(0, 3) = onLine - RpB;
+        T.block<3, 3>(0, 0) = R; T.block<3, 1>(0, 3) = pA - RpB;           // coincide the mate points
         return T;
     }
 

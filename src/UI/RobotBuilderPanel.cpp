@@ -524,23 +524,40 @@ void RobotBuilderPanel::onDefineFromFeatures()
         return;
     }
 
-    // MATE-SNAP: rigidly move the CHILD body + its subtree so its bore is concentric with the PARENT's
-    // bore. The parent (lower chain index) stays fixed; the child snaps onto it (and re-mates back into
-    // place if it was detached + dragged). Build the two picked bore frames and orient them to roles.
+    // MATE-SNAP: rigidly move the CHILD body + its subtree so the two SELECTED faces meet at their
+    // INTERFACE -- the child's selected bore RIM coincides with the parent's, axes concentric. The
+    // parent (lower chain index) stays fixed. Then the joint's persisted frame is set to that interface
+    // (origin) + the concentric axis, exactly as the operator described.
     auto faceFrame = [](const krs::sel::Selection& s) {
-        krs::rbuild::RBJoint f; f.axisPos = s.axisPos; f.axisDir = s.axisDir; f.orthonormalizeFrame(); return f;
+        krs::rbuild::RBJoint f;
+        // the SELECTED rim = the bore end-cap nearest the click (the face the operator pointed at);
+        // fall back to the analytic axis point when no trimmed rim is available (synthetic faces).
+        f.axisPos = (glm::distance(s.axisEnd0, s.axisEnd1) > 1e-5f)
+                    ? (glm::distance(s.hitPoint, s.axisEnd0) <= glm::distance(s.hitPoint, s.axisEnd1)
+                       ? s.axisEnd0 : s.axisEnd1)
+                    : s.axisPos;
+        f.axisDir = s.axisDir; f.orthonormalizeFrame(); return f;
     };
     const krs::rbuild::RBJoint frA = faceFrame(*selA);   // bore on body `a`
     const krs::rbuild::RBJoint frB = faceFrame(*selB);   // bore on body `b`
     const bool aIsParent = (a == parent);
-    krs::robot::snapMateSubtree(*m_scene, *g, parent, child,
-                                aIsParent ? frA : frB,    // parent's bore frame
-                                aIsParent ? frB : frA);   // child's bore frame
+    const krs::rbuild::RBJoint pf = aIsParent ? frA : frB;   // parent's selected face (stays)
+    const krs::rbuild::RBJoint cf = aIsParent ? frB : frA;   // child's selected face (snaps onto pf)
+    krs::robot::snapMateSubtree(*m_scene, *g, parent, child, pf, cf);
+
+    // The joint frame = the interface: origin at the (now coincident) faces, axis concentric to both.
+    const int pj = g->jointBetween(parent, child);
+    if (pj >= 0) {
+        krs::rbuild::EditController c2{ g };
+        c2.setJointAxis(pj, pf.axisDir);             // concentric axis (normal to the selected faces)
+        g->joints[pj].axisPos = pf.axisPos;          // origin at the interface of the two faces
+    }
 
     if (sel) krs::sel::clearSelection(*sel);   // consume the pair so the next joint starts fresh
-    setStatus(QStringLiteral("Mated B%1 (child) concentric to B%2 (parent), axis (%3, %4, %5). DOF %6 -> %7")
+    setStatus(QStringLiteral("Mated B%1 (child) onto B%2 (parent): interface (%3, %4, %5), axis (%6, %7, %8). DOF %9->%10")
         .arg(child).arg(parent)
-        .arg(created.axisDir.x, 0, 'f', 3).arg(created.axisDir.y, 0, 'f', 3).arg(created.axisDir.z, 0, 'f', 3)
+        .arg(pf.axisPos.x, 0, 'f', 3).arg(pf.axisPos.y, 0, 'f', 3).arg(pf.axisPos.z, 0, 'f', 3)
+        .arg(pf.axisDir.x, 0, 'f', 3).arg(pf.axisDir.y, 0, 'f', 3).arg(pf.axisDir.z, 0, 'f', 3)
         .arg(before).arg(ctrl.dof()));
     refresh();
     emit graphChanged();
@@ -1026,9 +1043,21 @@ bool runRobotBuilderPanelGate()
                zeroAxisRejected ? "yes" : "no", (axisDirOk && zeroAxisRejected) ? "PASS" : "FAIL");
     }
 
+    // EDIT-OP-INVOKED: bodyIndexForEntity must find a bore on an EXTRA solid of a collapsed link
+    // (the FANUC case). This was the bug that made "Define from 2 bores" fail on most of the arm --
+    // a bore clicked on an extraEntity returned -1 ("must be on two distinct bodies").
+    bool extraMapOk = false;
+    {
+        RobotGraph g; RBBody b; b.entity = 100; b.extraEntities = { 101, 102 }; g.bodies.push_back(b);
+        extraMapOk = bodyIndexForEntity(g, 100) == 0 && bodyIndexForEntity(g, 101) == 0
+                  && bodyIndexForEntity(g, 102) == 0 && bodyIndexForEntity(g, 999) == -1;
+        printf("[rbuild]   bodyIndexForEntity finds bores on extraEntities (collapsed link): %s  %s\n",
+               extraMapOk ? "yes" : "NO", extraMapOk ? "PASS" : "FAIL");
+    }
+
     const bool pass = completeness && wiringDetector && loadDemoWired && deleteOk && !deleteWrongDir
                     && defineOk && !defineWrongDir && degenRejected && limitOk && typeModelOk
-                    && axisDirOk && zeroAxisRejected;
+                    && axisDirOk && zeroAxisRejected && extraMapOk;
 
     printf("[rbuild]   NEG-CTRLs: delete-wrong-direction=%s define-wrong-direction=%s degenerate-rejected=%s  %s\n",
            deleteWrongDir ? "YES(bug)" : "no", defineWrongDir ? "YES(bug)" : "no",

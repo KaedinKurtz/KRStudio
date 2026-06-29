@@ -102,8 +102,13 @@ int mirrorGraphIntoScene(Scene& preview, const RobotGraph& g, int robotId) {
 }
 
 int bodyIndexForEntity(const RobotGraph& g, int entity) {
-    for (int i = 0; i < int(g.bodies.size()); ++i)
+    for (int i = 0; i < int(g.bodies.size()); ++i) {
         if (g.bodies[i].entity == entity) return i;
+        // A collapsed link (the FANUC case) owns several solids: the rep entity PLUS extraEntities.
+        // A bore clicked on any of those belongs to this body -- without this, picking a bore on an
+        // extra solid returned -1 and "Define from 2 bores" failed on most of the arm.
+        for (int ex : g.bodies[i].extraEntities) if (ex == entity) return i;
+    }
     return -1;
 }
 
