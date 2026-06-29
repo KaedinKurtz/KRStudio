@@ -250,7 +250,15 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
                     const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
                     bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
                     bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
-                    bf.radius = float(cy.Radius() * s); break; }
+                    bf.radius = float(cy.Radius() * s);
+                    // Trimmed axial extent -> the two RIM centres, for snapping a selection ring to the
+                    // nearest bore edge. (V is the axial parameter in unscaled length; scale to metres.)
+                    const double v0 = ad.FirstVParameter(), v1 = ad.LastVParameter();
+                    if (std::abs(v0) < 1e6 && std::abs(v1) < 1e6) {
+                        bf.axisEnd0 = bf.axisPos + bf.axisDir * float(v0 * s);
+                        bf.axisEnd1 = bf.axisPos + bf.axisDir * float(v1 * s);
+                    }
+                    break; }
                 case GeomAbs_Cone: { bf.type = 2; const gp_Cone co = ad.Cone();
                     const gp_Pnt o = co.Axis().Location(); const gp_Dir d = co.Axis().Direction();
                     bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };

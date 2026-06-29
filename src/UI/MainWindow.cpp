@@ -970,6 +970,18 @@ MainWindow::MainWindow(QWidget* parent)
             if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
             st->enabled = true;
             st->selected.clear();
+            // KRS_MATE_DEMO=2: two SYNTHETIC rings side-by-side in clean space (unambiguous color check).
+            if (qEnvironmentVariable("KRS_MATE_DEMO") == QLatin1String("2")) {
+                auto mk = [](glm::vec3 p, float r) {
+                    krs::sel::Selection s; s.valid = true; s.type = krs::sel::FeatureType::Cylinder;
+                    s.axisPos = p; s.axisDir = { 0,0,1 }; s.radius = r; s.hitPoint = p;
+                    s.axisEnd0 = p; s.axisEnd1 = p + glm::vec3(0,0,0.001f); return s;
+                };
+                st->selected.push_back(mk({ -0.5f, 1.6f, 0.0f }, 0.28f));   // GREEN (first)
+                st->selected.push_back(mk({  0.5f, 1.6f, 0.0f }, 0.28f));   // BLUE  (second)
+                qInfo() << "[MATE_DEMO] injected 2 SYNTHETIC rings (green left, blue right) at y=1.6";
+                return;
+            }
             // Collect the largest cylinder face per entity (world frame), keep the two biggest.
             struct Cand { krs::sel::Selection s; float r; };
             std::vector<Cand> cands;
@@ -984,12 +996,20 @@ MainWindow::MainWindow(QWidget* parent)
                 krs::sel::Selection s; s.valid = true; s.entity = e; s.type = krs::sel::FeatureType::Cylinder;
                 s.axisPos = glm::vec3(M * glm::vec4(bf->axisPos, 1.0f));
                 s.axisDir = glm::normalize(R * bf->axisDir);
-                s.radius = bf->radius; s.hitPoint = s.axisPos;
+                s.radius = bf->radius;
+                s.axisEnd0 = glm::vec3(M * glm::vec4(bf->axisEnd0, 1.0f));   // rim centres -> ring snaps to a rim
+                s.axisEnd1 = glm::vec3(M * glm::vec4(bf->axisEnd1, 1.0f));
+                s.hitPoint = s.axisEnd0;                                     // pretend the click was near rim 0
                 cands.push_back({ s, bf->radius });
             }
             std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b){ return a.r > b.r; });
             for (int i = 0; i < int(cands.size()) && i < 2; ++i) st->selected.push_back(cands[i].s);
             qInfo() << "[MATE_DEMO] injected" << int(st->selected.size()) << "bore selections (green+blue rings)";
+            for (int i = 0; i < int(st->selected.size()); ++i) {
+                const glm::vec3 p = st->selected[i].axisEnd0;
+                qInfo() << "[MATE_DEMO]   ring" << i << (i == 0 ? "(GREEN)" : "(BLUE)")
+                        << "at" << p.x << p.y << p.z << "r" << st->selected[i].radius;
+            }
         });
     }
 

@@ -557,6 +557,10 @@ struct BRepFace {
     glm::vec3 axisDir{ 0.0f, 0.0f, 1.0f }; // axis direction (cyl/cone)
     glm::vec3 normal{ 0.0f, 0.0f, 1.0f };  // surface normal (plane)
     float radius = 0.0f;                   // cyl/cone/sphere radius (metres)
+    // The two END-CAP centres of a trimmed cylinder (the bore RIMS), so a selection ring can snap to
+    // the nearest rim instead of floating mid-wall. Both zero on synthetic/demo faces (no trimmed B-Rep).
+    glm::vec3 axisEnd0{ 0.0f };
+    glm::vec3 axisEnd1{ 0.0f };
 };
 struct BRepFaceComponent { std::vector<BRepFace> faces; };  // indexed: faces[triFace[triangle]]
 

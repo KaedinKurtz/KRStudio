@@ -39,6 +39,8 @@ struct Selection {
     glm::vec3 axisDir{ 0.0f, 0.0f, 1.0f }; // unit axis direction (cyl/cone)
     glm::vec3 normal{ 0.0f, 0.0f, 1.0f };  // surface normal (plane)
     float radius = 0.0f;                   // metres
+    glm::vec3 axisEnd0{ 0.0f };            // cylinder rim centres (world); both zero => no trimmed B-Rep
+    glm::vec3 axisEnd1{ 0.0f };
 };
 
 // Resolve a world-space ray to the specific B-Rep face it hits + its exact
@@ -68,6 +70,8 @@ inline Selection resolveHit(entt::registry& reg, const krs::pick::PickHit& hit) 
     s.axisPos = glm::vec3(M * glm::vec4(bf.axisPos, 1.0f));
     s.axisDir = glm::normalize(R * bf.axisDir);
     s.normal = glm::normalize(R * bf.normal);
+    s.axisEnd0 = glm::vec3(M * glm::vec4(bf.axisEnd0, 1.0f));   // bore rim centres -> world (for rim-snap)
+    s.axisEnd1 = glm::vec3(M * glm::vec4(bf.axisEnd1, 1.0f));
     return s;
 }
 
@@ -107,9 +111,17 @@ inline IndicatorGeometry indicator(const Selection& sel, int segments = 32, floa
     if (!sel.valid) return g;
     g.type = sel.type;
     if (sel.type == FeatureType::Cylinder || sel.type == FeatureType::Cone) {
-        // centre = projection of the hit point onto the axis line.
         const glm::vec3 d = sel.axisDir;
-        g.center = sel.axisPos + glm::dot(sel.hitPoint - sel.axisPos, d) * d;
+        // RIM SNAP: if the trimmed B-Rep gave the two end-cap centres, ring the bore EDGE NEAREST the
+        // click (internal or external) so the ring lands on a real rim, not mid-wall. Else (synthetic/
+        // demo faces with no caps) fall back to the cross-section through the hit point.
+        const bool haveCaps = glm::distance(sel.axisEnd0, sel.axisEnd1) > 1e-5f;
+        if (haveCaps) {
+            g.center = (glm::distance(sel.hitPoint, sel.axisEnd0) <= glm::distance(sel.hitPoint, sel.axisEnd1))
+                       ? sel.axisEnd0 : sel.axisEnd1;
+        } else {
+            g.center = sel.axisPos + glm::dot(sel.hitPoint - sel.axisPos, d) * d;  // projection onto axis line
+        }
         g.normal = d;
         g.radius = sel.radius;
         // an orthonormal basis (u,v) spanning the cross-section plane.
