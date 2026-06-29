@@ -260,6 +260,75 @@ bool runMateSnapGate()
 }
 
 // ===========================================================================
+// GATE SPLIT-MERGE -- cutting a joint splits the graph into base + branch (the subtree), re-mating
+// merges them back. Adversarial: DOF/body counts split exactly, each side stays a connected tree, the
+// merge restores the original DOF + body count + end-effector FK, and bad inputs are rejected.
+bool runSplitMergeGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[rbuild] GATE SPLIT-MERGE -- cut a joint -> base+branch; re-mate -> one robot; FK round-trips\n");
+
+    // 5-body serial chain along +x, DOF 4 (all revolute Z).
+    RobotGraph g; g.base = 0;
+    for (int i = 0; i < 5; ++i) {
+        RBBody b; b.name = "b" + std::to_string(i);
+        b.placement = Eigen::Matrix4d::Identity(); b.placement(0, 3) = double(i);
+        b.entity = i; g.bodies.push_back(b);
+    }
+    for (int i = 0; i < 4; ++i) { RBJoint j; j.parent = i; j.child = i + 1; j.type = JType::Revolute;
+                                  j.axisDir = { 0, 0, 1 }; j.orthonormalizeFrame(); g.addJoint(j); }
+    const int dof0 = g.dof(); const int nb0 = int(g.bodies.size());
+
+    auto endX = [](const RobotGraph& gg) {
+        const krs::robot::Robot R = gg.toRobot();
+        krs::dyn::SerialChain ch = R.toChain();
+        std::vector<krs::dyn::Pose> p; ch.fk(Eigen::VectorXd::Zero(ch.nq()), p);
+        if (p.empty()) return -1e9;
+        const Eigen::Matrix4d w = R.basePlacement * poseMat(p.back());
+        return w(0, 3);
+    };
+    const double end0 = endX(g);
+
+    // SPLIT at joint 2 (connects body 2-3): branch = {3,4}, base = {0,1,2}.
+    RobotGraph spBase, spBranch;
+    const bool splitRan = g.splitAtJoint(2, spBase, spBranch);
+    const bool splitCounts = splitRan && int(spBase.bodies.size()) == 3 && int(spBranch.bodies.size()) == 2
+                          && spBase.dof() == 2 && spBranch.dof() == 1;
+    const bool splitTrees = int(spBase.chainOrder().order.size()) == 3      // base reaches all 3
+                         && int(spBranch.chainOrder().order.size()) == 2;   // branch reaches both
+    const bool branchEntitiesKept = spBranch.bodies.size() == 2
+                                 && spBranch.bodies[0].entity == 3 && spBranch.bodies[1].entity == 4;
+
+    // MERGE the branch back onto base body 2 via the original cut joint -> should restore the chain.
+    RobotGraph merged = spBase;
+    const int newJ = merged.mergeFrom(spBranch, 2, g.joints[2]);
+    const bool mergeCounts = newJ >= 0 && int(merged.bodies.size()) == nb0 && merged.dof() == dof0
+                          && int(merged.chainOrder().order.size()) == nb0;
+    const double endM = endX(merged);
+    const bool fkRoundTrip = std::abs(endM - end0) < 1e-9;
+
+    // NEG-CTRLs: an out-of-range joint is rejected.
+    RobotGraph junkA, junkB;
+    const bool negBadIdx = !g.splitAtJoint(99, junkA, junkB) && !g.splitAtJoint(-1, junkA, junkB);
+
+    const bool pass = splitCounts && splitTrees && branchEntitiesKept && mergeCounts && fkRoundTrip && negBadIdx;
+    printf("[rbuild]   split: base(dof2,3 bodies)+branch(dof1,2 bodies)=%s ; each a connected tree=%s ; branch keeps entities=%s  %s\n",
+           splitCounts ? "yes" : "NO", splitTrees ? "yes" : "NO", branchEntitiesKept ? "yes" : "NO",
+           (splitCounts && splitTrees && branchEntitiesKept) ? "PASS" : "FAIL");
+    printf("[rbuild]   merge restores dof=%d/%d bodies=%d/%d connected=%s ; FK end-effector %.6f -> %.6f  %s\n",
+           merged.dof(), dof0, int(merged.bodies.size()), nb0,
+           (int(merged.chainOrder().order.size()) == nb0) ? "yes" : "no", end0, endM,
+           (mergeCounts && fkRoundTrip) ? "PASS" : "FAIL");
+    printf("[rbuild]   NEG-CTRL bad split index rejected: %s  %s\n",
+           negBadIdx ? "yes" : "no", negBadIdx ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (split partitions the tree exactly; merge is its inverse; FK round-trips; bad input rejected)"
+                                 : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
 bool runJointEditGate()
 {
     using std::printf;

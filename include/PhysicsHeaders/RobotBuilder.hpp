@@ -305,6 +305,57 @@ struct RobotGraph {
         return T;
     }
 
+    // ---- SPLIT / MERGE (the multi-robot model: delete a joint -> two robots; mate -> one) ----------
+    // Cut joint `jointIdx`: the joint's CHILD subtree becomes `outBranch` (re-rooted at that child);
+    // the rest stays in `outBase`. Bodies keep their entities; joints are re-indexed to each side. The
+    // cut joint is dropped (re-mating restores it). Internal joints of each side survive. (Out-params,
+    // not a by-value struct, since RobotGraph is incomplete inside its own definition.) Returns false
+    // on a bad index or an attempt to split off the base itself.
+    bool splitAtJoint(int jointIdx, RobotGraph& outBase, RobotGraph& outBranch,
+                      int* branchRootOldIdx = nullptr) const {
+        outBase = RobotGraph{}; outBranch = RobotGraph{};
+        if (jointIdx < 0 || jointIdx >= int(joints.size())) return false;
+        const int childB = joints[jointIdx].child;
+        if (childB < 0 || childB >= int(bodies.size())) return false;
+        const std::vector<int> sub = subtreeOf(childB);          // body indices in the branch
+        std::vector<char> inBranch(bodies.size(), 0);
+        for (int b : sub) if (b >= 0 && b < int(bodies.size())) inBranch[b] = 1;
+        if (base >= 0 && base < int(inBranch.size()) && inBranch[base]) return false;  // never split off the base
+        std::vector<int> toBase(bodies.size(), -1), toBranch(bodies.size(), -1);
+        for (int b = 0; b < int(bodies.size()); ++b) {
+            if (inBranch[b]) { toBranch[b] = int(outBranch.bodies.size()); outBranch.bodies.push_back(bodies[b]); }
+            else             { toBase[b]   = int(outBase.bodies.size());   outBase.bodies.push_back(bodies[b]); }
+        }
+        outBase.base   = (base >= 0 && toBase[base] >= 0) ? toBase[base] : 0;
+        outBranch.base = (toBranch[childB] >= 0) ? toBranch[childB] : 0;
+        outBase.robotId = robotId;
+        for (int j = 0; j < int(joints.size()); ++j) {
+            if (j == jointIdx) continue;
+            const RBJoint& J = joints[j];
+            if (J.parent < 0 || J.child < 0 || J.parent >= int(bodies.size()) || J.child >= int(bodies.size())) continue;
+            const bool pIn = inBranch[J.parent], cIn = inBranch[J.child];
+            if (pIn && cIn)        { RBJoint nj = J; nj.parent = toBranch[J.parent]; nj.child = toBranch[J.child]; outBranch.addJoint(nj); }
+            else if (!pIn && !cIn) { RBJoint nj = J; nj.parent = toBase[J.parent];   nj.child = toBase[J.child];   outBase.addJoint(nj); }
+            // a tree has exactly one parent edge per body, so the only cross edge is jointIdx (dropped).
+        }
+        if (branchRootOldIdx) *branchRootOldIdx = childB;
+        return true;
+    }
+
+    // Merge `branch` INTO this graph: append its bodies (re-indexed) + internal joints, then connect
+    // branch.base (as the child) to `parentBodyInThis` via `crossJoint`. The inverse of splitAtJoint.
+    // Returns the index of the new cross joint, or -1.
+    int mergeFrom(const RobotGraph& branch, int parentBodyInThis, RBJoint crossJoint) {
+        if (parentBodyInThis < 0 || parentBodyInThis >= int(bodies.size())) return -1;
+        const int offset = int(bodies.size());
+        for (const auto& b : branch.bodies) bodies.push_back(b);
+        for (const auto& j : branch.joints) { RBJoint nj = j; nj.parent += offset; nj.child += offset; addJoint(nj); }
+        crossJoint.parent = parentBodyInThis;
+        crossJoint.child  = offset + (branch.base >= 0 ? branch.base : 0);
+        addJoint(crossJoint);
+        return int(joints.size()) - 1;
+    }
+
     // serial-order the member joints by DFS from base (parent = the already-visited
     // endpoint) -> a krs::robot::Robot whose FK at q=0 reproduces the parsed placements.
     krs::robot::Robot toRobot() const {
@@ -624,6 +675,7 @@ bool runAutoParseReport();       // PHASE 1 real-assembly demo: FANUC parse -> i
 bool runAutoParseChainGate();    // PHASE 1 (synthetic: inferred axes match geometry; FK==placements; ambiguous not faked)
 bool runBaseAxisVerticalGate();  // J0 base-turntable axis = vertical part-Z, not a horizontal flange bore (verticality prior)
 bool runMateSnapGate();          // concentric mate transform aligns child bore to parent axis; subtreeOf collects the sub-assembly
+bool runSplitMergeGate();        // cut a joint -> base+branch graphs; re-mate merges; FK round-trips; bad input rejected
 bool runJointEditGate();         // PHASE 2 (manual joint from selected features matches; degenerate rejected; chain re-derives)
 bool runTagOwnershipGate();      // PHASE 3 (single-owner lock-out; membership-tracked)
 bool runSubtreeDetachGate();     // PHASE 4 (downstream subtree detaches intact; tag tracks membership)

@@ -1022,6 +1022,8 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::rbuild::runAutoParseChainGate()
                       & krs::rbuild::runBaseAxisVerticalGate()
                       & krs::rbuild::runMateSnapGate()
+                      & krs::rbuild::runSplitMergeGate()
+                      & krs::robot::runManipOpsGate()
                       & krs::rbuild::runJointEditGate()
                       & krs::rbuild::runTagOwnershipGate()
                       & krs::rbuild::runSubtreeDetachGate();
@@ -1772,6 +1774,8 @@ void RenderingSystem::initializeSharedResources()
             { "GATE AUTO-PARSE-CHAIN (inferred joint axes == interface geometry; FK==parsed placements; ambiguous/offset/planar NOT faked; wrong-axis neg-ctrl)", krs::rbuild::runAutoParseChainGate() },
             { "GATE BASE-AXIS-VERTICAL (J0 base-turntable axis = vertical part-Z, not the horizontal flange decoy; horizontal-coaxial-pair neg-ctrl)", krs::rbuild::runBaseAxisVerticalGate() },
             { "GATE MATE-SNAP (concentric transform aligns child bore to parent axis; subtreeOf collects sub-assembly; off-axis-before neg-ctrl)", krs::rbuild::runMateSnapGate() },
+            { "GATE SPLIT-MERGE (cut joint -> base+branch trees; re-mate merges; DOF/body/FK round-trip; bad-index neg-ctrl)", krs::rbuild::runSplitMergeGate() },
+            { "GATE MANIP-OPS (rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1; unreachable-IK neg-ctrl)", krs::robot::runManipOpsGate() },
             { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },
             { "GATE TAG-OWNERSHIP (member body tagged + free-move-locked; non-member free; always-allow neg-ctrl breaks single-owner)", krs::rbuild::runTagOwnershipGate() },
             { "GATE SUBTREE-DETACH (mid-joint delete detaches subtree intact; tag tracks membership; re-mate restores; destroy & stale-tag neg-ctrls)", krs::rbuild::runSubtreeDetachGate() },

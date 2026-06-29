@@ -418,6 +418,29 @@ LiveRobot* reapplyGraphToRobot(Scene& scene, const krs::rbuild::RobotGraph& g, i
 void snapMateSubtree(Scene& scene, krs::rbuild::RobotGraph& g, int parent, int child,
                      const krs::rbuild::RBJoint& frameParent, const krs::rbuild::RBJoint& frameChild);
 
+// MANIPULATION (the parent-rigid / child-IK drag model). Defined in RobotInstance.cpp.
+// translateRobot: move the whole robot rigidly by a world delta (grab the root/parent -> all follow).
+void translateRobot(Scene& scene, int robotId, const Eigen::Vector3d& deltaWorld);
+// ikDragLink: drag chain body `body` toward a world point; DLS-IK solves the DoF above it. Returns
+// true on convergence; q is clamped to limits (grab a child -> IK bends the chain to the goal).
+bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld);
+
+// SPLIT (delete -> two robots): cut joint `graphJointIdx` of robot `robotId` -- the detached subtree
+// becomes a NEW first-class robot (returned id via outNewRobotId) that moves as a unit; the base side
+// keeps `robotId`. Returns true on success. Defined in RobotInstance.cpp.
+bool splitRobotAtJoint(Scene& scene, int robotId, int graphJointIdx, int* outNewRobotId = nullptr);
+
+// MERGE (mate across two robots): fold `childRobotId` into `parentRobotId`, connecting the child's base
+// to body `parentBodyIdx` (in the parent's graph) via `crossJoint`; the child robot is destroyed.
+// Returns true on success. Defined in RobotInstance.cpp.
+bool mergeRobots(Scene& scene, int parentRobotId, int childRobotId,
+                 int parentBodyIdx, const krs::rbuild::RBJoint& crossJoint);
+
+// GATE MANIP-OPS (env KRS_MANIP_SELFTEST): translateRobot shifts every link by the delta; ikDragLink
+// converges a reachable target + clamps; split->new-robot + merge round-trip; adversarial unreachable
+// target does not diverge/NaN. Defined in RobotInstance.cpp.
+bool runManipOpsGate();
+
 // --- Outliner grouping (step 7): Robot -> bodies tree, multi-robot ----------------
 // One robot group: the named root + the body entities owned by it (robotId match).
 struct RobotGroup {

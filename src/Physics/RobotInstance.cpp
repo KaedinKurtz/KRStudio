@@ -280,6 +280,104 @@ void snapMateSubtree(Scene& scene, krs::rbuild::RobotGraph& g, int /*parent*/, i
     }
 }
 
+// RIGID DRAG: translate the WHOLE robot by a world delta -- move its base placement and re-drive the
+// link viz, so every link follows as one rigid unit (the "grab the root/parent -> subtree follows"
+// behavior). Only the base placement changes; q (the pose) is untouched, so the articulation is kept.
+void translateRobot(Scene& scene, int robotId, const Eigen::Vector3d& deltaWorld)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return;
+    LiveRobot* lr = rr->get(robotId); if (!lr) return;
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity(); T.block<3, 1>(0, 3) = deltaWorld;
+    lr->model.basePlacement = T * lr->model.basePlacement;   // world-left-multiply; restLinkWorld stays
+    if (lr->useRobotFkViz) writeBackRobotViz(scene, *lr);    // delta = base_new*base_old^-1 -> shifts links
+    // Also move the named ROOT entity so the outliner/gizmo anchor follows the robot.
+    if (reg.valid(lr->root)) if (auto* tc = reg.try_get<TransformComponent>(lr->root))
+        setTransformFromEig(*tc, T * eigFromTransform(*tc));
+}
+
+// IK DRAG: drag link `body` (a chain-body index) toward a world target point -- solve the DoF ABOVE it
+// (DLS IK) so the chain bends to reach the goal, then re-drive the viz. Orientation is held at the
+// link's current value (a positional drag). Returns true if the solver converged. q is clamped to the
+// joint limits afterwards. This is the "grab a child -> IK drags the chain" behavior.
+bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return false;
+    LiveRobot* lr = rr->get(robotId); if (!lr || lr->ndof() <= 0) return false;
+    if (body < 0 || body >= lr->chain.nbody()) return false;
+    const Eigen::Matrix4d invBase = lr->model.basePlacement.inverse();
+    krs::dyn::Pose target;
+    target.R = lr->chain.bodyPose(lr->q, body).R;             // hold orientation; drag is positional
+    const Eigen::Vector4d tw(targetWorld.x(), targetWorld.y(), targetWorld.z(), 1.0);
+    target.p = (invBase * tw).head<3>();                     // world -> chain base frame (IK frame)
+    Eigen::VectorXd q = lr->q;
+    const krs::dyn::SerialChain::IKResult res = lr->chain.ik(target, body, q);
+    for (int i = 0; i < int(q.size()); ++i) q[i] = lr->clampDof(i, q[i]);
+    lr->q = q;
+    if (lr->useRobotFkViz) writeBackRobotViz(scene, *lr);
+    return res.ok;
+}
+
+// SPLIT: cut joint `graphJointIdx` of robot `robotId`; the detached subtree becomes a NEW first-class
+// robot (its own root + LiveRobot, rooted at the subtree's current world pose) so it moves as a unit,
+// while the base side keeps `robotId`. Both stay articulated (their internal joints survive).
+bool splitRobotAtJoint(Scene& scene, int robotId, int graphJointIdx, int* outNewRobotId)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return false;
+    LiveRobot* lr = rr->get(robotId); if (!lr) return false;
+
+    krs::rbuild::RobotGraph g = buildGraphFromLiveRobot(*lr);
+    krs::rbuild::RobotGraph base, branch;
+    if (!g.splitAtJoint(graphJointIdx, base, branch)) return false;
+    if (branch.bodies.empty() || base.bodies.empty()) return false;
+
+    int newId = 1; for (auto& rp : rr->robots) if (rp) newId = std::max(newId, rp->robotId + 1);
+    base.robotId = robotId; branch.robotId = newId;
+
+    // Re-instantiate the base (fewer bodies; reuses robot `robotId`'s root), then the branch as a new
+    // robot -- which re-parents + re-tags the subtree's entities onto the new root, moving them off the
+    // base robot. The branch is FK-viz + drivable so its base placement (drag) moves the whole subtree.
+    instantiateFromGraph(scene, base, robotId);
+    LiveRobot* br = instantiateFromGraph(scene, branch, newId);
+    if (!br) return false;
+    br->name = br->model.name = lr->name + " branch " + std::to_string(newId);
+    br->useRobotFkViz = lr->useRobotFkViz; br->ownsDrive = false;   // moved by hand, not the node bus
+    if (reg.valid(br->root)) {
+        reg.emplace_or_replace<RobotRootComponent>(br->root, RobotRootComponent{ br->name, newId });
+        reg.emplace_or_replace<TagComponent>(br->root, br->name);
+    }
+    if (outNewRobotId) *outNewRobotId = newId;
+    return true;
+}
+
+// MERGE: fold `childRobotId` into `parentRobotId` -- append the child's graph, connect its base to
+// `parentBodyIdx` via `crossJoint`, destroy the child robot, and re-instantiate the parent (which
+// re-parents the former child's entities). The inverse of splitRobotAtJoint.
+bool mergeRobots(Scene& scene, int parentRobotId, int childRobotId,
+                 int parentBodyIdx, const krs::rbuild::RBJoint& crossJoint)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return false;
+    LiveRobot* lrP = rr->get(parentRobotId); LiveRobot* lrC = rr->get(childRobotId);
+    if (!lrP || !lrC || parentRobotId == childRobotId) return false;
+
+    krs::rbuild::RobotGraph gP = buildGraphFromLiveRobot(*lrP);
+    krs::rbuild::RobotGraph gC = buildGraphFromLiveRobot(*lrC);
+    if (gP.mergeFrom(gC, parentBodyIdx, crossJoint) < 0) return false;
+    gP.robotId = parentRobotId;
+
+    // Drop the child robot (root + registry entry) BEFORE re-instantiating the parent, which then
+    // re-parents ALL bodies (including the former child's) under the parent root.
+    const entt::entity childRoot = lrC->root;
+    for (auto it = rr->robots.begin(); it != rr->robots.end(); ++it)
+        if (*it && (*it)->robotId == childRobotId) { rr->robots.erase(it); break; }   // invalidates lrC
+    if (reg.valid(childRoot)) reg.destroy(childRoot);
+    instantiateFromGraph(scene, gP, parentRobotId);
+    return true;
+}
+
 LiveRobot* instantiateFanucRobot(Scene& scene,
                                  const std::vector<std::vector<entt::entity>>& movingLinkEntities,
                                  const std::vector<entt::entity>& allBodies,
@@ -644,6 +742,99 @@ bool runRobotOwnerGate() {
 
     printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only + live-limit-edit + graph-round-trip)"
                                      : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
+// GATE MANIP-OPS -- the parent-rigid / child-IK / split / merge manipulation model, on a real scene.
+bool runManipOpsGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[manip] GATE MANIP-OPS -- rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1\n");
+
+    Scene scene; auto& reg = scene.getRegistry();
+    // 4-body planar arm along +x, 3 revolute-Z joints (DOF 3).
+    krs::rbuild::RobotGraph g; g.base = 0;
+    for (int i = 0; i < 4; ++i) { krs::rbuild::RBBody b; b.name = "L" + std::to_string(i);
+        b.placement = Eigen::Matrix4d::Identity(); b.placement(0, 3) = double(i); g.bodies.push_back(b); }
+    for (int i = 0; i < 3; ++i) { krs::rbuild::RBJoint j; j.parent = i; j.child = i + 1;
+        j.type = krs::rbuild::JType::Revolute; j.axisDir = { 0, 0, 1 };
+        j.axisPos = glm::vec3(float(i + 1), 0, 0); j.orthonormalizeFrame(); g.addJoint(j); }
+    g.robotId = 0;
+    auto& gctx = reg.ctx().emplace<krs::rbuild::RobotGraph>(g);
+    krs::rbuild::spawnGraphBodies(scene, gctx, 0);
+    LiveRobot* lr = instantiateFromGraph(scene, gctx, 0);
+    if (!lr || lr->ndof() < 3) { printf("[manip] FAIL: setup (ndof=%d)\n", lr ? lr->ndof() : -1); return false; }
+    lr->useRobotFkViz = true;
+    const int leaf = lr->ndof() - 1;
+
+    auto firstEnt = [&](int k) -> entt::entity {
+        return (k >= 0 && k < int(lr->linkEntities.size()) && !lr->linkEntities[k].empty())
+               ? lr->linkEntities[k][0] : entt::null; };
+    auto entX = [&](entt::entity e) { return reg.valid(e) ? double(reg.get<TransformComponent>(e).translation.x) : 0.0; };
+
+    // --- TRANSLATE: every link entity shifts by the world delta ---
+    const entt::entity e0 = firstEnt(0), eL = firstEnt(leaf);
+    const double x0b = entX(e0), xLb = entX(eL);
+    translateRobot(scene, 0, Eigen::Vector3d(1, 0, 0));
+    const double dx0 = entX(e0) - x0b, dxL = entX(eL) - xLb;
+    const bool transOk = std::abs(dx0 - 1.0) < 1e-5 && std::abs(dxL - 1.0) < 1e-5;
+    translateRobot(scene, 0, Eigen::Vector3d(-1, 0, 0));   // undo
+    printf("[manip]   translate: link0 dx=%.4f leaf dx=%.4f (want 1.0 each)  %s\n", dx0, dxL, transOk ? "PASS" : "FAIL");
+
+    // --- IK: record a reachable leaf target (FK of q*), reset, drag back to it ---
+    Eigen::VectorXd qstar(lr->ndof()); for (int i = 0; i < lr->ndof(); ++i) qstar[i] = 0.3;
+    lr->q = qstar; writeBackRobotViz(scene, *lr);
+    const krs::dyn::Pose ps = lr->chain.bodyPose(lr->q, leaf);
+    const Eigen::Vector3d tgt = (lr->model.basePlacement * Eigen::Vector4d(ps.p.x(), ps.p.y(), ps.p.z(), 1.0)).head<3>();
+    lr->q.setZero(); writeBackRobotViz(scene, *lr);
+    const bool ikConv = ikDragLink(scene, 0, leaf, tgt);
+    const krs::dyn::Pose pa = lr->chain.bodyPose(lr->q, leaf);
+    const Eigen::Vector3d reached = (lr->model.basePlacement * Eigen::Vector4d(pa.p.x(), pa.p.y(), pa.p.z(), 1.0)).head<3>();
+    const double ikErr = (reached - tgt).norm();
+    const bool ikOk = ikErr < 1e-3;
+    printf("[manip]   IK drag to reachable target: converged=%s pos-err=%.2e m (<1e-3)  %s\n",
+           ikConv ? "yes" : "no", ikErr, ikOk ? "PASS" : "FAIL");
+
+    // --- ADVERSARIAL: an unreachable target must not diverge/NaN, and q must stay limit-clamped ---
+    lr->q.setZero(); writeBackRobotViz(scene, *lr);
+    ikDragLink(scene, 0, leaf, Eigen::Vector3d(100, 100, 100));
+    bool finite = true, clamped = true;
+    for (int i = 0; i < int(lr->q.size()); ++i) {
+        if (!std::isfinite(lr->q[i])) finite = false;
+        if (std::abs(lr->q[i] - lr->clampDof(i, lr->q[i])) > 1e-9) clamped = false;
+    }
+    const bool advOk = finite && clamped;
+    printf("[manip]   adversarial unreachable IK: q finite=%s within-limits=%s  %s\n",
+           finite ? "yes" : "no", clamped ? "yes" : "no", advOk ? "PASS" : "FAIL");
+    lr->q.setZero(); writeBackRobotViz(scene, *lr);
+
+    // --- SPLIT: cut joint 1 (body1-body2) -> base{0,1}(dof1) + branch{2,3}(dof1) as a new robot ---
+    int newId = -1;
+    const bool splitRan = splitRobotAtJoint(scene, 0, 1, &newId);
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>();
+    LiveRobot* lrBase = rr ? rr->get(0) : nullptr;
+    LiveRobot* lrBranch = (rr && newId >= 0) ? rr->get(newId) : nullptr;
+    const bool splitOk = splitRan && lrBase && lrBranch && newId > 0
+                      && lrBase->ndof() == 1 && lrBranch->ndof() == 1;
+    printf("[manip]   split joint1: newRobot=%d baseDof=%d branchDof=%d (want 1/1)  %s\n",
+           newId, lrBase ? lrBase->ndof() : -1, lrBranch ? lrBranch->ndof() : -1, splitOk ? "PASS" : "FAIL");
+
+    // --- MERGE: fold the branch back into the base at base-body 1 via a revolute -> 1 robot, DOF 3 ---
+    krs::rbuild::RBJoint cj; cj.type = krs::rbuild::JType::Revolute; cj.axisDir = { 0, 0, 1 };
+    cj.axisPos = glm::vec3(2, 0, 0); cj.orthonormalizeFrame();
+    const bool mergeRan = (newId > 0) && mergeRobots(scene, 0, newId, 1, cj);
+    LiveRobot* lrM = rr ? rr->get(0) : nullptr;
+    const bool childGone = !(rr && rr->get(newId));
+    const bool mergeOk = mergeRan && lrM && lrM->ndof() == 3 && childGone;
+    printf("[manip]   merge: mergedDof=%d (want 3) childRobotGone=%s  %s\n",
+           lrM ? lrM->ndof() : -1, childGone ? "yes" : "no", mergeOk ? "PASS" : "FAIL");
+
+    const bool pass = transOk && ikOk && advOk && splitOk && mergeOk;
+    printf("[manip] %s\n", pass ? "ALL PASS (rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1 round-trips)"
+                                : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;
 }
