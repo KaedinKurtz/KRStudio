@@ -561,6 +561,9 @@ void RobotBuilderPanel::onDefineFromFeatures()
         .arg(before).arg(ctrl.dof()));
     refresh();
     emit graphChanged();
+    // SELECT the just-defined joint so its axis is shown (overlay bar) + the Axis Direction field
+    // targets it -- otherwise the list had no selection and typing an axis + Apply was a no-op.
+    if (pj >= 0) m_jointsList->setCurrentRow(pj);
 }
 
 // Spawn (or re-point) ONE glowing magenta axis bar through the selected joint's axis, in the MAIN

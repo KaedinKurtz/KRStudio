@@ -395,6 +395,11 @@ void ViewportWidget::mousePressEvent(QMouseEvent* ev)
 
             entt::entity h = m_gizmo->pickHandle(ray);
             if (h != entt::null) {
+                // GIZMO PRIORITY: a click on a gizmo handle is a MOVE, never a feature pick -- even if
+                // the drag can't start (locked target). The handle sits over the robot, so without this
+                // the release fell through to cylinder-preferred feature selection and you could never
+                // grab the gizmo. Click empty space (no handle) to drop the gizmo + pick features again.
+                m_suppressClickThisRelease = true;
                 auto& reg = m_scene->getRegistry();
                 entt::entity target = entt::null;
                 for (auto eSel : reg.view<SelectedComponent>()) { target = eSel; break; }
