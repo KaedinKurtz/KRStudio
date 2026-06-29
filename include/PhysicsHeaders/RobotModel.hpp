@@ -95,8 +95,16 @@ struct Robot {
 struct LiveRobot {
     Robot                 model;                  // schema (links/joints/base/limits)
     krs::dyn::SerialChain chain;                  // built from model member joints
-    Eigen::VectorXd       q;                      // commanded -- SOURCE OF TRUTH
+    Eigen::VectorXd       q;                      // commanded (CLAMPED) -- SOURCE OF TRUTH
     Eigen::VectorXd       qActual;                // PhysX feedback (influence)
+    // GHOST VALIDITY (Phase 7): qCommandRaw is the commanded value BEFORE limit clamping -- it equals
+    // q on in-limit DOFs and exceeds a limit where the command was out of range. jointValid[i] is 0
+    // exactly where clampDof() changed the value (the command violated the limit). The translucent
+    // "ghost" robot is FK(qCommandRaw) (where the robot WOULD be unclamped) tinted by validity, drawn
+    // against the real clamped robot FK(q) -- so an operator sees commanded-vs-reachable + which joint
+    // is at its stop.
+    Eigen::VectorXd       qCommandRaw;            // commanded PRE-CLAMP (ghost target)
+    std::vector<char>     jointValid;             // per DOF: 1 = in limits, 0 = clamped (violated)
     std::vector<int>      memberJoint;            // DOF index -> model.joints index
     std::vector<std::vector<entt::entity>> linkEntities;  // chain body idx -> entities it drives
     std::vector<Eigen::Matrix4d> restLinkWorld;   // per chain-body rest world pose (q=0) for delta viz
@@ -110,6 +118,8 @@ struct LiveRobot {
                                                    // hierarchy/selection without hijacking
                                                    // the working FANUC sweep -- step 6a).
     std::string           name = "robot";
+
+    static constexpr double kLimitEps = 1e-9;     // a DOF is "valid" iff clamp moved it <= this
 
     int ndof() const { return int(q.size()); }
 
@@ -126,6 +136,13 @@ struct LiveRobot {
         const int n = chain.nq();
         if (int(q.size())       != n) q       = Eigen::VectorXd::Zero(n);
         if (int(qActual.size()) != n) qActual = Eigen::VectorXd::Zero(n);
+        ensureGhostSized();
+    }
+
+    // Keep the ghost-validity arrays sized to q (default: ghost == q, all valid).
+    void ensureGhostSized() {
+        if (int(qCommandRaw.size()) != int(q.size())) qCommandRaw = q;
+        if (int(jointValid.size())  != int(q.size())) jointValid.assign(size_t(q.size()), char(1));
     }
 
     // Clamp one DOF to its member joint's limits.
@@ -136,20 +153,51 @@ struct LiveRobot {
     }
 
     void setCommandedQ(const Eigen::VectorXd& qc) {
+        ensureGhostSized();
         const int n = std::min(int(qc.size()), int(q.size()));
-        for (int i = 0; i < n; ++i) q[i] = clampDof(i, qc[i]);
+        for (int i = 0; i < n; ++i) {
+            qCommandRaw[i] = qc[i];
+            q[i]           = clampDof(i, qc[i]);
+            jointValid[i]  = (std::abs(qCommandRaw[i] - q[i]) <= kLimitEps) ? char(1) : char(0);
+        }
     }
 
-    // Node-graph command bus -> q. Only DOFs flagged driven are written (undriven rest).
+    // Node-graph command bus -> q. Only DOFs flagged driven are written (undriven rest). The ghost
+    // tracks the RAW command on driven DOFs (so an out-of-limit command shows as a divergent ghost);
+    // undriven DOFs rest at q and are always valid.
     void applyCommand(const std::vector<float>& target, const std::vector<char>& driven) {
+        ensureGhostSized();
         const int n = int(q.size());
-        for (int i = 0; i < n && i < int(target.size()); ++i)
-            if (i < int(driven.size()) && driven[i]) q[i] = clampDof(i, double(target[i]));
+        for (int i = 0; i < n; ++i) {
+            const bool drv = (i < int(target.size())) && (i < int(driven.size())) && driven[i];
+            if (drv) {
+                qCommandRaw[i] = double(target[i]);
+                q[i]           = clampDof(i, qCommandRaw[i]);
+            } else {
+                qCommandRaw[i] = q[i];               // rests at q -> always valid
+            }
+            jointValid[i] = (std::abs(qCommandRaw[i] - q[i]) <= kLimitEps) ? char(1) : char(0);
+        }
+    }
+
+    // True iff any DOF's command was clamped (the ghost diverges from the real robot somewhere).
+    bool anyJointInvalid() const {
+        for (char c : jointValid) if (!c) return true;
+        return false;
     }
 
     // Per chain-body world poses for q (chain base frame). World = basePlacement * pose.
     std::vector<krs::dyn::Pose> fkLinks() const {
         std::vector<krs::dyn::Pose> poses; chain.fk(q, poses); return poses;
+    }
+
+    // Per chain-body poses for the RAW (pre-clamp) command -- the GHOST pose (where the robot would be
+    // if no limit clamped it). Equals fkLinks() when every command is in range. (Phase 7 ghost robot.)
+    std::vector<krs::dyn::Pose> fkGhostLinks() const {
+        std::vector<krs::dyn::Pose> poses;
+        const Eigen::VectorXd qg = (qCommandRaw.size() == q.size()) ? qCommandRaw : q;
+        chain.fk(qg, poses);
+        return poses;
     }
 
     // World-frame (axisPos, axisDir) of each member joint at HOME (q=0), for the Robot
@@ -316,6 +364,12 @@ bool runRobotChainGate();
 // limits + leaves undriven DOFs at rest; rebuild() sizes q to nq(). Step 2 (ECS):
 // instantiateFromGraph creates a named root + parents bodies + real robotId + link map.
 bool runRobotOwnerGate();
+
+// GATE GHOST-VALIDITY (env KRS_GHOST_SELFTEST): the translucent ghost validity robot (CPU half).
+// An out-of-limit command clamps q while qCommandRaw holds the raw target + jointValid flags the
+// violated DOF; the ghost FK(qCommandRaw) diverges from the real FK(q) iff a joint is clamped.
+// NEG-CTRL: a ghost FKing the clamped q shows zero divergence (cannot reveal the violation).
+bool runGhostValidityGate();
 
 // --- the runtime side of the foundation (defined in src/Physics/RobotInstance.cpp) ---
 // Factory: build a LiveRobot + a named root entity from an authoring RobotGraph. Creates
