@@ -559,12 +559,12 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
                 }
             }
 
-            // SUB-FEATURE SELECT: commit the clicked face into the accumulating set, cycled to the
-            // SAME depth as the body pick. Features ACCUMULATE on plain clicks (re-clicking a feature
-            // toggles it off) -- this is the CAD mate-pick model that lets the robot builder collect the
-            // two bores a joint needs without a modifier key (body selection stays Shift-additive). The
-            // highlight is OPERATOR-VISUAL-CONFIRM; the resolved identity is gated.
-            featureCommitCycled(*m_scene, ray, m_xrayIdx, /*additive*/ true);
+            // SUB-FEATURE SELECT: commit the clicked feature into the accumulating set. Uses the
+            // CYLINDER-PREFERRED pick so clicking "on a bore" selects the BORE, not the flat face in
+            // front of it (the reason picking bores did nothing). Features ACCUMULATE on plain clicks
+            // (re-click toggles off) -- the CAD mate-pick model for collecting the two bores a joint
+            // needs. The highlight is OPERATOR-VISUAL-CONFIRM; the resolved identity is gated.
+            featureCommit(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(), width(), height(), /*additive*/ true);
 
             QVector<entt::entity> currentSelection;
             for (auto eSel : reg.view<SelectedComponent>()) currentSelection.push_back(eSel);

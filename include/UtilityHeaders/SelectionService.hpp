@@ -81,6 +81,47 @@ inline Selection pick(entt::registry& reg, const krs::pick::Ray& ray) {
     return resolveHit(reg, *hit);
 }
 
+// CYLINDER-PREFERRED feature pick (the robot-builder mate workflow picks BORES). Clicking "on a bore"
+// usually lands the ray on the flat face AROUND/in front of the hole -- nearest-triangle picking then
+// returns that PLANE, never the bore, and one-hit-per-entity x-ray can't reach the cylinder on the
+// same part. So: return the NEAREST CYLINDER face the ray hits (the bore the operator is aiming at),
+// and only fall back to the plain nearest face when the ray hits no cylinder at all.
+inline Selection pickPreferCylinder(entt::registry& reg, const krs::pick::Ray& ray) {
+    krs::pick::PickHit bestCyl, bestAny;                  // .t defaults to +inf
+    for (auto e : reg.view<TransformComponent, RenderableMeshComponent>()) {
+        const auto& xf = reg.get<TransformComponent>(e);
+        const auto& mesh = reg.get<RenderableMeshComponent>(e);
+        if (mesh.indices.size() < 3 || mesh.vertices.empty()) continue;
+        const auto* brep = reg.try_get<BRepFaceComponent>(e);
+        const glm::mat4 M = xf.getTransform();
+        const glm::mat4 invM = glm::inverse(M);
+        const glm::vec3 roL = glm::vec3(invM * glm::vec4(ray.origin, 1.0f));
+        const glm::vec3 rdL = glm::normalize(glm::vec3(invM * glm::vec4(ray.dir, 0.0f)));
+        for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
+            const glm::vec3& a = mesh.vertices[mesh.indices[i]].position;
+            const glm::vec3& b = mesh.vertices[mesh.indices[i + 1]].position;
+            const glm::vec3& c = mesh.vertices[mesh.indices[i + 2]].position;
+            float tL;
+            if (!krs::pick::rayTriangle(roL, rdL, a, b, c, tL)) continue;
+            if (tL <= 1e-6f) continue;
+            const glm::vec3 worldHit = glm::vec3(M * glm::vec4(roL + rdL * tL, 1.0f));
+            const float worldT = glm::dot(worldHit - ray.origin, ray.dir);
+            if (worldT <= 1e-5f) continue;
+            const int tri = int(i / 3);
+            if (worldT < bestAny.t) { bestAny.entity = e; bestAny.worldPos = worldHit; bestAny.t = worldT; bestAny.tri = tri; }
+            if (brep && tri < int(mesh.triFace.size())) {
+                const int fid = mesh.triFace[tri];
+                if (fid >= 0 && fid < int(brep->faces.size()) && brep->faces[fid].type == 1 && worldT < bestCyl.t) {
+                    bestCyl.entity = e; bestCyl.worldPos = worldHit; bestCyl.t = worldT; bestCyl.tri = tri;
+                }
+            }
+        }
+    }
+    if (bestCyl.entity != entt::null) return resolveHit(reg, bestCyl);   // the bore the operator aimed at
+    if (bestAny.entity != entt::null) return resolveHit(reg, bestAny);   // fallback: nearest face
+    return Selection{};
+}
+
 // X-RAY feature pick: resolve the cycleIndex-th body the ray pierces (near->far), so repeated clicks
 // at the same pixel walk DEEPER and can select a bore OCCLUDED behind the component in front of it.
 // cycleIndex is taken modulo the hit count; an empty result yields an invalid Selection. hitCount (if
@@ -174,7 +215,7 @@ struct SelectionState {
 // HOVER: resolve the ray and store it as the hovered feature (replaces prior hover).
 // A miss stores an invalid hover (highlight disappears). The stored hover IS pick().
 inline void updateHover(SelectionState& st, entt::registry& reg, const krs::pick::Ray& ray) {
-    st.hover = pick(reg, ray);
+    st.hover = pickPreferCylinder(reg, ray);   // bores win over the flat face around them
 }
 
 // CLICK / COMMIT: resolve the ray; on a hit ADD the feature to the selected SET
@@ -184,7 +225,7 @@ inline void updateHover(SelectionState& st, entt::registry& reg, const krs::pick
 // Returns the resolved Selection (the exact pick result -- the highlight tracks THIS).
 inline Selection commitSelection(SelectionState& st, entt::registry& reg,
                                  const krs::pick::Ray& ray, bool additive = true) {
-    const Selection s = pick(reg, ray);
+    const Selection s = pickPreferCylinder(reg, ray);   // bores win over the flat face around them
     if (!s.valid) return s;                              // miss -> no change to the set
     for (std::size_t i = 0; i < st.selected.size(); ++i) {
         if (sameFeature(st.selected[i], s)) {            // toggle off if re-picked

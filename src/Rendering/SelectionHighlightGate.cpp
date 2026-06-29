@@ -212,8 +212,8 @@ bool runHighlightMatchesGate()
 
     auto castAt = [&](const glm::vec3& origin, const glm::vec3& dir) {
         krs::pick::Ray ray; ray.origin = origin; ray.dir = glm::normalize(dir);
-        const Selection truth = pick(reg, ray);
-        // HOVER stores exactly pick(): the highlight tracks the TRUE resolved feature.
+        const Selection truth = pickPreferCylinder(reg, ray);   // updateHover's resolver (bores win)
+        // HOVER stores exactly the resolver result: the highlight tracks the TRUE resolved feature.
         updateHover(st, reg, ray);
         if (!truth.valid) {
             ++misses;

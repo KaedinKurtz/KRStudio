@@ -959,6 +959,91 @@ MainWindow::MainWindow(QWidget* parent)
         ghostTimer->start(250);
     }
 
+    // KRS_PICKTEST: headless diagnostic of the REAL feature-pick path (krs::sel::pick) against the
+    // actual FANUC bores -- localizes "clicking a bore highlights nothing". For a sample of cylinder
+    // faces it casts a ray that MUST hit that bore's wall and reports whether pick() resolved it.
+    if (qEnvironmentVariableIsSet("KRS_PICKTEST")) {
+        QTimer::singleShot(3500, this, [this]() {
+            if (!m_scene) return;
+            auto& reg = m_scene->getRegistry();
+            auto* st = reg.ctx().find<krs::sel::SelectionState>();
+            int nBrep = 0, nCyl = 0;
+            for (auto e : reg.view<RenderableMeshComponent, BRepFaceComponent>()) {
+                ++nBrep; const auto& b = reg.get<BRepFaceComponent>(e);
+                for (const auto& f : b.faces) if (f.type == 1) ++nCyl;
+            }
+            qInfo() << "[PICKTEST] SelectionState present=" << (st != nullptr)
+                    << "enabled=" << (st ? st->enabled : false)
+                    << "; BRep entities=" << nBrep << "; cylinder faces=" << nCyl;
+            int attempts = 0, resolvedCyl = 0, hitSomething = 0, sameEntity = 0;
+            for (auto e : reg.view<RenderableMeshComponent, BRepFaceComponent, TransformComponent>()) {
+                const auto& brep = reg.get<BRepFaceComponent>(e);
+                const glm::mat4 M = reg.get<TransformComponent>(e).getTransform();
+                const glm::mat3 R = glm::mat3(glm::inverseTranspose(M));
+                for (const auto& f : brep.faces) {
+                    if (f.type != 1 || f.radius < 1e-4f) continue;
+                    if (attempts >= 24) break;
+                    const glm::vec3 wp = glm::vec3(M * glm::vec4(f.axisPos, 1.0f));
+                    glm::vec3 wd = glm::normalize(R * f.axisDir);
+                    glm::vec3 perp = glm::cross(wd, glm::vec3(0, 1, 0));
+                    if (glm::dot(perp, perp) < 1e-6f) perp = glm::cross(wd, glm::vec3(1, 0, 0));
+                    perp = glm::normalize(perp);
+                    krs::pick::Ray ray; ray.origin = wp + perp * (f.radius + 0.04f); ray.dir = -perp;
+                    const krs::sel::Selection s = krs::sel::pick(reg, ray);
+                    ++attempts;
+                    if (s.entity != entt::null) ++hitSomething;
+                    if (s.entity == e) ++sameEntity;
+                    if (s.valid && s.type == krs::sel::FeatureType::Cylinder) ++resolvedCyl;
+                }
+                if (attempts >= 24) break;
+            }
+            qInfo() << "[PICKTEST] ray-at-bore:" << attempts << "attempts;" << hitSomething
+                    << "hit an entity;" << sameEntity << "hit the TARGET entity;" << resolvedCyl
+                    << "resolved to a valid CYLINDER selection";
+
+            // SCREEN-RAY test: the EXACT live click path -- project a bore to a pixel via the primary
+            // viewport's camera, build the ray with makeRayFromScreen, and run the real pick(). This is
+            // what hover/click do; isolates makeRayFromScreen / the camera from pick/resolveHit.
+            if (ViewportWidget* vp = primaryViewport()) {
+                const Camera& cam = vp->getCamera();
+                const int w = vp->width(), h = vp->height();
+                const float aspect = (h > 0) ? float(w) / float(h) : 1.0f;
+                const glm::mat4 P = cam.getProjectionMatrix(aspect);
+                const glm::mat4 V = cam.getViewMatrix();
+                int onScreen = 0, scrAtt = 0, scrHit = 0, scrCyl = 0, scrPlane = 0;
+                for (auto e : reg.view<RenderableMeshComponent, BRepFaceComponent, TransformComponent>()) {
+                    const auto& brep = reg.get<BRepFaceComponent>(e);
+                    const glm::mat4 M = reg.get<TransformComponent>(e).getTransform();
+                    for (const auto& f : brep.faces) {
+                        if (f.type != 1 || f.radius < 1e-3f) continue;
+                        if (scrAtt >= 30) break;
+                        const glm::vec3 wp = glm::vec3(M * glm::vec4(f.axisPos, 1.0f));
+                        const glm::vec4 clip = P * V * glm::vec4(wp, 1.0f);
+                        if (clip.w <= 1e-4f) continue;
+                        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+                        if (ndc.x < -1 || ndc.x > 1 || ndc.y < -1 || ndc.y > 1) continue;
+                        ++onScreen;
+                        const int px = int((ndc.x * 0.5f + 0.5f) * w);
+                        const int py = int((1.0f - (ndc.y * 0.5f + 0.5f)) * h);
+                        const krs::pick::Ray ray = krs::pick::makeRayFromScreen(P, V, px, py, w, h);
+                        if (!std::isfinite(ray.dir.x)) continue;
+                        ++scrAtt;
+                        const krs::sel::Selection s = krs::sel::pickPreferCylinder(reg, ray);   // the live commit path
+                        if (s.entity != entt::null) ++scrHit;
+                        if (s.valid && s.type == krs::sel::FeatureType::Cylinder) ++scrCyl;
+                        if (s.valid && s.type == krs::sel::FeatureType::Plane) ++scrPlane;
+                    }
+                    if (scrAtt >= 30) break;
+                }
+                qInfo() << "[PICKTEST] screen-ray via primary vp(" << w << "x" << h << "): onScreen=" << onScreen
+                        << "; attempts=" << scrAtt << "; hit=" << scrHit << "; cylinder=" << scrCyl
+                        << "; plane=" << scrPlane;
+            } else {
+                qInfo() << "[PICKTEST] no primary viewport available";
+            }
+        });
+    }
+
     // KRS_MATE_DEMO: inject the TWO largest FANUC bore selections into the main scene so the
     // green/blue selection rings are visible for a screenshot (verifies the selection-feedback fix
     // without scripting viewport clicks). First bore -> green, second -> blue.
