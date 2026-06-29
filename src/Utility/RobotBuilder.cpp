@@ -253,6 +253,18 @@ bool runAutoParseReport()
     printf("[autoparse]   NAME-DRIVEN chain: %d revolute joint(s), DOF=%d, %d ambiguous(need manual axis); "
            "named order base->j1..j6 = %s\n",
            revs, dofN, ambig, orderOk ? "OK" : "WRONG");
+    // Per-joint axes of the chain ACTUALLY used at boot (J0 = base turntable). Confirms the base
+    // verticality prior + flags any axis the user must refine via the Joint Axis Direction field.
+    {
+        const Eigen::Vector3d bz = gn.bodies[gn.base].placement.block<3,1>(0,2);
+        printf("[autoparse]   base part-Z (mounting normal) = (%.3f, %.3f, %.3f)\n", bz.x(), bz.y(), bz.z());
+        for (int ji = 0; ji < int(gn.joints.size()); ++ji) {
+            const auto& j = gn.joints[ji];
+            printf("[autoparse]     name-chain J%d: B%d->B%d axis=(%.3f, %.3f, %.3f)%s\n",
+                   ji, j.parent, j.child, j.axisDir.x, j.axisDir.y, j.axisDir.z,
+                   j.ambiguous ? " (ambiguous)" : "");
+        }
+    }
 
     // Gate passes iff a real 6-joint serial chain in the NAMED order was produced (axes may
     // still be ambiguous on the wrist -- that is honest, the user defines those).

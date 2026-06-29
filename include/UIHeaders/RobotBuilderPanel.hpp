@@ -55,9 +55,11 @@ private slots:
     void onLoadDemo();
     void onDeleteJoint();
     void onDefineFromFeatures();
+    void onClearSelection();   // clear the accumulated bore/feature selection set
     void onJointSelected(int row);
     void onApplyLimit();
     void onApplyAxisOrigin();   // move the selected joint's axis origin (where it snaps to)
+    void onApplyAxisDir();      // set the selected joint's axis DIRECTION (the rotation/translation axis)
     void onSnapAxisToBore();    // snap the selected joint's axis to the selected bore feature
     void onJointTypeChanged(int comboIndex);   // re-type the selected joint (Revolute/Continuous/Prismatic/Fixed)
 
@@ -83,6 +85,7 @@ private:
     QPushButton*    m_deleteBtn     = nullptr;
     QLabel*         m_defineHint    = nullptr;
     QPushButton*    m_defineBtn     = nullptr;
+    QPushButton*    m_clearSelBtn   = nullptr;
     QSpinBox*       m_dofIndex      = nullptr;
     QDoubleSpinBox* m_limitLo       = nullptr;
     QDoubleSpinBox* m_limitHi       = nullptr;
@@ -93,6 +96,11 @@ private:
     QDoubleSpinBox* m_axisZ         = nullptr;
     QPushButton*    m_applyAxisBtn  = nullptr;
     QPushButton*    m_snapAxisBtn   = nullptr;
+    // Joint axis DIRECTION (the actual rotation/translation axis) -- adjusts RBJoint.axisDir.
+    QDoubleSpinBox* m_dirX          = nullptr;
+    QDoubleSpinBox* m_dirY          = nullptr;
+    QDoubleSpinBox* m_dirZ          = nullptr;
+    QPushButton*    m_applyDirBtn   = nullptr;
     QLabel*         m_status        = nullptr;
 
     // Proven property hot-swap object (krs::rcfg). Rebuilt from graph->toRobot() on

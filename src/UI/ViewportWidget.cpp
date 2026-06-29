@@ -560,9 +560,11 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
             }
 
             // SUB-FEATURE SELECT: commit the clicked face into the accumulating set, cycled to the
-            // SAME depth as the body pick (Shift = additive multi-select; plain click replaces). The
+            // SAME depth as the body pick. Features ACCUMULATE on plain clicks (re-clicking a feature
+            // toggles it off) -- this is the CAD mate-pick model that lets the robot builder collect the
+            // two bores a joint needs without a modifier key (body selection stays Shift-additive). The
             // highlight is OPERATOR-VISUAL-CONFIRM; the resolved identity is gated.
-            featureCommitCycled(*m_scene, ray, m_xrayIdx, isShiftPressed);
+            featureCommitCycled(*m_scene, ray, m_xrayIdx, /*additive*/ true);
 
             QVector<entt::entity> currentSelection;
             for (auto eSel : reg.view<SelectedComponent>()) currentSelection.push_back(eSel);

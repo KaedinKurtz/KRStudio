@@ -311,7 +311,9 @@ struct RobotGraph {
 // degenerate pair (non-coaxial / non-cylinder), rejected for the right reason.
 inline bool defineRevoluteFromSelection(const BRepFace& worldFaceA, const BRepFace& worldFaceB,
                                         int bodyA, int bodyB, RBJoint& out,
-                                        double coaxTol = 1e-4)
+                                        double coaxTol = 5e-3)   // match the auto-parser; tight enough to
+                                                                 // reject non-coaxial bores, loose enough
+                                                                 // for real machined CAD bore pairs
 {
     krs::joint::JointFrame jf; double ang = 0, off = 0;
     if (!krs::joint::deriveRevoluteFromBores(worldFaceA, worldFaceB, jf, coaxTol, &ang, &off)) return false;
@@ -410,8 +412,41 @@ inline RobotGraph buildNamedSerialChain(const std::vector<ParsedPart>& parts)
     };
     for (int bi = 1; bi < int(g.bodies.size()); ++bi) {
         RBJoint best; double bestRes = 1e30; bool found = false;
+
+        // (0) BASE-JOINT VERTICALITY PRIOR (J0 only, bi==1): the first joint is the base turntable,
+        //     whose axis is the base MOUNTING NORMAL -- the base's own part-Z -- not a horizontal
+        //     flange/bolt bore. The generic radius/coaxiality search below latches onto the largest
+        //     horizontal bore (a bolt circle / flange face), giving J0 a wrong horizontal axis. So
+        //     for the base joint, prefer the cylinder whose axis is most parallel to the base part-Z;
+        //     if none is convincingly vertical, fall back to the base part-Z through the base origin.
+        //     (Keyed off the base's OWN Z so it follows a tilted base mount, not hard world-up.)
+        if (bi == 1) {
+            const Eigen::Vector3d upE = g.bodies[g.base].placement.block<3, 1>(0, 2);
+            const glm::vec3 up = glm::normalize(glm::vec3(float(upE.x()), float(upE.y()), float(upE.z())));
+            BRepFace bestF; float bestVert = -1.f; bool anyCyl = false;
+            for (int side = 0; side < 2; ++side)
+                for (int pi : linkParts[bi - 1 + side])
+                    for (const auto& f : parts[pi].faces) {
+                        if (f.type != 1) continue;
+                        const BRepFace w = faceToWorld(f, parts[pi].placement);
+                        const float vert = std::abs(glm::dot(glm::normalize(w.axisDir), up));
+                        if (vert > bestVert) { bestVert = vert; bestF = w; anyCyl = true; }
+                    }
+            if (anyCyl && bestVert > 0.7f) {           // a convincingly-vertical bore exists -> use it
+                best.axisDir = glm::normalize(bestF.axisDir);
+                best.axisPos = bestF.axisPos;
+            } else {                                    // else the base mounting normal through the base origin
+                best.axisDir = up;
+                best.axisPos = glm::vec3(float(g.bodies[g.base].placement(0, 3)),
+                                         float(g.bodies[g.base].placement(1, 3)),
+                                         float(g.bodies[g.base].placement(2, 3)));
+            }
+            if (glm::dot(best.axisDir, up) < 0.0f) best.axisDir = -best.axisDir;  // consistent +up sign
+            best.residual = 0.0; found = true;
+        }
+
         // (1) best coaxial bore PAIR across the two groups (highest confidence).
-        for (int a : linkParts[bi - 1]) for (int b : linkParts[bi]) {
+        if (!found) for (int a : linkParts[bi - 1]) for (int b : linkParts[bi]) {
             RBJoint cand;
             if (inferRevolute(parts[a], parts[b], cand, /*coaxTol*/ 5e-3, /*radTol*/ 5e-3)
                 && cand.residual < bestRes) {
@@ -503,6 +538,20 @@ struct EditController {
         graph->joints[jointIdx].prov   = Prov::Manual;
         return true;
     }
+
+    // SET-JOINT-AXIS control: edit a joint's rotation/translation axis DIRECTION (world frame).
+    // Normalizes, re-orthonormalizes the persisted mate frame (refDir kept perpendicular to the
+    // new axis), and marks the joint Manual. The world axis is rotated into the parent-link frame
+    // by toRobot() (rj.axis = parent.R^-1 * axisDir), so this is the single source of the FK axis.
+    // Returns false on a zero-length direction (rejected for the right reason).
+    bool setJointAxis(int jointIdx, const glm::vec3& worldDir) {
+        if (!graph || jointIdx < 0 || jointIdx >= int(graph->joints.size())) return false;
+        if (glm::length(worldDir) < 1e-6f) return false;
+        graph->joints[jointIdx].axisDir = glm::normalize(worldDir);
+        graph->joints[jointIdx].orthonormalizeFrame();
+        graph->joints[jointIdx].prov = Prov::Manual;
+        return true;
+    }
 };
 
 // ---- PHASE 0 recon + PHASES 1-4 gates (defined in RobotBuilder.cpp /
@@ -510,6 +559,7 @@ struct EditController {
 bool runParseReconGate();        // PHASE 0 (OCCT, real FANUC STEP)
 bool runAutoParseReport();       // PHASE 1 real-assembly demo: FANUC parse -> inference -> report (OCCT)
 bool runAutoParseChainGate();    // PHASE 1 (synthetic: inferred axes match geometry; FK==placements; ambiguous not faked)
+bool runBaseAxisVerticalGate();  // J0 base-turntable axis = vertical part-Z, not a horizontal flange bore (verticality prior)
 bool runJointEditGate();         // PHASE 2 (manual joint from selected features matches; degenerate rejected; chain re-derives)
 bool runTagOwnershipGate();      // PHASE 3 (single-owner lock-out; membership-tracked)
 bool runSubtreeDetachGate();     // PHASE 4 (downstream subtree detaches intact; tag tracks membership)

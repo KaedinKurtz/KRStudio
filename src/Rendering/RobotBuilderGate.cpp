@@ -156,6 +156,57 @@ bool runAutoParseChainGate()
 }
 
 // ===========================================================================
+// GATE BASE-AXIS-VERTICAL -- the J0 (base turntable) axis must be the base mounting normal (vertical
+// part-Z), NOT a horizontal flange/bolt bore. Replicates the real FANUC failure: the base<->j1
+// interface's only clean COAXIAL bore PAIR is a HORIZONTAL flange bore (the largest cylinder, which
+// the radius/coaxiality search latches onto), while the true turntable axis is a VERTICAL slew bore
+// that is NOT coaxial across the groups. The verticality prior (buildNamedSerialChain, bi==1) must
+// pick the vertical axis anyway. NEG-CTRL: the horizontal coaxial pair genuinely exists, so without
+// the prior J0 would be horizontal -- proving the prior is load-bearing, not a tautology.
+bool runBaseAxisVerticalGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[rbuild] GATE BASE-AXIS-VERTICAL -- J0 base-turntable axis is vertical (base part-Z), not a horizontal flange bore\n");
+
+    RBBody base; base.name = "430-base"; base.placement = Eigen::Matrix4d::Identity();
+    RBBody j1;   j1.name   = "430-j1";   j1.placement   = Eigen::Matrix4d::Identity();
+
+    const glm::vec3 horizAxis(1, 0, 0), vertAxis(0, 0, 1);
+    // Horizontal flange bore, COAXIAL across base+j1 (the decoy the radius search picks), LARGER radius.
+    addCylWorld(base, glm::vec3(0.0f, 0.0f, 0.5f), horizAxis, 0.10f);
+    addCylWorld(j1,   glm::vec3(0.0f, 0.0f, 0.5f), horizAxis, 0.10f);
+    // Vertical slew bores, NOT coaxial across the groups (2 cm offset), SMALLER radius -- the TRUE axis.
+    addCylWorld(base, glm::vec3(0.00f, 0.0f, 0.5f), vertAxis, 0.06f);
+    addCylWorld(j1,   glm::vec3(0.02f, 0.0f, 0.5f), vertAxis, 0.06f);
+
+    std::vector<ParsedPart> parts = { base, j1 };
+    RobotGraph g = buildNamedSerialChain(parts);
+
+    const bool haveJoint = !g.joints.empty();
+    const glm::vec3 axis = haveJoint ? glm::normalize(g.joints[0].axisDir) : glm::vec3(0);
+    const float vertical = std::abs(glm::dot(axis, vertAxis));
+    const bool isVertical = haveJoint && vertical > 0.99f;
+
+    // NEG-CTRL: the radius/coaxiality search WOULD pick the horizontal flange pair (it exists + is
+    // perfectly coaxial). Confirm, so "J0 is vertical" is a genuine effect of the prior.
+    RBJoint oldGuess;
+    const bool horizPairExists = inferRevolute(base, j1, oldGuess, 5e-3, 5e-3);
+    const float oldHoriz = horizPairExists ? std::abs(glm::dot(glm::normalize(oldGuess.axisDir), horizAxis)) : 0.f;
+    const bool oldWouldBeHorizontal = horizPairExists && oldHoriz > 0.99f;
+
+    const bool pass = isVertical && oldWouldBeHorizontal;
+    printf("[rbuild]   J0 axis = (%.3f, %.3f, %.3f) ; verticality=%.3f (want >0.99)  %s\n",
+           axis.x, axis.y, axis.z, vertical, isVertical ? "PASS" : "FAIL");
+    printf("[rbuild]   NEG-CTRL: horizontal coaxial flange pair exists (old search picks it, horiz=%.3f) -> prior non-vacuous: %s\n",
+           oldHoriz, oldWouldBeHorizontal ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (base joint resolves to the vertical turntable axis, overriding the horizontal flange decoy)"
+                                 : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
 bool runJointEditGate()
 {
     using std::printf;

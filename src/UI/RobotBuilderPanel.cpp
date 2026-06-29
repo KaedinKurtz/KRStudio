@@ -111,12 +111,18 @@ void RobotBuilderPanel::initializeUI()
 
     // --- Define joint from features ---
     layout->addWidget(makeSectionHeader(QStringLiteral("Define Joint"), content));
-    m_defineHint = new QLabel(QStringLiteral("Select two coaxial bores in the viewport, then:"), content);
+    m_defineHint = new QLabel(QStringLiteral(
+        "Click two coaxial bores in the viewport (each one highlights and stays selected; "
+        "click a bore again to deselect, or use Clear). Then Define a revolute about their shared axis."),
+        content);
     m_defineHint->setWordWrap(true);
     layout->addWidget(m_defineHint);
     m_defineBtn = new QPushButton(QStringLiteral("Define Revolute from 2 Selected Bores"), content);
     m_defineBtn->setObjectName(QStringLiteral("rbDefineFromFeaturesButton"));
     layout->addWidget(m_defineBtn);
+    m_clearSelBtn = new QPushButton(QStringLiteral("Clear Bore Selection"), content);
+    m_clearSelBtn->setObjectName(QStringLiteral("rbClearSelectionButton"));
+    layout->addWidget(m_clearSelBtn);
 
     // --- Joint type (Revolute / Continuous / Prismatic / Fixed) for the selected joint ---
     layout->addWidget(makeSectionHeader(QStringLiteral("Joint Type"), content));
@@ -179,6 +185,31 @@ void RobotBuilderPanel::initializeUI()
     m_snapAxisBtn->setObjectName(QStringLiteral("rbSnapAxisButton"));
     layout->addWidget(m_snapAxisBtn);
 
+    // --- Joint axis DIRECTION (the rotation/translation axis of the selected joint) ---
+    // This is the actual joint AXIS (e.g. a base turntable is (0,0,1)); editing it corrects a
+    // mis-inferred axis directly. Written to RBJoint.axisDir (world); toRobot() rotates it into the
+    // parent-link frame, so the live robot's joint axis updates on Apply.
+    layout->addWidget(makeSectionHeader(QStringLiteral("Joint Axis Direction"), content));
+    auto* dirBox = new QGroupBox(content);
+    auto* dirForm = new QFormLayout(dirBox);
+    auto mkDirSpin = [&](const char* objName) {
+        auto* s = new QDoubleSpinBox(dirBox);
+        s->setObjectName(QString::fromLatin1(objName));
+        s->setRange(-1.0, 1.0); s->setDecimals(3); s->setSingleStep(0.05);
+        s->setKeyboardTracking(false);
+        return s;
+    };
+    m_dirX = mkDirSpin("rbDirXSpin");
+    m_dirY = mkDirSpin("rbDirYSpin");
+    m_dirZ = mkDirSpin("rbDirZSpin");
+    dirForm->addRow(QStringLiteral("Axis X"), m_dirX);
+    dirForm->addRow(QStringLiteral("Axis Y"), m_dirY);
+    dirForm->addRow(QStringLiteral("Axis Z"), m_dirZ);
+    layout->addWidget(dirBox);
+    m_applyDirBtn = new QPushButton(QStringLiteral("Apply Axis Direction to Selected Joint"), content);
+    m_applyDirBtn->setObjectName(QStringLiteral("rbApplyDirButton"));
+    layout->addWidget(m_applyDirBtn);
+
     // --- Status ---
     m_status = new QLabel(QStringLiteral("No robot loaded."), content);
     m_status->setObjectName(QStringLiteral("rbStatusLabel"));
@@ -195,8 +226,10 @@ void RobotBuilderPanel::setupConnections()
     connect(m_loadDemoBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onLoadDemo);
     connect(m_deleteBtn,     &QPushButton::clicked,           this, &RobotBuilderPanel::onDeleteJoint);
     connect(m_defineBtn,     &QPushButton::clicked,           this, &RobotBuilderPanel::onDefineFromFeatures);
+    connect(m_clearSelBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onClearSelection);
     connect(m_applyLimitBtn, &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyLimit);
     connect(m_applyAxisBtn,  &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyAxisOrigin);
+    connect(m_applyDirBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyAxisDir);
     connect(m_snapAxisBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onSnapAxisToBore);
     connect(m_jointsList,    &QListWidget::currentRowChanged, this, &RobotBuilderPanel::onJointSelected);
     connect(m_jointType, QOverload<int>::of(&QComboBox::activated),
@@ -287,7 +320,8 @@ void RobotBuilderPanel::onLoadDemo()
         }
     }
     m_editRobotId = -1;   // authoring the demo's RobotGraph (full feature editing), not a live-robot bind
-    setStatus(QStringLiteral("Loaded demo robot (robotId %1): %2 bodies, DOF %3. Select two bores to define J2.")
+    if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) st->enabled = true;   // bore-picking live
+    setStatus(QStringLiteral("Loaded demo robot (robotId %1): %2 bodies, DOF %3. Click two bores to define a joint.")
                   .arg(demoId).arg(int(gp->bodies.size())).arg(gp->dof()));
     refresh();
     emit graphChanged();
@@ -303,6 +337,10 @@ void RobotBuilderPanel::editRobot(int robotId)
 {
     if (m_isUpdatingUI || !m_scene) return;
     auto& reg = m_scene->getRegistry();
+
+    // Authoring intent -> ensure feature (bore) picking is live so "Define from 2 bores" can collect
+    // them (the View toggle may have turned it off; binding a robot for editing turns it back on).
+    if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) st->enabled = true;
 
     // Authoring graph already represents this robot -> edit it directly (keeps any
     // un-jointed bodies / bore features authored this session).
@@ -435,48 +473,59 @@ void RobotBuilderPanel::onDeleteJoint()
 void RobotBuilderPanel::onDefineFromFeatures()
 {
     if (m_isUpdatingUI) return;
-    if (m_editRobotId >= 0) {   // FANUC bind: feature-define is an authoring-graph op
-        setStatus(QStringLiteral("Define-from-features applies to builder-authored robots. Load Demo to author."));
-        return;
-    }
     auto* g = graph();
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     auto& reg = m_scene->getRegistry();
     auto* sel = reg.ctx().find<krs::sel::SelectionState>();
 
+    // The two bores = the LAST two cylindrical features the user clicked (clicks accumulate; the most
+    // recent pair wins, so an extra stray click never blocks the define).
     std::vector<const krs::sel::Selection*> cyls;
     if (sel) for (const auto& s : sel->selected)
         if (s.valid && s.type == krs::sel::FeatureType::Cylinder) cyls.push_back(&s);
-    if (cyls.size() != 2) {
-        setStatus(QStringLiteral("Select exactly TWO cylindrical bores (have %1).").arg(int(cyls.size())));
+    if (cyls.size() < 2) {
+        setStatus(QStringLiteral("Click TWO cylindrical bores in the viewport (they highlight + accumulate); have %1.")
+                      .arg(int(cyls.size())));
         return;
     }
+    const krs::sel::Selection* selA = cyls[cyls.size() - 2];
+    const krs::sel::Selection* selB = cyls[cyls.size() - 1];
 
     auto toFace = [](const krs::sel::Selection& s) {
         BRepFace f; f.type = int(s.type); f.axisPos = s.axisPos; f.axisDir = s.axisDir;
         f.normal = s.normal; f.radius = s.radius; return f;
     };
-    const int a = krs::rbuild::bodyIndexForEntity(*g, int(cyls[0]->entity));
-    const int b = krs::rbuild::bodyIndexForEntity(*g, int(cyls[1]->entity));
+    const int a = krs::rbuild::bodyIndexForEntity(*g, int(selA->entity));
+    const int b = krs::rbuild::bodyIndexForEntity(*g, int(selB->entity));
     if (a < 0 || b < 0 || a == b) {
-        setStatus(QStringLiteral("Selected bores must be on two distinct robot bodies (a=%1 b=%2).").arg(a).arg(b));
+        setStatus(QStringLiteral("The two bores must be on two distinct robot bodies (a=%1 b=%2).").arg(a).arg(b));
         return;
     }
 
     krs::rbuild::EditController ctrl{ g };
     const int before = ctrl.dof();
     krs::rbuild::RBJoint created;
-    const bool ok = ctrl.defineFromFeatures(toFace(*cyls[0]), a, toFace(*cyls[1]), b, &created);
+    const bool ok = ctrl.defineFromFeatures(toFace(*selA), a, toFace(*selB), b, &created);
     if (!ok) {
-        setStatus(QStringLiteral("Cannot define joint: the two bores are not coaxial (rejected for the right reason)."));
+        setStatus(QStringLiteral("Cannot define joint: the two bores are not coaxial. Pick two bores that share an axis, "
+                                 "or set the axis directly in Joint Axis Direction."));
         return;
     }
-    setStatus(QStringLiteral("Defined revolute B%1-B%2 at axis (%3, %4, %5). DOF %6 -> %7")
+    if (sel) krs::sel::clearSelection(*sel);   // consume the pair so the next joint starts fresh
+    setStatus(QStringLiteral("Defined revolute B%1-B%2, axis (%3, %4, %5). DOF %6 -> %7")
         .arg(a).arg(b)
-        .arg(created.axisPos.x, 0, 'f', 3).arg(created.axisPos.y, 0, 'f', 3).arg(created.axisPos.z, 0, 'f', 3)
+        .arg(created.axisDir.x, 0, 'f', 3).arg(created.axisDir.y, 0, 'f', 3).arg(created.axisDir.z, 0, 'f', 3)
         .arg(before).arg(ctrl.dof()));
     refresh();
     emit graphChanged();
+}
+
+void RobotBuilderPanel::onClearSelection()
+{
+    if (!m_scene) return;
+    if (auto* sel = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>())
+        krs::sel::clearSelection(*sel);
+    setStatus(QStringLiteral("Bore selection cleared. Click two coaxial bores to define a joint."));
 }
 
 void RobotBuilderPanel::onJointSelected(int row)
@@ -513,10 +562,14 @@ void RobotBuilderPanel::onJointSelected(int row)
     auto* g = graph();
     if (!g || row < 0 || row >= int(g->joints.size()) || !m_axisX) return;
     const auto& j = g->joints[row];
-    const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ), bt(m_jointType);
+    const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ), bt(m_jointType),
+                         dx(m_dirX), dy(m_dirY), dz(m_dirZ);
     m_axisX->setValue(j.axisPos.x);
     m_axisY->setValue(j.axisPos.y);
     m_axisZ->setValue(j.axisPos.z);
+    m_dirX->setValue(j.axisDir.x);
+    m_dirY->setValue(j.axisDir.y);
+    m_dirZ->setValue(j.axisDir.z);
     int ti = 0;
     if (j.type == krs::rbuild::JType::Revolute)  ti = j.limits.enabled ? 0 : 1;  // 1 = continuous
     else if (j.type == krs::rbuild::JType::Prismatic) ti = 2;
@@ -594,6 +647,26 @@ void RobotBuilderPanel::onApplyAxisOrigin()
     emit graphChanged();
 }
 
+void RobotBuilderPanel::onApplyAxisDir()
+{
+    if (m_isUpdatingUI) return;
+    auto* g = graph();
+    if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
+    const int row = m_jointsList->currentRow();
+    if (row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to set its axis.")); return; }
+    const glm::vec3 dir(float(m_dirX->value()), float(m_dirY->value()), float(m_dirZ->value()));
+    krs::rbuild::EditController ctrl{ g };
+    if (!ctrl.setJointAxis(row, dir)) {   // normalizes + orthonormalizes the mate frame + marks Manual
+        setStatus(QStringLiteral("Axis direction must be non-zero (e.g. a vertical base turntable is 0, 0, 1)."));
+        return;
+    }
+    const glm::vec3 a = g->joints[row].axisDir;   // read back the normalized axis
+    setStatus(QStringLiteral("J%1 axis direction set to (%2, %3, %4). Re-applied to the live robot.")
+        .arg(row).arg(a.x, 0, 'f', 3).arg(a.y, 0, 'f', 3).arg(a.z, 0, 'f', 3));
+    refresh();
+    emit graphChanged();
+}
+
 void RobotBuilderPanel::onSnapAxisToBore()
 {
     if (m_isUpdatingUI) return;
@@ -607,18 +680,21 @@ void RobotBuilderPanel::onSnapAxisToBore()
     if (row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to snap.")); return; }
     auto* sel = m_scene ? m_scene->getRegistry().ctx().find<krs::sel::SelectionState>() : nullptr;
     const krs::sel::Selection* bore = nullptr;
-    if (sel) for (const auto& s : sel->selected)
-        if (s.valid && s.type == krs::sel::FeatureType::Cylinder) { bore = &s; break; }
+    if (sel) for (const auto& s : sel->selected)   // LAST selected cylinder = the most recent intent
+        if (s.valid && s.type == krs::sel::FeatureType::Cylinder) bore = &s;
     if (!bore) { setStatus(QStringLiteral("Select a cylindrical bore in the viewport to snap to.")); return; }
     g->joints[row].axisPos = bore->axisPos;
-    g->joints[row].axisDir = glm::normalize(bore->axisDir);
-    g->joints[row].prov    = krs::rbuild::Prov::Manual;
+    krs::rbuild::EditController ctrl{ g };
+    ctrl.setJointAxis(row, bore->axisDir);         // normalizes + orthonormalizes the mate frame + marks Manual
     if (m_axisX) {
-        const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ);
+        const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ), dx(m_dirX), dy(m_dirY), dz(m_dirZ);
         m_axisX->setValue(bore->axisPos.x); m_axisY->setValue(bore->axisPos.y); m_axisZ->setValue(bore->axisPos.z);
+        const glm::vec3 a = g->joints[row].axisDir;
+        m_dirX->setValue(a.x); m_dirY->setValue(a.y); m_dirZ->setValue(a.z);
     }
-    setStatus(QStringLiteral("J%1 snapped to bore axis (%2, %3, %4).")
-        .arg(row).arg(bore->axisPos.x, 0, 'f', 3).arg(bore->axisPos.y, 0, 'f', 3).arg(bore->axisPos.z, 0, 'f', 3));
+    setStatus(QStringLiteral("J%1 snapped to bore: origin (%2, %3, %4), axis (%5, %6, %7).")
+        .arg(row).arg(bore->axisPos.x, 0, 'f', 3).arg(bore->axisPos.y, 0, 'f', 3).arg(bore->axisPos.z, 0, 'f', 3)
+        .arg(g->joints[row].axisDir.x, 0, 'f', 3).arg(g->joints[row].axisDir.y, 0, 'f', 3).arg(g->joints[row].axisDir.z, 0, 'f', 3));
     refresh();
     emit graphChanged();
 }
@@ -701,8 +777,9 @@ bool runRobotBuilderPanelGate()
 
         const char* names[] = {
             "rbLoadDemoButton", "rbDofLabel", "rbJointsList", "rbDeleteJointButton",
-            "rbDefineFromFeaturesButton", "rbLimitDofSpin", "rbLimitLoSpin",
-            "rbLimitHiSpin", "rbApplyLimitButton", "rbStatusLabel"
+            "rbDefineFromFeaturesButton", "rbClearSelectionButton", "rbLimitDofSpin", "rbLimitLoSpin",
+            "rbLimitHiSpin", "rbApplyLimitButton",
+            "rbDirXSpin", "rbDirYSpin", "rbDirZSpin", "rbApplyDirButton", "rbStatusLabel"
         };
         for (const char* n : names) {
             QWidget* w = panel.findChild<QWidget*>(QString::fromLatin1(n));
@@ -850,8 +927,40 @@ bool runRobotBuilderPanelGate()
     }
     const bool typeModelOk = prismaticOk && fixedDropsDof && continuousOk && comboPresent;
 
+    // ---- EDIT-OP-INVOKED: AXIS-DIRECTION control rewrites the selected joint's axis (the J0 fix's
+    // user-correctable backstop). Select a joint, type a new axis, Apply -> RBJoint.axisDir == the
+    // NORMALIZED input, frame stays orthonormal, provenance Manual. NEG-CTRL: a zero vector is
+    // rejected (no change), so the control isn't a blind writer.
+    bool axisDirOk = false, zeroAxisRejected = false;
+    {
+        Scene scene;
+        auto& g = scene.getRegistry().ctx().emplace<RobotGraph>(buildDemoGraph());
+        spawnGraphBodies(scene, g, 0);
+        RobotBuilderPanel panel(&scene);
+        auto* list = panel.findChild<QListWidget*>(QStringLiteral("rbJointsList"));
+        auto* dx = panel.findChild<QDoubleSpinBox*>(QStringLiteral("rbDirXSpin"));
+        auto* dy = panel.findChild<QDoubleSpinBox*>(QStringLiteral("rbDirYSpin"));
+        auto* dz = panel.findChild<QDoubleSpinBox*>(QStringLiteral("rbDirZSpin"));
+        auto* applyDir = panel.findChild<QPushButton*>(QStringLiteral("rbApplyDirButton"));
+        list->setCurrentRow(0);                          // J0
+        dx->setValue(0.0); dy->setValue(0.0); dz->setValue(1.0);   // ask for vertical (0,0,1)
+        applyDir->click();
+        const glm::vec3 a = g.joints[0].axisDir;
+        const float dotZ = std::abs(glm::dot(glm::normalize(a), glm::vec3(0, 0, 1)));
+        const float dotRef = std::abs(glm::dot(glm::normalize(a), g.joints[0].refDir));   // orthonormal frame
+        axisDirOk = (dotZ > 0.999f) && (dotRef < 1e-3f) && (g.joints[0].prov == Prov::Manual);
+        // NEG-CTRL: a zero axis is rejected -> the joint keeps its (now vertical) axis.
+        dx->setValue(0.0); dy->setValue(0.0); dz->setValue(0.0);
+        applyDir->click();
+        zeroAxisRejected = std::abs(glm::dot(glm::normalize(g.joints[0].axisDir), glm::vec3(0, 0, 1))) > 0.999f;
+        printf("[rbuild]   axis-direction control: set J0 axis=(%.3f,%.3f,%.3f) vertical=%s orthonormal=%s ; zero-rejected=%s  %s\n",
+               a.x, a.y, a.z, dotZ > 0.999f ? "yes" : "no", dotRef < 1e-3f ? "yes" : "no",
+               zeroAxisRejected ? "yes" : "no", (axisDirOk && zeroAxisRejected) ? "PASS" : "FAIL");
+    }
+
     const bool pass = completeness && wiringDetector && loadDemoWired && deleteOk && !deleteWrongDir
-                    && defineOk && !defineWrongDir && degenRejected && limitOk && typeModelOk;
+                    && defineOk && !defineWrongDir && degenRejected && limitOk && typeModelOk
+                    && axisDirOk && zeroAxisRejected;
 
     printf("[rbuild]   NEG-CTRLs: delete-wrong-direction=%s define-wrong-direction=%s degenerate-rejected=%s  %s\n",
            deleteWrongDir ? "YES(bug)" : "no", defineWrongDir ? "YES(bug)" : "no",

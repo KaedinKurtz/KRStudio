@@ -1020,6 +1020,7 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_ROBOTBUILD_SELFTEST") != 0) {
         std::printf("\n================= KRS_ROBOTBUILD_SELFTEST =================\n");
         const bool ok = krs::rbuild::runAutoParseChainGate()
+                      & krs::rbuild::runBaseAxisVerticalGate()
                       & krs::rbuild::runJointEditGate()
                       & krs::rbuild::runTagOwnershipGate()
                       & krs::rbuild::runSubtreeDetachGate();
@@ -1768,6 +1769,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE MULTI-SELECT (small-bore-on-large-part resolves to bore; set accumulates; dominant-resolver & non-accumulating-commit neg-ctrls)", krs::sel::runMultiSelectGate() },
             { "GATE PARSE-RECON (OCCT STEPCAF recovers FANUC part tree + placements; mates absent -> infer from geometry; real assembly)", krs::rbuild::runParseReconGate() },
             { "GATE AUTO-PARSE-CHAIN (inferred joint axes == interface geometry; FK==parsed placements; ambiguous/offset/planar NOT faked; wrong-axis neg-ctrl)", krs::rbuild::runAutoParseChainGate() },
+            { "GATE BASE-AXIS-VERTICAL (J0 base-turntable axis = vertical part-Z, not the horizontal flange decoy; horizontal-coaxial-pair neg-ctrl)", krs::rbuild::runBaseAxisVerticalGate() },
             { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },
             { "GATE TAG-OWNERSHIP (member body tagged + free-move-locked; non-member free; always-allow neg-ctrl breaks single-owner)", krs::rbuild::runTagOwnershipGate() },
             { "GATE SUBTREE-DETACH (mid-joint delete detaches subtree intact; tag tracks membership; re-mate restores; destroy & stale-tag neg-ctrls)", krs::rbuild::runSubtreeDetachGate() },
