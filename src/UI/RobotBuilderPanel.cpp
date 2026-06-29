@@ -457,26 +457,34 @@ void RobotBuilderPanel::onApplyLimitLive()
 void RobotBuilderPanel::onDeleteJoint()
 {
     if (m_isUpdatingUI) return;
-    if (m_editRobotId >= 0) {   // FANUC bind: structural joint edits are an authoring-graph op
-        setStatus(QStringLiteral("Delete/define joints applies to builder-authored robots. "
-                                 "Load Demo to author, or edit this robot's limits."));
-        return;
-    }
     auto* g = graph();
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
     if (row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to delete.")); return; }
 
-    const int parent = g->joints[row].parent;
-    const int child  = g->joints[row].child;
+    // DELETE = SPLIT: the cut joint's child subtree becomes its OWN first-class robot, so it moves as a
+    // unit (drag its root) and stays articulated; re-mating it (Define across the two) merges it back.
+    const int robotId = g->robotId;
+    int newId = -1;
+    if (krs::robot::splitRobotAtJoint(*m_scene, robotId, row, &newId)) {
+        if (auto* rr = m_scene->getRegistry().ctx().find<krs::robot::RobotRegistry>())
+            if (auto* base = rr->get(robotId))
+                *g = krs::robot::buildGraphFromLiveRobot(*base);   // ctx graph -> the (smaller) base robot
+        setStatus(QStringLiteral("Deleted J%1 -> detached subtree is now robot %2 "
+                                 "(drag its root to move it; re-mate two bores to merge it back).").arg(row).arg(newId));
+        refresh();
+        emit graphChanged();
+        return;
+    }
+
+    // Fallback (e.g. the cut would orphan the base): plain graph delete.
+    const int parent = g->joints[row].parent, child = g->joints[row].child;
     krs::rbuild::EditController ctrl{ g };
     const int before = ctrl.dof();
-    const bool ok = ctrl.deleteJoint(row);   // row IS the current joints-vector index (acted on immediately)
-    const int after = ctrl.dof();
-    setStatus(QStringLiteral("Delete J%1 (B%2-B%3): %4. DOF %5 -> %6%7")
+    const bool ok = ctrl.deleteJoint(row);
+    setStatus(QStringLiteral("Delete J%1 (B%2-B%3): %4. DOF %5 -> %6")
         .arg(row).arg(parent).arg(child).arg(ok ? QStringLiteral("ok") : QStringLiteral("FAILED"))
-        .arg(before).arg(after)
-        .arg(after < before ? QStringLiteral("  (downstream subtree detached)") : QString()));
+        .arg(before).arg(ctrl.dof()));
     refresh();
     emit graphChanged();
 }
@@ -501,6 +509,43 @@ void RobotBuilderPanel::onDefineFromFeatures()
     }
     const krs::sel::Selection* selA = cyls[cyls.size() - 2];
     const krs::sel::Selection* selB = cyls[cyls.size() - 1];
+
+    auto rimFrame = [](const krs::sel::Selection& s) {
+        krs::rbuild::RBJoint f;
+        f.axisPos = (glm::distance(s.axisEnd0, s.axisEnd1) > 1e-5f)
+                    ? (glm::distance(s.hitPoint, s.axisEnd0) <= glm::distance(s.hitPoint, s.axisEnd1) ? s.axisEnd0 : s.axisEnd1)
+                    : s.axisPos;
+        f.axisDir = s.axisDir; f.orthonormalizeFrame(); return f;
+    };
+
+    // CROSS-ROBOT MERGE: if the two bores are on DIFFERENT robots (re-mating a detached branch), snap
+    // the child robot rigidly onto the parent's bore and MERGE it back into one robot.
+    auto robotOf = [&](entt::entity e) -> int {
+        const auto* s = reg.try_get<RobotSubcomponentComponent>(e); return s ? s->robotId : -1; };
+    const int ridA = robotOf(selA->entity), ridB = robotOf(selB->entity);
+    if (ridA >= 0 && ridB >= 0 && ridA != ridB) {
+        const int parentId = std::min(ridA, ridB), childId = std::max(ridA, ridB);
+        const krs::sel::Selection* pSel = (robotOf(selA->entity) == parentId) ? selA : selB;
+        const krs::sel::Selection* cSel = (pSel == selA) ? selB : selA;
+        const krs::rbuild::RBJoint pf = rimFrame(*pSel), cf = rimFrame(*cSel);
+        krs::robot::transformRobot(*m_scene, childId, krs::rbuild::RobotGraph::mateTransformConcentric(pf, cf));
+        auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
+        krs::robot::LiveRobot* lrP = rr ? rr->get(parentId) : nullptr;
+        if (!lrP) { setStatus(QStringLiteral("Merge: parent robot gone.")); return; }
+        krs::rbuild::RobotGraph gP = krs::robot::buildGraphFromLiveRobot(*lrP);
+        const int parentBody = krs::rbuild::bodyIndexForEntity(gP, int(pSel->entity));
+        if (parentBody < 0) { setStatus(QStringLiteral("Merge: parent bore body not found.")); return; }
+        krs::rbuild::RBJoint cj; cj.type = krs::rbuild::JType::Revolute;
+        cj.axisDir = pf.axisDir; cj.axisPos = pf.axisPos; cj.orthonormalizeFrame();
+        if (krs::robot::mergeRobots(*m_scene, parentId, childId, parentBody, cj)) {
+            if (auto* m = rr->get(parentId)) *g = krs::robot::buildGraphFromLiveRobot(*m);
+            if (sel) krs::sel::clearSelection(*sel);
+            setStatus(QStringLiteral("Merged robot %1 into robot %2 at the mated bores.").arg(childId).arg(parentId));
+            refresh(); emit graphChanged();
+            return;
+        }
+        setStatus(QStringLiteral("Merge failed.")); return;
+    }
 
     auto toFace = [](const krs::sel::Selection& s) {
         BRepFace f; f.type = int(s.type); f.axisPos = s.axisPos; f.axisDir = s.axisDir;

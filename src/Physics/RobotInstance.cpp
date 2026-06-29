@@ -283,17 +283,21 @@ void snapMateSubtree(Scene& scene, krs::rbuild::RobotGraph& g, int /*parent*/, i
 // RIGID DRAG: translate the WHOLE robot by a world delta -- move its base placement and re-drive the
 // link viz, so every link follows as one rigid unit (the "grab the root/parent -> subtree follows"
 // behavior). Only the base placement changes; q (the pose) is untouched, so the articulation is kept.
-void translateRobot(Scene& scene, int robotId, const Eigen::Vector3d& deltaWorld)
+void transformRobot(Scene& scene, int robotId, const Eigen::Matrix4d& Tworld)
 {
     auto& reg = scene.getRegistry();
     RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return;
     LiveRobot* lr = rr->get(robotId); if (!lr) return;
-    Eigen::Matrix4d T = Eigen::Matrix4d::Identity(); T.block<3, 1>(0, 3) = deltaWorld;
-    lr->model.basePlacement = T * lr->model.basePlacement;   // world-left-multiply; restLinkWorld stays
-    if (lr->useRobotFkViz) writeBackRobotViz(scene, *lr);    // delta = base_new*base_old^-1 -> shifts links
-    // Also move the named ROOT entity so the outliner/gizmo anchor follows the robot.
+    lr->model.basePlacement = Tworld * lr->model.basePlacement;   // world-left-multiply; restLinkWorld stays
+    if (lr->useRobotFkViz) writeBackRobotViz(scene, *lr);         // delta = base_new*base_old^-1 -> moves links
     if (reg.valid(lr->root)) if (auto* tc = reg.try_get<TransformComponent>(lr->root))
-        setTransformFromEig(*tc, T * eigFromTransform(*tc));
+        setTransformFromEig(*tc, Tworld * eigFromTransform(*tc));
+}
+
+void translateRobot(Scene& scene, int robotId, const Eigen::Vector3d& deltaWorld)
+{
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity(); T.block<3, 1>(0, 3) = deltaWorld;
+    transformRobot(scene, robotId, T);
 }
 
 // IK DRAG: drag link `body` (a chain-body index) toward a world target point -- solve the DoF ABOVE it
@@ -822,7 +826,25 @@ bool runManipOpsGate()
     printf("[manip]   split joint1: newRobot=%d baseDof=%d branchDof=%d (want 1/1)  %s\n",
            newId, lrBase ? lrBase->ndof() : -1, lrBranch ? lrBranch->ndof() : -1, splitOk ? "PASS" : "FAIL");
 
-    // --- MERGE: fold the branch back into the base at base-body 1 via a revolute -> 1 robot, DOF 3 ---
+    // --- TRANSFORM the detached branch by a RIGID rotation+translation; every branch link moves by T ---
+    bool xformOk = false;
+    if (lrBranch && newId > 0) {
+        entt::entity be = entt::null;
+        for (auto& v : lrBranch->linkEntities) if (!v.empty()) { be = v[0]; break; }
+        Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+        T.block<3, 3>(0, 0) = Eigen::AngleAxisd(0.7, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+        T(0, 3) = 0.4; T(1, 3) = -0.2;
+        if (reg.valid(be)) {
+            const Eigen::Matrix4d before = eigFromTransform(reg.get<TransformComponent>(be));
+            transformRobot(scene, newId, T);
+            const Eigen::Matrix4d after = eigFromTransform(reg.get<TransformComponent>(be));
+            xformOk = ((T * before) - after).cwiseAbs().maxCoeff() < 1e-4;
+        }
+        printf("[manip]   transformRobot(branch, rot0.7+trans): branch link moved by T exactly=%s  %s\n",
+               xformOk ? "yes" : "no", xformOk ? "PASS" : "FAIL");
+    }
+
+    // --- MERGE: fold the (now-moved) branch back into the base at base-body 1 -> 1 robot, DOF 3 ---
     krs::rbuild::RBJoint cj; cj.type = krs::rbuild::JType::Revolute; cj.axisDir = { 0, 0, 1 };
     cj.axisPos = glm::vec3(2, 0, 0); cj.orthonormalizeFrame();
     const bool mergeRan = (newId > 0) && mergeRobots(scene, 0, newId, 1, cj);
@@ -832,8 +854,8 @@ bool runManipOpsGate()
     printf("[manip]   merge: mergedDof=%d (want 3) childRobotGone=%s  %s\n",
            lrM ? lrM->ndof() : -1, childGone ? "yes" : "no", mergeOk ? "PASS" : "FAIL");
 
-    const bool pass = transOk && ikOk && advOk && splitOk && mergeOk;
-    printf("[manip] %s\n", pass ? "ALL PASS (rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1 round-trips)"
+    const bool pass = transOk && ikOk && advOk && splitOk && xformOk && mergeOk;
+    printf("[manip] %s\n", pass ? "ALL PASS (rigid translate+rotate move all links; IK converges+clamps; split->2 robots; move; merge->1)"
                                 : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;

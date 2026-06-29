@@ -419,7 +419,9 @@ void snapMateSubtree(Scene& scene, krs::rbuild::RobotGraph& g, int parent, int c
                      const krs::rbuild::RBJoint& frameParent, const krs::rbuild::RBJoint& frameChild);
 
 // MANIPULATION (the parent-rigid / child-IK drag model). Defined in RobotInstance.cpp.
-// translateRobot: move the whole robot rigidly by a world delta (grab the root/parent -> all follow).
+// transformRobot: rigidly move the whole robot by a world transform T (rotation + translation) -- used
+// to snap a child robot onto a parent before merging. translateRobot is the translation-only case.
+void transformRobot(Scene& scene, int robotId, const Eigen::Matrix4d& Tworld);
 void translateRobot(Scene& scene, int robotId, const Eigen::Vector3d& deltaWorld);
 // ikDragLink: drag chain body `body` toward a world point; DLS-IK solves the DoF above it. Returns
 // true on convergence; q is clamped to limits (grab a child -> IK bends the chain to the goal).

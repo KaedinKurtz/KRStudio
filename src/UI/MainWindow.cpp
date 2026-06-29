@@ -2357,11 +2357,37 @@ MainWindow::MainWindow(QWidget* parent)
         this->refreshGizmoAndProperties(); // picks primary viewport automatically
         };
 
-    // Phase 3 (subtree-grab): when the gizmo edits a body's transform, push the new
-    // pose into the live physics world (rebuilds the actor for the moved body). For a
-    // genuinely-detached sub-assembly this lets the grabbed subtree move as a passive
-    // articulated body. (Previously onTransformEdited was never assigned.)
+    // When the gizmo edits a body's transform, push the new pose into the physics world. ROBOT-LINK
+    // manipulation: route a robot link's drag through KINEMATICS instead of free-moving it -- grabbing
+    // the ROOT link (chain body 0) rigidly translates the whole robot (the subtree follows); grabbing
+    // any other link runs IK to bend the DoF above it to the drag point. A detached subtree is its own
+    // robot (split-on-delete), so the same rule moves it as a unit / poses it.
     m_gizmoSystem->onTransformEdited = [this](entt::entity e) {
+        if (!m_scene) return;
+        auto& reg = m_scene->getRegistry();
+        if (const auto* sub = reg.try_get<RobotSubcomponentComponent>(e)) {
+            if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>()) {
+                if (auto* lr = rr->get(sub->robotId)) {
+                    int body = -1;
+                    for (int k = 0; k < int(lr->linkEntities.size()) && body < 0; ++k)
+                        for (auto le : lr->linkEntities[k]) if (le == e) { body = k; break; }
+                    const auto* tc = reg.try_get<TransformComponent>(e);
+                    if (tc) {
+                        const Eigen::Vector3d tw(tc->translation.x, tc->translation.y, tc->translation.z);
+                        if (body == 0) {   // root link -> rigid translate the whole robot to track it
+                            const krs::dyn::Pose p0 = lr->chain.bodyPose(lr->q, 0);
+                            const Eigen::Vector3d cur =
+                                (lr->model.basePlacement * Eigen::Vector4d(p0.p.x(), p0.p.y(), p0.p.z(), 1.0)).head<3>();
+                            krs::robot::translateRobot(*m_scene, sub->robotId, tw - cur);
+                        } else if (body > 0) {   // child link -> IK the chain above it to the drag point
+                            krs::robot::ikDragLink(*m_scene, sub->robotId, body, tw);
+                        }
+                    }
+                    if (m_simulation) m_simulation->notifyEntityChanged(e);
+                    return;
+                }
+            }
+        }
         if (m_simulation) m_simulation->notifyEntityChanged(e);
     };
 

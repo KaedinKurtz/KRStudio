@@ -403,14 +403,11 @@ void ViewportWidget::mousePressEvent(QMouseEvent* ev)
                 auto& reg = m_scene->getRegistry();
                 entt::entity target = entt::null;
                 for (auto eSel : reg.view<SelectedComponent>()) { target = eSel; break; }
-                // ROBOT-SUBCOMPONENT lock-out: a body owned by a robot's kinematic chain
-                // is NOT free-movable -- kinematics is the single owner of its motion.
-                // The tag tracks LIVE membership (krs::rbuild::syncRobotTagsToMembership):
-                // a DETACHED sub-assembly is untagged here and therefore grabbable, while
-                // an attached link stays locked. (OPERATOR-VISUAL-CONFIRM: the gizmo drags
-                // a detached subtree but not a jointed link.)
-                if (target != entt::null && reg.all_of<RobotSubcomponentComponent>(target))
-                    target = entt::null;
+                // A robot link IS grabbable, but its drag is routed through KINEMATICS, not free-move:
+                // MainWindow's onTransformEdited sends a robot member's gizmo edit to translateRobot
+                // (root link -> whole robot follows) or ikDragLink (child link -> the DoF above it
+                // solve to the drag point). So the gizmo never breaks the chain; it poses/moves it.
+                // (The tag still marks the body kinematically-owned -- the free-move gate reads it.)
                 if (target != entt::null) {
                     glm::vec3 hitPoint = glm::vec3(0);
 
