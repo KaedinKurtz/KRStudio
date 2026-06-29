@@ -254,6 +254,32 @@ LiveRobot* reapplyGraphToRobot(Scene& scene, const krs::rbuild::RobotGraph& g, i
     return instantiateFromGraph(scene, g, robotId);
 }
 
+// MATE-SNAP: move the child subtree so its bore frame is concentric with the parent's. Mutates the
+// graph body placements AND the live solids' TransformComponents together, so the subsequent
+// reapplyGraphToRobot (toRobot from placements + captureRobotRest from TransformComponents at q=0)
+// sees a consistent, already-mated rest pose -> the live robot renders the snap.
+void snapMateSubtree(Scene& scene, krs::rbuild::RobotGraph& g, int /*parent*/, int child,
+                     const krs::rbuild::RBJoint& frameParent, const krs::rbuild::RBJoint& frameChild)
+{
+    const Eigen::Matrix4d T = krs::rbuild::RobotGraph::mateTransformConcentric(frameParent, frameChild);
+    if ((T - Eigen::Matrix4d::Identity()).cwiseAbs().maxCoeff() < 1e-9) return;   // already mated -> no-op
+    const std::vector<int> sub = g.subtreeOf(child);
+    auto& reg = scene.getRegistry();
+    for (int bdy : sub) {
+        if (bdy < 0 || bdy >= int(g.bodies.size())) continue;
+        g.bodies[bdy].placement = T * g.bodies[bdy].placement;     // graph (FK source for toRobot)
+        std::vector<int> ids = g.bodies[bdy].extraEntities;        // all solids of this link
+        ids.insert(ids.begin(), g.bodies[bdy].entity);
+        for (int eid : ids) {
+            if (eid < 0) continue;
+            const entt::entity e = entt::entity(static_cast<std::uint32_t>(eid));
+            if (!reg.valid(e)) continue;
+            if (auto* tc = reg.try_get<TransformComponent>(e))
+                setTransformFromEig(*tc, T * eigFromTransform(*tc));  // live solid (rest source)
+        }
+    }
+}
+
 LiveRobot* instantiateFanucRobot(Scene& scene,
                                  const std::vector<std::vector<entt::entity>>& movingLinkEntities,
                                  const std::vector<entt::entity>& allBodies,

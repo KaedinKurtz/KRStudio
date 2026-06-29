@@ -959,6 +959,40 @@ MainWindow::MainWindow(QWidget* parent)
         ghostTimer->start(250);
     }
 
+    // KRS_MATE_DEMO: inject the TWO largest FANUC bore selections into the main scene so the
+    // green/blue selection rings are visible for a screenshot (verifies the selection-feedback fix
+    // without scripting viewport clicks). First bore -> green, second -> blue.
+    if (qEnvironmentVariableIsSet("KRS_MATE_DEMO")) {
+        QTimer::singleShot(2500, this, [this]() {
+            if (!m_scene) return;
+            auto& reg = m_scene->getRegistry();
+            auto* st = reg.ctx().find<krs::sel::SelectionState>();
+            if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
+            st->enabled = true;
+            st->selected.clear();
+            // Collect the largest cylinder face per entity (world frame), keep the two biggest.
+            struct Cand { krs::sel::Selection s; float r; };
+            std::vector<Cand> cands;
+            for (auto e : reg.view<RenderableMeshComponent, BRepFaceComponent>()) {
+                const auto& brep = reg.get<BRepFaceComponent>(e);
+                glm::mat4 M(1.0f);
+                if (auto* xf = reg.try_get<TransformComponent>(e)) M = xf->getTransform();
+                const glm::mat3 R = glm::mat3(glm::inverseTranspose(M));
+                float bestR = -1.f; const BRepFace* bf = nullptr;
+                for (const auto& f : brep.faces) if (f.type == 1 && f.radius > bestR) { bestR = f.radius; bf = &f; }
+                if (!bf) continue;
+                krs::sel::Selection s; s.valid = true; s.entity = e; s.type = krs::sel::FeatureType::Cylinder;
+                s.axisPos = glm::vec3(M * glm::vec4(bf->axisPos, 1.0f));
+                s.axisDir = glm::normalize(R * bf->axisDir);
+                s.radius = bf->radius; s.hitPoint = s.axisPos;
+                cands.push_back({ s, bf->radius });
+            }
+            std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b){ return a.r > b.r; });
+            for (int i = 0; i < int(cands.size()) && i < 2; ++i) st->selected.push_back(cands[i].s);
+            qInfo() << "[MATE_DEMO] injected" << int(st->selected.size()) << "bore selections (green+blue rings)";
+        });
+    }
+
     // --- Create Splines ---
     {
         /*

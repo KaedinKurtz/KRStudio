@@ -19,6 +19,8 @@
 #include <cstdio>
 #include <cmath>
 #include <vector>
+#include <string>
+#include <algorithm>
 
 namespace krs::rbuild {
 namespace {
@@ -201,6 +203,57 @@ bool runBaseAxisVerticalGate()
     printf("[rbuild]   NEG-CTRL: horizontal coaxial flange pair exists (old search picks it, horiz=%.3f) -> prior non-vacuous: %s\n",
            oldHoriz, oldWouldBeHorizontal ? "REJECTS(non-vacuous)" : "VACUOUS!");
     printf("[rbuild] %s\n", pass ? "ALL PASS (base joint resolves to the vertical turntable axis, overriding the horizontal flange decoy)"
+                                 : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
+// GATE MATE-SNAP -- the concentric-mate transform makes the child bore collinear with the parent's,
+// and subtreeOf collects the moving sub-assembly. NEG-CTRL: the child was genuinely off-axis before
+// the snap (so the transform is doing real work, not a tautology).
+bool runMateSnapGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[rbuild] GATE MATE-SNAP -- concentric transform aligns child bore to parent axis; subtree collected\n");
+
+    // Parent bore: axis +Z through origin. Child bore: axis +X (rotated 90deg) at (0.5, 0.3, 0) (offset).
+    RBJoint jA; jA.axisPos = { 0, 0, 0 };       jA.axisDir = { 0, 0, 1 }; jA.orthonormalizeFrame();
+    RBJoint jB; jB.axisPos = { 0.5f, 0.3f, 0 }; jB.axisDir = { 1, 0, 0 }; jB.orthonormalizeFrame();
+
+    const Eigen::Matrix4d T = RobotGraph::mateTransformConcentric(jA, jB);
+    const Eigen::Vector3d dA(0, 0, 1), pA(0, 0, 0);
+    const Eigen::Vector3d pB(jB.axisPos.x, jB.axisPos.y, jB.axisPos.z);
+    const Eigen::Vector3d dB(jB.axisDir.x, jB.axisDir.y, jB.axisDir.z);
+    const Eigen::Vector3d pB2 = (T * Eigen::Vector4d(pB.x(), pB.y(), pB.z(), 1.0)).head<3>();
+    const Eigen::Vector3d dB2 = (T.block<3, 3>(0, 0) * dB).normalized();
+
+    auto perpDist = [&](const Eigen::Vector3d& p) { const Eigen::Vector3d w = p - pA; return (w - w.dot(dA) * dA).norm(); };
+    const double align   = std::abs(dB2.dot(dA));
+    const double offAfter = perpDist(pB2);
+    const double offBefore = perpDist(pB);
+    const bool concentric = align > 0.999 && offAfter < 1e-6;
+    const bool wasOffAxis = offBefore > 0.05;            // NEG-CTRL: genuinely off before
+
+    // subtreeOf: serial chain base(0)->1->2->3 ; subtreeOf(2) == {2,3} (2 + its descendant 3).
+    RobotGraph g;
+    for (int i = 0; i < 4; ++i) { RBBody b; b.name = "b" + std::to_string(i); b.placement = Eigen::Matrix4d::Identity(); g.bodies.push_back(b); }
+    g.base = 0;
+    for (int i = 0; i < 3; ++i) { RBJoint j; j.parent = i; j.child = i + 1; j.type = JType::Revolute;
+                                  j.axisDir = { 0,0,1 }; j.orthonormalizeFrame(); g.addJoint(j); }
+    const std::vector<int> sub = g.subtreeOf(2);
+    const bool subOk = (sub.size() == 2) && std::count(sub.begin(), sub.end(), 2) && std::count(sub.begin(), sub.end(), 3);
+
+    const bool pass = concentric && wasOffAxis && subOk;
+    printf("[rbuild]   concentric snap: axis-align=%.4f (>0.999), child off-axis %.3f m -> %.2e m  %s\n",
+           align, offBefore, offAfter, concentric ? "PASS" : "FAIL");
+    printf("[rbuild]   subtreeOf(B2) = {%s} (want 2,3)  %s\n",
+           [&]{ std::string s; for (int b : sub) s += std::to_string(b) + " "; return s; }().c_str(),
+           subOk ? "PASS" : "FAIL");
+    printf("[rbuild]   NEG-CTRL: child was off-axis before snap (%.3f m > 0.05) -> transform non-vacuous: %s\n",
+           offBefore, wasOffAxis ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (concentric mate aligns the child bore to the parent axis; subtree collected)"
                                  : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;

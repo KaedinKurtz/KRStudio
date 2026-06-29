@@ -13,6 +13,7 @@
 // ===========================================================================
 #include <QWidget>
 #include <memory>
+#include <cstdint>
 #include "IMenu.hpp"
 
 class Scene;
@@ -68,11 +69,17 @@ private:
     void setupConnections();
     krs::rbuild::RobotGraph* graph() const;   // discover from Scene registry ctx (nullptr if none)
     void setStatus(const QString& msg);
+    void showSelectedJointAxis(int row);      // spawn/refresh the selected joint's glowing axis bar (main viewport)
     bool refreshFromLiveRobot();   // when bound to a LiveRobot (m_editRobotId>=0): fill controls from its model; true if it handled refresh
     void onApplyLimitLive();       // write the edited limit straight into the bound LiveRobot's model + rebuild
 
     Scene* m_scene = nullptr;
     bool   m_isUpdatingUI = false;
+    // A single glowing axis bar for the currently-selected joint, shown in the MAIN viewport
+    // (JointAxisPass renders JointAxisComponent always-on-top). Editing the axis re-orients it ->
+    // direct visible feedback even at the home pose. entt::entity stored as uint32 to keep the
+    // header light (no entt include); resolved against m_scene's registry.
+    std::uint32_t m_selAxisBar = 0xFFFFFFFFu;   // entt::null sentinel
     // >=0 when the panel is bound to a LiveRobot (e.g. the FANUC) for live limit editing;
     // -1 when authoring the ctx RobotGraph (the demo). Set by editRobot().
     int    m_editRobotId = -1;

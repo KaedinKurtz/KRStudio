@@ -29,7 +29,7 @@
 #include "RobotDynamics.hpp"
 
 class Scene;
-namespace krs::rbuild { struct RobotGraph; }   // authoring schema (RobotBuilder.hpp)
+namespace krs::rbuild { struct RobotGraph; struct RBJoint; }   // authoring schema (RobotBuilder.hpp)
 
 namespace krs::robot {
 
@@ -409,6 +409,14 @@ krs::rbuild::RobotGraph buildGraphFromLiveRobot(const LiveRobot& lr);
 // the robot home, then re-instantiates idempotently (root reuse + entity re-map), so an
 // edit in the builder takes real effect on the live robot. Defined in RobotInstance.cpp.
 LiveRobot* reapplyGraphToRobot(Scene& scene, const krs::rbuild::RobotGraph& g, int robotId);
+
+// MATE-SNAP: rigidly move the CHILD body + its whole subtree so the child bore frame (frameChild)
+// becomes concentric with the parent bore frame (frameParent). Mutates BOTH the graph body
+// placements (the FK source for toRobot) AND the live solids' TransformComponents (the rest source
+// for captureRobotRest) so the q=0 re-capture in reapplyGraphToRobot stays consistent. The A-B joint
+// must already exist (subtreeOf walks the chain through it). Defined in RobotInstance.cpp.
+void snapMateSubtree(Scene& scene, krs::rbuild::RobotGraph& g, int parent, int child,
+                     const krs::rbuild::RBJoint& frameParent, const krs::rbuild::RBJoint& frameChild);
 
 // --- Outliner grouping (step 7): Robot -> bodies tree, multi-robot ----------------
 // One robot group: the named root + the body entities owned by it (robotId match).

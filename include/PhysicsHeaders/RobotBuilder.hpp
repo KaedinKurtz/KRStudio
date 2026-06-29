@@ -260,6 +260,52 @@ struct RobotGraph {
     // Body indices in chain order (order[0]=base; order[k>=1] = chain body k-1).
     std::vector<int> chainBodyOrder() const { return chainOrder().order; }
 
+    // ---- MATE-SNAP (CAD concentric mate) ----------------------------------------------
+    // Body B and every transitive descendant (so a whole sub-assembly moves as one rigid
+    // unit). Requires the A-B joint to already exist so chainOrder reaches B. order is
+    // base-rooted with parent before child, so one forward pass marks the closure.
+    std::vector<int> subtreeOf(int B) const {
+        const ChainOrder co = chainOrder();
+        std::vector<char> in(bodies.size(), 0);
+        if (B >= 0 && B < int(bodies.size())) in[B] = 1;
+        for (int b : co.order) {
+            if (b == base) continue;
+            const int pb = co.parentBody[b];
+            if (pb >= 0 && pb < int(in.size()) && in[pb]) in[b] = 1;   // child of an in-set body
+        }
+        std::vector<int> out;
+        for (int b = 0; b < int(in.size()); ++b) if (in[b]) out.push_back(b);
+        return out;
+    }
+
+    // Rigid world transform that mates child bore frame jB CONCENTRIC onto parent bore frame
+    // jA: rotate jB's axis parallel to jA's (shortest arc) and slide the child laterally onto
+    // jA's axis LINE. Axial slide + spin about the axis are left FREE (the revolute DOF + the
+    // designed seat depth), so it is a true concentric mate, not an over-seat. Left-multiplied
+    // onto the child subtree's world placements.
+    static Eigen::Matrix4d mateTransformConcentric(const RBJoint& jA, const RBJoint& jB) {
+        RBJoint a = jA, b = jB; a.orthonormalizeFrame(); b.orthonormalizeFrame();
+        const Eigen::Vector3d dA(a.axisDir.x, a.axisDir.y, a.axisDir.z);
+        const Eigen::Vector3d dB(b.axisDir.x, b.axisDir.y, b.axisDir.z);
+        const Eigen::Vector3d pA(a.axisPos.x, a.axisPos.y, a.axisPos.z);
+        const Eigen::Vector3d pB(b.axisPos.x, b.axisPos.y, b.axisPos.z);
+        Eigen::Vector3d v = dB.cross(dA); const double s = v.norm(), c = dB.dot(dA);
+        Eigen::Matrix3d R;
+        if (s < 1e-9) {
+            R = (c > 0.0) ? Eigen::Matrix3d::Identity()
+                          : Eigen::Matrix3d(Eigen::AngleAxisd(3.14159265358979323846, dB.unitOrthogonal()));
+        } else {
+            v /= s; Eigen::Matrix3d K;
+            K << 0, -v.z(), v.y(),  v.z(), 0, -v.x(),  -v.y(), v.x(), 0;
+            R = Eigen::Matrix3d::Identity() + s * K + (1.0 - c) * K * K;   // Rodrigues
+        }
+        const Eigen::Vector3d RpB = R * pB;
+        const Eigen::Vector3d onLine = pA + ((RpB - pA).dot(dA)) * dA;     // nearest point on A's axis line
+        Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+        T.block<3, 3>(0, 0) = R; T.block<3, 1>(0, 3) = onLine - RpB;
+        return T;
+    }
+
     // serial-order the member joints by DFS from base (parent = the already-visited
     // endpoint) -> a krs::robot::Robot whose FK at q=0 reproduces the parsed placements.
     krs::robot::Robot toRobot() const {
@@ -508,15 +554,33 @@ struct EditController {
         return true;
     }
 
-    // DEFINE-FROM-FEATURES control: a revolute from two selected world bore features.
-    // Returns false (no joint) on a degenerate pair (rejected for the right reason).
+    // DEFINE-FROM-FEATURES control: a revolute from two selected world bore features. Normalizes
+    // parent = the body NEARER the base in chain order (so the parent stays put and the CHILD subtree
+    // is what snaps), and REPLACES an existing joint between the same two bodies instead of appending
+    // a duplicate (defining on the already-complete FANUC is a re-mate, not a new edge -- a duplicate
+    // would be ignored by chainOrder and the user would "see no joint"). Returns false (no joint) on a
+    // degenerate pair (rejected for the right reason). outParent/outChild report the normalized roles.
     bool defineFromFeatures(const BRepFace& worldFaceA, int bodyA,
-                            const BRepFace& worldFaceB, int bodyB, RBJoint* created = nullptr) {
+                            const BRepFace& worldFaceB, int bodyB, RBJoint* created = nullptr,
+                            int* outParent = nullptr, int* outChild = nullptr) {
         if (!graph) return false;
         RBJoint j;
         if (!defineRevoluteFromSelection(worldFaceA, worldFaceB, bodyA, bodyB, j)) return false;
-        graph->addJoint(j);
-        if (created) *created = j;
+        // parent = lower chain index (base side); fall back to lower body index if unordered.
+        const RobotGraph::ChainOrder co = graph->chainOrder();
+        auto idxOf = [&](int b) {
+            for (size_t i = 0; i < co.order.size(); ++i) if (co.order[i] == b) return int(i);
+            return 1000000 + b;   // unreached -> sort after ordered, stable by body index
+        };
+        int parent = bodyA, child = bodyB;
+        if (idxOf(bodyB) < idxOf(bodyA)) { parent = bodyB; child = bodyA; }
+        j.parent = parent; j.child = child;
+        const int ex = graph->jointBetween(bodyA, bodyB);
+        if (ex >= 0) { j.limits = graph->joints[ex].limits; graph->joints[ex] = j; }  // REPLACE (no dup)
+        else         graph->addJoint(j);
+        if (created)   *created   = j;
+        if (outParent) *outParent = parent;
+        if (outChild)  *outChild  = child;
         return true;
     }
 
@@ -560,6 +624,7 @@ bool runParseReconGate();        // PHASE 0 (OCCT, real FANUC STEP)
 bool runAutoParseReport();       // PHASE 1 real-assembly demo: FANUC parse -> inference -> report (OCCT)
 bool runAutoParseChainGate();    // PHASE 1 (synthetic: inferred axes match geometry; FK==placements; ambiguous not faked)
 bool runBaseAxisVerticalGate();  // J0 base-turntable axis = vertical part-Z, not a horizontal flange bore (verticality prior)
+bool runMateSnapGate();          // concentric mate transform aligns child bore to parent axis; subtreeOf collects the sub-assembly
 bool runJointEditGate();         // PHASE 2 (manual joint from selected features matches; degenerate rejected; chain re-derives)
 bool runTagOwnershipGate();      // PHASE 3 (single-owner lock-out; membership-tracked)
 bool runSubtreeDetachGate();     // PHASE 4 (downstream subtree detaches intact; tag tracks membership)

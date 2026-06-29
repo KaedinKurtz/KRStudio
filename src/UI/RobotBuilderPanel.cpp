@@ -7,6 +7,9 @@
 #include "RobotBuilderScene.hpp"    // buildDemoGraph / spawnGraphBodies / bodyIndexForEntity
 #include "RobotModel.hpp"           // krs::robot::instantiateFromGraph (demo as a first-class robot)
 #include "RobotConfig.hpp"          // krs::rcfg::RobotConfig (proven property hot-swap)
+#include "SceneBuilder.hpp"         // spawnPrimitive (selected-joint axis overlay bar)
+#include "PrimitiveBuilders.hpp"    // Primitive::Cylinder
+#include <glm/gtx/quaternion.hpp>   // glm::rotation (orient the axis bar)
 
 #include <QVBoxLayout>
 #include <QFormLayout>
@@ -75,7 +78,15 @@ RobotBuilderPanel::RobotBuilderPanel(Scene* scene, QWidget* parent)
     refresh();
 }
 
-RobotBuilderPanel::~RobotBuilderPanel() = default;
+RobotBuilderPanel::~RobotBuilderPanel()
+{
+    // Remove the selected-joint axis overlay bar so it doesn't outlive the panel.
+    if (m_scene) {
+        auto& reg = m_scene->getRegistry();
+        const entt::entity bar = entt::entity(m_selAxisBar);
+        if (reg.valid(bar)) reg.destroy(bar);
+    }
+}
 
 void RobotBuilderPanel::initializeUI()
 {
@@ -505,19 +516,71 @@ void RobotBuilderPanel::onDefineFromFeatures()
     krs::rbuild::EditController ctrl{ g };
     const int before = ctrl.dof();
     krs::rbuild::RBJoint created;
-    const bool ok = ctrl.defineFromFeatures(toFace(*selA), a, toFace(*selB), b, &created);
+    int parent = a, child = b;
+    const bool ok = ctrl.defineFromFeatures(toFace(*selA), a, toFace(*selB), b, &created, &parent, &child);
     if (!ok) {
         setStatus(QStringLiteral("Cannot define joint: the two bores are not coaxial. Pick two bores that share an axis, "
                                  "or set the axis directly in Joint Axis Direction."));
         return;
     }
+
+    // MATE-SNAP: rigidly move the CHILD body + its subtree so its bore is concentric with the PARENT's
+    // bore. The parent (lower chain index) stays fixed; the child snaps onto it (and re-mates back into
+    // place if it was detached + dragged). Build the two picked bore frames and orient them to roles.
+    auto faceFrame = [](const krs::sel::Selection& s) {
+        krs::rbuild::RBJoint f; f.axisPos = s.axisPos; f.axisDir = s.axisDir; f.orthonormalizeFrame(); return f;
+    };
+    const krs::rbuild::RBJoint frA = faceFrame(*selA);   // bore on body `a`
+    const krs::rbuild::RBJoint frB = faceFrame(*selB);   // bore on body `b`
+    const bool aIsParent = (a == parent);
+    krs::robot::snapMateSubtree(*m_scene, *g, parent, child,
+                                aIsParent ? frA : frB,    // parent's bore frame
+                                aIsParent ? frB : frA);   // child's bore frame
+
     if (sel) krs::sel::clearSelection(*sel);   // consume the pair so the next joint starts fresh
-    setStatus(QStringLiteral("Defined revolute B%1-B%2, axis (%3, %4, %5). DOF %6 -> %7")
-        .arg(a).arg(b)
+    setStatus(QStringLiteral("Mated B%1 (child) concentric to B%2 (parent), axis (%3, %4, %5). DOF %6 -> %7")
+        .arg(child).arg(parent)
         .arg(created.axisDir.x, 0, 'f', 3).arg(created.axisDir.y, 0, 'f', 3).arg(created.axisDir.z, 0, 'f', 3)
         .arg(before).arg(ctrl.dof()));
     refresh();
     emit graphChanged();
+}
+
+// Spawn (or re-point) ONE glowing magenta axis bar through the selected joint's axis, in the MAIN
+// scene. JointAxisPass draws JointAxisComponent always-on-top in the main viewport, so editing the
+// axis direction visibly rotates this bar -- the feedback that was missing ("axis does nothing").
+void RobotBuilderPanel::showSelectedJointAxis(int row)
+{
+    if (!m_scene) return;
+    auto& reg = m_scene->getRegistry();
+    entt::entity bar = entt::entity(m_selAxisBar);
+    auto* g = graph();
+    const bool valid = g && row >= 0 && row < int(g->joints.size());
+    if (!valid) {                                  // no joint selected -> remove the bar
+        if (reg.valid(bar)) reg.destroy(bar);
+        m_selAxisBar = static_cast<std::uint32_t>(entt::entity{ entt::null });
+        return;
+    }
+    const auto& j = g->joints[row];
+    const glm::vec3 o = j.axisPos;
+    glm::vec3 d = j.axisDir;
+    if (glm::length(d) < 1e-6f) d = glm::vec3(0, 0, 1);
+    d = glm::normalize(d);
+    if (!reg.valid(bar)) {                          // create once, then reuse
+        bar = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::Cylinder), o,
+                                           glm::vec3(0.012f, 1.10f, 0.012f), "JointAxisEdit");
+        m_selAxisBar = std::uint32_t(bar);
+        if (reg.valid(bar)) reg.emplace_or_replace<JointAxisComponent>(bar);
+    }
+    if (!reg.valid(bar)) { m_selAxisBar = static_cast<std::uint32_t>(entt::entity{ entt::null }); return; }
+    auto& tc = reg.get<TransformComponent>(bar);
+    tc.translation = o;
+    tc.rotation    = glm::rotation(glm::vec3(0.0f, 1.0f, 0.0f), d);  // bar built along +Y -> point at axis
+    tc.scale       = glm::vec3(0.012f, 1.10f, 0.012f);
+    auto& mat = reg.get_or_emplace<MaterialComponent>(bar);
+    mat.albedoColor      = glm::vec3(1.00f, 0.20f, 1.00f);   // magenta = "the joint axis you are editing"
+    mat.emissiveColor    = glm::vec3(1.00f, 0.20f, 1.00f);
+    mat.emissiveStrength = 5.0f;
 }
 
 void RobotBuilderPanel::onClearSelection()
@@ -560,7 +623,7 @@ void RobotBuilderPanel::onJointSelected(int row)
 
     // Authoring graph: reflect the selected joint's axis origin + type into the controls.
     auto* g = graph();
-    if (!g || row < 0 || row >= int(g->joints.size()) || !m_axisX) return;
+    if (!g || row < 0 || row >= int(g->joints.size()) || !m_axisX) { showSelectedJointAxis(-1); return; }
     const auto& j = g->joints[row];
     const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ), bt(m_jointType),
                          dx(m_dirX), dy(m_dirY), dz(m_dirZ);
@@ -591,6 +654,7 @@ void RobotBuilderPanel::onJointSelected(int row)
         m_limitLo->setValue(j.limits.lower);
         m_limitHi->setValue(j.limits.upper);
     }
+    showSelectedJointAxis(row);   // glowing axis bar in the main viewport for the clicked joint
 }
 
 void RobotBuilderPanel::onJointTypeChanged(int comboIndex)
@@ -665,6 +729,8 @@ void RobotBuilderPanel::onApplyAxisDir()
         .arg(row).arg(a.x, 0, 'f', 3).arg(a.y, 0, 'f', 3).arg(a.z, 0, 'f', 3));
     refresh();
     emit graphChanged();
+    showSelectedJointAxis(row);            // re-orient the glowing axis bar so the edit is VISIBLE
+    m_jointsList->setCurrentRow(row);      // keep the joint selected after the rebuild
 }
 
 void RobotBuilderPanel::onSnapAxisToBore()
@@ -697,6 +763,8 @@ void RobotBuilderPanel::onSnapAxisToBore()
         .arg(g->joints[row].axisDir.x, 0, 'f', 3).arg(g->joints[row].axisDir.y, 0, 'f', 3).arg(g->joints[row].axisDir.z, 0, 'f', 3));
     refresh();
     emit graphChanged();
+    showSelectedJointAxis(row);
+    m_jointsList->setCurrentRow(row);
 }
 
 void RobotBuilderPanel::onApplyLimit()

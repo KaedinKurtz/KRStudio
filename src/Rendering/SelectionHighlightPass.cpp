@@ -10,9 +10,16 @@
 namespace {
 
 constexpr glm::vec3 kHoverColor{ 1.00f, 0.95f, 0.20f };   // bright yellow = "about to select"
-constexpr glm::vec3 kSelectColor{ 1.00f, 0.55f, 0.10f };  // orange = committed selection
+constexpr glm::vec3 kSelectColor{ 1.00f, 0.55f, 0.10f };  // orange = 3rd+ committed selection
+// The robot-builder mate workflow picks TWO bores: the FIRST is the parent/anchor (GREEN), the
+// SECOND is the child that snaps onto it (BLUE). Distinct colors so the operator sees which is which.
+constexpr glm::vec3 kFeatColor[2] = {
+    { 0.10f, 1.00f, 0.25f },   // [0] first pick  = GREEN
+    { 0.18f, 0.50f, 1.00f },   // [1] second pick = BLUE
+};
+constexpr float kGlow = 1.5f;                            // slight HDR lift for a glow WITHOUT clipping the hue to white
 constexpr float kHoverWidth = 2.5f;                       // px (driver-clamped on some GL profiles)
-constexpr float kSelectWidth = 4.0f;                      // a couple px thicker than hover
+constexpr float kSelectWidth = 6.0f;                      // thick "locked" ring (driver-clamped on core profiles)
 constexpr float kPlaneHalf = 0.03f;                       // planar-face outline half-size (was 0.01 -- too small to read)
 
 // Append an IndicatorLines (rim + arrow) into a flat GL_LINES vertex list.
@@ -89,21 +96,30 @@ void SelectionHighlightPass::execute(const RenderFrameContext& context)
     if (!st->hover.valid && st->selected.empty()) return;
 
     auto* gl = context.gl;
-    gl->glEnable(GL_DEPTH_TEST);
-    gl->glDepthMask(GL_FALSE);   // overlay: don't occlude later passes
+    // ALWAYS-ON-TOP: a selected bore's ring sits on the axis (often inside the part), so depth-testing
+    // it hides it behind the body. Disable the depth test for the highlight so the ring/arrow is always
+    // visible -- the operator must see what they picked regardless of viewing angle. Depth write stays
+    // off so the overlay never occludes later passes.
+    gl->glDisable(GL_DEPTH_TEST);
+    gl->glDepthMask(GL_FALSE);
 
-    // SELECTED features (committed): orange, double ring + thicker line for a "locked" look.
-    if (!st->selected.empty()) {
-        std::vector<glm::vec3> selLines;
-        for (const auto& sel : st->selected) {
-            if (!sel.valid) continue;
-            const krs::sel::IndicatorLines L =
-                krs::sel::buildIndicatorLines(krs::sel::indicator(sel, 32, kPlaneHalf));
-            appendIndicator(selLines, L);
-            appendOuterRing(selLines, L, 1.12f);     // concentric accent
-        }
-        gl->glLineWidth(kSelectWidth);
-        drawLines(context, selLines, kSelectColor);
+    // SELECTED features (committed): PER-FEATURE color so the operator sees the mate pair --
+    // first pick GREEN (parent/anchor), second pick BLUE (child that snaps), 3rd+ orange. Each is a
+    // double concentric ring at high HDR intensity so it reads as a glowing rim, not a hairline.
+    gl->glLineWidth(kSelectWidth);
+    std::size_t shown = 0;
+    for (const auto& sel : st->selected) {
+        if (!sel.valid) continue;
+        const krs::sel::IndicatorLines L =
+            krs::sel::buildIndicatorLines(krs::sel::indicator(sel, 64, kPlaneHalf));
+        std::vector<glm::vec3> one;
+        one.insert(one.end(), L.arrow.begin(), L.arrow.end());   // axis arrow (which way the joint turns)
+        // Stack several concentric rings into a THICK band -- desktop GL clamps glLineWidth to 1px on
+        // core profiles, so a band of rings is the only reliable way to read as a fat glowing rim.
+        for (float sc : { 0.92f, 0.97f, 1.00f, 1.05f, 1.10f, 1.15f }) appendOuterRing(one, L, sc);
+        const glm::vec3 base = (shown < 2) ? kFeatColor[shown] : kSelectColor;
+        drawLines(context, one, base * kGlow);       // >1 -> glows through the tonemap
+        ++shown;
     }
 
     // HOVERED feature (preview): yellow, single ring. Drawn last so it sits on top.
@@ -117,4 +133,5 @@ void SelectionHighlightPass::execute(const RenderFrameContext& context)
 
     gl->glLineWidth(1.0f);
     gl->glDepthMask(GL_TRUE);
+    gl->glEnable(GL_DEPTH_TEST);   // restore for later passes
 }
