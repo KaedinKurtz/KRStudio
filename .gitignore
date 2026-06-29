@@ -82,3 +82,5 @@ assets/**/coacd.bin
 # sqlite WAL / shared-memory temp files (runtime, never tracked)
 *.db-shm
 *.db-wal
+
+render_gate_gradient.png
