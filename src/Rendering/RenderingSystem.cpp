@@ -26,6 +26,7 @@
 #include "PointCloudPass.hpp"
 #include "GizmoPass.hpp"
 #include "JointAxisPass.hpp"
+#include "GhostRobotPass.hpp"
 #include "FluidPass.hpp"
 #include "MpmPass.hpp"
 #include "FluidSurfacePass.hpp"
@@ -378,6 +379,11 @@ void RenderingSystem::initializeSharedResources()
             (shaderDir + "gizmo_highlight_vert.glsl").toStdString(),
             (shaderDir + "gizmo_highlight_frag.glsl").toStdString());
 
+        // Phase 7 ghost validity robot: translucent tinted overlay of the commanded (pre-clamp) pose.
+        loadAndStoreShader("ghost",
+            (shaderDir + "ghost_vert.glsl").toStdString(),
+            (shaderDir + "ghost_frag.glsl").toStdString());
+
         // Load all other shaders as before
         loadAndStoreShader("lighting", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "lighting_frag.glsl").toStdString());
         loadAndStoreShader("phong", (shaderDir + "vertex_shader_vert.glsl").toStdString(), (shaderDir + "fragment_shader_frag.glsl").toStdString());
@@ -714,6 +720,10 @@ void RenderingSystem::initializeSharedResources()
     // Display transform AFTER the water/foam composite (they blend in linear
     // HDR), BEFORE the gizmo (authored in display space).
     m_overlayPasses.push_back(std::make_unique<TonemapPass>());
+    // Ghost validity robot: post-tonemap (display space), depth-tested against the real scene (the
+    // G-buffer depth was blitted into the final FBO), depth-write off + alpha blend. Drawn BEFORE the
+    // always-on-top axis/gizmo overlays so those still win. Invisible unless a joint is clamped.
+    m_overlayPasses.push_back(std::make_unique<GhostRobotPass>());
     // Joint-axis indicator bars: always-on-top, post-tonemap (no exposure pre-divide
     // needed). Before the gizmo so the gizmo stays on absolute top.
     m_overlayPasses.push_back(std::make_unique<JointAxisPass>());

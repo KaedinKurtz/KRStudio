@@ -229,6 +229,15 @@ struct LiveRobot {
     }
 };
 
+// Per-scene toggle for the translucent ghost validity robot (Phase 7). Held in registry.ctx().
+// enabled => GhostRobotPass draws each LiveRobot's commanded (pre-clamp) pose as a translucent tinted
+// overlay, but ONLY where a joint is actually clamped (anyJointInvalid) so it is invisible in normal
+// operation. alpha is the base opacity; the validity tint (green/red) is chosen per link in the pass.
+struct GhostVizState {
+    bool  enabled = true;
+    float alpha   = 0.40f;
+};
+
 // ctx-singleton registry of live robots (multi-robot). Mirrors the existing ctx
 // patterns (RobotGraph, ArticulationCommandComponent). robotId is the stable key.
 struct RobotRegistry {

@@ -932,6 +932,33 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
+    // KRS_GHOST_DEMO: drive a joint PAST its limit so the translucent ghost validity robot is visible
+    // (commanded-vs-clamped). Injects joint 1 (J2) beyond +/-pi into the command bus a couple seconds
+    // after boot (robot + bus ready); the default node graph only drives J1, so this persists. The real
+    // arm clamps at the limit while the ghost shows J2 + every downstream link over-rotated, in red.
+    if (qEnvironmentVariableIsSet("KRS_GHOST_DEMO")) {
+        // The sim only drains the command bus while PLAYING, so for a static screenshot we set the
+        // ghost state on the LiveRobot DIRECTLY (real arm stays at its home q; the ghost rotates J2 +1.5
+        // rad past it, flagged invalid). Repeating so it persists even if the sim later starts draining.
+        auto* ghostTimer = new QTimer(this);
+        connect(ghostTimer, &QTimer::timeout, this, [this]() {
+            if (!m_scene) return;
+            auto* rr = m_scene->getRegistry().ctx().find<krs::robot::RobotRegistry>();
+            krs::robot::LiveRobot* lr = rr ? rr->get(0) : nullptr;
+            if (!lr || lr->ndof() < 2) return;
+            lr->ensureGhostSized();
+            lr->qCommandRaw = lr->q;                                   // ghost starts at the real pose
+            lr->jointValid.assign(size_t(lr->ndof()), char(1));
+            // KRS_GHOST_DEMO_JOINT picks which DOF to violate (default 1 = J2). The chosen DOF is
+            // commanded past its home so the ghost swings out; everything from it down the chain reds.
+            int dj = qEnvironmentVariable("KRS_GHOST_DEMO_JOINT").toInt();
+            if (dj < 0 || dj >= lr->ndof()) dj = 1;
+            lr->qCommandRaw[dj] = lr->q[dj] + 1.4;                     // commanded 1.4 rad past home
+            lr->jointValid[dj]  = 0;                                   // -> invalid: ghost diverges (red) from here on
+        });
+        ghostTimer->start(250);
+    }
+
     // --- Create Splines ---
     {
         /*
