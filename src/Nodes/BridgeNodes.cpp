@@ -1,6 +1,7 @@
 #include "BridgeNodes.hpp"
 #include "Scene.hpp"
 #include "components.hpp"
+#include "RobotModel.hpp"   // krs::robot::JointNameRegistry + rebuildJointNameRegistry (drive-by-name)
 #include "RevoluteFK.hpp"   // shared krs::kin::revoluteApply (one FK definition)
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -109,15 +110,25 @@ ArticulationDriveNode::ArticulationDriveNode() {
     m_id = "physics_articulation_drive";
     m_ports.push_back({ "Angle", {"float", "radians"}, Port::Direction::Input, this });
     m_ports.push_back({ "Joint", {"int", "index"},     Port::Direction::Input, this });
+    // Joint-primary addressing: drive by stable NAME or CAN nodeId (a string accepts either). When
+    // set it WINS over the legacy positional "Joint" index, and survives reorder/re-derive.
+    m_ports.push_back({ "Joint Name", {"string", "name"}, Port::Direction::Input, this });
 }
 
 void ArticulationDriveNode::compute() {
     if (!m_scene) return;
     auto angle = getInput<float>("Angle");
     if (!angle) return;                                // disconnected -> commands nothing (joint at rest)
-    const int joint = getInput<int>("Joint").value_or(0);
-    if (joint < 0) return;
     auto& reg = m_scene->getRegistry();
+    int joint = -1;
+    // Resolve a name/nodeId to the live DOF if given; else fall back to the legacy positional index.
+    if (auto nameIn = getInput<std::string>("Joint Name"); nameIn && !nameIn->empty()) {
+        krs::robot::rebuildJointNameRegistry(reg);
+        if (const auto* nr = reg.ctx().find<krs::robot::JointNameRegistry>())
+            if (const auto* jr = nr->resolve(*nameIn)) joint = jr->dof;
+    }
+    if (joint < 0) joint = getInput<int>("Joint").value_or(0);
+    if (joint < 0) return;
     ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
     if (!cmd) cmd = &reg.ctx().emplace<ArticulationCommandComponent>();
     if (int(cmd->target.size()) <= joint) { cmd->target.resize(joint + 1, 0.0f); cmd->driven.resize(joint + 1, 0); }

@@ -127,6 +127,11 @@ bool runDemoGraphGate();
 // graph the joint stays at rest (no second writer); rapid DOF-switching never crashes/corrupts.
 bool runOwnershipGate();
 
+// GATE DRIVE-BY-NAME: a joint is addressable by stable NAME and CAN nodeId via the JointNameRegistry;
+// resolution follows the name across a rename (not a positional index); ArticulationDriveNode with a
+// "Joint Name" input drives the named DOF (joint-primary addressing; persistent-selection invariant).
+bool runDriveByNameGate();
+
 // GATE PID (KRS_PID_SELFTEST): the PID node closes a 1st-order plant onto a step, matching an independent
 // reference PID+plant simulation to <tol and removing steady-state error; a P-only loop retains an offset.
 bool runPidGate();

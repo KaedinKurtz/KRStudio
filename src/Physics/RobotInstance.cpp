@@ -249,6 +249,35 @@ krs::rbuild::RobotGraph buildGraphFromLiveRobot(const LiveRobot& lr)
     return g;
 }
 
+// Rebuild the ctx JointNameRegistry from every live robot: each DOF contributes a {name, nodeId} ->
+// {robotId, dof} mapping, so a node can drive a joint by its stable name/nodeId. Cheap (a few joints);
+// called on demand by the drive path. Name/nodeId collisions across robots: last writer wins.
+void rebuildJointNameRegistry(entt::registry& reg)
+{
+    JointNameRegistry* nrp = reg.ctx().find<JointNameRegistry>();
+    if (!nrp) nrp = &reg.ctx().emplace<JointNameRegistry>();
+    JointNameRegistry& nr = *nrp;
+    nr.clear();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>();
+    if (!rr) return;
+    for (auto& sp : rr->robots) {
+        if (!sp) continue;
+        LiveRobot& lr = *sp;
+        const int nd = lr.ndof();
+        for (int k = 0; k < nd; ++k) {
+            if (k >= int(lr.memberJoint.size())) break;
+            const int mjIdx = lr.memberJoint[k];
+            if (mjIdx < 0 || mjIdx >= int(lr.model.joints.size())) continue;
+            const krs::robot::Joint& mj = lr.model.joints[mjIdx];
+            JointRef jr; jr.robotId = lr.robotId; jr.dof = k; jr.id = mj.id; jr.nodeId = mj.nodeId; jr.name = mj.name;
+            const int idx = int(nr.joints.size());
+            nr.joints.push_back(jr);
+            if (!jr.name.empty()) nr.byName[jr.name] = idx;
+            if (jr.nodeId >= 0)   nr.byNodeId[jr.nodeId] = idx;
+        }
+    }
+}
+
 // Re-apply an EDITED authoring graph to its live robot (the schema<->graph round-trip):
 // snap the robot HOME first (so captureRobotRest re-captures the true rest from the
 // solids' home transforms), then re-instantiate (idempotent root reuse + entity re-map).

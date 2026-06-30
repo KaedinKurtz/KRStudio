@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <unordered_map>
 #include <sstream>
 #include <iomanip>
 #include <cmath>
@@ -271,6 +272,47 @@ struct RobotRegistry {
         return *robots.back();
     }
 };
+
+// ===========================================================================
+// JOINT NAME REGISTRY -- the joint-primary ADDRESSING layer. Maps a joint's user-facing name and
+// CAN nodeId to its live (robotId, dofIndex), rebuilt from the live robots. A node drives a joint
+// BY NAME or nodeId -- a stable identifier that survives reorder/re-derive -- instead of a fragile
+// positional DOF index. ctx-singleton, mirroring RobotRegistry. Rebuilt on demand (drain/drive).
+// ===========================================================================
+struct JointRef {
+    int           robotId = -1;
+    int           dof     = -1;     // DOF index within that robot
+    std::uint64_t id      = 0;      // stable joint id
+    int           nodeId  = -1;     // CAN-style numeric id
+    std::string   name;             // semantic name
+};
+struct JointNameRegistry {
+    std::vector<JointRef> joints;
+    std::unordered_map<std::string, int> byName;     // name   -> index into joints
+    std::unordered_map<int, int>         byNodeId;    // nodeId -> index into joints
+    void clear() { joints.clear(); byName.clear(); byNodeId.clear(); }
+    const JointRef* findByName(const std::string& n) const {
+        auto it = byName.find(n); return (it == byName.end()) ? nullptr : &joints[it->second];
+    }
+    const JointRef* findByNodeId(int nid) const {
+        auto it = byNodeId.find(nid); return (it == byNodeId.end()) ? nullptr : &joints[it->second];
+    }
+    // A single "Joint Name" field accepts a name OR a numeric nodeId string (so a node can address
+    // either way). Name takes precedence; an all-digits token falls through to nodeId.
+    const JointRef* resolve(const std::string& token) const {
+        if (const JointRef* r = findByName(token)) return r;
+        bool numeric = !token.empty();
+        for (char c : token) if (c < '0' || c > '9') { numeric = false; break; }
+        if (numeric) { try { return findByNodeId(std::stoi(token)); } catch (...) { return nullptr; } }
+        return nullptr;
+    }
+    std::string nameOf(int robotId, int dof) const {
+        for (const auto& j : joints) if (j.robotId == robotId && j.dof == dof) return j.name;
+        return {};
+    }
+};
+// Repopulate the ctx JointNameRegistry from every LiveRobot in the scene's RobotRegistry.
+void rebuildJointNameRegistry(entt::registry& reg);
 
 // --- mount port: attach a typed tool -------------------------------------
 struct Tool {

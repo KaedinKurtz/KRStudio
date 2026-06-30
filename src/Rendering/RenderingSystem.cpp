@@ -1842,6 +1842,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE VIS (readout/gauge displayed value matches input; digits/decimals; disconnected inert)", krs::nodes::runVisGate() },
             { "GATE DEMO-GRAPH (editing the canvas sine changes the live robot; boot graph IS the driver)", krs::nodes::runDemoGraphGate() },
             { "GATE OWNERSHIP (node command sole joint driver, FK<1e-4; no graph->rest; switch-robust)", krs::nodes::runOwnershipGate() },
+            { "GATE DRIVE-BY-NAME (joint addressable by name+nodeId via JointNameRegistry; follows name across rename; node drives the named DOF)", krs::nodes::runDriveByNameGate() },
             { "GATE PID (PID node closes a plant onto a step vs independent reference; P-only retains offset)", krs::nodes::runPidGate() },
             { "GATE FILTER (Kalman/low-pass/moving-average each vs independent reference + neg-ctrl)", krs::nodes::runFilterGate() },
             { "GATE THREAD (async UI edits keep tick rate; old synchronous path stalls it)", krs::nodes::runThreadGate() },
