@@ -810,6 +810,81 @@ bool runRobotOwnerGate() {
 }
 
 // ===========================================================================
+// GATE CUT-KEEPS-DRIVABLE -- the joint-primary cut semantics. Cutting a joint splits the robot into
+// TWO derived components (NOT a deleted subtree); both keep their joint names/ids, both stay drivable
+// BY NAME, the cut joint's DOF is gone, and every body survives (the detached forearm is a free-floating
+// controllable chain). This is the data/drivability half of the fix; rendering all components is Phase 6.
+bool runCutKeepsDrivableGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[cutdrive] GATE CUT-KEEPS-DRIVABLE -- cut a joint -> two components; both keep names + stay drivable by name; nothing destroyed\n");
+
+    Scene scene; auto& reg = scene.getRegistry();
+    // 4-DOF serial robot -> joints J0..J3, bodies L0..L4.
+    krs::rbuild::RobotGraph g; g.base = 0;
+    for (int i = 0; i < 5; ++i) {
+        krs::rbuild::RBBody b; b.name = "L" + std::to_string(i);
+        b.placement = Eigen::Matrix4d::Identity(); b.placement(0, 3) = double(i);
+        g.bodies.push_back(b);
+    }
+    for (int i = 0; i < 4; ++i) {
+        krs::rbuild::RBJoint j; j.parent = i; j.child = i + 1; j.type = krs::rbuild::JType::Revolute;
+        j.axisDir = glm::vec3(0, 0, 1); j.orthonormalizeFrame(); g.addJoint(j);
+    }
+    LiveRobot* lr0 = instantiateFromGraph(scene, g, 0);
+    const bool built = lr0 && lr0->ndof() == 4;
+    rebuildJointNameRegistry(reg);
+    const JointNameRegistry* nrB = reg.ctx().find<JointNameRegistry>();
+    const bool before = nrB && nrB->findByName("J0") && nrB->findByName("J3") && nrB->joints.size() == 4;
+
+    // CUT joint J1 (graph joint index 1): branch = subtree {2,3,4} (joints J2,J3); base keeps J0; J1 dropped.
+    int newId = -1;
+    const bool splitRan = splitRobotAtJoint(scene, 0, 1, &newId);
+
+    rebuildJointNameRegistry(reg);
+    const JointNameRegistry* nr = reg.ctx().find<JointNameRegistry>();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>();
+    const JointRef* rJ0 = nr ? nr->findByName("J0") : nullptr;
+    const JointRef* rJ2 = nr ? nr->findByName("J2") : nullptr;
+    const JointRef* rJ3 = nr ? nr->findByName("J3") : nullptr;
+    const bool namesKept   = rJ0 && rJ2 && rJ3;
+    const bool baseHasJ0   = rJ0 && rJ0->robotId == 0;
+    const bool branchHasJ23= rJ2 && rJ3 && rJ2->robotId == newId && rJ3->robotId == newId;
+    const bool j1Cut       = nr && !nr->findByName("J1");                  // the cut DOF is gone
+    LiveRobot* base   = rr ? rr->get(0) : nullptr;
+    LiveRobot* branch = rr && newId >= 0 ? rr->get(newId) : nullptr;
+    const bool bothExist = base && branch && base->ndof() == 1 && branch->ndof() == 2;  // nothing destroyed
+
+    // Drive each component BY NAME: resolve name -> (robotId,dof), move that DOF, assert the EE pose changes.
+    auto drivableByName = [&](const char* nm) -> bool {
+        const JointRef* jr = nr ? nr->findByName(nm) : nullptr;
+        LiveRobot* t = (jr && rr) ? rr->get(jr->robotId) : nullptr;
+        if (!t || !jr || jr->dof < 0 || jr->dof >= t->ndof()) return false;
+        Eigen::VectorXd q0 = Eigen::VectorXd::Zero(t->ndof());
+        Eigen::VectorXd q1 = q0; q1[jr->dof] = 0.5;
+        const int ee = t->chain.nbody() - 1;
+        const krs::dyn::Pose p0 = t->chain.bodyPose(q0, ee), p1 = t->chain.bodyPose(q1, ee);
+        return (p0.p - p1.p).norm() > 1e-3 || (p0.R - p1.R).cwiseAbs().maxCoeff() > 1e-3;
+    };
+    const bool baseDrivable   = drivableByName("J0");
+    const bool branchDrivable = drivableByName("J2") && drivableByName("J3");
+
+    const bool pass = built && before && splitRan && namesKept && baseHasJ0 && branchHasJ23
+                   && j1Cut && bothExist && baseDrivable && branchDrivable;
+    printf("[cutdrive]   before: 4 joints J0..J3 on one component=%s\n", before ? "yes" : "NO");
+    printf("[cutdrive]   after cut J1: J0->base(0)=%s J2,J3->branch(%d)=%s J1 gone=%s ; both exist (dof 1 & 2, nothing destroyed)=%s  %s\n",
+           baseHasJ0 ? "yes" : "NO", newId, branchHasJ23 ? "yes" : "NO", j1Cut ? "yes" : "NO", bothExist ? "yes" : "NO",
+           (namesKept && baseHasJ0 && branchHasJ23 && j1Cut && bothExist) ? "PASS" : "FAIL");
+    printf("[cutdrive]   drivable by name: base J0=%s branch J2&J3=%s  %s\n",
+           baseDrivable ? "yes" : "NO", branchDrivable ? "yes" : "NO", (baseDrivable && branchDrivable) ? "PASS" : "FAIL");
+    printf("[cutdrive] %s\n", pass ? "ALL PASS (cut -> two components; names+ids kept; both drivable by name; nothing destroyed)"
+                                   : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
 // GATE MANIP-OPS -- the parent-rigid / child-IK / split / merge manipulation model, on a real scene.
 bool runManipOpsGate()
 {

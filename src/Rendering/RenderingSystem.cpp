@@ -1026,6 +1026,7 @@ void RenderingSystem::initializeSharedResources()
                       & krs::rbuild::runSplitMergeGate()
                       & krs::rbuild::runConnectedComponentsGate()
                       & krs::robot::runManipOpsGate()
+                      & krs::robot::runCutKeepsDrivableGate()
                       & krs::rbuild::runJointEditGate()
                       & krs::rbuild::runTagOwnershipGate()
                       & krs::rbuild::runSubtreeDetachGate();
@@ -1781,6 +1782,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE SPLIT-MERGE (cut joint -> base+branch trees; re-mate merges; DOF/body/FK round-trip; bad-index neg-ctrl)", krs::rbuild::runSplitMergeGate() },
             { "GATE CONNECTED-COMPONENTS (robot = derived component; serial->1 / disjoint->2; chooseBase deterministic; chainOrderFrom re-roots)", krs::rbuild::runConnectedComponentsGate() },
             { "GATE MANIP-OPS (rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1; unreachable-IK neg-ctrl)", krs::robot::runManipOpsGate() },
+            { "GATE CUT-KEEPS-DRIVABLE (cut a joint -> two components; both keep names+ids; both drivable by name; cut DOF gone; nothing destroyed)", krs::robot::runCutKeepsDrivableGate() },
             { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },
             { "GATE TAG-OWNERSHIP (member body tagged + free-move-locked; non-member free; always-allow neg-ctrl breaks single-owner)", krs::rbuild::runTagOwnershipGate() },
             { "GATE SUBTREE-DETACH (mid-joint delete detaches subtree intact; tag tracks membership; re-mate restores; destroy & stale-tag neg-ctrls)", krs::rbuild::runSubtreeDetachGate() },

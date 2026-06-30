@@ -500,6 +500,11 @@ bool mergeRobots(Scene& scene, int parentRobotId, int childRobotId,
 // target does not diverge/NaN. Defined in RobotInstance.cpp.
 bool runManipOpsGate();
 
+// GATE CUT-KEEPS-DRIVABLE (joint-primary): cutting a joint yields TWO derived components; both keep
+// their joint names/ids, both stay drivable BY NAME, and nothing is destroyed (the detached forearm
+// stays a controllable free-floating chain). Defined in RobotInstance.cpp.
+bool runCutKeepsDrivableGate();
+
 // --- Outliner grouping (step 7): Robot -> bodies tree, multi-robot ----------------
 // One robot group: the named root + the body entities owned by it (robotId match).
 struct RobotGroup {
