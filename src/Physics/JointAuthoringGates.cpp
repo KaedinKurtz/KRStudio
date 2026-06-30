@@ -531,6 +531,70 @@ void familyConcentricBoth(Scene& scene, Suite& S) {
     }
 }
 
+// =================================================================================================
+// FAMILY M -- PERSISTENCE under a LONG SEQUENCE of up/down drags: after EACH drag every joint edge is
+// intact, dof is unchanged, and FK stays finite (a chain is never corrupted by repeated manipulation).
+void familyDragSequence(Scene& scene, Suite& S) {
+    krs::rbuild::RobotGraph g = makeSerialGraph(4);
+    const int rid = 950;
+    krs::rbuild::spawnGraphBodies(scene, g, rid);
+    LiveRobot* lr = instantiateFromGraph(scene, g, rid);
+    if (lr) lr->useRobotFkViz = true;
+    auto& reg = scene.getRegistry();
+    if (!lr) { S.check("M built", false); return; }
+    const int dof0 = lr->ndof();
+    auto edgesIntact = [&] {
+        krs::rbuild::RobotGraph gg = buildGraphFromLiveRobot(*lr);
+        int e = 0; for (int i = 0; i < dof0; ++i) if (gg.jointBetween(i, i + 1) >= 0) ++e; return e == dof0;
+    };
+    const int seq[] = { 3, 0, 2, 1, 3, 0 };   // alternate downstream/upstream links
+    for (int s = 0; s < 6; ++s) {
+        const int j = seq[s] % dof0;
+        const entt::entity e = lr->linkEntities[j][0];
+        const glm::vec3 r = entWorld(reg, e);
+        ikDragEntity(scene, rid, e, ev(r + glm::vec3(0.0f, 0.04f, 0.03f)));
+        const bool ok = edgesIntact() && lr->ndof() == dof0 && finiteVec(lr->q);
+        S.check("M drag #" + std::to_string(s + 1) + " (link " + std::to_string(j) + "): joints intact + FK finite", ok);
+    }
+}
+
+// =================================================================================================
+// FAMILY O -- MULTI-COMPONENT INDEPENDENT DRIVE: cutting a joint yields exactly TWO live components,
+// and driving a joint BY NAME on one component moves ONLY that component (no cross-talk) -- the data
+// half of "cut doesn't make a tangled mess / both sub-chains stay independently controllable".
+void familyMultiComponentDrive(Scene& scene, Suite& S) {
+    krs::rbuild::RobotGraph g = makeSerialGraph(5);     // 5 dof so BOTH halves keep >=2 dof (a translatable tip)
+    const int rid = 960;
+    krs::rbuild::spawnGraphBodies(scene, g, rid);
+    LiveRobot* lr = instantiateFromGraph(scene, g, rid);
+    if (lr) lr->useRobotFkViz = true;
+    auto& reg = scene.getRegistry();
+    if (!lr) { S.check("O built", false); return; }
+    int newId = -1;
+    const bool split = splitRobotAtJoint(scene, rid, 2, &newId);    // base {0,1,2}(2dof), branch {3,4,5}(2dof)
+    S.check("O cut -> two components", split && newId >= 0);
+    if (!split) return;
+    rebuildJointNameRegistry(reg);
+    auto* rr = reg.ctx().find<RobotRegistry>();
+    const JointNameRegistry* nr = reg.ctx().find<JointNameRegistry>();
+    S.check("O exactly two live components after cut", rr && rr->get(rid) && rr->get(newId));
+    auto firstName = [&](int cr) -> std::string { LiveRobot* t = rr->get(cr); return (t && t->ndof() >= 1) ? t->model.joints[t->memberJoint[0]].name : std::string(); };
+    auto tip = [&](int cr) -> entt::entity { LiveRobot* t = rr->get(cr); if (!t || t->ndof() < 1) return entt::null; const int l = t->ndof() - 1; return (l < int(t->linkEntities.size()) && !t->linkEntities[l].empty()) ? t->linkEntities[l][0] : entt::null; };
+    auto driveName = [&](const std::string& nm) { const JointRef* r = nr ? nr->findByName(nm) : nullptr; if (!r) return; LiveRobot* t = rr->get(r->robotId); if (!t || r->dof >= t->ndof()) return; t->q.setZero(); t->q[r->dof] = 0.6; writeBackRobotViz(scene, *t); };
+    const std::string baseJ = firstName(rid), branchJ = firstName(newId);
+    S.check("O each component has a named joint", !baseJ.empty() && !branchJ.empty());
+    const entt::entity bTip = tip(rid), brTip = tip(newId);
+    const glm::vec3 b0 = entWorld(reg, bTip), r0 = entWorld(reg, brTip);
+    driveName(baseJ);
+    S.check("O drive BASE joint moves base component", glm::distance(b0, entWorld(reg, bTip)) > 1e-3f);
+    S.check("O drive BASE joint does NOT move branch (no cross-talk)", glm::distance(r0, entWorld(reg, brTip)) < 1e-6f);
+    if (rr->get(rid)) { rr->get(rid)->q.setZero(); writeBackRobotViz(scene, *rr->get(rid)); }
+    const glm::vec3 b2 = entWorld(reg, bTip), r2 = entWorld(reg, brTip);
+    driveName(branchJ);
+    S.check("O drive BRANCH joint moves branch component", glm::distance(r2, entWorld(reg, brTip)) > 1e-3f);
+    S.check("O drive BRANCH joint does NOT move base (no cross-talk)", glm::distance(b2, entWorld(reg, bTip)) < 1e-6f);
+}
+
 } // namespace
 
 // The master suite: runs every family on a fresh scene, prints each sub-gate, and a TOTAL line.
@@ -553,6 +617,8 @@ bool runJointAuthoringSuite()
     { Scene sc; familyJointServer(sc, S); }
     familyFifoSelect(S);
     { Scene sc; familyConcentricBoth(sc, S); }
+    { Scene sc; familyDragSequence(sc, S); }
+    { Scene sc; familyMultiComponentDrive(sc, S); }
     printf("[jsuite] ===== JOINT-AUTHORING SUITE: %d / %d sub-gates PASS =====\n", S.pass, S.total);
     std::fflush(stdout);
     return S.pass == S.total;
