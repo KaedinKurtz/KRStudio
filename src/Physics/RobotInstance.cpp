@@ -309,27 +309,24 @@ void snapMateSubtree(Scene& scene, krs::rbuild::RobotGraph& g, int /*parent*/, i
     auto& reg = scene.getRegistry();
     for (int bdy : sub) {
         if (bdy < 0 || bdy >= int(g.bodies.size())) continue;
-        // The graph placement must be derived from the body's CURRENT LIVE world pose, NOT from the
-        // (possibly stale) g.bodies[].placement: an interactive gizmo drag writes only the entity's
-        // TransformComponent, never g.placement, so left-multiplying T onto the stale placement and then
-        // rebuilding FK from it discards the real snap. Read the rep entity's live pose first.
-        Eigen::Matrix4d liveWorld = g.bodies[bdy].placement;       // fallback (synthetic / no entity)
-        {
-            const int rep = g.bodies[bdy].entity;
-            if (rep >= 0) {
-                const entt::entity re = entt::entity(static_cast<std::uint32_t>(rep));
-                if (reg.valid(re)) if (auto* rtc = reg.try_get<TransformComponent>(re)) liveWorld = eigFromTransform(*rtc);
-            }
-        }
-        g.bodies[bdy].placement = T * liveWorld;                   // graph (FK source for toRobot) == snapped live pose
-        std::vector<int> ids = g.bodies[bdy].extraEntities;        // all solids of this link
+        // The WORLD-pose source of truth for the builder is g.bodies[].placement (buildGraphFromLiveRobot
+        // sets it from restLinkWorld == the live world). We must NOT read the entity TransformComponent
+        // here: for a CAD-imported FANUC link the geometry is baked to world and tc is identity (or an
+        // FK-viz delta), so T * tc would collapse EVERY subtree body onto T -- the "shoves everything
+        // down" bug. Drive the snap off the graph placement; reapplyGraphToRobot + writeBackRobotViz
+        // then update the live viz from FK for an FK-viz robot.
+        const Eigen::Matrix4d snapped = T * g.bodies[bdy].placement;
+        g.bodies[bdy].placement = snapped;
+        // Also move the live solids directly (covers a non-FK-viz robot, e.g. the demo, whose viz is the
+        // raw TransformComponent). For an FK-viz robot this is harmlessly overwritten by writeBackRobotViz.
+        std::vector<int> ids = g.bodies[bdy].extraEntities;
         ids.insert(ids.begin(), g.bodies[bdy].entity);
         for (int eid : ids) {
             if (eid < 0) continue;
             const entt::entity e = entt::entity(static_cast<std::uint32_t>(eid));
             if (!reg.valid(e)) continue;
             if (auto* tc = reg.try_get<TransformComponent>(e))
-                setTransformFromEig(*tc, T * eigFromTransform(*tc));  // live solid (rest source)
+                setTransformFromEig(*tc, T * eigFromTransform(*tc));
         }
     }
 }

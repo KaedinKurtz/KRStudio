@@ -607,6 +607,86 @@ void familyMultiComponentDrive(Scene& scene, Suite& S) {
     S.check("O drive BRANCH joint does NOT move base (no cross-talk)", glm::distance(b2, entWorld(reg, bTip)) < 1e-6f);
 }
 
+// =================================================================================================
+// FAMILY R -- DEFINE/SNAP on the REAL (FANUC-like) world model: the world pose lives in g.bodies[].placement,
+// NOT in the entity TransformComponent (a CAD-imported link has baked-world geometry + identity tc). We
+// zero the entity tc to MIMIC that, then mate a misaligned child sub-assembly (Q with descendant R) onto a
+// distant parent P. The snap must move ONLY the child subtree (Q,R), keep P fixed, keep Q/R distinct (no
+// collapse-onto-T), and end concentric -- the "define shoves everything down / piles up" bug.
+void familyDefineRealModel(Scene& scene, Suite& S) {
+    using namespace krs::rbuild;
+    auto tr = [](double x, double y, double z) { Eigen::Matrix4d M = Eigen::Matrix4d::Identity(); M(0,3)=x; M(1,3)=y; M(2,3)=z; return M; };
+    RobotGraph g; g.base = 0;
+    RBBody P; P.name = "P"; P.placement = Eigen::Matrix4d::Identity();
+    RBBody Q; Q.name = "Q"; Q.placement = tr(2.0, 0.5, 0.0);     // child sub-assembly, FAR + offset from P
+    RBBody R; R.name = "R"; R.placement = tr(2.4, 0.5, 0.0);     // R = Q + (0.4,0,0): Q's descendant
+    addCyl(P, glm::vec3(0, 0, 0),   glm::vec3(0, 0, 1), 0.05f);  // P mate bore (world)
+    addCyl(Q, glm::vec3(2.0, 0.5, 0), glm::vec3(0, 0, 1), 0.05f);// Q mate bore (parallel, far)
+    g.bodies = { P, Q, R };
+    { RBJoint j; j.parent = 1; j.child = 2; j.type = JType::Revolute; j.axisPos = glm::vec3(2.4f,0.5f,0); j.axisDir = {0,0,1}; j.orthonormalizeFrame(); g.addJoint(j); }
+    const int rid = 980;
+    spawnGraphBodies(scene, g, rid);
+    auto& reg = scene.getRegistry();
+    // MIMIC the FANUC: world pose only in g.placement; entity tc identity (as baked-geometry CAD parts are).
+    for (const auto& b : g.bodies) if (b.entity >= 0) { entt::entity e = entt::entity(std::uint32_t(b.entity));
+        if (reg.valid(e)) if (auto* tc = reg.try_get<TransformComponent>(e)) { tc->translation = glm::vec3(0); tc->rotation = glm::quat(1,0,0,0); } }
+
+    auto wpos = [&](int b) { return glm::vec3(float(g.bodies[b].placement(0,3)), float(g.bodies[b].placement(1,3)), float(g.bodies[b].placement(2,3))); };
+    const glm::vec3 Pb = wpos(0), Qb = wpos(1), Rb = wpos(2);
+    const BRepFace pB = faceToWorld(g.bodies[0].faces[0], g.bodies[0].placement);
+    const BRepFace qB = faceToWorld(g.bodies[1].faces[0], g.bodies[1].placement);
+    S.check("R bores far apart before mate (non-vacuous)", glm::distance(qB.axisPos, pB.axisPos) > 1.0f);
+
+    EditController ctrl{ &g };
+    int parent = 0, child = 1; RBJoint created;
+    const bool ok = ctrl.defineFromFeatures(pB, 0, qB, 1, &created, &parent, &child, false);
+    S.check("R define accepts parallel-but-far bores", ok);
+    if (ok) {
+        RBJoint pf; pf.axisPos = pB.axisPos; pf.axisDir = pB.axisDir; pf.orthonormalizeFrame();
+        RBJoint cf; cf.axisPos = qB.axisPos; cf.axisDir = qB.axisDir; cf.orthonormalizeFrame();
+        snapMateSubtree(scene, g, parent, child, pf, cf);
+        const BRepFace qA = faceToWorld(g.bodies[1].faces[0], g.bodies[1].placement);
+        const glm::vec3 d = glm::normalize(pB.axisDir), w = qA.axisPos - pB.axisPos;
+        S.check("R child bore concentric to parent after snap", glm::length(w - glm::dot(w, d) * d) < 1e-3f);
+        S.check("R PARENT did NOT move (no shove)", glm::distance(wpos(0), Pb) < 1e-4f);
+        S.check("R descendant moved RIGIDLY with child (subtree)", glm::length((wpos(2) - wpos(1)) - (Rb - Qb)) < 1e-4f);
+        S.check("R no collapse: child + descendant stay distinct", glm::distance(wpos(1), wpos(2)) > 0.1f);
+        S.check("R child subtree actually moved (snap ran)", glm::distance(wpos(1), Qb) > 0.1f);
+    }
+}
+
+// Family P (gizmo pivot): the headline "gizmo spawns at base origin" bug. GizmoSystem::update computes
+// the pivot as  tc.getTransform() * aabbCenter,  aabbCenter = (aabbMin+aabbMax)*0.5. A CAD-imported
+// FANUC body bakes its geometry to WORLD coords and carries an IDENTITY tc, so the pivot MUST be the
+// body's world centroid -- but only if the importer fills aabbMin/aabbMax. With the old (unset) AABB
+// the centroid is (0,0,0) and the pivot collapses onto the base origin. This gate proves the math both
+// ways: a real (filled) AABB pivots at the body; the unset AABB (NEG-CTRL) reproduces the old collapse.
+void familyGizmoPivot(Scene& scene, Suite& S) {
+    auto& reg = scene.getRegistry();
+    // A CAD-like body: identity TransformComponent, geometry baked to a world location far from origin.
+    const glm::vec3 worldCenter(1.7f, 0.4f, -0.9f);
+    entt::entity e = reg.create();
+    reg.emplace<TransformComponent>(e, glm::vec3(0.0f), glm::quat(1,0,0,0), glm::vec3(1.0f)); // identity tc (baked CAD)
+    auto& mesh = reg.emplace<RenderableMeshComponent>(e);
+    // box of half-extent 0.1 centered at worldCenter (mimics CadImporter's vertex-space AABB)
+    mesh.aabbMin = worldCenter - glm::vec3(0.1f);
+    mesh.aabbMax = worldCenter + glm::vec3(0.1f);
+
+    auto pivotOf = [&](const RenderableMeshComponent& m) {
+        const auto& tc = reg.get<TransformComponent>(e);
+        const glm::vec3 c = (m.aabbMin + m.aabbMax) * 0.5f;
+        return glm::vec3(tc.getTransform() * glm::vec4(c, 1.0f));   // EXACT GizmoSystem::update formula
+    };
+    const glm::vec3 piv = pivotOf(mesh);
+    S.check("P gizmo pivot lands at the clicked body's world centroid", glm::distance(piv, worldCenter) < 1e-4f);
+    S.check("P gizmo pivot is NOT the base origin (the bug)", glm::length(piv) > 0.5f);
+
+    // NEG-CTRL: reproduce the old unset-AABB collapse so the gate FAILS loudly if a regression unsets it.
+    RenderableMeshComponent zero; // default aabbMin==aabbMax==0
+    const glm::vec3 collapsed = pivotOf(zero);
+    S.check("P NEG-CTRL: unset AABB collapses pivot to origin (documents old bug)", glm::length(collapsed) < 1e-6f);
+}
+
 } // namespace
 
 // The master suite: runs every family on a fresh scene, prints each sub-gate, and a TOTAL line.
@@ -631,6 +711,8 @@ bool runJointAuthoringSuite()
     { Scene sc; familyConcentricBoth(sc, S); }
     { Scene sc; familyDragSequence(sc, S); }
     { Scene sc; familyMultiComponentDrive(sc, S); }
+    { Scene sc; familyDefineRealModel(sc, S); }
+    { Scene sc; familyGizmoPivot(sc, S); }
     printf("[jsuite] ===== JOINT-AUTHORING SUITE: %d / %d sub-gates PASS =====\n", S.pass, S.total);
     std::fflush(stdout);
     return S.pass == S.total;

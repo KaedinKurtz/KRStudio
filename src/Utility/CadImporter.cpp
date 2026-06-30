@@ -77,6 +77,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <limits>
 #include <cmath>
 #include <utility>
 #include <cstdio>
@@ -307,6 +308,17 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
     auto& mesh = reg.emplace<RenderableMeshComponent>(e);
     mesh.vertices = std::move(verts);
     mesh.indices = std::move(idx);
+    // AABB in the SAME (assembly/world-baked) space as the geometry. CAD parts bake the assembly
+    // transform into the vertices and carry an IDENTITY TransformComponent, so this AABB is already
+    // world-space. Without it aabbMin==aabbMax==0 -> aabbCenter==0 -> the gizmo pivot collapses to
+    // tc.translation (the base origin) for every FANUC body: the "gizmo spawns at base" bug. Also
+    // feeds ray-AABB picking (IntersectionSystem) and the PhysX box fallback (SimulationController).
+    {
+        glm::vec3 mn(std::numeric_limits<float>::max());
+        glm::vec3 mx(std::numeric_limits<float>::lowest());
+        for (const auto& v : mesh.vertices) { mn = glm::min(mn, v.position); mx = glm::max(mx, v.position); }
+        if (!mesh.vertices.empty()) { mesh.aabbMin = mn; mesh.aabbMax = mx; }
+    }
     mesh.triFace = std::move(triFace);                     // GATE F: triangle -> B-Rep face id
     mesh.sourcePath = "occt_step";
     if (!brepFaces.empty()) reg.emplace<BRepFaceComponent>(e, std::move(brepFaces)); // GATE F

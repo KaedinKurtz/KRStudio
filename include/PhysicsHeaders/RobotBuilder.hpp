@@ -730,6 +730,16 @@ struct EditController {
         int parent = bodyA, child = bodyB;
         if (idxOf(bodyB) < idxOf(bodyA)) { parent = bodyB; child = bodyA; }
         j.parent = parent; j.child = child;
+        // RE-ROOT (one parent per body): if `child` already attaches to the tree via a DIFFERENT parent
+        // joint, drop that edge so the new mate is the child's SOLE parent. Without this, subtreeOf(child)
+        // walks the STALE parent and the snap moves the wrong (often whole-arm) closure -- the "define
+        // shoves all the other bodies down" bug when mating an already-attached sub-assembly to a new body.
+        const int oldPj = (child >= 0 && child < int(co.parentJoint.size())) ? co.parentJoint[child] : -1;
+        if (oldPj >= 0 && oldPj < int(graph->joints.size())) {
+            const RBJoint& oj = graph->joints[oldPj];
+            const bool sameEdge = (oj.parent == parent && oj.child == child) || (oj.parent == child && oj.child == parent);
+            if (!sameEdge) graph->deleteJoint(oldPj);   // re-root: remove the child's prior parent edge
+        }
         const int ex = graph->jointBetween(bodyA, bodyB);
         if (ex >= 0) { j.limits = graph->joints[ex].limits; graph->joints[ex] = j; }  // REPLACE (no dup)
         else         graph->addJoint(j);
