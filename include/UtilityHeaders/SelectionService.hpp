@@ -208,9 +208,26 @@ inline bool sameFeature(const Selection& a, const Selection& b) {
 // builder needs). Both store the EXACT krs::sel::pick result -- no re-derivation.
 struct SelectionState {
     bool enabled = true;                 // feature-selection mode (View toggle)
+    bool fifoTwoBores = false;           // robot-builder bore picking: keep AT MOST 2 CYLINDER (bore-edge)
+                                         // selections, FIFO -- clicking a 3rd bore evicts the OLDEST, so
+                                         // there are only ever 2 bore edges selected at a time.
     Selection hover;                     // current hovered feature (valid==false => none)
     std::vector<Selection> selected;     // committed set (accumulates across clicks)
 };
+
+// Enforce the FIFO-two-bores rule: while more than two CYLINDER (bore) features are selected, drop the
+// OLDEST cylinder. Non-cylinder selections are left alone. No-op unless st.fifoTwoBores is set.
+inline void enforceFifoTwoBores(SelectionState& st) {
+    if (!st.fifoTwoBores) return;
+    auto cylCount = [&] { int n = 0; for (const auto& s : st.selected) if (s.valid && s.type == FeatureType::Cylinder) ++n; return n; };
+    while (cylCount() > 2) {
+        for (std::size_t i = 0; i < st.selected.size(); ++i)
+            if (st.selected[i].valid && st.selected[i].type == FeatureType::Cylinder) {
+                st.selected.erase(st.selected.begin() + std::ptrdiff_t(i));   // evict the oldest bore
+                break;
+            }
+    }
+}
 
 // HOVER: resolve the ray and store it as the hovered feature (replaces prior hover).
 // A miss stores an invalid hover (highlight disappears). The stored hover IS pick().
@@ -235,6 +252,7 @@ inline Selection commitSelection(SelectionState& st, entt::registry& reg,
     }
     if (!additive) st.selected.clear();
     st.selected.push_back(s);
+    enforceFifoTwoBores(st);                             // keep only the 2 most-recent bore edges (FIFO)
     return s;
 }
 
@@ -254,6 +272,7 @@ inline Selection commitSelectionCycled(SelectionState& st, entt::registry& reg,
     }
     if (!additive) st.selected.clear();
     st.selected.push_back(s);
+    enforceFifoTwoBores(st);                             // keep only the 2 most-recent bore edges (FIFO)
     return s;
 }
 

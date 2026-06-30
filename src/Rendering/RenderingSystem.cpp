@@ -1028,9 +1028,18 @@ void RenderingSystem::initializeSharedResources()
                       & krs::rbuild::runBoreAnchorGate()
                       & krs::robot::runManipOpsGate()
                       & krs::robot::runCutKeepsDrivableGate()
+                      & krs::robot::runJointAuthoringSuite()
                       & krs::rbuild::runJointEditGate()
                       & krs::rbuild::runTagOwnershipGate()
                       & krs::rbuild::runSubtreeDetachGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // JOINT-AUTHORING SUITE in isolation (fast iteration): the big body-frame real-path suite alone.
+    if (qEnvironmentVariableIntValue("KRS_JOINT_SUITE") != 0) {
+        std::printf("\n================= KRS_JOINT_SUITE =================\n");
+        const bool ok = krs::robot::runJointAuthoringSuite();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
@@ -1785,6 +1794,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE BORE-ANCHOR (lowered revolute rotates about the bore axis/axisPos, not the child link CAD origin; offset-bore neg-ctrl)", krs::rbuild::runBoreAnchorGate() },
             { "GATE MANIP-OPS (rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1; unreachable-IK neg-ctrl)", krs::robot::runManipOpsGate() },
             { "GATE CUT-KEEPS-DRIVABLE (cut a joint -> two components; both keep names+ids; both drivable by name; cut DOF gone; nothing destroyed)", krs::robot::runCutKeepsDrivableGate() },
+            { "JOINT-AUTHORING SUITE (body-frame real-path: gizmo-route/IK-drag/define-snap/no-self-joint/persistence/cut-count/merge/coaxial/joint-server/FIFO/concentric-both)", krs::robot::runJointAuthoringSuite() },
             { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },
             { "GATE TAG-OWNERSHIP (member body tagged + free-move-locked; non-member free; always-allow neg-ctrl breaks single-owner)", krs::rbuild::runTagOwnershipGate() },
             { "GATE SUBTREE-DETACH (mid-joint delete detaches subtree intact; tag tracks membership; re-mate restores; destroy & stale-tag neg-ctrls)", krs::rbuild::runSubtreeDetachGate() },

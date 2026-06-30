@@ -259,7 +259,9 @@ struct RobotGraph {
     bool freeMoveAllowed(int body) const { return !isMember(body); }
 
     // Append a joint, minting identity for any unassigned field and preserving an existing one.
+    // Rejects a self-joint (parent==child) -- a joint must connect two DISTINCT bodies. Returns -1.
     int addJoint(RBJoint j) {
+        if (j.parent == j.child) return -1;   // no self-joint (e.g. two coaxial bores on one collapsed link)
         if (j.id == 0) j.id = nextJointId++;
         else           nextJointId = std::max(nextJointId, j.id + 1);
         if (j.nodeId < 0) j.nodeId = nextNodeId++;
@@ -505,12 +507,15 @@ struct RobotGraph {
 // degenerate pair (non-coaxial / non-cylinder), rejected for the right reason.
 inline bool defineRevoluteFromSelection(const BRepFace& worldFaceA, const BRepFace& worldFaceB,
                                         int bodyA, int bodyB, RBJoint& out,
-                                        double coaxTol = 5e-3)   // match the auto-parser; tight enough to
+                                        double coaxTol = 5e-3,   // match the auto-parser; tight enough to
                                                                  // reject non-coaxial bores, loose enough
                                                                  // for real machined CAD bore pairs
+                                        bool requireCollinear = true)  // manual define passes false: the mate
+                                                                       // snaps an offset (but parallel) pair coaxial
 {
+    if (bodyA == bodyB) return false;   // a joint must connect two DISTINCT bodies (no fiducial self-joint)
     krs::joint::JointFrame jf; double ang = 0, off = 0;
-    if (!krs::joint::deriveRevoluteFromBores(worldFaceA, worldFaceB, jf, coaxTol, &ang, &off)) return false;
+    if (!krs::joint::deriveRevoluteFromBores(worldFaceA, worldFaceB, jf, coaxTol, &ang, &off, requireCollinear)) return false;
     out.parent = bodyA; out.child = bodyB; out.type = JType::Revolute;
     out.axisPos = jf.axisPos; out.axisDir = jf.axisDir;
     out.orthonormalizeFrame();                              // persist a full mate frame (decoupled from the faces)
@@ -710,10 +715,12 @@ struct EditController {
     // degenerate pair (rejected for the right reason). outParent/outChild report the normalized roles.
     bool defineFromFeatures(const BRepFace& worldFaceA, int bodyA,
                             const BRepFace& worldFaceB, int bodyB, RBJoint* created = nullptr,
-                            int* outParent = nullptr, int* outChild = nullptr) {
+                            int* outParent = nullptr, int* outChild = nullptr,
+                            bool requireCollinear = true) {   // manual panel define passes false (mate snaps coaxial)
         if (!graph) return false;
+        if (bodyA == bodyB) return false;   // distinct-body invariant (no self-joint at the data layer)
         RBJoint j;
-        if (!defineRevoluteFromSelection(worldFaceA, worldFaceB, bodyA, bodyB, j)) return false;
+        if (!defineRevoluteFromSelection(worldFaceA, worldFaceB, bodyA, bodyB, j, 5e-3, requireCollinear)) return false;
         // parent = lower chain index (base side); fall back to lower body index if unordered.
         const RobotGraph::ChainOrder co = graph->chainOrder();
         auto idxOf = [&](int b) {

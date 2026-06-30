@@ -309,7 +309,19 @@ void snapMateSubtree(Scene& scene, krs::rbuild::RobotGraph& g, int /*parent*/, i
     auto& reg = scene.getRegistry();
     for (int bdy : sub) {
         if (bdy < 0 || bdy >= int(g.bodies.size())) continue;
-        g.bodies[bdy].placement = T * g.bodies[bdy].placement;     // graph (FK source for toRobot)
+        // The graph placement must be derived from the body's CURRENT LIVE world pose, NOT from the
+        // (possibly stale) g.bodies[].placement: an interactive gizmo drag writes only the entity's
+        // TransformComponent, never g.placement, so left-multiplying T onto the stale placement and then
+        // rebuilding FK from it discards the real snap. Read the rep entity's live pose first.
+        Eigen::Matrix4d liveWorld = g.bodies[bdy].placement;       // fallback (synthetic / no entity)
+        {
+            const int rep = g.bodies[bdy].entity;
+            if (rep >= 0) {
+                const entt::entity re = entt::entity(static_cast<std::uint32_t>(rep));
+                if (reg.valid(re)) if (auto* rtc = reg.try_get<TransformComponent>(re)) liveWorld = eigFromTransform(*rtc);
+            }
+        }
+        g.bodies[bdy].placement = T * liveWorld;                   // graph (FK source for toRobot) == snapped live pose
         std::vector<int> ids = g.bodies[bdy].extraEntities;        // all solids of this link
         ids.insert(ids.begin(), g.bodies[bdy].entity);
         for (int eid : ids) {
@@ -363,6 +375,41 @@ bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targ
     lr->q = q;
     if (lr->useRobotFkViz) writeBackRobotViz(scene, *lr);
     return res.ok;
+}
+
+// IK DRAG by ENTITY (the production gizmo handler for a member link). Resolves the chain body + slot the
+// dragged solid occupies, converts the ENTITY-space target into a body-FK-frame goal -- the entity origin
+// and the chain body FK origin differ by a fixed per-link CAD offset, so feeding the raw entity origin to
+// IK makes the solver chase that offset at drag-start (the "explosion"). dWorld = newEntityWorld - entityRest
+// makes a zero drag an EXACT no-op. Returns true on IK convergence; false if the entity isn't a member link.
+bool ikDragEntity(Scene& scene, int robotId, entt::entity e, const Eigen::Vector3d& newEntityWorld)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return false;
+    LiveRobot* lr = rr->get(robotId); if (!lr || lr->ndof() <= 0) return false;
+    int body = -1, slot = -1;
+    for (int k = 0; k < int(lr->linkEntities.size()) && body < 0; ++k)
+        for (int s = 0; s < int(lr->linkEntities[k].size()); ++s)
+            if (lr->linkEntities[k][s] == e) { body = k; slot = s; break; }
+    if (body < 0 || body >= lr->chain.nbody()) return false;
+    Eigen::Vector3d entityRest = Eigen::Vector3d::Zero();
+    if (body < int(lr->linkEntityRestWorld.size()) && slot >= 0 && slot < int(lr->linkEntityRestWorld[body].size()))
+        entityRest = lr->linkEntityRestWorld[body][slot].block<3, 1>(0, 3);
+    const Eigen::Vector3d dWorld = newEntityWorld - entityRest;
+    const krs::dyn::Pose p = lr->chain.bodyPose(lr->q, body);
+    const Eigen::Vector3d bodyWorld =
+        (lr->model.basePlacement * Eigen::Vector4d(p.p.x(), p.p.y(), p.p.z(), 1.0)).head<3>();
+    return ikDragLink(scene, robotId, body, bodyWorld + dWorld);
+}
+
+// Production gizmo routing for a MEMBER chain link (shared by MainWindow::onTransformEdited AND the
+// real-path gates, so the gate exercises the identical decision): a member link is ALWAYS IK-dragged.
+// Rigid whole-robot translation is the ROOT entity's behavior (RobotRootComponent), never a member link
+// at chain-body index 0 (that index is the first MOVING link, not the fixed base).
+bool routeGizmoEdit(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld)
+{
+    if (body < 0) return false;
+    return ikDragLink(scene, robotId, body, targetWorld);
 }
 
 // SPLIT: cut joint `graphJointIdx` of robot `robotId`; the detached subtree becomes a NEW first-class

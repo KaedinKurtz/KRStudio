@@ -24,7 +24,7 @@ struct JointFrame {
 // residuals for the caller's diagnostics.
 inline bool deriveRevoluteFromBores(const BRepFace& a, const BRepFace& b, JointFrame& out,
                                     double coaxTol = 1.0e-4, double* coaxAngleErr = nullptr,
-                                    double* coaxOffset = nullptr)
+                                    double* coaxOffset = nullptr, bool requireCollinear = true)
 {
     if (a.type != 1 || b.type != 1) return false;        // both must be cylinders
     // GUARD degenerate / non-finite features: a zero-length axis makes glm::normalize NaN, and since
@@ -49,7 +49,11 @@ inline bool deriveRevoluteFromBores(const BRepFace& a, const BRepFace& b, JointF
     const glm::vec3 perp = w - glm::dot(w, dir) * dir;
     const double off = double(glm::length(perp));
     if (coaxOffset) *coaxOffset = off;
-    if (off > coaxTol) return false;                     // axis lines offset -> not coaxial
+    // requireCollinear=true (auto-parse): the two bores must ALREADY be coaxial. requireCollinear=false
+    // (manual "Define from 2 bores"): the axes need only be PARALLEL -- the mate SNAP then makes them
+    // coaxial, so a body the user dragged away can still be jointed. The parallel (angErr) check above
+    // always applies; only the offset gate is relaxed.
+    if (requireCollinear && off > coaxTol) return false; // axis lines offset -> not coaxial
     out.axisDir = dir;
     // origin: midpoint of the two bore reference points, projected onto the common line.
     const glm::vec3 mid = 0.5f * (a.axisPos + b.axisPos);

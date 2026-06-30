@@ -2283,6 +2283,9 @@ MainWindow::MainWindow(QWidget* parent)
                 auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
                 if (gp && rr && rr->get(gp->robotId))
                     krs::robot::reapplyGraphToRobot(*m_scene, *gp, gp->robotId);
+                // Refresh the joint-name registry (the "joint server" the Nodes drive by name/nodeId)
+                // so a freshly defined / deleted / renamed joint is immediately addressable.
+                krs::robot::rebuildJointNameRegistry(reg);
             }
             if (m_renderingSystem) m_renderingSystem->requestViewportUpdates();
         });
@@ -2365,23 +2368,33 @@ MainWindow::MainWindow(QWidget* parent)
     m_gizmoSystem->onTransformEdited = [this](entt::entity e) {
         if (!m_scene) return;
         auto& reg = m_scene->getRegistry();
+        // ROOT entity grab -> rigid-translate the WHOLE robot. The root carries RobotRootComponent and NO
+        // RobotSubcomponentComponent, so this is the ONE rigid-translate trigger. A member LINK is never
+        // rigid-translated (chain body 0 is the first MOVING link, not the fixed base -- the old off-by-one).
+        if (const auto* rootC = reg.try_get<RobotRootComponent>(e)) {
+            if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>()) {
+                if (auto* lr = rr->get(rootC->robotId)) {
+                    if (const auto* tc = reg.try_get<TransformComponent>(e)) {
+                        const Eigen::Vector3d tw(tc->translation.x, tc->translation.y, tc->translation.z);
+                        const Eigen::Vector3d cur = lr->model.basePlacement.block<3, 1>(0, 3);
+                        krs::robot::translateRobot(*m_scene, rootC->robotId, tw - cur);
+                    }
+                    if (m_simulation) m_simulation->notifyEntityChanged(e);
+                    return;
+                }
+            }
+        }
         if (const auto* sub = reg.try_get<RobotSubcomponentComponent>(e)) {
             if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>()) {
                 if (auto* lr = rr->get(sub->robotId)) {
-                    int body = -1;
-                    for (int k = 0; k < int(lr->linkEntities.size()) && body < 0; ++k)
-                        for (auto le : lr->linkEntities[k]) if (le == e) { body = k; break; }
-                    const auto* tc = reg.try_get<TransformComponent>(e);
-                    if (tc) {
+                    if (const auto* tc = reg.try_get<TransformComponent>(e)) {
                         const Eigen::Vector3d tw(tc->translation.x, tc->translation.y, tc->translation.z);
-                        if (body == 0) {   // root link -> rigid translate the whole robot to track it
-                            const krs::dyn::Pose p0 = lr->chain.bodyPose(lr->q, 0);
-                            const Eigen::Vector3d cur =
-                                (lr->model.basePlacement * Eigen::Vector4d(p0.p.x(), p0.p.y(), p0.p.z(), 1.0)).head<3>();
-                            krs::robot::translateRobot(*m_scene, sub->robotId, tw - cur);
-                        } else if (body > 0) {   // child link -> IK the chain above it to the drag point
-                            krs::robot::ikDragLink(*m_scene, sub->robotId, body, tw);
-                        }
+                        // EVERY member link (including chain body 0, the first MOVING link) is IK-dragged to
+                        // the gizmo position. ikDragEntity resolves the body+slot and applies the
+                        // entity->body-frame offset, so there is no drag-start explosion and the GRABBED link
+                        // tracks the cursor (not a sibling/parent).
+                        (void)lr;
+                        krs::robot::ikDragEntity(*m_scene, sub->robotId, e, tw);
                     }
                     if (m_simulation) m_simulation->notifyEntityChanged(e);
                     return;

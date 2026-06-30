@@ -483,6 +483,12 @@ void translateRobot(Scene& scene, int robotId, const Eigen::Vector3d& deltaWorld
 // ikDragLink: drag chain body `body` toward a world point; DLS-IK solves the DoF above it. Returns
 // true on convergence; q is clamped to limits (grab a child -> IK bends the chain to the goal).
 bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld);
+// ikDragEntity: production gizmo handler -- drag a link SOLID (entity) to a new world pos. Resolves the
+// chain body+slot, applies the entity->body-frame offset so a zero drag is an exact no-op (no explosion).
+bool ikDragEntity(Scene& scene, int robotId, entt::entity e, const Eigen::Vector3d& newEntityWorld);
+// routeGizmoEdit: shared member-link routing (MainWindow + gates) -- a member chain body is ALWAYS
+// IK-dragged; rigid whole-robot translate is the ROOT entity's behavior, never a member link.
+bool routeGizmoEdit(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld);
 
 // SPLIT (delete -> two robots): cut joint `graphJointIdx` of robot `robotId` -- the detached subtree
 // becomes a NEW first-class robot (returned id via outNewRobotId) that moves as a unit; the base side
@@ -504,6 +510,12 @@ bool runManipOpsGate();
 // their joint names/ids, both stay drivable BY NAME, and nothing is destroyed (the detached forearm
 // stays a controllable free-floating chain). Defined in RobotInstance.cpp.
 bool runCutKeepsDrivableGate();
+
+// JOINT-AUTHORING SUITE (env KRS_JOINT_SUITE): a large body-frame-backed, REAL-path suite proving the
+// intended joint behaviors (gizmo routing / IK drag / define-snap concentric+coaxial / no self-joint /
+// joint persistence under drags / cut-component-count / merge / coaxial-solve / node joint-server /
+// FIFO bore selection / concentric-to-both-sides). Defined in src/Physics/JointAuthoringGates.cpp.
+bool runJointAuthoringSuite();
 
 // --- Outliner grouping (step 7): Robot -> bodies tree, multi-robot ----------------
 // One robot group: the named root + the body entities owned by it (robotId match).

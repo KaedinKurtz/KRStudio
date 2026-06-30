@@ -331,7 +331,7 @@ void RobotBuilderPanel::onLoadDemo()
         }
     }
     m_editRobotId = -1;   // authoring the demo's RobotGraph (full feature editing), not a live-robot bind
-    if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) st->enabled = true;   // bore-picking live
+    if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) { st->enabled = true; st->fifoTwoBores = true; }  // bore-picking live, FIFO 2
     setStatus(QStringLiteral("Loaded demo robot (robotId %1): %2 bodies, DOF %3. Click two bores to define a joint.")
                   .arg(demoId).arg(int(gp->bodies.size())).arg(gp->dof()));
     refresh();
@@ -351,7 +351,7 @@ void RobotBuilderPanel::editRobot(int robotId)
 
     // Authoring intent -> ensure feature (bore) picking is live so "Define from 2 bores" can collect
     // them (the View toggle may have turned it off; binding a robot for editing turns it back on).
-    if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) st->enabled = true;
+    if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) { st->enabled = true; st->fifoTwoBores = true; }
 
     // Authoring graph already represents this robot -> edit it directly (keeps any
     // un-jointed bodies / bore features authored this session).
@@ -562,7 +562,9 @@ void RobotBuilderPanel::onDefineFromFeatures()
     const int before = ctrl.dof();
     krs::rbuild::RBJoint created;
     int parent = a, child = b;
-    const bool ok = ctrl.defineFromFeatures(toFace(*selA), a, toFace(*selB), b, &created, &parent, &child);
+    // requireCollinear=false: the user may have dragged a body away, so the two bores are PARALLEL but
+    // not yet coaxial; the mate snap below makes them coaxial. (Auto-parse still requires collinearity.)
+    const bool ok = ctrl.defineFromFeatures(toFace(*selA), a, toFace(*selB), b, &created, &parent, &child, false);
     if (!ok) {
         setStatus(QStringLiteral("Cannot define joint: the two bores are not coaxial. Pick two bores that share an axis, "
                                  "or set the axis directly in Joint Axis Direction."));
