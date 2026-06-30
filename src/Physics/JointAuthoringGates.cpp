@@ -250,6 +250,18 @@ void familyDefineSnap(Scene& scene, Suite& S, const glm::vec3& childOffset, cons
         S.check("C." + kind + " bore axes COAXIAL (|dot|>0.999) after mate", std::abs(glm::dot(glm::normalize(cA.axisDir), d2)) > 0.999f);
         S.check("C." + kind + " parent bore did NOT move (parent fixed)", glm::distance(pA.axisPos, pPos) < 1e-3f);
         S.check("C." + kind + " joint registered between 2 and 3", g.jointBetween(2, 3) >= 0);
+        // END-TO-END: after define+snap+reapply the joint lands in the joint SERVER so a Node can drive it
+        // by name (select bores -> define -> snap -> registered -> drivable, the full user workflow).
+        rebuildJointNameRegistry(reg);
+        const JointNameRegistry* nr = reg.ctx().find<JointNameRegistry>();
+        RobotRegistry* rr = reg.ctx().find<RobotRegistry>();
+        LiveRobot* lrv = rr ? rr->get(rid) : nullptr;
+        bool registered = false;
+        if (nr && lrv) for (int d = 0; d < lrv->ndof(); ++d) {
+            const std::string nm = lrv->model.joints[lrv->memberJoint[d]].name;
+            if (!nm.empty() && nr->findByName(nm)) registered = true;
+        }
+        S.check("C." + kind + " defined joint registered in the joint server (drivable by name)", registered);
     }
 }
 
