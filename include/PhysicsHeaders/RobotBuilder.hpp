@@ -443,7 +443,33 @@ struct RobotGraph {
                                                             : krs::dyn::JType::Revolute;
             rj.member = true;   // in the chain (a Fixed joint positions its child rigidly; 0-DOF)
             rj.Rtree = rel.block<3,3>(0,0);
-            rj.ptree = rel.block<3,1>(0,3);
+            // BORE ANCHOR: place the joint frame ORIGIN on the BORE AXIS LINE so the revolute rotates
+            // about the bore, not the child link's CAD origin. Use the point on the bore axis CLOSEST to
+            // the child link origin -- this removes only the LATERAL offset (the actual bug, e.g. FANUC J0)
+            // while keeping the along-axis position, so a well-modeled joint whose link origin already lies
+            // on the bore axis (every synthetic graph + FANUC J1-J5) is an EXACT no-op (bodyPose(0)
+            // unchanged). axisPos unset (0,0,0) also falls back to the link origin.
+            const glm::vec3 bore = joints[pj].axisPos;
+            const Eigen::Vector3d linkOrigin = rel.block<3,1>(0,3);
+            if (glm::length(bore) > 1e-9f) {
+                const Eigen::Matrix4d invP = bodies[pb].placement.inverse();
+                const Eigen::Vector4d bw(double(bore.x), double(bore.y), double(bore.z), 1.0);
+                const Eigen::Vector3d borePar = (invP * bw).head<3>();                 // bore point in parent frame
+                Eigen::Vector3d axPar = invP.block<3,3>(0,0) *
+                                        Eigen::Vector3d(joints[pj].axisDir.x, joints[pj].axisDir.y, joints[pj].axisDir.z);
+                const double L = axPar.norm();
+                if (L > 1e-9) {
+                    axPar /= L;
+                    const Eigen::Vector3d proj = borePar + (linkOrigin - borePar).dot(axPar) * axPar;  // closest axis point
+                    // Move ONLY when the link origin is genuinely off the bore axis (the bug). Otherwise use
+                    // the link origin EXACTLY so a well-modeled joint is bit-exact (no ~1e-8 projection drift).
+                    rj.ptree = ((linkOrigin - proj).norm() > 1e-6) ? proj : linkOrigin;
+                } else {
+                    rj.ptree = linkOrigin;
+                }
+            } else {
+                rj.ptree = linkOrigin;
+            }
             // joint axis expressed in the PARENT link frame (world axis rotated by parent^-1).
             const Eigen::Matrix3d Rp = bodies[pb].placement.block<3,3>(0,0);
             const Eigen::Vector3d aw(joints[pj].axisDir.x, joints[pj].axisDir.y, joints[pj].axisDir.z);
@@ -749,6 +775,7 @@ bool runBaseAxisVerticalGate();  // J0 base-turntable axis = vertical part-Z, no
 bool runMateSnapGate();          // concentric mate transform aligns child bore to parent axis; subtreeOf collects the sub-assembly
 bool runSplitMergeGate();        // cut a joint -> base+branch graphs; re-mate merges; FK round-trips; bad input rejected
 bool runConnectedComponentsGate();// a "robot" is a DERIVED component: serial->1 comp, disjoint->2, chooseBase deterministic, re-root spans
+bool runBoreAnchorGate();        // the lowered revolute rotates about the BORE axis (axisPos), not the child link CAD origin
 bool runJointEditGate();         // PHASE 2 (manual joint from selected features matches; degenerate rejected; chain re-derives)
 bool runTagOwnershipGate();      // PHASE 3 (single-owner lock-out; membership-tracked)
 bool runSubtreeDetachGate();     // PHASE 4 (downstream subtree detaches intact; tag tracks membership)

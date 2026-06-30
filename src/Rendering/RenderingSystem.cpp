@@ -1025,6 +1025,7 @@ void RenderingSystem::initializeSharedResources()
                       & krs::rbuild::runMateSnapGate()
                       & krs::rbuild::runSplitMergeGate()
                       & krs::rbuild::runConnectedComponentsGate()
+                      & krs::rbuild::runBoreAnchorGate()
                       & krs::robot::runManipOpsGate()
                       & krs::robot::runCutKeepsDrivableGate()
                       & krs::rbuild::runJointEditGate()
@@ -1781,6 +1782,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE MATE-SNAP (concentric transform aligns child bore to parent axis; subtreeOf collects sub-assembly; off-axis-before neg-ctrl)", krs::rbuild::runMateSnapGate() },
             { "GATE SPLIT-MERGE (cut joint -> base+branch trees; re-mate merges; DOF/body/FK round-trip; bad-index neg-ctrl)", krs::rbuild::runSplitMergeGate() },
             { "GATE CONNECTED-COMPONENTS (robot = derived component; serial->1 / disjoint->2; chooseBase deterministic; chainOrderFrom re-roots)", krs::rbuild::runConnectedComponentsGate() },
+            { "GATE BORE-ANCHOR (lowered revolute rotates about the bore axis/axisPos, not the child link CAD origin; offset-bore neg-ctrl)", krs::rbuild::runBoreAnchorGate() },
             { "GATE MANIP-OPS (rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1; unreachable-IK neg-ctrl)", krs::robot::runManipOpsGate() },
             { "GATE CUT-KEEPS-DRIVABLE (cut a joint -> two components; both keep names+ids; both drivable by name; cut DOF gone; nothing destroyed)", krs::robot::runCutKeepsDrivableGate() },
             { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },

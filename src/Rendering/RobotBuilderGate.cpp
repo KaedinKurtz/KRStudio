@@ -417,6 +417,54 @@ bool runConnectedComponentsGate()
 }
 
 // ===========================================================================
+// GATE BORE-ANCHOR -- the lowered revolute rotates about the BORE axis, not the child link's CAD origin.
+// The child link origin is placed OFF the bore axis; toRobot() must anchor the joint frame on the bore
+// (axisPos) so the joint origin lies ON the rotation axis (and is therefore invariant to q). The old
+// lowering (rotation center = link origin) would have orbited the wrong axis line.
+bool runBoreAnchorGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[rbuild] GATE BORE-ANCHOR -- lowered joint frame sits ON the bore axis (rotation about the bore, not the child link origin)\n");
+
+    const glm::vec3 bore(0.30f, 0.0f, 0.30f), dir(0.0f, 0.0f, 1.0f);    // vertical bore at (0.3,*,0.3)
+    RobotGraph g; g.base = 0;
+    RBBody B0; B0.name = "base";  B0.placement = Eigen::Matrix4d::Identity();                          B0.entity = 0;
+    RBBody B1; B1.name = "link1"; B1.placement = placement(0.5, 0.2, 0.0, Eigen::Vector3d(0,0,1), 0.0); B1.entity = 1; // origin OFF the bore
+    g.bodies.push_back(B0); g.bodies.push_back(B1);
+    { RBJoint j; j.parent = 0; j.child = 1; j.type = JType::Revolute;
+      j.axisPos = bore; j.axisDir = dir; j.orthonormalizeFrame(); g.addJoint(j); }
+
+    const krs::robot::Robot r = g.toRobot();
+    krs::dyn::SerialChain ch = r.toChain();
+    const krs::dyn::Pose p0 = ch.bodyPose(Eigen::VectorXd::Zero(ch.nq()), 0);
+    Eigen::VectorXd q(ch.nq()); for (int i = 0; i < ch.nq(); ++i) q[i] = 0.6;
+    const krs::dyn::Pose pq = ch.bodyPose(q, 0);
+    const Eigen::Vector3d worldOrigin = r.basePlacement.block<3,3>(0,0) * p0.p + r.basePlacement.block<3,1>(0,3);
+
+    const Eigen::Vector3d b(bore.x, bore.y, bore.z), d(dir.x, dir.y, dir.z);
+    const Eigen::Vector3d w = worldOrigin - b;
+    const double perp = (w - w.dot(d) * d).norm();                 // (a) joint origin on the bore axis?
+    const bool onBore = perp < 1e-6;
+    const double originDrift = (pq.p - p0.p).norm();               // (b) origin invariant to q (on the axis)
+    const bool axisThroughOrigin = originDrift < 1e-9;
+    const Eigen::Vector3d linkOrigin(0.5, 0.2, 0.0);               // (c) the bug's center was genuinely off-axis
+    const Eigen::Vector3d wl = linkOrigin - b;
+    const double linkPerp = (wl - wl.dot(d) * d).norm();
+    const bool nonVacuous = linkPerp > 0.05;
+
+    const bool pass = onBore && axisThroughOrigin && nonVacuous;
+    printf("[rbuild]   joint frame on bore axis: perp=%.2e (<1e-6)=%s ; origin invariant to q: drift=%.2e=%s  %s\n",
+           perp, onBore ? "yes" : "NO", originDrift, axisThroughOrigin ? "yes" : "NO", (onBore && axisThroughOrigin) ? "PASS" : "FAIL");
+    printf("[rbuild]   NEG-CTRL child link origin was %.3f m OFF the bore (fix non-vacuous): %s\n",
+           linkPerp, nonVacuous ? "yes" : "NO");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (the lowered revolute rotates about the bore axis, not the child link CAD origin)"
+                                 : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
 bool runJointEditGate()
 {
     using std::printf;
