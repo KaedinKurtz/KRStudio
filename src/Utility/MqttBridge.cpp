@@ -9,6 +9,7 @@
 // ===========================================================================
 #include "ArticulationSpec.hpp"
 #include "RevoluteFK.hpp"   // shared krs::kin::revoluteApply (one FK definition, reused by GATE ND too)
+#include "GateOutcome.hpp"  // krs::gate::skip() -- broker absent => SKIP, not FAIL
 
 #include <mosquitto.h>
 #include <QtGlobal>
@@ -111,8 +112,8 @@ bool runMqttGateM()
     std::string exe = "C:/Program Files/mosquitto/mosquitto.exe";
     if (const char* ov = std::getenv("KRS_MOSQUITTO_EXE")) exe = ov;
     if (!std::filesystem::exists(exe)) {
-        printf("[mqtt] FAIL: mosquitto broker exe not found at '%s' (set KRS_MOSQUITTO_EXE)\n", exe.c_str());
-        fflush(stdout); return false;
+        printf("[mqtt] SKIP: mosquitto broker exe not found at '%s' (install mosquitto or set KRS_MOSQUITTO_EXE)\n", exe.c_str());
+        fflush(stdout); krs::gate::skip(); return true;
     }
 
     // --- write a minimal broker config (anonymous loopback listener) ---
@@ -282,8 +283,8 @@ bool runMqttRobustnessGateM5()
     const char* host = "127.0.0.1";
     std::string exe = "C:/Program Files/mosquitto/mosquitto.exe";
     if (const char* ov = std::getenv("KRS_MOSQUITTO_EXE")) exe = ov;
-    if (!std::filesystem::exists(exe)) { printf("[mqtt-r] FAIL: broker exe not found at '%s'\n", exe.c_str());
-        fflush(stdout); return false; }
+    if (!std::filesystem::exists(exe)) { printf("[mqtt-r] SKIP: broker exe not found at '%s' (install mosquitto or set KRS_MOSQUITTO_EXE)\n", exe.c_str());
+        fflush(stdout); krs::gate::skip(); return true; }
     std::error_code ec;
     const std::string conf = (std::filesystem::temp_directory_path(ec) / "krs_m5_mosq.conf").string();
     { std::ofstream f(conf); f << "listener " << port << " 127.0.0.1\n" << "allow_anonymous true\n"; }

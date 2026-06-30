@@ -200,9 +200,17 @@ void main()
                     vec3 tauProj = s * (coneR / sNorm) + vec3(pmean);   // radial return to the cone surface
                     float trTau = tauProj.x + tauProj.y + tauProj.z;
                     vec3 epsNew = (tauProj - vec3(lambda * trTau / (2.0 * mu + 3.0 * lambda))) / (2.0 * mu);
+                    // Stability backstop: bound the per-step Hencky strain before exp() so a CONFINED column
+                    // cannot drive the explicit DP return map into an exponential blow-up (clamped stretch stays
+                    // in exp([-1.2,1.2]) ~ [0.30, 3.32]). A settled pile sits at eps~0, so this never bites the
+                    // physics; it only clips the divergent transient that otherwise reached ~3500 m/s on some GPUs.
+                    epsNew = clamp(epsNew, vec3(-1.2), vec3(1.2));
                     SigProj = exp(epsNew);                      // invert stress -> strain -> stretches
                 }
             }
+            // Final guard on the principal stretches (covers the elastic-inside-cone path too, where SigProj=sig
+            // is the raw SVD of a possibly-overshot trial Fnew): keep F well-conditioned and finite.
+            SigProj = clamp(SigProj, vec3(0.1), vec3(10.0));
             F = U * diagm(SigProj) * transpose(V);
         } else {
             // SNOW — box-clamp principal stretches (Stomakhin 2013).

@@ -6,6 +6,7 @@
 #include "RobotBuilder.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -49,14 +50,17 @@ namespace {
 std::string findAssembly()
 {
     namespace fs = std::filesystem;
-    const char* cands[] = {
-        "assets/FANUC-430 Robot.STEP",
-        "build/release/assets/FANUC-430 Robot.STEP",
-        "C:/Users/kurtz/KRStudio/KRStudio/assets/FANUC-430 Robot.STEP",
-        "C:/Users/kurtz/KRStudio/KRStudio/build/release/assets/FANUC-430 Robot.STEP",
-    };
     std::error_code ec;
-    for (const char* c : cands) if (fs::exists(c, ec)) return c;
+    // machine-agnostic candidates: env override, beside the exe / cwd, then the source tree.
+    std::vector<std::string> cands;
+    if (const char* env = std::getenv("KRS_ASSETS_DIR"); env && env[0])
+        cands.push_back(std::string(env) + "/FANUC-430 Robot.STEP");
+    cands.push_back("assets/FANUC-430 Robot.STEP");
+    cands.push_back("build/release/assets/FANUC-430 Robot.STEP");
+#ifdef KRS_SOURCE_DIR
+    cands.push_back(std::string(KRS_SOURCE_DIR) + "/assets/FANUC-430 Robot.STEP");
+#endif
+    for (const std::string& c : cands) if (fs::exists(c, ec)) return c;
     return {};
 }
 

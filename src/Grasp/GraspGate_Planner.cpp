@@ -54,6 +54,7 @@ static int scoreVariant(const char* label, const RenderableMeshComponent& mesh, 
 }
 
 bool runGraspPlannerGate() {
+    if (ycbSkipIfAbsent("GRASP GATE PLANNER")) return true;
     std::printf("\n[GRASP GATE PLANNER] antipodal heuristic: random < baseline < tuned, under LOCKED physics  (locked-cfg %016llx)\n",
                 (unsigned long long)lockedConfigHash());
 

@@ -75,6 +75,8 @@ std::vector<PxConvexMesh*> cookCoacd(CollisionCookingService& cook, const std::s
 } // namespace
 
 bool runGraspCoacdRealGate() {
+    if (ycbSkipIfAbsent("GRASP GATE COACD-REAL")) return true;
+    if (coacdSkipIfAbsent("GRASP GATE COACD-REAL")) return true;
     std::printf("\n[GRASP GATE COACD-REAL] CoACD preserves grasp-relevant concavities that V-HACD FILLS  (locked-cfg %016llx)\n",
                 (unsigned long long)lockedConfigHash());
 

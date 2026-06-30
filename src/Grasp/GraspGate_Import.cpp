@@ -21,6 +21,7 @@ static bool scalePasses(const MeshMetrics& m, const YcbObject& o) {
 }
 
 bool runGraspImportGate() {
+    if (ycbSkipIfAbsent("GRASP GATE IMPORT")) return true;
     std::printf("\n[GRASP GATE IMPORT] YCB load + real-meter scale + mass/inertia + NaN  (locked-cfg %016llx)\n",
                 (unsigned long long)lockedConfigHash());
     const auto& cat = ycbCatalog();

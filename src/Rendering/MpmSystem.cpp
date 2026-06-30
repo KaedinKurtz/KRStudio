@@ -537,7 +537,17 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
         gl->glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
                             GLsizeiptr(sizeof(float)) * m_seedScratch.size(), m_seedScratch.data());
         gl->glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-        const float stiff = (material == 0) ? E * 7.0f : E; // fluid: K*gamma
+        // CFL is sized off the fastest elastic wave. For a solid that is the P-wave (dilatational) modulus
+        // M = lambda + 2*mu, NOT E -- using E understates the speed by ~16% at nu=0.3 and under-resolves a stiff
+        // confined column (a prime cause of the Drucker-Prager sand blow-up). Fluid uses K*gamma as before.
+        float stiff;
+        if (material == 0) {
+            stiff = E * 7.0f;                                // fluid: K*gamma
+        } else {
+            const float mu = E / (2.0f * (1.0f + nu));
+            const float lambda = E * nu / ((1.0f + nu) * (1.0f - 2.0f * nu));
+            stiff = lambda + 2.0f * mu;                      // P-wave modulus
+        }
         m_maxWaveSpeed = std::max(append ? m_maxWaveSpeed : 1.0f, std::sqrt(stiff / density));
     };
 
@@ -603,6 +613,12 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
     // Test 4 — sand column (Drucker-Prager) collapses, stays bounded, and
     // spreads wider than it started (granular flow, not a rigid drop).
     {
+        // Sand is a dissipative material: enable the granular damping (APIC->PIC blend + dt-scaled velocity
+        // bleed) the explicit MLS-MPM granular model needs to settle -- the same values runReposeFidelity uses.
+        // Without it a confined column keeps injecting affine energy the floor friction can't remove and the DP
+        // return map diverges (the ~3500 m/s blow-up). Restored after the test so other suites are unaffected.
+        const float savedBlend = m_picBlend, savedDamp = m_sandVelDampRate;
+        m_picBlend = 0.05f; m_sandVelDampRate = 8.0f;
         seedBlock(2, glm::vec3(0, -0.5f, 0), 0.22f, 0.045f, 1600.0f, 6.0e5f, 0.3f, glm::vec3(0), 20.0f, 1.0e9f, 0.0f);
         Diag d0 = sample(gl);
         // Measure initial horizontal spread (std-dev proxy via re-reading buffer).
@@ -614,6 +630,7 @@ bool MpmSystem::runSelfTests(RenderingSystem& renderer, QOpenGLFunctions_4_3_Cor
         check("sand mass conserved", massErr < 1e-3f, fmt("relErr", massErr));
         check("sand settles (COM drops)", d1.comPosition.y < d0.comPosition.y - 0.02,
               fmt("dropY", d0.comPosition.y - d1.comPosition.y));
+        m_picBlend = savedBlend; m_sandVelDampRate = savedDamp;
     }
 
     // Test 5 — pure heat diffusion. A fluid block with a 20->80C gradient along

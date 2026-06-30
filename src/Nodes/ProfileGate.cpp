@@ -28,6 +28,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QThread>
+#include <QDir>
 
 #include <cstdio>
 #include <chrono>
@@ -90,8 +91,8 @@ bool runNodeProfileDiag()
             p.setRenderHint(QPainter::Antialiasing);
             scene.render(&p, QRectF(0, 0, sbr.width(), sbr.height()), sbr);
             p.end();
-            const QString path = QStringLiteral("C:/Users/kurtz/KRStudio/KRStudio/") + file;
-            printf("[prof]   render %-12s -> %s  (%s)\n", t, file, img.save(path) ? "saved" : "SAVE FAILED");
+            const QString path = QDir::tempPath() + QLatin1Char('/') + QLatin1String(file);
+            printf("[prof]   render %-12s -> %s  (%s)\n", t, qPrintable(path), img.save(path) ? "saved" : "SAVE FAILED");
         };
         renderNode("time_source", "node_time_source.png");
         renderNode("gen_sine", "node_gen_sine.png");

@@ -1,5 +1,5 @@
 #include "GsoCatalog.hpp"
-#include <cstdlib>
+#include "AssetPaths.hpp"
 #include <algorithm>
 #include <filesystem>
 
@@ -8,8 +8,7 @@ namespace krs::grasp {
 namespace fs = std::filesystem;
 
 static std::string gsoRoot() {
-    if (const char* env = std::getenv("KRS_GSO_DIR")) return std::string(env);
-    return "C:/Users/kurtz/KRStudio/KRStudio/assets/gso";
+    return krs::assets::assetDir("gso", "KRS_GSO_DIR");
 }
 
 std::string GsoObject::meshPath() const  { return gsoRoot() + "/" + name + "/model.obj"; }

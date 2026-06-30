@@ -10,6 +10,13 @@ Set** (the Yale-CMU-Berkeley object set).
   to the repository (`.gitignore`: `assets/ycb/`); run the script to populate `assets/ycb/`.
 - Geometry used for physics: `nontextured.ply` (clean watertight scan, no UV/material overhead).
 
+## Path resolution (machine-agnostic)
+`YcbCatalog.cpp` resolves the mesh root with **no hardcoded developer path**: `$KRS_YCB_DIR` if set, else the
+first existing `assets/ycb` relative to the cwd / exe deploy dir, else the source tree (`KRS_SOURCE_DIR/assets/ycb`,
+injected by CMake). Assets are copied beside the exe at build time (CMake `POST_BUILD`), so a deployed build finds
+them automatically. **If the pack is absent, the 8 GRASP gates report `[SKIP]` (not `[FAIL]`)** and the overnight
+bench still passes — download the pack to exercise them for real.
+
 ## License / terms
 The YCB Object and Model Set is provided by Yale University / Carnegie Mellon / UC Berkeley and is **freely
 available for research use**. It is the de-facto standard benchmark for manipulation/grasping research. The S3

@@ -1,11 +1,13 @@
 #include "YcbCatalog.hpp"
-#include <cstdlib>
+#include "AssetPaths.hpp"
+#include "GateOutcome.hpp"
+#include <cstdio>
+#include <filesystem>
 
 namespace krs::grasp {
 
 static std::string ycbRoot() {
-    if (const char* env = std::getenv("KRS_YCB_DIR")) return std::string(env);
-    return "C:/Users/kurtz/KRStudio/KRStudio/assets/ycb";
+    return krs::assets::assetDir("ycb", "KRS_YCB_DIR");
 }
 
 std::string YcbObject::meshPath() const {
@@ -46,6 +48,40 @@ const std::vector<YcbObject>& ycbCatalog() {
         { "077_rubiks_cube",     "box",      false, 0.065, 0.090 },  // measured 0.0761 (tilt-inflated)
     };
     return kCat;
+}
+
+bool ycbAssetsAvailable() {
+    const auto& cat = ycbCatalog();
+    if (cat.empty()) return false;
+    std::error_code ec;
+    return std::filesystem::exists(cat.front().meshPath(), ec);
+}
+
+bool ycbSkipIfAbsent(const char* gateName) {
+    if (ycbAssetsAvailable()) return false;
+    std::printf("\n[%s] SKIP: YCB asset pack absent under '%s' "
+                "(optional ~117 MB; run scripts/download_ycb.sh or set KRS_YCB_DIR)\n",
+                gateName, ycbRoot().c_str());
+    std::fflush(stdout);
+    krs::gate::skip();
+    return true;
+}
+
+bool ycbCoacdAvailable() {
+    const auto& cat = ycbCatalog();
+    if (cat.empty()) return false;
+    std::error_code ec;
+    return std::filesystem::exists(cat.front().coacdPath(), ec);
+}
+
+bool coacdSkipIfAbsent(const char* gateName) {
+    if (ycbCoacdAvailable()) return false;
+    std::printf("\n[%s] SKIP: CoACD colliders absent under '%s' "
+                "(offline-cooked; run scripts/gen_coacd.py -- needs `pip install coacd`)\n",
+                gateName, ycbRoot().c_str());
+    std::fflush(stdout);
+    krs::gate::skip();
+    return true;
 }
 
 } // namespace krs::grasp

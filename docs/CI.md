@@ -203,3 +203,25 @@ ships a verified self-contained `windeployqt` bundle**: the `Package` step lifts
 so a green `ci-win` run guarantees a launchable folder (no more silent windeployqt-skip shipping a broken artifact).
 Remaining polish: an AppImage / `linuxdeployqt` bundle on Linux (the Linux artifact is still binary + assets and
 relies on the host's Qt platform plugin / GL driver).
+
+---
+
+## Overnight-bench environment variables & optional prerequisites
+
+The headless gate dashboard (`KRS_OVERNIGHT_BENCH=1 RoboticsSoftware`) is **machine-agnostic**: there are no
+hardcoded developer paths. Asset directories resolve automatically (env override → `assets/<sub>` beside the
+exe / cwd → the source tree via the compiled-in `KRS_SOURCE_DIR`). Two gate families depend on **optional**
+prerequisites; when one is absent the gate reports **`[SKIP]`** (not `[FAIL]`) and does **not** fail the bench —
+a SKIP is distinct from a genuine PASS in the dashboard tally, so a vacuous green can never masquerade as a pass.
+
+| Variable | Used by | Default if unset | Effect when the prerequisite is missing |
+|---|---|---|---|
+| `KRS_MOSQUITTO_EXE` | GATE M / M5 / NODE-MQTT | `C:/Program Files/mosquitto/mosquitto.exe` | The 3 MQTT gates `SKIP` (the **broker daemon** must be installed separately — see below). |
+| `KRS_YCB_DIR` | the 8 GRASP gates | resolved `assets/ycb` | The grasp gates `SKIP` until the YCB pack is downloaded (`scripts/download_ycb.sh`, ~117 MB; see `docs/YCB_DATASET.md`). |
+| `KRS_GSO_DIR` | GATE FILTER / GENERALIZE | resolved `assets/gso` | The GSO gates already degrade gracefully (empty catalog). |
+| `KRS_ASSETS_DIR` | FANUC importer fallback | resolved `assets/` | Only a fallback; `assets/FANUC-430 Robot.STEP` (deployed beside the exe) is found first. |
+
+**MQTT note:** the gates spawn a real **Mosquitto broker daemon** (`mosquitto.exe`) via `QProcess`. The vcpkg
+`mosquitto` port ships only the **client library** (`libmosquitto`), *not* the broker daemon — so vcpkg cannot
+satisfy this. Install the broker from the official Mosquitto distribution (or point `KRS_MOSQUITTO_EXE` at it) to
+exercise the 3 MQTT gates for real; otherwise they `SKIP`.

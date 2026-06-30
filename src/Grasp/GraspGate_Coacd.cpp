@@ -83,6 +83,7 @@ Drop runDrop(PxPhysics* phys, PxMaterial* mat, const PxQuat& q,
 } // namespace
 
 bool runGraspCoacdGate() {
+    if (ycbSkipIfAbsent("GRASP GATE COACD")) return true;
     std::printf("\n[GRASP GATE COACD] concavity survives (ball rests INSIDE) vs convex-hull filler FAILS  (locked-cfg %016llx)\n",
                 (unsigned long long)lockedConfigHash());
 

@@ -12,6 +12,7 @@
 #include "MqttBridge.hpp"
 #include "ArticulationSpec.hpp"
 #include "FanucArticulation.hpp"
+#include "GateOutcome.hpp"  // krs::gate::skip() -- broker absent => SKIP, not FAIL
 
 #include <mosquitto.h>
 #include <QtGlobal>
@@ -170,7 +171,7 @@ bool runMqttNodeGate()
     const int port = NodeLibrary::mqttPort();
     std::string exe = "C:/Program Files/mosquitto/mosquitto.exe";
     if (const char* ov = std::getenv("KRS_MOSQUITTO_EXE")) exe = ov;
-    if (!std::filesystem::exists(exe)) { printf("[node-mqtt] FAIL: broker exe not found\n"); fflush(stdout); return false; }
+    if (!std::filesystem::exists(exe)) { printf("[node-mqtt] SKIP: broker exe not found at '%s' (install mosquitto or set KRS_MOSQUITTO_EXE)\n", exe.c_str()); fflush(stdout); krs::gate::skip(); return true; }
     std::error_code ec;
     const std::string conf = (std::filesystem::temp_directory_path(ec) / "krs_nodemqtt.conf").string();
     { std::ofstream f(conf); f << "listener " << port << " 127.0.0.1\n" << "allow_anonymous true\n"; }

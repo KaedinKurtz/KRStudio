@@ -77,6 +77,7 @@
 #include "SensorGates.hpp"        // synthetic-sensor pipeline gates (krs::sensor GATE 0 ...)
 #include "GraspGates.hpp"         // rigid-body grasp-planning gates (krs::grasp GATE IMPORT ...)
 #include "FidelityGates.hpp"      // physics-fidelity validation gates (krs::fidelity HARNESS-SELFTEST ...)
+#include "GateOutcome.hpp"        // tri-state PASS/FAIL/SKIP for the overnight-bench dashboard
 
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
@@ -1730,7 +1731,9 @@ void RenderingSystem::initializeSharedResources()
 
     if (qEnvironmentVariableIntValue("KRS_OVERNIGHT_BENCH") != 0) {
         std::printf("\n================= KRS_OVERNIGHT_BENCH =================\n");
-        struct GateRes { const char* name; bool ok; };
+        // ok is a krs::gate::GateOutcome: each gate's bool implicitly converts, and a gate that
+        // calls krs::gate::skip() (missing environmental prerequisite) reports SKIP, not FAIL.
+        struct GateRes { const char* name; krs::gate::GateOutcome ok; };
         GateRes g[] = {
             { "Phase A dynamics oracle (FK/M/dyn/IK/loop)", krs::dyn::runSelfTests() },
             { "Phase A articulation gate (A1/A2/A3/A5)",    krs::dyn::runArticulationGate() },
@@ -1869,14 +1872,18 @@ void RenderingSystem::initializeSharedResources()
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
             { "GATE V.6 FANUC boot path moves (shared helper)",    krs::dyn::runFanucBootGateV6() },
         };
-        int fails = 0;
+        int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
-        for (const auto& x : g) { std::printf("  [%s] %s\n", x.ok ? "PASS" : "FAIL", x.name); if (!x.ok) ++fails; }
+        for (const auto& x : g) {
+            const char* tag = x.ok.skipped ? "SKIP" : (x.ok.pass ? "PASS" : "FAIL");
+            std::printf("  [%s] %s\n", tag, x.name);
+            if (x.ok.skipped) ++skips; else if (!x.ok.pass) ++fails;
+        }
         const int n = int(sizeof(g) / sizeof(g[0]));
-        std::printf("  ----- %d / %d gate groups PASS  (rigid KRS_BENCH 7/7 runs separately) -----\n",
-                    n - fails, n);
+        std::printf("  ----- %d / %d gate groups PASS  (%d skipped [env prereq absent], %d failed; rigid KRS_BENCH 7/7 runs separately) -----\n",
+                    n - fails - skips, n, skips, fails);
         std::fflush(stdout);
-        std::_Exit(fails);
+        std::_Exit(fails);   // SKIP does not fail the bench; only real FAILs set the exit code
     }
 
     // Headless MLS-MPM fidelity suite (analytic ground-truth checks).

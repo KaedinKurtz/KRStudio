@@ -63,6 +63,7 @@ bool classifyPartial(bool found, const GraspResult& r, int& mode) {
 } // namespace
 
 bool runGraspFailureCatalogGate() {
+    if (ycbSkipIfAbsent("GRASP GATE FAILURE-CATALOG")) return true;
     std::printf("\n[GRASP GATE FAILURE-CATALOG] classify 100%% of tuned-planner failures (locked-cfg %016llx)\n",
                 (unsigned long long)lockedConfigHash());
 

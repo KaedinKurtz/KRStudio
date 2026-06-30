@@ -70,6 +70,8 @@ int scoreVariant(const RenderableMeshComponent& mesh, const std::vector<GraspSpe
 } // namespace
 
 bool runGraspHeuristicV2Gate() {
+    if (ycbSkipIfAbsent("GRASP GATE HEURISTIC-V2")) return true;
+    if (coacdSkipIfAbsent("GRASP GATE HEURISTIC-V2")) return true;
     std::printf("\n[GRASP GATE HEURISTIC-V2] V1(tuned) vs V2(+above-CoM stability) on 20 YCB x3, CoACD + LOCKED  (locked-cfg %016llx)\n",
                 (unsigned long long)lockedConfigHash());
 

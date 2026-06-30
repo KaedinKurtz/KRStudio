@@ -17,6 +17,7 @@ namespace krs::grasp { bool runGraspFilterGate() { std::printf("[GRASP GATE FILT
 #include "GraspFilter.hpp"
 #include "GraspMesh.hpp"
 #include "GsoCatalog.hpp"
+#include "AssetPaths.hpp"
 #include "MeshUtils.hpp"
 #include <vector>
 #include <array>
@@ -79,8 +80,7 @@ bool runGraspFilterGate() {
                 kFilterMaxBoundary * 100, bdist[0], bdist[1], bdist[2], bdist[3], bdist[4]);
 
     // write the survivor list for CoACD generation + GATE GENERALIZE.
-    const char* env = std::getenv("KRS_GSO_DIR");
-    const std::string outPath = (env ? std::string(env) : std::string("C:/Users/kurtz/KRStudio/KRStudio/assets/gso")) + "/_valid.txt";
+    const std::string outPath = krs::assets::assetDir("gso", "KRS_GSO_DIR") + "/_valid.txt";
     { std::ofstream out(outPath); for (const auto& v : valid) out << v << "\n"; }
     std::printf("  wrote %zu valid names -> %s\n", valid.size(), outPath.c_str());
 

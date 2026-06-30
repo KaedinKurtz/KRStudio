@@ -38,6 +38,7 @@ static int scoreCollider(const RenderableMeshComponent& mesh, const std::vector<
 }
 
 bool runGraspRemeasureGate() {
+    if (ycbSkipIfAbsent("GRASP GATE REMEASURE")) return true;
     std::printf("\n[GRASP GATE REMEASURE] V-HACD vs CoACD collider, SAME tuned grasps + LOCKED criterion  (locked-cfg %016llx)\n",
                 (unsigned long long)lockedConfigHash());
 

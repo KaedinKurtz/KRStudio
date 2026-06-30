@@ -33,6 +33,7 @@ static void report(const char* tag, const GraspResult& r) {
 }
 
 bool runGraspSuccessGate() {
+    if (ycbSkipIfAbsent("GRASP GATE SUCCESS-CRITERION")) return true;
     std::printf("\n[GRASP GATE SUCCESS-CRITERION] good passes / bad fails (locked) + softened-world anti-cheat  (locked-cfg %016llx)\n",
                 (unsigned long long)lockedConfigHash());
 
