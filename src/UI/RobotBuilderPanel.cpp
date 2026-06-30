@@ -282,10 +282,13 @@ void RobotBuilderPanel::refresh()
     for (int i = 0; i < int(g->joints.size()); ++i) {
         const auto& j = g->joints[i];
         const int t = int(j.type);
-        m_jointsList->addItem(QStringLiteral("J%1: B%2 - B%3 [%4]%5")
-            .arg(i).arg(j.parent).arg(j.child)
+        // Joint-centric: the NAME + CAN nodeId (the addressable identity the node editor drives) lead;
+        // the bodies it connects + type are secondary detail.
+        const QString nm = j.name.empty() ? QStringLiteral("J%1").arg(i) : QString::fromStdString(j.name);
+        m_jointsList->addItem(QStringLiteral("%1  [node %2]   B%3->B%4  %5%6")
+            .arg(nm).arg(j.nodeId).arg(j.parent).arg(j.child)
             .arg(QString::fromLatin1((t >= 0 && t <= 2) ? kJTypeName[t] : "?"))
-            .arg(j.ambiguous ? QStringLiteral(" (ambiguous)") : QString()));
+            .arg(j.ambiguous ? QStringLiteral("  (ambiguous)") : QString()));
     }
     m_dofLabel->setText(QStringLiteral("DOF: %1   (bodies: %2, joints: %3)")
         .arg(g->dof()).arg(int(g->bodies.size())).arg(int(g->joints.size())));
@@ -405,8 +408,9 @@ bool RobotBuilderPanel::refreshFromLiveRobot()
         const auto& j = lr->model.joints[i];
         const int t = int(j.type);
         const bool isDof = j.member && j.type != krs::dyn::JType::Fixed;
-        m_jointsList->addItem(QStringLiteral("J%1: %2%3  limits [%4, %5]")
-            .arg(i)
+        const QString nm = j.name.empty() ? QStringLiteral("J%1").arg(i) : QString::fromStdString(j.name);
+        m_jointsList->addItem(QStringLiteral("%1  [node %2]   %3%4  limits [%5, %6]")
+            .arg(nm).arg(j.nodeId)
             .arg(QString::fromLatin1((t >= 0 && t <= 2) ? kJTypeName[t] : "?"))
             .arg(isDof ? QStringLiteral(" (dof %1)").arg(dofSeen) : QStringLiteral(" (fixed)"))
             .arg(j.qLower, 0, 'f', 2).arg(j.qUpper, 0, 'f', 2));

@@ -1026,6 +1026,7 @@ void RenderingSystem::initializeSharedResources()
                       & krs::rbuild::runSplitMergeGate()
                       & krs::rbuild::runConnectedComponentsGate()
                       & krs::rbuild::runBoreAnchorGate()
+                      & krs::rbuild::runUrdfExportGate()
                       & krs::robot::runManipOpsGate()
                       & krs::robot::runCutKeepsDrivableGate()
                       & krs::robot::runJointAuthoringSuite()
@@ -1792,6 +1793,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE SPLIT-MERGE (cut joint -> base+branch trees; re-mate merges; DOF/body/FK round-trip; bad-index neg-ctrl)", krs::rbuild::runSplitMergeGate() },
             { "GATE CONNECTED-COMPONENTS (robot = derived component; serial->1 / disjoint->2; chooseBase deterministic; chainOrderFrom re-roots)", krs::rbuild::runConnectedComponentsGate() },
             { "GATE BORE-ANCHOR (lowered revolute rotates about the bore axis/axisPos, not the child link CAD origin; offset-bore neg-ctrl)", krs::rbuild::runBoreAnchorGate() },
+            { "GATE URDF-EXPORT (base-pick + tree-search -> URDF; links/joints/types/limits; re-rootable; bad-base-empty neg-ctrl)", krs::rbuild::runUrdfExportGate() },
             { "GATE MANIP-OPS (rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1; unreachable-IK neg-ctrl)", krs::robot::runManipOpsGate() },
             { "GATE CUT-KEEPS-DRIVABLE (cut a joint -> two components; both keep names+ids; both drivable by name; cut DOF gone; nothing destroyed)", krs::robot::runCutKeepsDrivableGate() },
             { "JOINT-AUTHORING SUITE (body-frame real-path: gizmo-route/IK-drag/define-snap/no-self-joint/persistence/cut-count/merge/coaxial/joint-server/FIFO/concentric-both)", krs::robot::runJointAuthoringSuite() },

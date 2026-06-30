@@ -465,6 +465,54 @@ bool runBoreAnchorGate()
 }
 
 // ===========================================================================
+// GATE URDF-EXPORT -- the joint-primary export: pick a base link, derive the chain by tree-search over
+// the joints, emit links/joints/types/limits. Re-rootable; a bad base yields an empty robot (non-vacuous).
+bool runUrdfExportGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[rbuild] GATE URDF-EXPORT -- base-pick + tree-search -> URDF; links/joints/types/limits round-trip; re-rootable\n");
+
+    RobotGraph g; g.base = 0;
+    for (int i = 0; i < 4; ++i) { RBBody b; b.name = "seg" + std::to_string(i);
+        b.placement = Eigen::Matrix4d::Identity(); b.placement(0, 3) = double(i) * 0.4; g.bodies.push_back(b); }
+    { RBJoint j; j.parent = 0; j.child = 1; j.type = JType::Revolute;  j.axisDir = { 0,0,1 }; j.orthonormalizeFrame(); j.name = "shoulder"; j.limits.lower = -1.0; j.limits.upper = 1.0; g.addJoint(j); }
+    { RBJoint j; j.parent = 1; j.child = 2; j.type = JType::Revolute;  j.axisDir = { 0,1,0 }; j.orthonormalizeFrame(); j.name = "elbow"; j.limits.enabled = false; g.addJoint(j); }  // continuous
+    { RBJoint j; j.parent = 2; j.child = 3; j.type = JType::Prismatic; j.axisDir = { 1,0,0 }; j.orthonormalizeFrame(); j.name = "slide"; j.limits.lower = 0.0; j.limits.upper = 0.2; g.addJoint(j); }
+
+    const std::string urdf = exportGraphToUrdf(g, 0, "test_arm");
+    auto cnt = [](const std::string& s, const std::string& needle) { int n = 0; size_t p = 0; while ((p = s.find(needle, p)) != std::string::npos) { ++n; p += needle.size(); } return n; };
+
+    const bool links4  = cnt(urdf, "<link ") == 4;
+    const bool joints3 = cnt(urdf, "<joint ") == 3;
+    const bool names   = urdf.find("name=\"shoulder\"") != std::string::npos
+                      && urdf.find("name=\"elbow\"") != std::string::npos
+                      && urdf.find("name=\"slide\"") != std::string::npos;
+    const bool types   = urdf.find("type=\"revolute\"") != std::string::npos
+                      && urdf.find("type=\"continuous\"") != std::string::npos
+                      && urdf.find("type=\"prismatic\"") != std::string::npos;
+    const bool tree    = urdf.find("<parent link=\"seg0\"/>") != std::string::npos
+                      && urdf.find("<child link=\"seg1\"/>") != std::string::npos;
+    const bool limitCount = cnt(urdf, "<limit ") == 2;   // revolute + prismatic carry limits; continuous none
+
+    const std::string urdf2 = exportGraphToUrdf(g, 2, "rerooted");
+    const bool reroot = cnt(urdf2, "<link ") == 4 && cnt(urdf2, "<joint ") == 3;
+    const std::string bad = exportGraphToUrdf(g, 99, "bad");
+    const bool negBad = bad.find("<link ") == std::string::npos && bad.find("<joint ") == std::string::npos;
+
+    const bool pass = links4 && joints3 && names && types && tree && limitCount && reroot && negBad;
+    printf("[rbuild]   links=%d(4) joints=%d(3) names=%d types(rev/cont/prism)=%d tree=%d limitCount=%d(2)  %s\n",
+           cnt(urdf, "<link "), cnt(urdf, "<joint "), names, types, tree, cnt(urdf, "<limit "),
+           (links4 && joints3 && names && types && tree && limitCount) ? "PASS" : "FAIL");
+    printf("[rbuild]   re-root from base 2 -> 4 links/3 joints=%d ; NEG-CTRL bad base -> empty=%d  %s\n",
+           reroot, negBad, (reroot && negBad) ? "PASS" : "FAIL");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (URDF export: base-pick + tree-search; types+limits correct; re-rootable; bad base empty)"
+                                 : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
 bool runJointEditGate()
 {
     using std::printf;

@@ -783,9 +783,15 @@ bool runMateSnapGate();          // concentric mate transform aligns child bore 
 bool runSplitMergeGate();        // cut a joint -> base+branch graphs; re-mate merges; FK round-trips; bad input rejected
 bool runConnectedComponentsGate();// a "robot" is a DERIVED component: serial->1 comp, disjoint->2, chooseBase deterministic, re-root spans
 bool runBoreAnchorGate();        // the lowered revolute rotates about the BORE axis (axisPos), not the child link CAD origin
+bool runUrdfExportGate();        // export a component to URDF (base-pick + tree-search): links/joints/types/limits round-trip
 bool runJointEditGate();         // PHASE 2 (manual joint from selected features matches; degenerate rejected; chain re-derives)
 bool runTagOwnershipGate();      // PHASE 3 (single-owner lock-out; membership-tracked)
 bool runSubtreeDetachGate();     // PHASE 4 (downstream subtree detaches intact; tag tracks membership)
 bool runEditOpInvokedGate();     // CONFIG Phase 3 (panel controls invoke the proven ops; no-op/wrong-op neg-ctrls)
+
+// Export the connected component containing `baseBody` (spanning tree rooted there) as a URDF string --
+// the joint-primary "pick a base link, derive the chain from the joint tree" export. Defined in
+// src/Utility/UrdfExport.cpp.
+std::string exportGraphToUrdf(const RobotGraph& g, int baseBody = 0, const std::string& robotName = "exported");
 
 } // namespace krs::rbuild

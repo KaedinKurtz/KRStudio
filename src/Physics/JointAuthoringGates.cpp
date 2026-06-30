@@ -544,6 +544,7 @@ bool runJointAuthoringSuite()
     { Scene sc; familyIkDrag(sc, S); }
     { Scene sc; familyDefineSnap(sc, S, glm::vec3(0.0f, 0.30f, 0.0f), "lateral"); }
     { Scene sc; familyDefineSnap(sc, S, glm::vec3(0.25f, 0.20f, 0.0f), "lateral+axial"); }
+    { Scene sc; familyDefineSnap(sc, S, glm::vec3(0.90f, 0.50f, 0.30f), "far-apart-not-touching"); }
     { Scene sc; familyNoSelfJoint(sc, S); }
     { Scene sc; familyPersistence(sc, S); }
     familyCutComponents(S);
