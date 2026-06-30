@@ -22,6 +22,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "components.hpp"        // BRepFace
 #include "JointTooling.hpp"      // krs::joint::deriveRevoluteFromBores (gated JOINT-FROM-FEATURE)
@@ -78,6 +79,16 @@ struct RBJoint {
     bool ambiguous = false;                  // flagged low-confidence -> NOT a committed joint
     double residual = 0.0;                   // coaxiality residual (diagnostic)
     JointLimits limits;                      // position/effort/velocity bounds (Revolute/Prismatic)
+
+    // ---- IDENTITY (joint-primary model) -----------------------------------------
+    // A joint is a first-class, addressable entity. `id` = engine-internal STABLE handle
+    // (assigned once by RobotGraph::addJoint, never reused, PRESERVED across split/merge/
+    // rebuild) used for persistent selection + by-id lookup. `nodeId` = user-facing CAN-style
+    // numeric address (hardware mapping). `name` = user-facing semantic label. Both nodeId and
+    // name surface in the joint picker; id stays internal. 0 / -1 / "" mean "unassigned" -> auto.
+    std::uint64_t id     = 0;                 // internal stable handle (0 = unassigned)
+    int           nodeId = -1;                // CAN-style numeric node id (-1 = unassigned)
+    std::string   name;                       // semantic name ("" = unassigned)
 
     // Re-derive refDir as a UNIT vector perpendicular to axisDir (a stable frame basis).
     // Call after setting axisDir from inference/snap; picks any perpendicular if refDir
@@ -177,11 +188,19 @@ struct RobotGraph {
     // member bodies with THIS id so two graphs coexist without clobbering each other.
     int robotId = 0;
 
-    // bodies reachable from base through committed joints (BFS over the undirected graph).
-    std::set<int> members() const {
+    // Joint-identity allocators (see RBJoint::id/nodeId/name). addJoint() issues a fresh
+    // id/nodeId/name to any joint that arrives unassigned, and PRESERVES (never regenerates)
+    // the identity of a joint that already carries one -- so split/merge/rebuild keep stable
+    // ids. Counters are kept ahead of any preserved id to guarantee uniqueness within a graph.
+    std::uint64_t nextJointId = 1;           // 0 is the "unassigned" sentinel on RBJoint::id
+    int           nextNodeId  = 0;
+
+    // bodies reachable from an ARBITRARY root through committed joints (BFS over the undirected
+    // graph). Base-independent -- the building block for re-rooting and connected-components.
+    std::set<int> membersFrom(int root) const {
         std::set<int> seen;
-        if (base < 0 || base >= int(bodies.size())) return seen;
-        std::vector<int> stack{ base }; seen.insert(base);
+        if (root < 0 || root >= int(bodies.size())) return seen;
+        std::vector<int> stack{ root }; seen.insert(root);
         while (!stack.empty()) {
             const int b = stack.back(); stack.pop_back();
             for (const auto& j : joints) {
@@ -193,7 +212,35 @@ struct RobotGraph {
         }
         return seen;
     }
+    // bodies reachable from base (the kinematic-tree membership).
+    std::set<int> members() const { return membersFrom(base); }
     bool isMember(int body) const { const auto m = members(); return m.count(body) != 0; }
+
+    // ---- CONNECTED COMPONENTS (the joint-primary model: a "robot" is a DERIVED component) -------
+    // Partition the bodies into connected components over all committed joints (base-independent).
+    // Each returned list is sorted ascending (std::set order). Cutting a joint that disconnects a
+    // subtree simply yields TWO components here -- nothing is deleted; both stay drivable.
+    std::vector<std::vector<int>> connectedComponents() const {
+        std::vector<std::vector<int>> comps;
+        std::vector<char> visited(bodies.size(), 0);
+        for (int b = 0; b < int(bodies.size()); ++b) {
+            if (visited[b]) continue;
+            const std::set<int> m = membersFrom(b);
+            std::vector<int> comp(m.begin(), m.end());
+            for (int x : comp) if (x >= 0 && x < int(visited.size())) visited[x] = 1;
+            comps.push_back(std::move(comp));
+        }
+        return comps;
+    }
+    // Deterministically pick a root body for a component: keep the existing base if it belongs to
+    // the component, else the lowest body index (stable). (Phase 4 re-root passes an explicit body.)
+    int chooseBase(const std::vector<int>& comp) const {
+        if (comp.empty()) return -1;
+        for (int b : comp) if (b == base) return base;
+        int best = comp.front();
+        for (int b : comp) best = std::min(best, b);
+        return best;
+    }
 
     // robot DOF = committed, member, non-Fixed joints (both endpoints reachable from base).
     int dof() const {
@@ -211,7 +258,16 @@ struct RobotGraph {
     bool isTagged(int body) const { return isMember(body); }
     bool freeMoveAllowed(int body) const { return !isMember(body); }
 
-    int addJoint(const RBJoint& j) { joints.push_back(j); return int(joints.size()) - 1; }
+    // Append a joint, minting identity for any unassigned field and preserving an existing one.
+    int addJoint(RBJoint j) {
+        if (j.id == 0) j.id = nextJointId++;
+        else           nextJointId = std::max(nextJointId, j.id + 1);
+        if (j.nodeId < 0) j.nodeId = nextNodeId++;
+        else              nextNodeId = std::max(nextNodeId, j.nodeId + 1);
+        if (j.name.empty()) j.name = "J" + std::to_string(j.nodeId);
+        joints.push_back(std::move(j));
+        return int(joints.size()) - 1;
+    }
 
     // delete a joint by index. The downstream subtree's INTERNAL joints stay in the
     // list (intact, still articulated) -- membership is recomputed lazily by members().
@@ -235,14 +291,15 @@ struct RobotGraph {
     // factory (instantiateFromGraph) both consume this, so the chain DOF order, the
     // krs::robot::Robot joints, and the link->entity map are GUARANTEED to agree.
     struct ChainOrder { std::vector<int> order; std::vector<int> parentJoint; std::vector<int> parentBody; };
-    ChainOrder chainOrder() const {
+    // Spanning tree by DFS from an ARBITRARY root (base-independent) -- the re-rootable derivation.
+    ChainOrder chainOrderFrom(int root) const {
         ChainOrder co;
         co.parentJoint.assign(bodies.size(), -1);
         co.parentBody.assign(bodies.size(), -1);
-        if (base < 0 || base >= int(bodies.size())) return co;
-        const auto m = members();
-        std::set<int> seen{ base }; std::vector<int> stack{ base };
-        co.order.push_back(base);
+        if (root < 0 || root >= int(bodies.size())) return co;
+        const auto m = membersFrom(root);
+        std::set<int> seen{ root }; std::vector<int> stack{ root };
+        co.order.push_back(root);
         while (!stack.empty()) {
             const int b = stack.back(); stack.pop_back();
             for (int ji = 0; ji < int(joints.size()); ++ji) {
@@ -257,6 +314,7 @@ struct RobotGraph {
         }
         return co;
     }
+    ChainOrder chainOrder() const { return chainOrderFrom(base); }
     // Body indices in chain order (order[0]=base; order[k>=1] = chain body k-1).
     std::vector<int> chainBodyOrder() const { return chainOrder().order; }
 
@@ -366,6 +424,12 @@ struct RobotGraph {
         if (order.empty()) return r;
         r.basePlacement = bodies[base].placement;
         r.nLinks = int(order.size());
+        // position of each body in chain order; chain-DOF index of order[k] (k>=1) is k-1.
+        // Used to set Joint.treeParent so a BRANCHED graph lowers with the correct parent
+        // (base -> treeParent -1 == serial fallback).
+        std::vector<int> orderPos(bodies.size(), -1);
+        for (size_t k = 0; k < order.size(); ++k)
+            if (order[k] >= 0 && order[k] < int(bodies.size())) orderPos[order[k]] = int(k);
         for (size_t k = 1; k < order.size(); ++k) {           // skip base (k=0)
             const int body = order[k];
             const int pj = co.parentJoint[body];
@@ -395,6 +459,14 @@ struct RobotGraph {
             if (L.effort   > 0.0) rj.effortMax = L.effort;
             rj.engProv = (joints[pj].prov == Prov::Manual) ? krs::robot::Provenance::UserSupplied
                                                            : krs::robot::Provenance::GeometryDerived;
+            // carry joint identity into the derived model so it survives the live<->graph round-trip.
+            rj.id     = joints[pj].id;
+            rj.nodeId = joints[pj].nodeId;
+            rj.name   = joints[pj].name;
+            // tree edge: chain-DOF index of this body's parent. orderPos[base]=0 -> -1 (base/root,
+            // read by toChain as the serial-root); a deeper parent gives its chain-body index. The
+            // -2 fallback (malformed) defers to the serial previous-body rule.
+            rj.treeParent = (pb >= 0 && orderPos[pb] >= 0) ? (orderPos[pb] - 1) : -2;
             r.joints.push_back(rj);
         }
         return r;
@@ -676,6 +748,7 @@ bool runAutoParseChainGate();    // PHASE 1 (synthetic: inferred axes match geom
 bool runBaseAxisVerticalGate();  // J0 base-turntable axis = vertical part-Z, not a horizontal flange bore (verticality prior)
 bool runMateSnapGate();          // concentric mate transform aligns child bore to parent axis; subtreeOf collects the sub-assembly
 bool runSplitMergeGate();        // cut a joint -> base+branch graphs; re-mate merges; FK round-trips; bad input rejected
+bool runConnectedComponentsGate();// a "robot" is a DERIVED component: serial->1 comp, disjoint->2, chooseBase deterministic, re-root spans
 bool runJointEditGate();         // PHASE 2 (manual joint from selected features matches; degenerate rejected; chain re-derives)
 bool runTagOwnershipGate();      // PHASE 3 (single-owner lock-out; membership-tracked)
 bool runSubtreeDetachGate();     // PHASE 4 (downstream subtree detaches intact; tag tracks membership)

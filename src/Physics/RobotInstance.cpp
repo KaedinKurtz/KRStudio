@@ -219,8 +219,14 @@ krs::rbuild::RobotGraph buildGraphFromLiveRobot(const LiveRobot& lr)
         g.bodies.push_back(b);
     }
     for (int k = 0; k < n; ++k) {
-        RBJoint j; j.parent = k; j.child = k + 1;     // link k -> link k+1
         const krs::robot::Joint& mj = lr.model.joints[lr.memberJoint[k]];
+        // Tree parent body: treeParent -1 = base (graph body 0); >=0 = chain idx t -> graph body t+1;
+        // < -1 (unset) = serial fallback (parent = previous body k). Serial robots reconstruct
+        // unchanged while a branched robot recovers its true parent.
+        const int parentBody = (mj.treeParent < -1) ? k
+                             : (mj.treeParent == -1) ? 0
+                                                     : (mj.treeParent + 1);
+        RBJoint j; j.parent = parentBody; j.child = k + 1;     // link parent -> link k+1
         j.type = (mj.type == krs::dyn::JType::Fixed)     ? JType::Fixed
                : (mj.type == krs::dyn::JType::Prismatic) ? JType::Prismatic
                                                          : JType::Revolute;
@@ -231,7 +237,14 @@ krs::rbuild::RobotGraph buildGraphFromLiveRobot(const LiveRobot& lr)
         j.orthonormalizeFrame();
         j.limits.lower = mj.qLower; j.limits.upper = mj.qUpper; j.limits.enabled = true;
         j.prov = krs::rbuild::Prov::Inferred;
-        g.joints.push_back(j);
+        // Preserve joint identity across the live<->graph round-trip (else selection/names reset
+        // every refresh). Trust the live model's id/nodeId only when it carries a real identity
+        // (id != 0, i.e. it came through toRobot); otherwise let addJoint mint a fresh one with a
+        // canonical "J{dof}" name and dof-indexed nodeId on this first build.
+        j.id     = mj.id;
+        j.name   = !mj.name.empty() ? mj.name : ("J" + std::to_string(k));
+        j.nodeId = (mj.id != 0) ? mj.nodeId : k;
+        g.addJoint(j);                                   // mints identity iff still unassigned
     }
     return g;
 }
@@ -742,6 +755,23 @@ bool runRobotOwnerGate() {
         pass = pass && step9;
         printf("[robotowner]   STEP9 graph round-trip: bodies=%zu joints=%zu dofOk=%s FKerr=%.2e  %s\n",
                g.bodies.size(), g.joints.size(), dofOk ? "yes" : "no", maxErr, step9 ? "OK" : "FAIL");
+
+        // STEP9b -- joint IDENTITY (Phase 0): buildGraphFromLiveRobot MINTS a stable id + name +
+        // nodeId for every joint, and toRobot() CARRIES that identity into the derived model (so it
+        // survives the round-trip). For this serial graph, g.joints[i] lowers to rr.joints[i].
+        bool minted = !g.joints.empty();
+        for (const auto& jj : g.joints)
+            if (jj.id == 0 || jj.name.empty() || jj.nodeId < 0) minted = false;
+        const krs::robot::Robot rr = g.toRobot();
+        bool carried = (rr.joints.size() == g.joints.size());
+        for (size_t i = 0; i < rr.joints.size() && carried; ++i)
+            carried = (rr.joints[i].id == g.joints[i].id) &&
+                      (rr.joints[i].name == g.joints[i].name) &&
+                      (rr.joints[i].nodeId == g.joints[i].nodeId);
+        const bool step9b = minted && carried;
+        pass = pass && step9b;
+        printf("[robotowner]   STEP9b joint identity: minted=%s carried=%s  %s\n",
+               minted ? "yes" : "no", carried ? "yes" : "no", step9b ? "OK" : "FAIL");
     }
 
     printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only + live-limit-edit + graph-round-trip)"

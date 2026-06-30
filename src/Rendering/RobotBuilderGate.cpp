@@ -312,7 +312,37 @@ bool runSplitMergeGate()
     RobotGraph junkA, junkB;
     const bool negBadIdx = !g.splitAtJoint(99, junkA, junkB) && !g.splitAtJoint(-1, junkA, junkB);
 
-    const bool pass = splitCounts && splitTrees && branchEntitiesKept && mergeCounts && fkRoundTrip && negBadIdx;
+    // ---- BRANCHED lowering (Phase 1): base->A->B and base->C (C is a SIBLING of A). Robot::toChain
+    //      must honor Joint.treeParent so C depends only on its own joint, not on A's -- a serial
+    //      misread (parent = previous body) would make C a descendant of A and couple them. ----
+    RobotGraph gb; gb.base = 0;
+    for (int i = 0; i < 4; ++i) {
+        RBBody b; b.name = "bb" + std::to_string(i);
+        b.placement = Eigen::Matrix4d::Identity();
+        b.placement(0, 3) = (i == 3) ? 0.0 : double(i);   // C(3) sits at +y so its motion is distinguishable
+        b.placement(1, 3) = (i == 3) ? 1.0 : 0.0;
+        b.entity = 10 + i; gb.bodies.push_back(b);
+    }
+    { RBJoint j; j.parent = 0; j.child = 1; j.axisDir = { 0,0,1 }; j.orthonormalizeFrame(); gb.addJoint(j); } // A: base->1
+    { RBJoint j; j.parent = 1; j.child = 2; j.axisDir = { 0,0,1 }; j.orthonormalizeFrame(); gb.addJoint(j); } // B: 1->2 (child of A)
+    { RBJoint j; j.parent = 0; j.child = 3; j.axisDir = { 0,0,1 }; j.orthonormalizeFrame(); gb.addJoint(j); } // C: base->3 (child of base)
+    krs::dyn::SerialChain chb = gb.toRobot().toChain();
+    const auto cob = gb.chainOrder();
+    auto chainIdxOf = [&](int body) { for (size_t k = 1; k < cob.order.size(); ++k) if (cob.order[k] == body) return int(k) - 1; return -1; };
+    const int aIdx = chainIdxOf(1), bIdx = chainIdxOf(2), cIdx = chainIdxOf(3);
+    auto poseUnder = [&](int dof, double val, int bodyChainIdx) {
+        Eigen::VectorXd q = Eigen::VectorXd::Zero(chb.nq());
+        if (dof >= 0 && dof < chb.nq()) q[dof] = val;
+        std::vector<krs::dyn::Pose> p; chb.fk(q, p);
+        return (bodyChainIdx >= 0 && bodyChainIdx < int(p.size())) ? poseMat(p[bodyChainIdx]) : Eigen::Matrix4d::Identity();
+    };
+    const bool branchValid = (chb.nq() == 3) && aIdx >= 0 && bIdx >= 0 && cIdx >= 0;
+    const double cVsA = branchValid ? (poseUnder(aIdx, 0.0, cIdx) - poseUnder(aIdx, 0.7, cIdx)).cwiseAbs().maxCoeff() : 1e9; // C invariant to A
+    const double cVsC = branchValid ? (poseUnder(cIdx, 0.0, cIdx) - poseUnder(cIdx, 0.7, cIdx)).cwiseAbs().maxCoeff() : 0.0; // C moves with C
+    const double bVsA = branchValid ? (poseUnder(aIdx, 0.0, bIdx) - poseUnder(aIdx, 0.7, bIdx)).cwiseAbs().maxCoeff() : 0.0; // B moves with A
+    const bool branchedOk = branchValid && cVsA < 1e-12 && cVsC > 1e-3 && bVsA > 1e-3;
+
+    const bool pass = splitCounts && splitTrees && branchEntitiesKept && mergeCounts && fkRoundTrip && negBadIdx && branchedOk;
     printf("[rbuild]   split: base(dof2,3 bodies)+branch(dof1,2 bodies)=%s ; each a connected tree=%s ; branch keeps entities=%s  %s\n",
            splitCounts ? "yes" : "NO", splitTrees ? "yes" : "NO", branchEntitiesKept ? "yes" : "NO",
            (splitCounts && splitTrees && branchEntitiesKept) ? "PASS" : "FAIL");
@@ -322,7 +352,65 @@ bool runSplitMergeGate()
            (mergeCounts && fkRoundTrip) ? "PASS" : "FAIL");
     printf("[rbuild]   NEG-CTRL bad split index rejected: %s  %s\n",
            negBadIdx ? "yes" : "no", negBadIdx ? "REJECTS(non-vacuous)" : "VACUOUS!");
-    printf("[rbuild] %s\n", pass ? "ALL PASS (split partitions the tree exactly; merge is its inverse; FK round-trips; bad input rejected)"
+    printf("[rbuild]   BRANCHED toChain honors treeParent: C-invariant-to-A=%.2e(<1e-12) C-moves-with-C=%.3f(>1e-3) B-moves-with-A=%.3f(>1e-3)  %s\n",
+           cVsA, cVsC, bVsA, branchedOk ? "PASS" : "FAIL");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (split partitions the tree exactly; merge is its inverse; FK round-trips; branched lowering correct; bad input rejected)"
+                                 : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
+// GATE CONNECTED-COMPONENTS -- the joint-primary model: a "robot" is a DERIVED connected component
+// of the body/joint graph, base-independent. A serial graph is one component; a disjoint graph is
+// two (cutting a joint never deletes anything -- it just yields two components, both drivable);
+// chooseBase is deterministic; chainOrderFrom re-roots the spanning tree at any body.
+bool runConnectedComponentsGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[rbuild] GATE CONNECTED-COMPONENTS -- a robot is a DERIVED component; disjoint graph -> two; re-root spans from any body\n");
+
+    // (a) one serial chain -> exactly ONE component spanning all bodies; chooseBase keeps the base.
+    RobotGraph one; one.base = 0;
+    for (int i = 0; i < 4; ++i) { RBBody b; b.name = "s" + std::to_string(i); b.entity = i; one.bodies.push_back(b); }
+    for (int i = 0; i < 3; ++i) { RBJoint j; j.parent = i; j.child = i + 1; j.axisDir = { 0,0,1 }; j.orthonormalizeFrame(); one.addJoint(j); }
+    const auto c1 = one.connectedComponents();
+    const bool oneComp = (c1.size() == 1) && (c1.size() == 1 && int(c1[0].size()) == 4);
+    const bool baseKept = oneComp && (one.chooseBase(c1[0]) == 0);
+
+    // (b) two DISJOINT chains in one graph -> TWO components (nothing deleted).
+    RobotGraph two; two.base = 0;
+    for (int i = 0; i < 5; ++i) { RBBody b; b.name = "t" + std::to_string(i); b.entity = 10 + i; two.bodies.push_back(b); }
+    { RBJoint j; j.parent = 0; j.child = 1; j.axisDir = { 0,0,1 }; j.orthonormalizeFrame(); two.addJoint(j); }
+    { RBJoint j; j.parent = 1; j.child = 2; j.axisDir = { 0,0,1 }; j.orthonormalizeFrame(); two.addJoint(j); }
+    { RBJoint j; j.parent = 3; j.child = 4; j.axisDir = { 0,0,1 }; j.orthonormalizeFrame(); two.addJoint(j); }   // disjoint pair {3,4}
+    const auto c2 = two.connectedComponents();
+    const bool twoComp = (c2.size() == 2)
+                      && std::find(c2.begin(), c2.end(), std::vector<int>{ 0, 1, 2 }) != c2.end()
+                      && std::find(c2.begin(), c2.end(), std::vector<int>{ 3, 4 }) != c2.end();
+    int baseA = -1, baseB = -1;
+    for (const auto& cc : c2) {
+        if (std::find(cc.begin(), cc.end(), 0) != cc.end()) baseA = two.chooseBase(cc);
+        else                                                baseB = two.chooseBase(cc);
+    }
+    const bool basesOk = (baseA == 0) && (baseB == 3);
+
+    // (c) RE-ROOT: derive a spanning tree of the {0,1,2} chain from a NON-base root (body 2).
+    const auto coR = two.chainOrderFrom(2);
+    const bool reRoot = (!coR.order.empty()) && (coR.order.front() == 2) && (int(coR.order.size()) == 3);
+
+    // (d) determinism.
+    const bool deterministic = (two.connectedComponents() == c2);
+
+    const bool pass = oneComp && baseKept && twoComp && basesOk && reRoot && deterministic;
+    printf("[rbuild]   serial graph -> 1 component of 4 bodies=%s ; chooseBase keeps base=%s  %s\n",
+           oneComp ? "yes" : "NO", baseKept ? "yes" : "NO", (oneComp && baseKept) ? "PASS" : "FAIL");
+    printf("[rbuild]   disjoint graph -> 2 components {0,1,2},{3,4}=%s ; chooseBase deterministic (0 and 3)=%s  %s\n",
+           twoComp ? "yes" : "NO", basesOk ? "yes" : "NO", (twoComp && basesOk) ? "PASS" : "FAIL");
+    printf("[rbuild]   re-root chainOrderFrom(2) spans {0,1,2} from body 2=%s ; deterministic=%s  %s\n",
+           reRoot ? "yes" : "NO", deterministic ? "yes" : "NO", (reRoot && deterministic) ? "PASS" : "FAIL");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (components derived base-independently; chooseBase deterministic; re-root spans the component)"
                                  : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;

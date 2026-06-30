@@ -1024,6 +1024,7 @@ void RenderingSystem::initializeSharedResources()
                       & krs::rbuild::runBaseAxisVerticalGate()
                       & krs::rbuild::runMateSnapGate()
                       & krs::rbuild::runSplitMergeGate()
+                      & krs::rbuild::runConnectedComponentsGate()
                       & krs::robot::runManipOpsGate()
                       & krs::rbuild::runJointEditGate()
                       & krs::rbuild::runTagOwnershipGate()
@@ -1778,6 +1779,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE BASE-AXIS-VERTICAL (J0 base-turntable axis = vertical part-Z, not the horizontal flange decoy; horizontal-coaxial-pair neg-ctrl)", krs::rbuild::runBaseAxisVerticalGate() },
             { "GATE MATE-SNAP (concentric transform aligns child bore to parent axis; subtreeOf collects sub-assembly; off-axis-before neg-ctrl)", krs::rbuild::runMateSnapGate() },
             { "GATE SPLIT-MERGE (cut joint -> base+branch trees; re-mate merges; DOF/body/FK round-trip; bad-index neg-ctrl)", krs::rbuild::runSplitMergeGate() },
+            { "GATE CONNECTED-COMPONENTS (robot = derived component; serial->1 / disjoint->2; chooseBase deterministic; chainOrderFrom re-roots)", krs::rbuild::runConnectedComponentsGate() },
             { "GATE MANIP-OPS (rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1; unreachable-IK neg-ctrl)", krs::robot::runManipOpsGate() },
             { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },
             { "GATE TAG-OWNERSHIP (member body tagged + free-move-locked; non-member free; always-allow neg-ctrl breaks single-owner)", krs::rbuild::runTagOwnershipGate() },

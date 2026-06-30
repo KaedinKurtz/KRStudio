@@ -20,6 +20,7 @@
 #include <Eigen/Dense>
 #include <string>
 #include <vector>
+#include <cstdint>
 #include <sstream>
 #include <iomanip>
 #include <cmath>
@@ -46,7 +47,17 @@ struct Joint {
     double qLower = -3.14159265, qUpper = 3.14159265, vMax = 2.0, effortMax = 100.0;
     Provenance engProv = Provenance::UserSupplied;
     std::string controlMode = "position";
-    int nodeId = 0;
+    int nodeId = 0;                                       // CAN-style numeric node id (user-facing)
+    // IDENTITY (joint-primary model; mirrors krs::rbuild::RBJoint). id = engine-internal STABLE
+    // handle (0 = unassigned); name = semantic label. Both round-trip through toRobot <->
+    // buildGraphFromLiveRobot so a joint keeps its identity across edits/rebuilds.
+    std::uint64_t id = 0;
+    std::string  name;
+    // Tree edge: the chain-DOF index of this joint's PARENT body. -1 = base/root (parent IS the
+    // base, no DynBody), >=0 = an explicit parent chain-body, < -1 (unset) = serial fallback to the
+    // previously-added body. The distinct -1 vs unset is what lets a SIBLING-under-base lower as a
+    // sibling rather than re-coupling to the previous body. (set in Phase 1)
+    int treeParent = -2;
 };
 
 struct MountPort {                                        // one-sided typed end-effector frame
@@ -73,7 +84,11 @@ struct Robot {
         for (const auto& j : joints) {
             if (!j.member && !includeNonMembers) continue;
             krs::dyn::DynJoint dj;
-            dj.type = j.type; dj.parent = prevBody;
+            dj.type = j.type;
+            // honor the tree: treeParent -1 = base/root, >=0 = explicit parent chain-body, < -1
+            // (unset) = serial fallback to the previously-added body (so serial chains are
+            // byte-identical). The -1-vs-unset split keeps a sibling-under-base a sibling.
+            dj.parent = (j.treeParent < -1) ? prevBody : j.treeParent;
             dj.Rtree = j.Rtree; dj.ptree = j.ptree; dj.axis = j.axis;
             dj.qLower = j.qLower; dj.qUpper = j.qUpper;
             krs::dyn::DynBody b;
