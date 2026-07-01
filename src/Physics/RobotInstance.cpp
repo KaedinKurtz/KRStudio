@@ -94,11 +94,17 @@ Robot robotFromArticSpec(const krs::dyn::RobotArticSpec& spec) {
 // rest viz that works when one link drives several solids (the FANUC case).
 void captureRobotRest(Scene& scene, LiveRobot& lr) {
     auto& reg = scene.getRegistry();
-    const std::vector<krs::dyn::Pose> poses = lr.fkLinks();
-    lr.restLinkWorld.assign(lr.ndof(), Eigen::Matrix4d::Identity());
-    lr.linkEntityRestWorld.assign(lr.ndof(), {});
-    for (int k = 0; k < lr.ndof(); ++k) {
+    const std::vector<krs::dyn::Pose> poses = lr.fkLinks();  // indexed by CHAIN BODY (base-excluded)
+    // Index by CHAIN BODY (nbody), NOT ndof: a Fixed/ambiguous member joint makes nbody > ndof, and an
+    // ndof-sized array drops every body past the Fixed one -> those solids are never FK-driven -> they
+    // stay put while the chain bends = shatter. poses/restLinkWorld/linkEntityRestWorld/linkEntities all
+    // share the SAME chain-body index. For an all-revolute chain nbody==ndof (bit-identical to before).
+    const int nb = lr.chain.nbody();
+    lr.restLinkWorld.assign(nb, Eigen::Matrix4d::Identity());
+    lr.linkEntityRestWorld.assign(nb, {});
+    for (int k = 0; k < nb; ++k) {
         if (k < int(poses.size())) lr.restLinkWorld[k] = lr.model.basePlacement * poseToEig(poses[k]);
+        if (k >= int(lr.linkEntities.size())) continue;
         for (entt::entity e : lr.linkEntities[k]) {
             const auto* tc = reg.try_get<TransformComponent>(e);
             lr.linkEntityRestWorld[k].push_back(tc ? eigFromTransform(*tc) : Eigen::Matrix4d::Identity());
@@ -113,8 +119,11 @@ void writeBackRobotViz(Scene& scene, LiveRobot& lr) {
     if (!lr.useRobotFkViz) return;
     auto& reg = scene.getRegistry();
     const std::vector<krs::dyn::Pose> poses = lr.fkLinks();
-    for (int k = 0; k < lr.ndof() && k < int(poses.size()); ++k) {
-        if (k >= int(lr.restLinkWorld.size())) continue;
+    // Drive EVERY chain body (nbody), not just the first ndof: with a Fixed member joint nbody > ndof,
+    // and the old ndof loop left every body past the Fixed one un-driven (static) -> shatter. All of
+    // poses/restLinkWorld/linkEntities share the chain-body index.
+    for (int k = 0; k < int(poses.size()); ++k) {
+        if (k >= int(lr.restLinkWorld.size()) || k >= int(lr.linkEntities.size())) continue;
         const Eigen::Matrix4d linkNow = lr.model.basePlacement * poseToEig(poses[k]);
         const Eigen::Matrix4d delta   = linkNow * lr.restLinkWorld[k].inverse();
         for (size_t ei = 0; ei < lr.linkEntities[k].size(); ++ei) {
@@ -168,7 +177,10 @@ LiveRobot* instantiateFromGraph(Scene& scene, const krs::rbuild::RobotGraph& g, 
     // Map chain bodies -> graph body entities using the SAME ordering toRobot() used,
     // and stamp the real robotId + parent each member body under the root.
     const std::vector<int> order = g.chainBodyOrder();   // order[0]=base; order[k>=1]=chain body k-1
-    lr.linkEntities.assign(lr.ndof(), {});
+    // Size by CHAIN BODY count (nbody == order.size()-1), NOT ndof: a Fixed member joint makes
+    // nbody > ndof, and an ndof-sized array + the old `k-1 < ndof` guard DROPPED every solid past
+    // the Fixed joint from linkEntities -> those bodies were never FK-driven (static) = shatter.
+    lr.linkEntities.assign(lr.chain.nbody(), {});
     for (size_t k = 0; k < order.size(); ++k) {
         const int bodyIdx = order[k];
         if (bodyIdx < 0 || bodyIdx >= int(g.bodies.size())) continue;
@@ -182,7 +194,7 @@ LiveRobot* instantiateFromGraph(Scene& scene, const krs::rbuild::RobotGraph& g, 
             if (!reg.valid(e)) continue;
             reg.emplace_or_replace<ParentComponent>(e, root);
             reg.emplace_or_replace<RobotSubcomponentComponent>(e, robotId);
-            if (k >= 1 && int(k - 1) < lr.ndof()) lr.linkEntities[k - 1].push_back(e);
+            if (k >= 1 && int(k - 1) < int(lr.linkEntities.size())) lr.linkEntities[k - 1].push_back(e);
         }
     }
     captureRobotRest(scene, lr);   // q is still 0 here -> rest = the authored pose
@@ -622,6 +634,10 @@ int drainCommandBusIntoRobots(entt::registry& reg)
     int n = 0;
     for (auto& rp : rr->robots) {
         if (!rp) continue;
+        // JOINT GROUND TRUTH: a robot being hand-dragged owns its q for the duration of the gesture.
+        // Without this guard the auto-play node graph (time->sine->drive J1) re-stomps q[J1] EVERY
+        // frame while the user drags, so the arm fights the drag and never settles ("still breaking").
+        if (rp->dragActive) continue;
         rp->applyCommand(cmd->target, cmd->driven);   // bus -> q (clamped, driven-only)
         ++n;
     }

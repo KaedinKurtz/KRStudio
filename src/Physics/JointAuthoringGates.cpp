@@ -756,6 +756,71 @@ void familySolverGroundTruth(Scene& scene, Suite& S) {
     lr->q.setZero(); writeBackRobotViz(scene, *lr);
 }
 
+// Family T (FIXED-JOINT COVERAGE / off-by-one): the real FANUC shatter. When a member joint is FIXED
+// (or ambiguous), the chain has a BODY with no DOF, so nbody > ndof. The old writeback/linkEntities
+// indexing was ndof-sized and DROPPED every body past the Fixed joint -> those solids were never
+// FK-driven, stayed static while the chain bent = shatter. family S (all-revolute) can never build
+// this; family T does, and asserts full coverage + that post-Fixed bodies actually follow FK.
+void familyFixedJointCoverage(Scene& scene, Suite& S) {
+    using namespace krs::rbuild;
+    RobotGraph g; g.base = 0;
+    auto placed = [](double x){ Eigen::Matrix4d M = Eigen::Matrix4d::Identity(); M(0,3)=x; M(2,3)=0.2; return M; };
+    { RBBody base; base.name="base"; base.placement=Eigen::Matrix4d::Identity(); g.bodies.push_back(base); }
+    for (int i=1;i<=4;++i){ RBBody b; b.name="L"+std::to_string(i); b.placement=placed(0.3*i); g.bodies.push_back(b); }
+    auto addJ=[&](int p,int c,JType t,glm::vec3 axis){ RBJoint j; j.parent=p; j.child=c; j.type=t;
+        j.axisPos=glm::vec3(float(0.3*c),0.0f,0.2f); j.axisDir=axis; j.orthonormalizeFrame(); g.addJoint(j); };
+    addJ(0,1,JType::Revolute,{0,0,1});
+    addJ(1,2,JType::Fixed,   {0,1,0});   // FIXED weld: a chain BODY with no DOF -> nbody > ndof
+    addJ(2,3,JType::Revolute,{0,1,0});
+    addJ(3,4,JType::Revolute,{0,0,1});
+    const int rid = 960;
+    spawnGraphBodies(scene, g, rid);
+    LiveRobot* lr = instantiateFromGraph(scene, g, rid);
+    if (!lr) { S.check("T built", false); return; }
+    lr->useRobotFkViz = true;
+    auto& reg = scene.getRegistry();
+    const int nb = lr->chain.nbody();
+
+    S.check("T Fixed member joint -> nbody > ndof (the case family S never builds)", nb > lr->ndof());
+    // COVERAGE: linkEntities is chain-body sized and EVERY member body (incl. past the Fixed joint) has
+    // a driven entity -- the old ndof-indexing dropped the tail bodies (static solids = shatter).
+    bool covered = int(lr->linkEntities.size()) == nb;
+    for (int k = 0; k < nb; ++k) covered = covered && !lr->linkEntities[k].empty();
+    S.check("T every chain body incl. past the Fixed joint has a driven entity (no dropped/static body)", covered);
+
+    // The LAST body (past the Fixed joint) must FOLLOW FK when an UPSTREAM dof is driven -- proving it is
+    // FK-driven, not left static. Drive dof 0 (L1) and confirm the tail link's solid moved.
+    auto entOf = [&](int b){ return (b >= 0 && b < int(lr->linkEntities.size()) && !lr->linkEntities[b].empty())
+                                    ? lr->linkEntities[b][0] : entt::entity(entt::null); };
+    const entt::entity tail = entOf(nb - 1);
+    S.check("T tail body (past Fixed joint) has a resolvable entity", tail != entt::null);
+    if (tail != entt::null) {
+        const glm::vec3 before = entWorld(reg, tail);
+        // consecutive link-origin distances -- invariant under any q for a serial chain (joints hold)
+        auto lens = [&](){ std::vector<double> d; for (int k=0;k+1<nb;++k)
+            if (!lr->linkEntities[k].empty() && !lr->linkEntities[k+1].empty())
+                d.push_back(double(glm::distance(entWorld(reg,lr->linkEntities[k][0]), entWorld(reg,lr->linkEntities[k+1][0])))); return d; };
+        const std::vector<double> lensRest = lens();
+        lr->q.setZero(); lr->q[0] = 0.5;                    // drive the FIRST dof (upstream of everything)
+        for (int i=0;i<lr->ndof();++i) lr->q[i]=lr->clampDof(i,lr->q[i]);
+        writeBackRobotViz(scene, *lr);
+        const glm::vec3 after = entWorld(reg, tail);
+        S.check("T tail body FOLLOWS FK on upstream drive (not left static = the shatter)", glm::distance(after, before) > 1e-3f);
+        bool hold = true; const std::vector<double> lensNow = lens();
+        if (lensNow.size()==lensRest.size()) for (size_t i=0;i<lensNow.size();++i) hold = hold && std::abs(lensNow[i]-lensRest[i]) < 1e-6;
+        else hold = false;
+        S.check("T JOINTS HOLD across the Fixed joint (link lengths invariant under drive)", hold);
+        // NEG-CTRL: clearing a post-Fixed body's entities re-creates the old dropped-body state -> a
+        // sibling gap opens, proving the coverage check is non-vacuous.
+        auto saved = lr->linkEntities[nb-1];
+        lr->linkEntities[nb-1].clear();
+        bool coveredNow = true; for (int k=0;k<nb;++k) coveredNow = coveredNow && !lr->linkEntities[k].empty();
+        S.check("T NEG-CTRL: dropping the tail body's entities FAILS coverage (check non-vacuous)", !coveredNow);
+        lr->linkEntities[nb-1] = saved;
+        lr->q.setZero(); writeBackRobotViz(scene, *lr);
+    }
+}
+
 // Family P (gizmo pivot): the headline "gizmo spawns at base origin" bug. GizmoSystem::update computes
 // the pivot as  tc.getTransform() * aabbCenter,  aabbCenter = (aabbMin+aabbMax)*0.5. A CAD-imported
 // FANUC body bakes its geometry to WORLD coords and carries an IDENTITY tc, so the pivot MUST be the
@@ -814,6 +879,7 @@ bool runJointAuthoringSuite()
     { Scene sc; familyMultiComponentDrive(sc, S); }
     { Scene sc; familyDefineRealModel(sc, S); }
     { Scene sc; familySolverGroundTruth(sc, S); }
+    { Scene sc; familyFixedJointCoverage(sc, S); }
     { Scene sc; familyGizmoPivot(sc, S); }
     printf("[jsuite] ===== JOINT-AUTHORING SUITE: %d / %d sub-gates PASS =====\n", S.pass, S.total);
     std::fflush(stdout);
