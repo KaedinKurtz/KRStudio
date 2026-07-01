@@ -892,6 +892,12 @@ MainWindow::MainWindow(QWidget* parent)
         std::vector<krs::rbuild::ParsedPart> parts = krs::cad::importStepAssembly(*m_scene, fanucStepPath);
         krs::rbuild::RobotGraph g = krs::rbuild::buildNamedSerialChain(parts);
         g.robotId = 0;
+        if (!g.joints.empty() && !g.bodies.empty()) {
+            qInfo() << "[FANUC-BOOT] base=" << QString::fromStdString(g.bodies[0].name)
+                    << " J0 dir=(" << g.joints[0].axisDir.x << g.joints[0].axisDir.y << g.joints[0].axisDir.z << ")"
+                    << " pos=(" << g.joints[0].axisPos.x << g.joints[0].axisPos.y << g.joints[0].axisPos.z
+                    << ") -- expect vertical (base->J1)";
+        }
         { auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
           if (!gp) gp = &reg.ctx().emplace<krs::rbuild::RobotGraph>();
           *gp = g; }

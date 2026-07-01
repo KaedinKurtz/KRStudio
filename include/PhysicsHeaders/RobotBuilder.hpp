@@ -584,10 +584,26 @@ inline RobotGraph buildNamedSerialChain(const std::vector<ParsedPart>& parts)
     std::vector<std::vector<int>> linkParts;        // original part indices per collapsed body
     for (int L = 0; L <= 6; ++L) {
         if (grp[L].empty()) continue;
-        const int rep = grp[L].front();
+        int rep = grp[L].front();
+        // BASE group (L==0) may contain ACCESSORIES (balancer / counterweight / damper / cover) lumped in
+        // because their names carry no jN. The old rep = front() = lowest index picked whichever accessory
+        // happened to sort first (the 430-balancer, behind J2), so the base FRAME + J0 axis were built from
+        // a counterweight. Pick the STRUCTURAL base instead: prefer a name containing "base", else the part
+        // nearest the assembly origin (the base mounts at/near the origin; accessories are offset).
+        if (L == 0 && grp[0].size() > 1) {
+            double bestScore = 1e30;
+            for (int i : grp[0]) {
+                const std::string& nm = parts[i].name;
+                const bool named = nm.find("base") != std::string::npos || nm.find("Base") != std::string::npos;
+                const double d = (named ? 0.0 : 1e6) + parts[i].placement.block<3,1>(0,3).norm();
+                if (d < bestScore) { bestScore = d; rep = i; }
+            }
+        }
         RBBody b = parts[rep];                       // name + placement + faces + entity (rep)
-        for (size_t k = 1; k < grp[L].size(); ++k)
-            if (parts[grp[L][k]].entity >= 0) b.extraEntities.push_back(parts[grp[L][k]].entity);
+        // Fold EVERY non-rep member as an extraEntity (skip whichever index is the rep, not just front()) --
+        // otherwise swapping the base rep away from index 0 would silently DROP the balancer geometry.
+        for (size_t k = 0; k < grp[L].size(); ++k)
+            if (grp[L][k] != rep && parts[grp[L][k]].entity >= 0) b.extraEntities.push_back(parts[grp[L][k]].entity);
         g.bodies.push_back(b);
         linkParts.push_back(grp[L]);
     }
@@ -622,27 +638,21 @@ inline RobotGraph buildNamedSerialChain(const std::vector<ParsedPart>& parts)
         //     if none is convincingly vertical, fall back to the base part-Z through the base origin.
         //     (Keyed off the base's OWN Z so it follows a tilted base mount, not hard world-up.)
         if (bi == 1) {
-            const Eigen::Vector3d upE = g.bodies[g.base].placement.block<3, 1>(0, 2);
-            const glm::vec3 up = glm::normalize(glm::vec3(float(upE.x()), float(upE.y()), float(upE.z())));
-            BRepFace bestF; float bestVert = -1.f; bool anyCyl = false;
-            for (int side = 0; side < 2; ++side)
-                for (int pi : linkParts[bi - 1 + side])
-                    for (const auto& f : parts[pi].faces) {
-                        if (f.type != 1) continue;
-                        const BRepFace w = faceToWorld(f, parts[pi].placement);
-                        const float vert = std::abs(glm::dot(glm::normalize(w.axisDir), up));
-                        if (vert > bestVert) { bestVert = vert; bestF = w; anyCyl = true; }
-                    }
-            if (anyCyl && bestVert > 0.7f) {           // a convincingly-vertical bore exists -> use it
-                best.axisDir = glm::normalize(bestF.axisDir);
-                best.axisPos = bestF.axisPos;
-            } else {                                    // else the base mounting normal through the base origin
-                best.axisDir = up;
-                best.axisPos = glm::vec3(float(g.bodies[g.base].placement(0, 3)),
-                                         float(g.bodies[g.base].placement(1, 3)),
-                                         float(g.bodies[g.base].placement(2, 3)));
-            }
-            if (glm::dot(best.axisDir, up) < 0.0f) best.axisDir = -best.axisDir;  // consistent +up sign
+            // BASE TURNTABLE AXIS = the direction the arm STANDS UP = from the base origin to J1's mount.
+            // J1 sits concentrically ON the turntable, offset ALONG its rotation axis, so (J1 - base) IS
+            // that axis. This is derived from geometry and is CONVENTION-AGNOSTIC (Y-up, Z-up, tilted) --
+            // unlike the base part-Z, which need not align with world up (this world is Y-up but the CAD
+            // base part-Z is (0,0,1), which made J0 come out horizontal). Position = J1's mount (on-axis).
+            const Eigen::Vector3d cE = g.bodies[bi].placement.block<3, 1>(0, 3);       // J1 origin (child of J0)
+            const Eigen::Vector3d bE = g.bodies[g.base].placement.block<3, 1>(0, 3);   // base origin
+            const glm::vec3 C(float(cE.x()), float(cE.y()), float(cE.z()));
+            Eigen::Vector3d axisE = cE - bE;
+            glm::vec3 up;
+            if (axisE.norm() > 1e-9) { axisE.normalize(); up = glm::vec3(float(axisE.x()), float(axisE.y()), float(axisE.z())); }
+            else { const Eigen::Vector3d z = g.bodies[g.base].placement.block<3,1>(0,2);   // fallback: base part-Z
+                   up = glm::normalize(glm::vec3(float(z.x()), float(z.y()), float(z.z()))); }
+            best.axisDir = up;
+            best.axisPos = C;
             best.residual = 0.0; found = true;
         }
 

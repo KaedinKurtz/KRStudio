@@ -232,6 +232,20 @@ bool runAutoParseReport()
     for (const auto& p : parts) for (const auto& f : p.faces) if (f.type == 1) ++cylTotal;
     printf("[autoparse]   parsed %zu bodies (with placements) ; %d cylindrical faces total\n",
            parts.size(), cylTotal);
+    // DIAGNOSTIC (J0 base-axis mis-parse): dump every part's name, its name-group (jointNumberFromName),
+    // placement origin, and its MOST-VERTICAL cylinder (|axisDir.z|). Reveals which parts land in the base
+    // group (grp 0) and where a spurious vertical bore (e.g. a rotary damper behind J2) lives.
+    printf("[autoparse]   --- part inventory (idx name | grp | origin | maxVertCyl vert/pos/dir) ---\n");
+    for (int i = 0; i < int(parts.size()); ++i) {
+        const ParsedPart& p = parts[i];
+        const int grp = jointNumberFromName(p.name);
+        const glm::vec3 o(float(p.placement(0,3)), float(p.placement(1,3)), float(p.placement(2,3)));
+        float bestVert = -1.f; glm::vec3 vp(0), vd(0);
+        for (const auto& f : p.faces) if (f.type == 1) { const BRepFace w = faceToWorld(f, p.placement);
+            const float vert = std::abs(w.axisDir.z); if (vert > bestVert) { bestVert = vert; vp = w.axisPos; vd = w.axisDir; } }
+        printf("[autoparse]     [%2d] %-18s grp=%d origin=(%.0f,%.0f,%.0f) vert=%.2f pos=(%.0f,%.0f,%.0f) dir=(%.2f,%.2f,%.2f)\n",
+               i, p.name.c_str(), grp, o.x,o.y,o.z, bestVert, vp.x,vp.y,vp.z, vd.x,vd.y,vd.z);
+    }
 
     // infer the chain: greedy spanning tree of coaxial-cylinder interfaces.
     RobotGraph g = buildGraphFromParts(parts, /*base=*/0);
@@ -271,6 +285,7 @@ bool runAutoParseReport()
     // verticality prior + flags any axis the user must refine via the Joint Axis Direction field.
     bool onLinkFail = false;
     int  overlayFloat = 0;   // G1+G2: ACTUAL overlay/rotation origins that float off the robot / off the bore line
+    bool j0BaseFail = false; // J0 base-turntable: vertical + on the base/J1 centerline (not a counterweight bore)
     {
         const Eigen::Vector3d bz = gn.bodies[gn.base].placement.block<3,1>(0,2);
         printf("[autoparse]   base part-Z (mounting normal) = (%.3f, %.3f, %.3f)\n", bz.x(), bz.y(), bz.z());
@@ -306,6 +321,28 @@ bool runAutoParseReport()
                        within ? "YES" : "NO(FLOATING)", onBore ? "YES" : "NO");
             }
             printf("[autoparse]   OVERLAY axes on-robot + on-bore: %d floating (want 0)\n", overlayFloat);
+            // J0 BASE-TURNTABLE gate: the base axis must be PARALLEL to the turntable direction (base -> J1,
+            // the way the arm stands up -- convention-agnostic, NOT the base part-Z which is horizontal in a
+            // Y-up world) AND its axis LINE must pass through J1's mount. Scale-invariant (perp vs the base->J1
+            // span). Non-vacuous: the old base part-Z J0 (0,0,1) is perpendicular to base->J1 (0,1,0) -> FAILS;
+            // the balancer J0 (175,730,-495) is ~531 mm off the centreline -> FAILS; the fixed axis -> PASSES.
+            if (!gn.joints.empty() && gn.bodies.size() > 1) {
+                const auto& j0 = gn.joints[0];
+                const glm::vec3 a0 = glm::normalize(j0.axisDir);
+                const Eigen::Vector3d c1 = gn.bodies[1].placement.block<3,1>(0,3);       // J1 origin (turntable centre)
+                const Eigen::Vector3d b0 = gn.bodies[gn.base].placement.block<3,1>(0,3); // base origin
+                Eigen::Vector3d refE = c1 - b0; const double refLen = refE.norm();
+                const glm::vec3 ref = refLen > 1e-9 ? glm::normalize(glm::vec3(float(refE.x()),float(refE.y()),float(refE.z()))) : glm::vec3(0,1,0);
+                const bool j0Aligned = std::abs(glm::dot(a0, ref)) > 0.99f;              // parallel to base->J1
+                const glm::vec3 pC(float(c1.x()), float(c1.y()), float(c1.z()));
+                const glm::vec3 w = pC - j0.axisPos;
+                const float perp = glm::length(w - glm::dot(w, a0) * a0);
+                const bool j0OnCenter = perp < 0.10f * float(refLen) + 1e-3f;            // < 10% of the base->J1 span
+                j0BaseFail = !(j0Aligned && j0OnCenter);
+                printf("[autoparse]   J0 base-turntable: axis=(%.3f,%.3f,%.3f) origin=(%.1f,%.1f,%.1f) aligned-to-base->J1=%s perp=%.1f on-center=%s\n",
+                       a0.x,a0.y,a0.z, j0.axisPos.x,j0.axisPos.y,j0.axisPos.z,
+                       j0Aligned?"YES":"NO", perp, j0OnCenter?"YES":"NO");
+            }
         }
         // ON-LINK CHECK (verifies the trimmed-bore-midpoint origin fix): each joint origin (axisPos, world)
         // must lie within the CHILD link's world extent (from its analytic-face reference points + a margin).
@@ -340,7 +377,7 @@ bool runAutoParseReport()
 
     // Gate passes iff a real 6-joint serial chain in the NAMED order was produced with every joint
     // origin ON its link (axes may still be ambiguous on the wrist -- that is honest, user defines those).
-    const bool pass = parts.size() >= 2 && revs == 6 && orderOk && !onLinkFail && overlayFloat == 0;
+    const bool pass = parts.size() >= 2 && revs == 6 && orderOk && !onLinkFail && overlayFloat == 0 && !j0BaseFail;
     printf("[autoparse] %s\n", pass ? "PASS (named 6-DoF serial chain in correct order; axes from bores; ambiguous wrist axes flagged for manual definition)"
                                     : "FAIL (named serial chain not 6 joints in order)");
     std::fflush(stdout);

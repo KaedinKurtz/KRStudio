@@ -169,10 +169,12 @@ bool runBaseAxisVerticalGate()
 {
     using std::printf;
     setvbuf(stdout, nullptr, _IONBF, 0);
-    printf("[rbuild] GATE BASE-AXIS-VERTICAL -- J0 base-turntable axis is vertical (base part-Z), not a horizontal flange bore\n");
+    printf("[rbuild] GATE BASE-AXIS-VERTICAL -- J0 base-turntable axis = base->J1 (the way the arm stands up), not a horizontal flange bore\n");
 
     RBBody base; base.name = "430-base"; base.placement = Eigen::Matrix4d::Identity();
-    RBBody j1;   j1.name   = "430-j1";   j1.placement   = Eigen::Matrix4d::Identity();
+    // J1 mounts 0.3 UP the turntable axis (+Z here). J0 direction = normalize(J1 - base) = +Z, derived from
+    // geometry (convention-agnostic), NOT from any bore -- so the horizontal flange decoy cannot win.
+    RBBody j1;   j1.name   = "430-j1";   j1.placement   = Eigen::Matrix4d::Identity(); j1.placement(2, 3) = 0.3;
 
     const glm::vec3 horizAxis(1, 0, 0), vertAxis(0, 0, 1);
     // Horizontal flange bore, COAXIAL across base+j1 (the decoy the radius search picks), LARGER radius.
