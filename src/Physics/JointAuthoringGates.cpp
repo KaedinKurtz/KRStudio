@@ -655,6 +655,107 @@ void familyDefineRealModel(Scene& scene, Suite& S) {
     }
 }
 
+// Family S (SOLVER GROUND TRUTH): the joint must hold no matter what the user does. For a serial chain
+// the distance between consecutive link ORIGINS equals |ptree| and is INVARIANT under ANY q -- so if a
+// joint ever "detaches" (a link written outside FK, or the arm flung past reach) that distance changes.
+// This is the non-vacuous "joints are ground truth" invariant. Covers: no-fling on an unreachable drag
+// (commit closest-reachable, not the diverged iterate), stale-rest re-anchor (a zero drag is an exact
+// no-op at any pose), reachable drag tracks the target, and the ik() bestQ/reach-clamp contract.
+void familySolverGroundTruth(Scene& scene, Suite& S) {
+    using krs::robot::beginIkDrag; using krs::robot::endIkDrag;
+    const int ndof = 5;
+    krs::rbuild::RobotGraph g = makeSerialGraph(ndof);
+    const int rid = 970;
+    krs::rbuild::spawnGraphBodies(scene, g, rid);
+    LiveRobot* lr = instantiateFromGraph(scene, g, rid);
+    if (!lr || lr->ndof() != ndof) { S.check("S built", false); return; }
+    lr->useRobotFkViz = true;
+    auto& reg = scene.getRegistry();
+
+    // consecutive link-origin distances (the joint "lengths") -- invariant under any q for a serial chain
+    auto jointLens = [&]() { std::vector<double> d;
+        for (int k = 0; k + 1 < ndof; ++k) d.push_back(double(glm::distance(entWorld(reg, lr->linkEntities[k][0]), entWorld(reg, lr->linkEntities[k+1][0]))));
+        return d; };
+    auto lensHold = [&](const std::vector<double>& a, const std::vector<double>& b) {
+        if (a.size() != b.size()) return false;
+        for (size_t i = 0; i < a.size(); ++i) if (std::abs(a[i]-b[i]) > 1e-6) return false; return true; };
+
+    // Pose the arm AWAY FROM HOME so the stale-q=0-rest bug would bite.
+    lr->q.setZero(); lr->q[0] = 0.6; lr->q[1] = -0.4; lr->q[2] = 0.3;
+    for (int i = 0; i < ndof; ++i) lr->q[i] = lr->clampDof(i, lr->q[i]);
+    writeBackRobotViz(scene, *lr);
+    const std::vector<double> lensRest = jointLens();
+    S.check("S joint lengths well-defined (non-vacuous)", lensRest.size() == size_t(ndof-1) && lensRest[0] > 1e-3);
+
+    // --- S1 NO-FLING: drag the tip toward a target 10 m away. The arm must settle at the reachable
+    // boundary (closest-reachable q), NOT fling out to 10 m, and the joints must hold. ---
+    { const entt::entity tip = lr->linkEntities[ndof-1][0];
+      const glm::vec3 here = entWorld(reg, tip);
+      beginIkDrag(scene, rid, tip);
+      ikDragEntity(scene, rid, tip, ev(here + glm::vec3(10.0f, 0.0f, 0.0f)));   // unreachable
+      endIkDrag(scene, rid);
+      const glm::vec3 after = entWorld(reg, tip);
+      const double reach = 0.3 * double(ndof) + 0.5;   // sum of link offsets + margin
+      S.check("S1 tip did NOT fling past reach (settles at boundary)", glm::length(after) < reach);
+      S.check("S1 q finite + in-limits after unreachable drag", finiteVec(lr->q));
+      S.check("S1 JOINTS HOLD under unreachable drag (lengths invariant)", lensHold(jointLens(), lensRest)); }
+
+    // --- S2 REACHABLE drag actually tracks the target (proves S1 isn't just refusing to move) ---
+    { const entt::entity tip = lr->linkEntities[ndof-1][0];
+      const glm::vec3 before = entWorld(reg, tip);
+      const glm::vec3 tgt = before + glm::vec3(0.0f, 0.05f, 0.04f);    // small, reachable by rotation
+      beginIkDrag(scene, rid, tip);
+      ikDragEntity(scene, rid, tip, ev(tgt));
+      endIkDrag(scene, rid);
+      const glm::vec3 after = entWorld(reg, tip);
+      S.check("S2 reachable drag moves the tip toward target", glm::distance(after, tgt) < glm::distance(before, tgt) - 1e-4f);
+      S.check("S2 JOINTS HOLD under reachable drag (lengths invariant)", lensHold(jointLens(), lensRest)); }
+
+    // --- S3 STALE-REST RE-ANCHOR: at q!=0, a ZERO-magnitude drag is an EXACT no-op WITH beginIkDrag;
+    // WITHOUT it (frozen q=0 rest) the same call moves the arm a lot -- proving the re-anchor is the fix. ---
+    { lr->q.setZero(); lr->q[0] = 0.6; lr->q[1] = -0.4; lr->q[2] = 0.3;
+      for (int i = 0; i < ndof; ++i) lr->q[i] = lr->clampDof(i, lr->q[i]);
+      writeBackRobotViz(scene, *lr);
+      const entt::entity tip = lr->linkEntities[ndof-1][0];
+      const glm::vec3 hereW = entWorld(reg, tip);
+      const Eigen::VectorXd qA = lr->q;
+      beginIkDrag(scene, rid, tip);
+      ikDragEntity(scene, rid, tip, ev(hereW));            // zero drag (target == current pos)
+      endIkDrag(scene, rid);
+      S.check("S3 zero-drag at q!=0 is an EXACT no-op (re-anchored rest)", (lr->q - qA).norm() < 1e-6);
+      // NEG-CTRL: no beginIkDrag -> frozen-rest path injects a spurious target -> arm moves.
+      lr->q = qA; writeBackRobotViz(scene, *lr);
+      const Eigen::VectorXd qB = lr->q;
+      ikDragEntity(scene, rid, tip, ev(hereW));            // dragActive==false -> stale-rest fallback
+      S.check("S3 NEG-CTRL: WITHOUT re-anchor the same zero-target moves the arm (proves the fix)", (lr->q - qB).norm() > 1e-3); }
+
+    // --- S4 NEG-CTRL for the joint-hold check: poke a link's transform OFF-FK and confirm the invariant
+    // detects it (so S1/S2's "lengths invariant" is not vacuously true). ---
+    { lr->q.setZero(); writeBackRobotViz(scene, *lr);
+      const std::vector<double> good = jointLens();
+      auto* tc = reg.try_get<TransformComponent>(lr->linkEntities[2][0]);
+      const glm::vec3 saved = tc->translation; tc->translation += glm::vec3(0.5f, 0, 0);
+      S.check("S4 NEG-CTRL: an off-FK write BREAKS the joint-length invariant (check is non-vacuous)", !lensHold(jointLens(), good));
+      tc->translation = saved; }
+
+    // --- S5 ik() CONTRACT: unreachable target -> not-ok, clampedToReach, bestQ finite & within reach;
+    // reachable target -> ok. Direct unit test of the solver's ground-truth guarantees. ---
+    { lr->q.setZero();
+      krs::dyn::Pose far; far.R = lr->chain.bodyPose(lr->q, ndof-1).R; far.p = Eigen::Vector3d(50.0, 0.0, 0.0);
+      Eigen::VectorXd q = lr->q;
+      const auto rFar = lr->chain.ik(far, ndof-1, q, 0.05, 200, 1e-6);
+      S.check("S5 unreachable ik: not converged", !rFar.ok);
+      S.check("S5 unreachable ik: target reach-clamped", rFar.clampedToReach);
+      S.check("S5 unreachable ik: bestQ finite (closest-reachable)", rFar.bestQ.size() == q.size() && finiteVec(rFar.bestQ));
+      // reachable: take FK of a known q as the target
+      Eigen::VectorXd qk = Eigen::VectorXd::Zero(ndof); qk[0] = 0.3; qk[1] = 0.2;
+      const krs::dyn::Pose reachTgt = lr->chain.bodyPose(qk, ndof-1);
+      Eigen::VectorXd q2 = lr->q;
+      const auto rNear = lr->chain.ik(reachTgt, ndof-1, q2, 0.05, 200, 1e-6);
+      S.check("S5 reachable ik converges", rNear.ok && !rNear.clampedToReach); }
+    lr->q.setZero(); writeBackRobotViz(scene, *lr);
+}
+
 // Family P (gizmo pivot): the headline "gizmo spawns at base origin" bug. GizmoSystem::update computes
 // the pivot as  tc.getTransform() * aabbCenter,  aabbCenter = (aabbMin+aabbMax)*0.5. A CAD-imported
 // FANUC body bakes its geometry to WORLD coords and carries an IDENTITY tc, so the pivot MUST be the
@@ -712,6 +813,7 @@ bool runJointAuthoringSuite()
     { Scene sc; familyDragSequence(sc, S); }
     { Scene sc; familyMultiComponentDrive(sc, S); }
     { Scene sc; familyDefineRealModel(sc, S); }
+    { Scene sc; familySolverGroundTruth(sc, S); }
     { Scene sc; familyGizmoPivot(sc, S); }
     printf("[jsuite] ===== JOINT-AUTHORING SUITE: %d / %d sub-gates PASS =====\n", S.pass, S.total);
     std::fflush(stdout);

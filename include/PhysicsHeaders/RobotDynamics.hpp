@@ -88,9 +88,18 @@ public:
                                     const Eigen::VectorXd& tau, const Eigen::Vector3d& gravity) const;
 
     // --- DLS inverse kinematics for a target pose of `body` ---
-    struct IKResult { bool ok = false; int iters = 0; double posErr = 0, rotErr = 0; };
+    // bestQ = the CLOSEST-REACHABLE configuration seen across all iterations (min posErr+rotErr).
+    // The caller commits bestQ, never a diverged final iterate, so an unreachable drag settles at
+    // the reachable boundary instead of flinging the arm. clampedToReach = the target was beyond the
+    // kinematic reach and was projected onto the reachable sphere before solving.
+    struct IKResult { bool ok = false; int iters = 0; double posErr = 0, rotErr = 0;
+                      Eigen::VectorXd bestQ; bool clampedToReach = false; };
+    // qSeed / holdWeight (optional): a null-space hold-posture regularizer that pulls the undragged
+    // dofs toward qSeed WITHOUT disturbing the primary reach task (projected through the same damped
+    // inverse). holdWeight==0 or qSeed==nullptr reproduces the plain DLS behavior bit-for-bit.
     IKResult ik(const Pose& target, int body, Eigen::VectorXd& q,
-                double lambda = 0.05, int maxIters = 200, double tol = 1e-6) const;
+                double lambda = 0.05, int maxIters = 200, double tol = 1e-6,
+                const Eigen::VectorXd* qSeed = nullptr, double holdWeight = 0.0) const;
 
     // --- loop closure (constraint-aware) ---
     // 6-vector residual [Δp(3); Δrot(3)] of constraint c at configuration q.

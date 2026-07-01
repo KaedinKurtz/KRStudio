@@ -488,6 +488,9 @@ void GizmoSystem::startDrag(entt::entity handleEntity,
     m_initialObjectTransform = m_scene.getRegistry().get<TransformComponent>(selectedEntity);
     m_dragStartPoint = hitPoint;
     m_hasScreenStart = false;
+    // Gesture-start hook: a robot link snapshots its live IK-drag anchors here (beginIkDrag), so the
+    // drag delta is measured from the current pose, not the frozen rest -- the joint-ground-truth path.
+    if (onTransformEditBegin) onTransformEditBegin(selectedEntity);
 
     auto& R = m_scene.getRegistry();
     const auto& gh = R.get<GizmoHandleComponent>(handleEntity);
@@ -961,6 +964,7 @@ void GizmoSystem::endDrag()
     m_isDragging = false;
     m_snap.didStep = false;
     updateHighlights(entt::null); // back to hover-only
+    if (onTransformEditEnd && m_selectedObject != entt::null) onTransformEditEnd(m_selectedObject);
     m_draggedHandle = entt::null;
     m_selectedObject = entt::null;
 

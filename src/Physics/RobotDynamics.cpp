@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <random>
 #include <algorithm>
+#include <limits>
 
 namespace krs::dyn {
 
@@ -214,18 +215,43 @@ Eigen::VectorXd SerialChain::forwardDynamics(const Eigen::VectorXd& q, const Eig
 
 // --- DLS inverse kinematics -------------------------------------------------
 SerialChain::IKResult SerialChain::ik(const Pose& target, int body, Eigen::VectorXd& q,
-                                      double lambda, int maxIters, double tol) const {
+                                      double lambda, int maxIters, double tol,
+                                      const Eigen::VectorXd* qSeed, double holdWeight) const {
     IKResult r;
+    r.bestQ = q;                      // closest-reachable seen so far (starts at the seed pose)
     const double maxLinStep = 0.05;   // m per iteration
     const double maxAngStep = 0.20;   // rad per iteration
+
+    // REACH CLAMP: a target GROSSLY beyond the kinematic reach is projected inward before solving, so
+    // a 10 m drag converges to a bounded pose instead of commanding every joint toward its stop -- the
+    // "arm extends forward violently" case. The threshold is a GENEROUS over-estimate (1.5x the summed
+    // joint offsets + margin) so only pathological over-drags are touched; a legitimately reachable or
+    // near-reach target is NEVER clamped (bit-exact for the round-trip self-test + normal drags). The
+    // real no-fling guarantee is bestQ (closest-reachable commit) + clampDof; this just tames NaN-scale
+    // targets and reports the clamp for the gate.
+    Pose tgt = target;
+    {
+        double reach = 0.0;
+        for (int b = body; b >= 0; b = joints_[b].parent) reach += joints_[b].ptree.norm();
+        const double cap = 1.5 * reach + 0.10;    // generous: only gross over-reach clamps
+        const double d = tgt.p.norm();
+        if (cap > 0.0 && d > cap) { tgt.p *= (cap * 0.999) / d; r.clampedToReach = true; }
+    }
+
+    double bestErr = std::numeric_limits<double>::max();
     for (int it = 0; it < maxIters; ++it) {
         std::vector<Pose> wp; fk(q, wp);
-        const Eigen::Vector3d ep = target.p - wp[body].p;
-        const Eigen::Matrix3d Rerr = target.R * wp[body].R.transpose();
+        const Eigen::Vector3d ep = tgt.p - wp[body].p;
+        const Eigen::Matrix3d Rerr = tgt.R * wp[body].R.transpose();
         Eigen::AngleAxisd aa(Rerr);
         Eigen::Vector3d eo = aa.axis() * aa.angle();
         r.posErr = ep.norm(); r.rotErr = eo.norm(); r.iters = it;
-        if (r.posErr < tol && r.rotErr < tol) { r.ok = true; return r; }
+        // best-Q is POSITION-DOMINANT: a drag holds orientation only softly, so reaching the target
+        // point must not be vetoed by the orientation drift it necessarily incurs (equal weighting
+        // would pick "don't move" as best for a positional drag). rotErr is a mild tiebreaker.
+        const double sel = r.posErr + 0.05 * r.rotErr;
+        if (sel < bestErr) { bestErr = sel; r.bestQ = q; }
+        if (r.posErr < tol && r.rotErr < tol) { r.ok = true; r.bestQ = q; return r; }
         Eigen::Matrix<double,6,1> e;
         // clamp the error so a far/unreachable target can't drive a huge step
         Eigen::Vector3d epc = ep, eoc = eo;
@@ -233,9 +259,17 @@ SerialChain::IKResult SerialChain::ik(const Pose& target, int body, Eigen::Vecto
         if (eoc.norm() > maxAngStep) eoc *= maxAngStep / eoc.norm();
         e << epc, eoc;
         const Eigen::MatrixXd J = jacobian(q, body);
-        const Eigen::MatrixXd JJt = J * J.transpose()
-                                  + lambda * lambda * Eigen::MatrixXd::Identity(6, 6);
-        Eigen::VectorXd dq = J.transpose() * JJt.ldlt().solve(e);
+        const Eigen::LDLT<Eigen::MatrixXd> ldlt(J * J.transpose()
+                                  + lambda * lambda * Eigen::MatrixXd::Identity(6, 6));
+        Eigen::VectorXd dq = J.transpose() * ldlt.solve(e);
+        // NULL-SPACE HOLD-POSTURE: pull the undragged dofs toward qSeed through the SAME damped
+        // inverse (no fresh pseudo-inverse). (I - J^+ J) z lives in the task null space, so the
+        // primary reach is undisturbed while redundant dofs resist being swept -- the arm "tries
+        // to hold its position". Disabled (bit-exact) when holdWeight==0 or qSeed is null/mismatched.
+        if (qSeed && holdWeight > 0.0 && qSeed->size() == q.size()) {
+            const Eigen::VectorXd z = holdWeight * (*qSeed - q);
+            dq += z - J.transpose() * ldlt.solve(J * z);
+        }
         const double dqn = dq.norm();
         if (dqn > maxAngStep) dq *= maxAngStep / dqn;   // per-step joint clamp
         q += dq;
@@ -243,13 +277,14 @@ SerialChain::IKResult SerialChain::ik(const Pose& target, int body, Eigen::Vecto
             const int d = dofIndex_[b];
             if (d >= 0) q[d] = std::min(std::max(q[d], joints_[b].qLower), joints_[b].qUpper);
         }
-        if (!q.allFinite()) { r.ok = false; return r; }     // never propagate NaN
+        if (!q.allFinite()) { r.ok = false; return r; }     // never propagate NaN (bestQ stays finite)
     }
     // final residual after the loop
     std::vector<Pose> wp; fk(q, wp);
-    r.posErr = (target.p - wp[body].p).norm();
-    Eigen::AngleAxisd aa(target.R * wp[body].R.transpose());
+    r.posErr = (tgt.p - wp[body].p).norm();
+    Eigen::AngleAxisd aa(tgt.R * wp[body].R.transpose());
     r.rotErr = (aa.axis() * aa.angle()).norm();
+    if (r.posErr + 0.05 * r.rotErr < bestErr) { r.bestQ = q; }
     r.ok = (r.posErr < tol && r.rotErr < tol);
     return r;
 }

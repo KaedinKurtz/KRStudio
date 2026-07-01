@@ -121,6 +121,17 @@ struct LiveRobot {
     // is at its stop.
     Eigen::VectorXd       qCommandRaw;            // commanded PRE-CLAMP (ghost target)
     std::vector<char>     jointValid;             // per DOF: 1 = in limits, 0 = clamped (violated)
+    // --- IK-drag gesture state (joint-ground-truth) --------------------------------------------
+    // A gizmo drag emits a TARGET, never a pose. beginIkDrag() snapshots the pose + the grabbed
+    // entity/body world anchors ONCE per gesture, so the drag delta is measured from the LIVE pose
+    // (not the frozen q=0 rest -- that stale rest is what commanded the arm "forward violently"
+    // away from home). qDragStart also seeds the null-space hold-posture regularizer so undragged
+    // joints resist being swept. Only ikDragLink writes q; only writeBackRobotViz writes a pose.
+    Eigen::VectorXd       qDragStart;             // pose at gesture-start (posture seed)
+    bool                  dragActive = false;     // a gizmo IK-drag is in progress
+    int                   dragBody   = -1;         // chain-body index being dragged
+    Eigen::Vector3d       dragEntityAnchorW = Eigen::Vector3d::Zero(); // grabbed entity world @ start
+    Eigen::Vector3d       dragBodyAnchorW   = Eigen::Vector3d::Zero(); // dragged body FK origin world @ start
     std::vector<int>      memberJoint;            // DOF index -> model.joints index
     std::vector<std::vector<entt::entity>> linkEntities;  // chain body idx -> entities it drives
     std::vector<Eigen::Matrix4d> restLinkWorld;   // per chain-body rest world pose (q=0) for delta viz
@@ -486,6 +497,12 @@ bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targ
 // ikDragEntity: production gizmo handler -- drag a link SOLID (entity) to a new world pos. Resolves the
 // chain body+slot, applies the entity->body-frame offset so a zero drag is an exact no-op (no explosion).
 bool ikDragEntity(Scene& scene, int robotId, entt::entity e, const Eigen::Vector3d& newEntityWorld);
+// beginIkDrag: call ONCE at gizmo gesture-start for a member-link entity. Snapshots qDragStart + the
+// grabbed entity/body world anchors from the LIVE pose, so the subsequent ikDragEntity delta is measured
+// from where the part IS (not the frozen q=0 rest -- the stale rest that flung the arm forward away from
+// home). endIkDrag clears the gesture. Both are no-ops for a non-member entity / unknown robot.
+void beginIkDrag(Scene& scene, int robotId, entt::entity e);
+void endIkDrag(Scene& scene, int robotId);
 // routeGizmoEdit: shared member-link routing (MainWindow + gates) -- a member chain body is ALWAYS
 // IK-dragged; rigid whole-robot translate is the ROOT entity's behavior, never a member link.
 bool routeGizmoEdit(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld);

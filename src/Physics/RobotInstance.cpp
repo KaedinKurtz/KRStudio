@@ -351,10 +351,47 @@ void translateRobot(Scene& scene, int robotId, const Eigen::Vector3d& deltaWorld
     transformRobot(scene, robotId, T);
 }
 
+// Resolve the (chain body, entity slot) a member solid occupies. -1/-1 if not a member link.
+static void resolveMemberSlot(const LiveRobot& lr, entt::entity e, int& body, int& slot) {
+    body = -1; slot = -1;
+    for (int k = 0; k < int(lr.linkEntities.size()) && body < 0; ++k)
+        for (int s = 0; s < int(lr.linkEntities[k].size()); ++s)
+            if (lr.linkEntities[k][s] == e) { body = k; slot = s; break; }
+}
+
+// GESTURE START: snapshot the pose + grabbed-entity/body world anchors ONCE, from the LIVE pose. The
+// subsequent per-frame ikDragEntity measures its delta from these anchors, so a zero drag is an EXACT
+// no-op at ANY pose -- killing the frozen-q=0-rest target that commanded the arm "forward violently"
+// when it was away from home. qDragStart also seeds the hold-posture regularizer.
+void beginIkDrag(Scene& scene, int robotId, entt::entity e)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return;
+    LiveRobot* lr = rr->get(robotId); if (!lr || lr->ndof() <= 0) { return; }
+    int body = -1, slot = -1; resolveMemberSlot(*lr, e, body, slot);
+    if (body < 0 || body >= lr->chain.nbody()) { lr->dragActive = false; return; }
+    lr->qDragStart = lr->q;
+    lr->dragActive = true;
+    lr->dragBody   = body;
+    lr->dragEntityAnchorW = Eigen::Vector3d::Zero();
+    if (reg.valid(e)) if (auto* tc = reg.try_get<TransformComponent>(e))
+        lr->dragEntityAnchorW = Eigen::Vector3d(tc->translation.x, tc->translation.y, tc->translation.z);
+    const krs::dyn::Pose p = lr->chain.bodyPose(lr->q, body);
+    lr->dragBodyAnchorW = (lr->model.basePlacement * Eigen::Vector4d(p.p.x(), p.p.y(), p.p.z(), 1.0)).head<3>();
+}
+
+void endIkDrag(Scene& scene, int robotId)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return;
+    if (LiveRobot* lr = rr->get(robotId)) { lr->dragActive = false; lr->dragBody = -1; }
+}
+
 // IK DRAG: drag link `body` (a chain-body index) toward a world target point -- solve the DoF ABOVE it
 // (DLS IK) so the chain bends to reach the goal, then re-drive the viz. Orientation is held at the
-// link's current value (a positional drag). Returns true if the solver converged. q is clamped to the
-// joint limits afterwards. This is the "grab a child -> IK drags the chain" behavior.
+// link's current value (a positional drag). Returns true if the solver converged. GROUND TRUTH: the
+// only writable robot state is a limit-clamped q, and the ONLY link-pose writer is writeBackRobotViz
+// fed from FK(q) -- so a defined joint is structurally un-violable regardless of the target.
 bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld)
 {
     auto& reg = scene.getRegistry();
@@ -366,37 +403,52 @@ bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targ
     target.R = lr->chain.bodyPose(lr->q, body).R;             // hold orientation; drag is positional
     const Eigen::Vector4d tw(targetWorld.x(), targetWorld.y(), targetWorld.z(), 1.0);
     target.p = (invBase * tw).head<3>();                     // world -> chain base frame (IK frame)
+
+    // Hold-posture seed: while a gesture is active, pull undragged dofs toward the gesture-start pose
+    // so the arm resists being swept to serve the target (it "tries to hold").
+    const bool useHold = lr->dragActive && lr->qDragStart.size() == lr->q.size();
+    const Eigen::VectorXd* qSeed = useHold ? &lr->qDragStart : nullptr;
+    const double holdWeight = useHold ? 0.20 : 0.0;
+
     Eigen::VectorXd q = lr->q;
-    const krs::dyn::SerialChain::IKResult res = lr->chain.ik(target, body, q);
-    for (int i = 0; i < int(q.size()); ++i) q[i] = lr->clampDof(i, q[i]);
-    lr->q = q;
-    if (lr->useRobotFkViz) writeBackRobotViz(scene, *lr);
+    const krs::dyn::SerialChain::IKResult res =
+        lr->chain.ik(target, body, q, 0.05, 200, 1e-6, qSeed, holdWeight);
+    // Commit the CLOSEST-REACHABLE q (bestQ), NEVER the diverged final iterate: an unreachable drag
+    // settles at the reachable boundary instead of flinging the arm forward. NEVER write a pose here.
+    Eigen::VectorXd qc = (res.bestQ.size() == lr->q.size()) ? res.bestQ : q;
+    for (int i = 0; i < int(qc.size()); ++i) qc[i] = lr->clampDof(i, qc[i]);
+    if (!qc.allFinite()) return false;                       // never publish a NaN pose
+    lr->q = qc;
+    if (lr->useRobotFkViz) writeBackRobotViz(scene, *lr);    // the SOLE writer of member link poses
     return res.ok;
 }
 
 // IK DRAG by ENTITY (the production gizmo handler for a member link). Resolves the chain body + slot the
-// dragged solid occupies, converts the ENTITY-space target into a body-FK-frame goal -- the entity origin
-// and the chain body FK origin differ by a fixed per-link CAD offset, so feeding the raw entity origin to
-// IK makes the solver chase that offset at drag-start (the "explosion"). dWorld = newEntityWorld - entityRest
-// makes a zero drag an EXACT no-op. Returns true on IK convergence; false if the entity isn't a member link.
+// dragged solid occupies and builds a body-FK-frame target from the grabbed entity's world drag delta.
+// With a gesture active (beginIkDrag ran), the delta is measured from the LIVE gesture-start anchors so a
+// zero drag is an EXACT no-op at any pose (no explosion); otherwise it falls back to the q=0 rest + the
+// current FK body origin. Returns true on IK convergence; false if the entity isn't a member link.
 bool ikDragEntity(Scene& scene, int robotId, entt::entity e, const Eigen::Vector3d& newEntityWorld)
 {
     auto& reg = scene.getRegistry();
     RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return false;
     LiveRobot* lr = rr->get(robotId); if (!lr || lr->ndof() <= 0) return false;
-    int body = -1, slot = -1;
-    for (int k = 0; k < int(lr->linkEntities.size()) && body < 0; ++k)
-        for (int s = 0; s < int(lr->linkEntities[k].size()); ++s)
-            if (lr->linkEntities[k][s] == e) { body = k; slot = s; break; }
+    int body = -1, slot = -1; resolveMemberSlot(*lr, e, body, slot);
     if (body < 0 || body >= lr->chain.nbody()) return false;
-    Eigen::Vector3d entityRest = Eigen::Vector3d::Zero();
-    if (body < int(lr->linkEntityRestWorld.size()) && slot >= 0 && slot < int(lr->linkEntityRestWorld[body].size()))
-        entityRest = lr->linkEntityRestWorld[body][slot].block<3, 1>(0, 3);
-    const Eigen::Vector3d dWorld = newEntityWorld - entityRest;
-    const krs::dyn::Pose p = lr->chain.bodyPose(lr->q, body);
-    const Eigen::Vector3d bodyWorld =
-        (lr->model.basePlacement * Eigen::Vector4d(p.p.x(), p.p.y(), p.p.z(), 1.0)).head<3>();
-    return ikDragLink(scene, robotId, body, bodyWorld + dWorld);
+
+    Eigen::Vector3d entityAnchor, bodyAnchor;
+    if (lr->dragActive && lr->dragBody == body) {            // live gesture anchors (the correct path)
+        entityAnchor = lr->dragEntityAnchorW;
+        bodyAnchor   = lr->dragBodyAnchorW;
+    } else {                                                 // fallback for a scripted single call
+        entityAnchor = Eigen::Vector3d::Zero();
+        if (body < int(lr->linkEntityRestWorld.size()) && slot >= 0 && slot < int(lr->linkEntityRestWorld[body].size()))
+            entityAnchor = lr->linkEntityRestWorld[body][slot].block<3, 1>(0, 3);
+        const krs::dyn::Pose p = lr->chain.bodyPose(lr->q, body);
+        bodyAnchor = (lr->model.basePlacement * Eigen::Vector4d(p.p.x(), p.p.y(), p.p.z(), 1.0)).head<3>();
+    }
+    const Eigen::Vector3d dWorld = newEntityWorld - entityAnchor;
+    return ikDragLink(scene, robotId, body, bodyAnchor + dWorld);
 }
 
 // Production gizmo routing for a MEMBER chain link (shared by MainWindow::onTransformEdited AND the

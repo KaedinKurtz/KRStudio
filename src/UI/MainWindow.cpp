@@ -2365,6 +2365,20 @@ MainWindow::MainWindow(QWidget* parent)
     // the ROOT link (chain body 0) rigidly translates the whole robot (the subtree follows); grabbing
     // any other link runs IK to bend the DoF above it to the drag point. A detached subtree is its own
     // robot (split-on-delete), so the same rule moves it as a unit / poses it.
+    // Gesture-start / -end: a robot member link snapshots (and clears) its live IK-drag anchors so the
+    // drag delta is measured from where the part IS -- kills the stale-rest target that flung the arm.
+    m_gizmoSystem->onTransformEditBegin = [this](entt::entity e) {
+        if (!m_scene) return;
+        auto& reg = m_scene->getRegistry();
+        if (const auto* sub = reg.try_get<RobotSubcomponentComponent>(e))
+            krs::robot::beginIkDrag(*m_scene, sub->robotId, e);
+    };
+    m_gizmoSystem->onTransformEditEnd = [this](entt::entity e) {
+        if (!m_scene) return;
+        auto& reg = m_scene->getRegistry();
+        if (const auto* sub = reg.try_get<RobotSubcomponentComponent>(e))
+            krs::robot::endIkDrag(*m_scene, sub->robotId);
+    };
     m_gizmoSystem->onTransformEdited = [this](entt::entity e) {
         if (!m_scene) return;
         auto& reg = m_scene->getRegistry();
