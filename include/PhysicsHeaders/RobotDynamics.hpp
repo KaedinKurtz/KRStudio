@@ -104,9 +104,14 @@ public:
     // qSeed / holdWeight (optional): a null-space hold-posture regularizer that pulls the undragged
     // dofs toward qSeed WITHOUT disturbing the primary reach task (projected through the same damped
     // inverse). holdWeight==0 or qSeed==nullptr reproduces the plain DLS behavior bit-for-bit.
+    // rotWeight weights orientation in the CLOSEST-REACHABLE (bestQ) selection ONLY (the residual + the
+    // pos<tol && rot<tol convergence test are unchanged). Default 0.05 = position-dominant (a positional
+    // drag: reach the point, don't let the incurred orientation drift veto it). Pass ~1.0 for an explicit
+    // 6-DoF POSE target so orientation is honored when the target isn't perfectly reachable.
     IKResult ik(const Pose& target, int body, Eigen::VectorXd& q,
                 double lambda = 0.05, int maxIters = 200, double tol = 1e-6,
-                const Eigen::VectorXd* qSeed = nullptr, double holdWeight = 0.0) const;
+                const Eigen::VectorXd* qSeed = nullptr, double holdWeight = 0.0,
+                double rotWeight = 0.05) const;
 
     // --- loop closure (constraint-aware) ---
     // 6-vector residual [Δp(3); Δrot(3)] of constraint c at configuration q.

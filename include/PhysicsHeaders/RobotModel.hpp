@@ -138,6 +138,8 @@ struct LiveRobot {
     int                   dragBody   = -1;         // chain-body index being dragged
     Eigen::Vector3d       dragEntityAnchorW = Eigen::Vector3d::Zero(); // grabbed entity world @ start
     Eigen::Vector3d       dragBodyAnchorW   = Eigen::Vector3d::Zero(); // dragged body FK origin world @ start
+    Eigen::Matrix3d       dragEntityAnchorR = Eigen::Matrix3d::Identity(); // grabbed entity world ORIENTATION @ start
+    Eigen::Matrix3d       dragBodyAnchorR   = Eigen::Matrix3d::Identity(); // dragged body FK world ORIENTATION @ start
     std::vector<int>      memberJoint;            // DOF index -> model.joints index
     std::vector<std::vector<entt::entity>> linkEntities;  // chain body idx -> entities it drives
     std::vector<Eigen::Matrix4d> restLinkWorld;   // per chain-body rest world pose (q=0) for delta viz
@@ -502,10 +504,19 @@ void transformRobot(Scene& scene, int robotId, const Eigen::Matrix4d& Tworld);
 void translateRobot(Scene& scene, int robotId, const Eigen::Vector3d& deltaWorld);
 // ikDragLink: drag chain body `body` toward a world point; DLS-IK solves the DoF above it. Returns
 // true on convergence; q is clamped to limits (grab a child -> IK bends the chain to the goal).
-bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld);
-// ikDragEntity: production gizmo handler -- drag a link SOLID (entity) to a new world pos. Resolves the
-// chain body+slot, applies the entity->body-frame offset so a zero drag is an exact no-op (no explosion).
+// targetWorldR != null commands a world ORIENTATION too (full 6-DoF pose); null = hold orientation.
+bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld,
+                const Eigen::Matrix3d* targetWorldR = nullptr);
+// ikDragLinkPose: 6-DoF -- command both a world position and orientation for chain body `body`.
+bool ikDragLinkPose(Scene& scene, int robotId, int body,
+                    const Eigen::Vector3d& targetWorld, const Eigen::Matrix3d& targetWorldR);
+// ikDragEntity: production gizmo handler (TRANSLATE) -- drag a link SOLID (entity) to a new world pos.
+// Resolves the chain body+slot, applies the entity->body-frame offset so a zero drag is an exact no-op.
 bool ikDragEntity(Scene& scene, int robotId, entt::entity e, const Eigen::Vector3d& newEntityWorld);
+// ikDragEntityPose: production gizmo handler (ROTATE) -- reorient the end body IN PLACE. Holds the EE
+// control point (current FK body origin) and commands the gizmo's world orientation via 6-DoF IK, so a
+// rotate CHANGES orientation instead of sliding the origin around a phantom circle.
+bool ikDragEntityPose(Scene& scene, int robotId, entt::entity e, const Eigen::Matrix3d& newEntityWorldR);
 // beginIkDrag: call ONCE at gizmo gesture-start for a member-link entity. Snapshots qDragStart + the
 // grabbed entity/body world anchors from the LIVE pose, so the subsequent ikDragEntity delta is measured
 // from where the part IS (not the frozen q=0 rest -- the stale rest that flung the arm forward away from
@@ -531,6 +542,9 @@ bool mergeRobots(Scene& scene, int parentRobotId, int childRobotId,
 // converges a reachable target + clamps; split->new-robot + merge round-trip; adversarial unreachable
 // target does not diverge/NaN. Defined in RobotInstance.cpp.
 bool runManipOpsGate();
+// GATE IK-POSE (KRS_IKPOSE_SELFTEST): 6-DoF pose IK (ikDragLinkPose reaches pos+orient) + rotate-reorients
+// the end-effector in place (ikDragEntityPose) with position-only negative controls. In RobotInstance.cpp.
+bool runIkPoseGate();
 
 // GATE CUT-KEEPS-DRIVABLE (joint-primary): cutting a joint yields TWO derived components; both keep
 // their joint names/ids, both stay drivable BY NAME, and nothing is destroyed (the detached forearm

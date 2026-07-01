@@ -62,6 +62,7 @@
 #include "SettingsDialog.hpp"
 #include <QPointer>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>   // glm::mat3_cast (rotate-gizmo -> IK orientation target)
 #include "TextureBrowserWidget.hpp"
 #include "AssetBrowserWidget.hpp"
 #include "FluidMesher.hpp"
@@ -2385,7 +2386,7 @@ MainWindow::MainWindow(QWidget* parent)
         if (const auto* sub = reg.try_get<RobotSubcomponentComponent>(e))
             krs::robot::endIkDrag(*m_scene, sub->robotId);
     };
-    m_gizmoSystem->onTransformEdited = [this](entt::entity e) {
+    m_gizmoSystem->onTransformEdited = [this](entt::entity e, GizmoMode mode, Frame /*frame*/) {
         if (!m_scene) return;
         auto& reg = m_scene->getRegistry();
         // ROOT entity grab -> rigid-translate the WHOLE robot. The root carries RobotRootComponent and NO
@@ -2408,13 +2409,20 @@ MainWindow::MainWindow(QWidget* parent)
             if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>()) {
                 if (auto* lr = rr->get(sub->robotId)) {
                     if (const auto* tc = reg.try_get<TransformComponent>(e)) {
-                        const Eigen::Vector3d tw(tc->translation.x, tc->translation.y, tc->translation.z);
-                        // EVERY member link (including chain body 0, the first MOVING link) is IK-dragged to
-                        // the gizmo position. ikDragEntity resolves the body+slot and applies the
-                        // entity->body-frame offset, so there is no drag-start explosion and the GRABBED link
-                        // tracks the cursor (not a sibling/parent).
                         (void)lr;
-                        krs::robot::ikDragEntity(*m_scene, sub->robotId, e, tw);
+                        if (mode == GizmoMode::Rotate) {
+                            // ROTATE gizmo -> 6-DoF orientation IK: reorient the end body in place to the
+                            // gizmo's commanded WORLD orientation (glm quat -> Eigen 3x3). ikDragEntityPose
+                            // holds the control point, so this changes orientation, not a ghost-circle slide.
+                            const glm::mat3 m = glm::mat3_cast(tc->rotation);
+                            Eigen::Matrix3d Rworld;
+                            for (int c = 0; c < 3; ++c) for (int r = 0; r < 3; ++r) Rworld(r, c) = double(m[c][r]);
+                            krs::robot::ikDragEntityPose(*m_scene, sub->robotId, e, Rworld);
+                        } else {
+                            // TRANSLATE (default): IK-drag the grabbed link to the gizmo position (unchanged).
+                            const Eigen::Vector3d tw(tc->translation.x, tc->translation.y, tc->translation.z);
+                            krs::robot::ikDragEntity(*m_scene, sub->robotId, e, tw);
+                        }
                     }
                     if (m_simulation) m_simulation->notifyEntityChanged(e);
                     return;

@@ -488,6 +488,9 @@ void GizmoSystem::startDrag(entt::entity handleEntity,
     m_initialObjectTransform = m_scene.getRegistry().get<TransformComponent>(selectedEntity);
     m_dragStartPoint = hitPoint;
     m_hasScreenStart = false;
+    // Ctrl at gesture-start -> BODY-frame gizmo (axes AND the synthesized IK orientation target expressed
+    // in the end-effector body frame); else WORLD frame. Shift stays the orthogonal rotate-in-place path.
+    m_currentFrame = QGuiApplication::keyboardModifiers().testFlag(Qt::ControlModifier) ? Frame::Body : Frame::World;
     // Gesture-start hook: a robot link snapshots its live IK-drag anchors here (beginIkDrag), so the
     // drag delta is measured from the current pose, not the frozen rest -- the joint-ground-truth path.
     if (onTransformEditBegin) onTransformEditBegin(selectedEntity);
@@ -570,7 +573,7 @@ void GizmoSystem::updateDrag(const CpuRay& ray, const Camera& camera)
     const bool useLocal = QGuiApplication::keyboardModifiers().testFlag(Qt::ShiftModifier);
 
     auto emitEdited = [&](entt::entity e) {
-        if (onTransformEdited) onTransformEdited(e);
+        if (onTransformEdited) onTransformEdited(e, m_dragMode, m_currentFrame);
         };
 
     // Helpers that write back transforms for all group items
@@ -1250,7 +1253,9 @@ void GizmoSystem::applyCommand(const TransformCommand& cmd, bool toBefore)
         auto& t = R.get<TransformComponent>(rec.e);
         const TransformComponent& src = toBefore ? rec.before : rec.after;
         t = src;
-        if (onTransformEdited) onTransformEdited(rec.e);
+        // undo/redo replays an already-applied transform -> route as a positional re-sync (Translate),
+        // never a spurious orientation IK command.
+        if (onTransformEdited) onTransformEdited(rec.e, GizmoMode::Translate, m_currentFrame);
     }
     // >>> Ask UI to refresh gizmo + menus <<<
     if (onAfterCommandApplied) onAfterCommandApplied();

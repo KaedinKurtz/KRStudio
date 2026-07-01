@@ -1028,11 +1028,20 @@ void RenderingSystem::initializeSharedResources()
                       & krs::rbuild::runBoreAnchorGate()
                       & krs::rbuild::runUrdfExportGate()
                       & krs::robot::runManipOpsGate()
+                      & krs::robot::runIkPoseGate()
                       & krs::robot::runCutKeepsDrivableGate()
                       & krs::robot::runJointAuthoringSuite()
                       & krs::rbuild::runJointEditGate()
                       & krs::rbuild::runTagOwnershipGate()
                       & krs::rbuild::runSubtreeDetachGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // IK-POSE gate in isolation (fast iteration): 6-DoF pose IK + rotate-reorients-in-place.
+    if (qEnvironmentVariableIntValue("KRS_IKPOSE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_IKPOSE_SELFTEST =================\n");
+        const bool ok = krs::robot::runIkPoseGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
@@ -1795,6 +1804,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE BORE-ANCHOR (lowered revolute rotates about the bore axis/axisPos, not the child link CAD origin; offset-bore neg-ctrl)", krs::rbuild::runBoreAnchorGate() },
             { "GATE URDF-EXPORT (base-pick + tree-search -> URDF; links/joints/types/limits; re-rootable; bad-base-empty neg-ctrl)", krs::rbuild::runUrdfExportGate() },
             { "GATE MANIP-OPS (rigid translate moves all links; IK converges+clamps; split->2 robots; merge->1; unreachable-IK neg-ctrl)", krs::robot::runManipOpsGate() },
+            { "GATE IK-POSE (6-DoF pose IK reaches pos+orient; rotate reorients the EE in place not a ghost circle; position-only neg-ctrls)", krs::robot::runIkPoseGate() },
             { "GATE CUT-KEEPS-DRIVABLE (cut a joint -> two components; both keep names+ids; both drivable by name; cut DOF gone; nothing destroyed)", krs::robot::runCutKeepsDrivableGate() },
             { "JOINT-AUTHORING SUITE (body-frame real-path: gizmo-route/IK-drag/define-snap/no-self-joint/persistence/cut-count/merge/coaxial/joint-server/FIFO/concentric-both)", krs::robot::runJointAuthoringSuite() },
             { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },

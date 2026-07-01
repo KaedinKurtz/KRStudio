@@ -230,7 +230,7 @@ Eigen::VectorXd SerialChain::forwardDynamics(const Eigen::VectorXd& q, const Eig
 // --- DLS inverse kinematics -------------------------------------------------
 SerialChain::IKResult SerialChain::ik(const Pose& target, int body, Eigen::VectorXd& q,
                                       double lambda, int maxIters, double tol,
-                                      const Eigen::VectorXd* qSeed, double holdWeight) const {
+                                      const Eigen::VectorXd* qSeed, double holdWeight, double rotWeight) const {
     IKResult r;
     r.bestQ = q;                      // closest-reachable seen so far (starts at the seed pose)
     const double maxLinStep = 0.05;   // m per iteration
@@ -263,7 +263,7 @@ SerialChain::IKResult SerialChain::ik(const Pose& target, int body, Eigen::Vecto
         // best-Q is POSITION-DOMINANT: a drag holds orientation only softly, so reaching the target
         // point must not be vetoed by the orientation drift it necessarily incurs (equal weighting
         // would pick "don't move" as best for a positional drag). rotErr is a mild tiebreaker.
-        const double sel = r.posErr + 0.05 * r.rotErr;
+        const double sel = r.posErr + rotWeight * r.rotErr;
         if (sel < bestErr) { bestErr = sel; r.bestQ = q; }
         if (r.posErr < tol && r.rotErr < tol) { r.ok = true; r.bestQ = q; return r; }
         Eigen::Matrix<double,6,1> e;
@@ -298,7 +298,7 @@ SerialChain::IKResult SerialChain::ik(const Pose& target, int body, Eigen::Vecto
     r.posErr = (tgt.p - wp[body].p).norm();
     Eigen::AngleAxisd aa(tgt.R * wp[body].R.transpose());
     r.rotErr = (aa.axis() * aa.angle()).norm();
-    if (r.posErr + 0.05 * r.rotErr < bestErr) { r.bestQ = q; }
+    if (r.posErr + rotWeight * r.rotErr < bestErr) { r.bestQ = q; }
     r.ok = (r.posErr < tol && r.rotErr < tol);
     return r;
 }

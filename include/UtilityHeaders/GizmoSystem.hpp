@@ -150,7 +150,9 @@ public:
     entt::entity getRootEntity() const { return m_gizmoRoot; }
     void setHoveredHandle(entt::entity handle);
 
-    std::function<void(entt::entity)> onTransformEdited;
+    // Carries the drag MODE (Translate/Rotate/Scale) and the active FRAME (Body/World) so the consumer
+    // can route a rotate to a 6-DoF orientation IK target and express it in the right frame.
+    std::function<void(entt::entity, GizmoMode, Frame)> onTransformEdited;
     // Fired ONCE per gesture: begin at mouse-down (the grabbed entity), end at mouse-up. Lets a robot
     // link snapshot its live drag anchors (krs::robot::beginIkDrag) so the IK drag measures its delta
     // from where the part IS, not the frozen rest -- the joint-ground-truth gesture lifecycle.

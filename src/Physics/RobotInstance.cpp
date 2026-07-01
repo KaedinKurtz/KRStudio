@@ -386,10 +386,15 @@ void beginIkDrag(Scene& scene, int robotId, entt::entity e)
     lr->dragActive = true;
     lr->dragBody   = body;
     lr->dragEntityAnchorW = Eigen::Vector3d::Zero();
-    if (reg.valid(e)) if (auto* tc = reg.try_get<TransformComponent>(e))
+    lr->dragEntityAnchorR = Eigen::Matrix3d::Identity();
+    if (reg.valid(e)) if (auto* tc = reg.try_get<TransformComponent>(e)) {
         lr->dragEntityAnchorW = Eigen::Vector3d(tc->translation.x, tc->translation.y, tc->translation.z);
+        lr->dragEntityAnchorR = Eigen::Quaterniond(double(tc->rotation.w), double(tc->rotation.x),
+                                                   double(tc->rotation.y), double(tc->rotation.z)).normalized().toRotationMatrix();
+    }
     const krs::dyn::Pose p = lr->chain.bodyPose(lr->q, body);
     lr->dragBodyAnchorW = (lr->model.basePlacement * Eigen::Vector4d(p.p.x(), p.p.y(), p.p.z(), 1.0)).head<3>();
+    lr->dragBodyAnchorR = lr->model.basePlacement.block<3,3>(0,0) * p.R;   // body FK world orientation @ start
 }
 
 void endIkDrag(Scene& scene, int robotId)
@@ -404,7 +409,8 @@ void endIkDrag(Scene& scene, int robotId)
 // link's current value (a positional drag). Returns true if the solver converged. GROUND TRUTH: the
 // only writable robot state is a limit-clamped q, and the ONLY link-pose writer is writeBackRobotViz
 // fed from FK(q) -- so a defined joint is structurally un-violable regardless of the target.
-bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld)
+bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targetWorld,
+                const Eigen::Matrix3d* targetWorldR)
 {
     auto& reg = scene.getRegistry();
     RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return false;
@@ -412,7 +418,10 @@ bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targ
     if (body < 0 || body >= lr->chain.nbody()) return false;
     const Eigen::Matrix4d invBase = lr->model.basePlacement.inverse();
     krs::dyn::Pose target;
-    target.R = lr->chain.bodyPose(lr->q, body).R;             // hold orientation; drag is positional
+    // POSE target (targetWorldR != null): command a world orientation for the end body -> chain base frame
+    // (same world->base mapping as target.p; rigid base). Else HOLD the current orientation (positional drag).
+    if (targetWorldR) target.R = invBase.block<3,3>(0,0) * (*targetWorldR);
+    else              target.R = lr->chain.bodyPose(lr->q, body).R;
     const Eigen::Vector4d tw(targetWorld.x(), targetWorld.y(), targetWorld.z(), 1.0);
     target.p = (invBase * tw).head<3>();                     // world -> chain base frame (IK frame)
 
@@ -421,10 +430,11 @@ bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targ
     const bool useHold = lr->dragActive && lr->qDragStart.size() == lr->q.size();
     const Eigen::VectorXd* qSeed = useHold ? &lr->qDragStart : nullptr;
     const double holdWeight = useHold ? 0.20 : 0.0;
+    const double rotWeight  = targetWorldR ? 1.0 : 0.05;     // honor orientation for an explicit pose target
 
     Eigen::VectorXd q = lr->q;
     const krs::dyn::SerialChain::IKResult res =
-        lr->chain.ik(target, body, q, 0.05, 200, 1e-6, qSeed, holdWeight);
+        lr->chain.ik(target, body, q, 0.05, 200, 1e-6, qSeed, holdWeight, rotWeight);
     // Commit the CLOSEST-REACHABLE q (bestQ), NEVER the diverged final iterate: an unreachable drag
     // settles at the reachable boundary instead of flinging the arm forward. NEVER write a pose here.
     Eigen::VectorXd qc = (res.bestQ.size() == lr->q.size()) ? res.bestQ : q;
@@ -433,6 +443,13 @@ bool ikDragLink(Scene& scene, int robotId, int body, const Eigen::Vector3d& targ
     lr->q = qc;
     if (lr->useRobotFkViz) writeBackRobotViz(scene, *lr);    // the SOLE writer of member link poses
     return res.ok;
+}
+
+// 6-DoF POSE drag: command BOTH a world position and a world orientation for chain body `body`.
+bool ikDragLinkPose(Scene& scene, int robotId, int body,
+                    const Eigen::Vector3d& targetWorld, const Eigen::Matrix3d& targetWorldR)
+{
+    return ikDragLink(scene, robotId, body, targetWorld, &targetWorldR);
 }
 
 // IK DRAG by ENTITY (the production gizmo handler for a member link). Resolves the chain body + slot the
@@ -461,6 +478,34 @@ bool ikDragEntity(Scene& scene, int robotId, entt::entity e, const Eigen::Vector
     }
     const Eigen::Vector3d dWorld = newEntityWorld - entityAnchor;
     return ikDragLink(scene, robotId, body, bodyAnchor + dWorld);
+}
+
+// 6-DoF POSE variant (the ROTATE-gizmo handler for a member link). Reorients the end body IN PLACE: the
+// position target is the HELD end-effector control point (current FK body origin), NOT the gizmo's
+// orbit-circle translation -- so rotating changes ORIENTATION, not the phantom "ghost circle" traversal.
+// newEntityWorldR is the world orientation the gizmo just commanded. Returns false if e isn't a member link.
+bool ikDragEntityPose(Scene& scene, int robotId, entt::entity e, const Eigen::Matrix3d& newEntityWorldR)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return false;
+    LiveRobot* lr = rr->get(robotId); if (!lr || lr->ndof() <= 0) return false;
+    int body = -1, slot = -1; resolveMemberSlot(*lr, e, body, slot);
+    if (body < 0 || body >= lr->chain.nbody()) return false;
+    Eigen::Vector3d bodyWorld; Eigen::Matrix3d entAnchorR, bodyAnchorR;
+    if (lr->dragActive && lr->dragBody == body) {                 // live gesture anchors (the correct path)
+        bodyWorld = lr->dragBodyAnchorW; entAnchorR = lr->dragEntityAnchorR; bodyAnchorR = lr->dragBodyAnchorR;
+    } else {                                                      // fallback: entity treated as aligned with the body
+        const krs::dyn::Pose p = lr->chain.bodyPose(lr->q, body);
+        bodyWorld   = (lr->model.basePlacement * Eigen::Vector4d(p.p.x(), p.p.y(), p.p.z(), 1.0)).head<3>();
+        bodyAnchorR = lr->model.basePlacement.block<3,3>(0,0) * p.R;
+        entAnchorR  = bodyAnchorR;
+    }
+    // The gizmo commanded a world rotation of the grabbed SOLID (newEntityWorldR relative to its start
+    // entAnchorR). Apply that SAME world delta to the body's start orientation, so the solid -- which is
+    // rigidly attached to the body -- reaches the commanded orientation despite the solid<->body offset.
+    const Eigen::Matrix3d deltaR = newEntityWorldR * entAnchorR.transpose();
+    const Eigen::Matrix3d targetBodyR = deltaR * bodyAnchorR;
+    return ikDragLinkPose(scene, robotId, body, bodyWorld, targetBodyR);
 }
 
 // Production gizmo routing for a MEMBER chain link (shared by MainWindow::onTransformEdited AND the
@@ -1103,6 +1148,82 @@ bool runManipOpsGate()
     const bool pass = transOk && ikOk && advOk && splitOk && xformOk && mergeOk;
     printf("[manip] %s\n", pass ? "ALL PASS (rigid translate+rotate move all links; IK converges+clamps; split->2 robots; move; merge->1)"
                                 : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// GATE IK-POSE (env KRS_IKPOSE_SELFTEST): the 6-DoF IK feature -- ikDragLinkPose reaches a FULL pose
+// (position AND orientation); ikDragEntityPose reorients the end-effector IN PLACE (a rotate changes
+// orientation, not a ghost-circle translation). Each sub-gate has a non-vacuous position-only neg-ctrl.
+bool runIkPoseGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[ikpose] GATE IK-POSE -- 6-DoF pose IK + rotate-reorients-in-place (not the ghost circle)\n");
+
+    Scene scene; auto& reg = scene.getRegistry();
+    // 4-body planar arm, 3 revolute-Z joints (DOF 3): fully controls (x, y, yaw) -- enough to exercise
+    // BOTH the position and the orientation (yaw) channel of the 6-DoF solver.
+    krs::rbuild::RobotGraph g; g.base = 0;
+    for (int i = 0; i < 4; ++i) { krs::rbuild::RBBody b; b.name = "L" + std::to_string(i);
+        b.placement = Eigen::Matrix4d::Identity(); b.placement(0, 3) = double(i); g.bodies.push_back(b); }
+    for (int i = 0; i < 3; ++i) { krs::rbuild::RBJoint j; j.parent = i; j.child = i + 1;
+        j.type = krs::rbuild::JType::Revolute; j.axisDir = { 0, 0, 1 };
+        j.axisPos = glm::vec3(float(i + 1), 0, 0); j.orthonormalizeFrame(); g.addJoint(j); }
+    g.robotId = 0;
+    auto& gctx = reg.ctx().emplace<krs::rbuild::RobotGraph>(g);
+    krs::rbuild::spawnGraphBodies(scene, gctx, 0);
+    LiveRobot* lr = instantiateFromGraph(scene, gctx, 0);
+    if (!lr || lr->ndof() < 3) { printf("[ikpose] FAIL: setup (ndof=%d)\n", lr ? lr->ndof() : -1); return false; }
+    lr->useRobotFkViz = true;
+    const int leaf = lr->ndof() - 1;
+    const Eigen::Matrix3d Rb = lr->model.basePlacement.block<3,3>(0,0);
+    auto leafWorld = [&](Eigen::Vector3d& p, Eigen::Matrix3d& R){ const krs::dyn::Pose ps = lr->chain.bodyPose(lr->q, leaf);
+        p = (lr->model.basePlacement * Eigen::Vector4d(ps.p.x(), ps.p.y(), ps.p.z(), 1.0)).head<3>(); R = Rb * ps.R; };
+    auto rotErr = [](const Eigen::Matrix3d& A, const Eigen::Matrix3d& B){ Eigen::AngleAxisd aa(A.transpose() * B); return std::abs(aa.angle()); };
+
+    // ===== Gate 1: 6-DoF pose reach (position AND orientation) =====
+    Eigen::VectorXd qstar(lr->ndof()); qstar << 0.4, -0.3, 0.5;
+    lr->q = qstar; writeBackRobotViz(scene, *lr);
+    Eigen::Vector3d pStar; Eigen::Matrix3d RStar; leafWorld(pStar, RStar);      // a reachable pose (FK of q*)
+    lr->q.setZero(); writeBackRobotViz(scene, *lr);
+    ikDragLinkPose(scene, 0, leaf, pStar, RStar);
+    Eigen::Vector3d p1; Eigen::Matrix3d R1; leafWorld(p1, R1);
+    const double pe1 = (p1 - pStar).norm(), re1 = rotErr(R1, RStar);
+    const bool g1 = pe1 < 1e-3 && re1 < 1e-3;
+    printf("[ikpose]   G1 6-DoF pose reach: posErr=%.2e rotErr=%.2e (both <1e-3)  %s\n", pe1, re1, g1 ? "PASS" : "FAIL");
+    lr->q.setZero(); writeBackRobotViz(scene, *lr);
+    ikDragLink(scene, 0, leaf, pStar);                                          // NEG-CTRL: position-only (holds R)
+    Eigen::Vector3d p1n; Eigen::Matrix3d R1n; leafWorld(p1n, R1n);
+    const bool g1neg = (p1n - pStar).norm() < 1e-3 && rotErr(R1n, RStar) > 0.05;
+    printf("[ikpose]   G1 NEG-CTRL position-only: posErr=%.2e rotErr=%.2e (pos reached, orient NOT)  %s\n",
+           (p1n - pStar).norm(), rotErr(R1n, RStar), g1neg ? "PASS" : "FAIL");
+
+    // ===== Gate 2: a ROTATE reorients the EE in place -- orientation changes, control point stays =====
+    lr->q << 0.3, 0.2, -0.2; writeBackRobotViz(scene, *lr);
+    Eigen::Vector3d p0; Eigen::Matrix3d R0; leafWorld(p0, R0);
+    const entt::entity leafE = lr->linkEntities[leaf].empty() ? entt::null : lr->linkEntities[leaf][0];
+    if (leafE == entt::null) { printf("[ikpose] FAIL: no leaf entity\n"); return false; }
+    beginIkDrag(scene, 0, leafE);
+    const Eigen::Matrix3d dR = Eigen::AngleAxisd(0.4, Eigen::Vector3d::UnitZ()).toRotationMatrix();  // reachable yaw delta
+    ikDragEntityPose(scene, 0, leafE, dR * lr->dragEntityAnchorR);              // rotate the grabbed solid by dR
+    endIkDrag(scene, 0);
+    Eigen::Vector3d p2; Eigen::Matrix3d R2; leafWorld(p2, R2);
+    const Eigen::Matrix3d bodyTargetR = dR * R0;                                // the body should rotate by dR
+    const double posHold = (p2 - p0).norm(), reAfter = rotErr(R2, bodyTargetR);
+    const bool g2 = posHold < 1e-3 && reAfter < 1e-3;
+    printf("[ikpose]   G2 rotate-in-place: control-point moved=%.2e (want ~0, no ghost circle) rotErr=%.2e (<1e-3)  %s\n",
+           posHold, reAfter, g2 ? "PASS" : "FAIL");
+    lr->q << 0.3, 0.2, -0.2; writeBackRobotViz(scene, *lr);
+    ikDragLink(scene, 0, leaf, p0);                                             // NEG-CTRL: position-only holds orientation
+    Eigen::Vector3d p2n; Eigen::Matrix3d R2n; leafWorld(p2n, R2n);
+    const bool g2neg = rotErr(R2n, bodyTargetR) > 0.2;
+    printf("[ikpose]   G2 NEG-CTRL position-only holds orientation: rotErr=%.2e (unchanged)  %s\n",
+           rotErr(R2n, bodyTargetR), g2neg ? "PASS" : "FAIL");
+
+    const bool pass = g1 && g1neg && g2 && g2neg;
+    printf("[ikpose] %s\n", pass ? "ALL PASS (6-DoF pose IK reaches pos+orient; rotate reorients the EE in place; position-only neg-ctrls confirm)"
+                                  : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;
 }
