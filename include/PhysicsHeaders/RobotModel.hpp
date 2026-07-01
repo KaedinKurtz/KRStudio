@@ -517,6 +517,9 @@ bool ikDragEntity(Scene& scene, int robotId, entt::entity e, const Eigen::Vector
 // control point (current FK body origin) and commands the gizmo's world orientation via 6-DoF IK, so a
 // rotate CHANGES orientation instead of sliding the origin around a phantom circle.
 bool ikDragEntityPose(Scene& scene, int robotId, entt::entity e, const Eigen::Matrix3d& newEntityWorldR);
+// linkWorldRot: the TRUE FK world orientation of the chain link entity `e` belongs to (the gizmo BODY
+// frame for a robot link -- the entity TransformComponent only carries the FK delta-from-home). false=not member.
+bool linkWorldRot(Scene& scene, int robotId, entt::entity e, Eigen::Quaterniond& outWorldRot);
 // beginIkDrag: call ONCE at gizmo gesture-start for a member-link entity. Snapshots qDragStart + the
 // grabbed entity/body world anchors from the LIVE pose, so the subsequent ikDragEntity delta is measured
 // from where the part IS (not the frozen q=0 rest -- the stale rest that flung the arm forward away from

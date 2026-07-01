@@ -159,6 +159,11 @@ public:
     std::function<void(entt::entity)> onTransformEditBegin;
     std::function<void(entt::entity)> onTransformEditEnd;
 
+    // BODY-frame orientation override: for a robot member link, the entity's TransformComponent carries
+    // only the FK delta-from-home, so the consumer (MainWindow) supplies the link's TRUE FK world
+    // orientation here. When valid, the Body-frame gizmo uses this instead of the entity's tc.rotation.
+    void setBodyFrameWorldRot(bool valid, const glm::quat& r) { m_bodyFrameWorldRotValid = valid; m_bodyFrameWorldRot = r; }
+
 
 
     void setCenterScaleSensitivity(float g) { m_centerScaleSensitivity = g; }
@@ -196,6 +201,8 @@ private:
     // --- Gizmo State ---
     GizmoMode m_activeMode = static_cast<GizmoMode>(-1);
     Frame m_currentFrame = Frame::World;
+    glm::quat m_bodyFrameWorldRot{ 1.0f, 0.0f, 0.0f, 0.0f };  // robot-link true FK world orientation (Body frame)
+    bool      m_bodyFrameWorldRotValid = false;
     entt::entity m_gizmoRoot = entt::null;
     bool m_isVisible = false;
 

@@ -3136,6 +3136,23 @@ void MainWindow::onSelectionChanged(const QVector<entt::entity>& selectedEntitie
 {
     // This slot acts as the central hub.
     if (m_gizmoSystem) {
+        // For a robot member link, supply the link's TRUE FK world orientation so the Body-frame gizmo
+        // (Ctrl) reorients to the LINK's frame -- the entity's TransformComponent only carries the FK
+        // delta-from-home for baked-CAD parts (identity at the home pose), which would make Body look
+        // like World. Ordinary meshes fall back to their own transform rotation.
+        bool bodyRotSet = false;
+        if (!selectedEntities.isEmpty() && m_scene) {
+            auto& reg = m_scene->getRegistry();
+            const entt::entity e0 = selectedEntities.first();
+            if (reg.valid(e0)) if (const auto* sub = reg.try_get<RobotSubcomponentComponent>(e0)) {
+                Eigen::Quaterniond q;
+                if (krs::robot::linkWorldRot(*m_scene, sub->robotId, e0, q)) {
+                    m_gizmoSystem->setBodyFrameWorldRot(true, glm::quat(float(q.w()), float(q.x()), float(q.y()), float(q.z())));
+                    bodyRotSet = true;
+                }
+            }
+        }
+        if (!bodyRotSet) m_gizmoSystem->setBodyFrameWorldRot(false, glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
         m_gizmoSystem->update(selectedEntities, camera);
     }
 

@@ -444,9 +444,17 @@ void GizmoSystem::update(const QVector<entt::entity>& selectedEntities, const Ca
         // apparent (screen-space) size; see updateScreenScale().
         updateScreenScale(camera);
 
+        // Ctrl held (while NOT dragging) -> BODY-frame gizmo; released -> World. Read LIVE every frame so
+        // the gizmo axes reorient to the selected body's frame the moment Ctrl is pressed -- not only at
+        // grab. The drag itself locks whatever frame is active at grab-start (see startDrag).
+        m_currentFrame = QGuiApplication::keyboardModifiers().testFlag(Qt::ControlModifier)
+                       ? Frame::Body : Frame::World;
+
         switch (m_currentFrame) {
         case Frame::Body:
-            gizmoTransform.rotation = firstObjectTransform.rotation;
+            // Robot link -> its TRUE FK world orientation (supplied via setBodyFrameWorldRot); else the
+            // selected object's own transform rotation (correct for ordinary meshes).
+            gizmoTransform.rotation = m_bodyFrameWorldRotValid ? m_bodyFrameWorldRot : firstObjectTransform.rotation;
             break;
         case Frame::Parent:
         case Frame::World:

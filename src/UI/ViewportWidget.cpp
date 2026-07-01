@@ -674,12 +674,26 @@ void ViewportWidget::keyPressEvent(QKeyEvent* ev)
         }
         }
     }
+    // Ctrl toggles the gizmo frame (World <-> Body): re-emit the current selection so the gizmo re-runs
+    // its frame logic (which reads the Ctrl modifier LIVE) and reorients its axes to the body frame.
+    if (ev->key() == Qt::Key_Control && m_scene) {
+        QVector<entt::entity> cur;
+        for (auto eSel : m_scene->getRegistry().view<SelectedComponent>()) cur.push_back(eSel);
+        emit selectionChanged(cur, getCamera());
+    }
     update();
 }
 
 void ViewportWidget::keyReleaseEvent(QKeyEvent* ev)
 {
     if (!ev->isAutoRepeat()) m_keysDown.remove(ev->key());
+    // Releasing Ctrl reverts the gizmo to World frame -- re-emit so it reorients back.
+    if (ev->key() == Qt::Key_Control && m_scene) {
+        QVector<entt::entity> cur;
+        for (auto eSel : m_scene->getRegistry().view<SelectedComponent>()) cur.push_back(eSel);
+        emit selectionChanged(cur, getCamera());
+        update();
+    }
     QOpenGLWidget::keyReleaseEvent(ev);
 }
 

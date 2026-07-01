@@ -508,6 +508,21 @@ bool ikDragEntityPose(Scene& scene, int robotId, entt::entity e, const Eigen::Ma
     return ikDragLinkPose(scene, robotId, body, bodyWorld, targetBodyR);
 }
 
+// The TRUE world orientation of the chain link that entity `e` belongs to = FK(q) body orientation. The
+// entity TransformComponent carries only the FK delta-from-home for baked-CAD parts, so it cannot supply
+// this -- the gizmo's BODY frame for a robot link must come from here. Returns false if e isn't a member.
+bool linkWorldRot(Scene& scene, int robotId, entt::entity e, Eigen::Quaterniond& outWorldRot)
+{
+    auto& reg = scene.getRegistry();
+    RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return false;
+    LiveRobot* lr = rr->get(robotId); if (!lr) return false;
+    int body = -1, slot = -1; resolveMemberSlot(*lr, e, body, slot);
+    if (body < 0 || body >= lr->chain.nbody()) return false;
+    const krs::dyn::Pose p = lr->chain.bodyPose(lr->q, body);
+    outWorldRot = Eigen::Quaterniond(Eigen::Matrix3d(lr->model.basePlacement.block<3,3>(0,0) * p.R));
+    return true;
+}
+
 // Production gizmo routing for a MEMBER chain link (shared by MainWindow::onTransformEdited AND the
 // real-path gates, so the gate exercises the identical decision): a member link is ALWAYS IK-dragged.
 // Rigid whole-robot translation is the ROOT entity's behavior (RobotRootComponent), never a member link
