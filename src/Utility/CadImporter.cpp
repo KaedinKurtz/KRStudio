@@ -258,6 +258,8 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
                     if (std::abs(v0) < 1e6 && std::abs(v1) < 1e6) {
                         bf.axisEnd0 = bf.axisPos + bf.axisDir * float(v0 * s);
                         bf.axisEnd1 = bf.axisPos + bf.axisDir * float(v1 * s);
+                        // Physical bore centre (not the arbitrary infinite-axis ref) -- see analyticFacesScaled.
+                        bf.axisPos  = 0.5f * (bf.axisEnd0 + bf.axisEnd1);
                     }
                     break; }
                 case GeomAbs_Cone: { bf.type = 2; const gp_Cone co = ad.Cone();
@@ -427,7 +429,21 @@ std::vector<BRepFace> analyticFacesScaled(const TopoDS_Shape& shape, double s) {
                 const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
                 bf.axisPos = { float(o.X()*s), float(o.Y()*s), float(o.Z()*s) };
                 bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
-                bf.radius = float(cy.Radius()*s); break; }
+                bf.radius = float(cy.Radius()*s);
+                // JOINT-ORIGIN FIX: cy.Axis().Location() is an ARBITRARY point on the INFINITE axis
+                // (often the part/global CAD origin), so seeding the joint origin from it makes the axis
+                // float far ALONG its own direction, off the link -- the "joint origins not even on the
+                // links" bug. Re-seed axisPos to the PHYSICAL trimmed-bore midpoint (mean of the two rim
+                // centres). The auto-parser (buildNamedSerialChain) reads THESE faces, so this is the
+                // decisive site. Direction/radius unchanged; the axis LINE is identical (same dir, still
+                // on the line) so interactive selection (which uses axisEnd0/1) is unaffected.
+                const double v0 = ad.FirstVParameter(), v1 = ad.LastVParameter();
+                if (std::abs(v0) < 1e6 && std::abs(v1) < 1e6) {
+                    bf.axisEnd0 = bf.axisPos + bf.axisDir * float(v0 * s);
+                    bf.axisEnd1 = bf.axisPos + bf.axisDir * float(v1 * s);
+                    bf.axisPos  = 0.5f * (bf.axisEnd0 + bf.axisEnd1);
+                }
+                break; }
             case GeomAbs_Cone: { bf.type = 2; const gp_Cone co = ad.Cone();
                 const gp_Pnt o = co.Axis().Location(); const gp_Dir d = co.Axis().Direction();
                 bf.axisPos = { float(o.X()*s), float(o.Y()*s), float(o.Z()*s) };

@@ -141,7 +141,17 @@ std::vector<BRepFace> extractAnalyticFaces(const TopoDS_Shape& shape)
                 const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
                 bf.axisPos = { float(o.X()), float(o.Y()), float(o.Z()) };
                 bf.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
-                bf.radius = float(cy.Radius()); break; }
+                bf.radius = float(cy.Radius());
+                // JOINT-ORIGIN FIX (mirrors CadImporter analyticFacesScaled): cy.Axis().Location() is an
+                // arbitrary point on the INFINITE axis (often the CAD origin), so re-seed axisPos to the
+                // PHYSICAL trimmed-bore midpoint so the inferred joint origin lands inside the bore.
+                const double v0 = ad.FirstVParameter(), v1 = ad.LastVParameter();
+                if (std::abs(v0) < 1e6 && std::abs(v1) < 1e6) {
+                    bf.axisEnd0 = bf.axisPos + bf.axisDir * float(v0);
+                    bf.axisEnd1 = bf.axisPos + bf.axisDir * float(v1);
+                    bf.axisPos  = 0.5f * (bf.axisEnd0 + bf.axisEnd1);
+                }
+                break; }
             case GeomAbs_Cone: { bf.type = 2; const gp_Cone co = ad.Cone();
                 const gp_Pnt o = co.Axis().Location(); const gp_Dir d = co.Axis().Direction();
                 bf.axisPos = { float(o.X()), float(o.Y()), float(o.Z()) };
@@ -259,20 +269,44 @@ bool runAutoParseReport()
            revs, dofN, ambig, orderOk ? "OK" : "WRONG");
     // Per-joint axes of the chain ACTUALLY used at boot (J0 = base turntable). Confirms the base
     // verticality prior + flags any axis the user must refine via the Joint Axis Direction field.
+    bool onLinkFail = false;
     {
         const Eigen::Vector3d bz = gn.bodies[gn.base].placement.block<3,1>(0,2);
         printf("[autoparse]   base part-Z (mounting normal) = (%.3f, %.3f, %.3f)\n", bz.x(), bz.y(), bz.z());
+        // ON-LINK CHECK (verifies the trimmed-bore-midpoint origin fix): each joint origin (axisPos, world)
+        // must lie within the CHILD link's world extent (from its analytic-face reference points + a margin).
+        // Pre-fix, axisPos = cy.Axis().Location() floated far up the axis (often the CAD origin, metres off);
+        // this asserts every origin now sits on/near its link. off = worst per-joint distance outside the box.
+        int offLink = 0;
         for (int ji = 0; ji < int(gn.joints.size()); ++ji) {
             const auto& j = gn.joints[ji];
-            printf("[autoparse]     name-chain J%d: B%d->B%d axis=(%.3f, %.3f, %.3f)%s\n",
+            // The joint origin sits at the PARENT<->CHILD interface, so test against the UNION of both
+            // links' world extents (the base joint's axis, e.g., lies in the base, not up in j1).
+            glm::vec3 mn(1e9f), mx(-1e9f);
+            for (int bi2 : { j.parent, j.child }) {
+                if (bi2 < 0 || bi2 >= int(gn.bodies.size())) continue;
+                const RBBody& cb = gn.bodies[bi2];
+                const glm::vec3 cbo(float(cb.placement(0,3)), float(cb.placement(1,3)), float(cb.placement(2,3)));
+                mn = glm::min(mn, cbo); mx = glm::max(mx, cbo);
+                for (const auto& f : cb.faces) { const BRepFace w = faceToWorld(f, cb.placement);
+                    mn = glm::min(mn, w.axisPos); mx = glm::max(mx, w.axisPos); }
+            }
+            const glm::vec3 margin(0.30f);   // 300 mm: covers bore extent + the parent/child joint interface
+            const bool onLink = glm::all(glm::greaterThanEqual(j.axisPos, mn - margin)) &&
+                                glm::all(glm::lessThanEqual   (j.axisPos, mx + margin));
+            if (!onLink && !j.ambiguous) ++offLink;
+            printf("[autoparse]     name-chain J%d: B%d->B%d axis=(%.3f,%.3f,%.3f) origin=(%.3f,%.3f,%.3f) on-link=%s%s\n",
                    ji, j.parent, j.child, j.axisDir.x, j.axisDir.y, j.axisDir.z,
+                   j.axisPos.x, j.axisPos.y, j.axisPos.z, onLink ? "YES" : "NO",
                    j.ambiguous ? " (ambiguous)" : "");
         }
+        printf("[autoparse]   joint origins ON their child link: %d/%d off-link (want 0)\n", offLink, revs);
+        onLinkFail = (offLink > 0);
     }
 
-    // Gate passes iff a real 6-joint serial chain in the NAMED order was produced (axes may
-    // still be ambiguous on the wrist -- that is honest, the user defines those).
-    const bool pass = parts.size() >= 2 && revs == 6 && orderOk;
+    // Gate passes iff a real 6-joint serial chain in the NAMED order was produced with every joint
+    // origin ON its link (axes may still be ambiguous on the wrist -- that is honest, user defines those).
+    const bool pass = parts.size() >= 2 && revs == 6 && orderOk && !onLinkFail;
     printf("[autoparse] %s\n", pass ? "PASS (named 6-DoF serial chain in correct order; axes from bores; ambiguous wrist axes flagged for manual definition)"
                                     : "FAIL (named serial chain not 6 joints in order)");
     std::fflush(stdout);
