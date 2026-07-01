@@ -453,24 +453,26 @@ struct RobotGraph {
             // unchanged). axisPos unset (0,0,0) also falls back to the link origin.
             const glm::vec3 bore = joints[pj].axisPos;
             const Eigen::Vector3d linkOrigin = rel.block<3,1>(0,3);
+            // FRAME ORIGIN = the CAD child link origin, ALWAYS. This keeps chainFK(0)==CAD placement
+            // bit-exact so the chain reconstructs the assembly and the per-joint offsets do NOT
+            // accumulate down the arm (the old ptree=proj injected each link's lateral bore offset as a
+            // parent-relative translation that fk() telescoped -> the floating/accumulating overlay).
+            rj.ptree = linkOrigin;
+            rj.hasAxisPoint = false;
+            // If the link origin is genuinely OFF the bore axis, rotate about the physical bore via the
+            // rigid off-pivot axisPoint (bore centre, parent frame) while the origin stays on the link.
             if (glm::length(bore) > 1e-9f) {
                 const Eigen::Matrix4d invP = bodies[pb].placement.inverse();
                 const Eigen::Vector4d bw(double(bore.x), double(bore.y), double(bore.z), 1.0);
-                const Eigen::Vector3d borePar = (invP * bw).head<3>();                 // bore point in parent frame
+                const Eigen::Vector3d borePar = (invP * bw).head<3>();                 // bore centre in parent frame
                 Eigen::Vector3d axPar = invP.block<3,3>(0,0) *
                                         Eigen::Vector3d(joints[pj].axisDir.x, joints[pj].axisDir.y, joints[pj].axisDir.z);
                 const double L = axPar.norm();
                 if (L > 1e-9) {
                     axPar /= L;
-                    const Eigen::Vector3d proj = borePar + (linkOrigin - borePar).dot(axPar) * axPar;  // closest axis point
-                    // Move ONLY when the link origin is genuinely off the bore axis (the bug). Otherwise use
-                    // the link origin EXACTLY so a well-modeled joint is bit-exact (no ~1e-8 projection drift).
-                    rj.ptree = ((linkOrigin - proj).norm() > 1e-6) ? proj : linkOrigin;
-                } else {
-                    rj.ptree = linkOrigin;
+                    const Eigen::Vector3d proj = borePar + (linkOrigin - borePar).dot(axPar) * axPar;  // link origin ON axis?
+                    if ((linkOrigin - proj).norm() > 1e-6) { rj.axisPoint = borePar; rj.hasAxisPoint = true; }
                 }
-            } else {
-                rj.ptree = linkOrigin;
             }
             // joint axis expressed in the PARENT link frame (world axis rotated by parent^-1).
             const Eigen::Matrix3d Rp = bodies[pb].placement.block<3,3>(0,0);

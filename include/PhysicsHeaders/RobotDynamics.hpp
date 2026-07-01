@@ -46,8 +46,15 @@ struct DynJoint {
     JType type = JType::Revolute;
     int parent = -1;                                            // parent body index, −1 = world
     Eigen::Matrix3d Rtree = Eigen::Matrix3d::Identity();        // parent → joint-frame rotation (q=0)
-    Eigen::Vector3d ptree = Eigen::Vector3d::Zero();            // parent → joint-frame origin   (q=0)
+    Eigen::Vector3d ptree = Eigen::Vector3d::Zero();            // parent → joint-frame ORIGIN   (q=0) = child link origin
     Eigen::Vector3d axis = Eigen::Vector3d::UnitZ();            // joint axis in the joint frame (unit)
+    // AXIS POINT (rigid off-pivot): a point ON the rotation axis line, in the PARENT frame, DECOUPLED
+    // from the frame origin ptree. A revolute rotates the child rigidly about the line through axisPoint
+    // while the child origin stays at ptree, so the frame origin can equal the CAD link origin (chainFK
+    // ==CAD, no down-chain accumulation) WHILE the arm rotates about the physical bore. hasAxisPoint=false
+    // => axisPoint:=ptree (axis through the origin), i.e. the classic model -- bit-exact no-op.
+    Eigen::Vector3d axisPoint = Eigen::Vector3d::Zero();
+    bool            hasAxisPoint = false;
     double qLower = -1e30, qUpper = 1e30;                       // position limits (IK clamps to these)
 };
 

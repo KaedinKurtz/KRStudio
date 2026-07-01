@@ -41,8 +41,13 @@ struct Joint {
     krs::dyn::JType type = krs::dyn::JType::Revolute;
     bool member = true;                                   // a chain DOF? (false = excluded)
     Eigen::Matrix3d Rtree = Eigen::Matrix3d::Identity();  // parent -> joint frame (q=0)
-    Eigen::Vector3d ptree = Eigen::Vector3d::Zero();
+    Eigen::Vector3d ptree = Eigen::Vector3d::Zero();      // child link origin (parent frame); chainFK==CAD
     Eigen::Vector3d axis  = Eigen::Vector3d::UnitZ();
+    // Rigid off-pivot axis point (see krs::dyn::DynJoint::axisPoint): the axis passes through axisPoint
+    // (the physical bore), not the frame origin, so the arm rotates about the bore while the frame stays
+    // on the CAD link origin (no down-chain accumulation). hasAxisPoint=false => axisPoint:=ptree (no-op).
+    Eigen::Vector3d axisPoint = Eigen::Vector3d::Zero();
+    bool            hasAxisPoint = false;
     Provenance frameProv = Provenance::GeometryDerived;   // FRAME comes from CAD features
     // engineering fields -- USER-SUPPLIED + provenance-tagged:
     double qLower = -3.14159265, qUpper = 3.14159265, vMax = 2.0, effortMax = 100.0;
@@ -91,6 +96,7 @@ struct Robot {
             // byte-identical). The -1-vs-unset split keeps a sibling-under-base a sibling.
             dj.parent = (j.treeParent < -1) ? prevBody : j.treeParent;
             dj.Rtree = j.Rtree; dj.ptree = j.ptree; dj.axis = j.axis;
+            dj.axisPoint = j.axisPoint; dj.hasAxisPoint = j.hasAxisPoint;   // rigid off-pivot bore axis
             dj.qLower = j.qLower; dj.qUpper = j.qUpper;
             krs::dyn::DynBody b;
             b.mass = 1.0; b.com = Eigen::Vector3d(0.2, 0, 0); b.inertiaCom = 0.05 * Eigen::Matrix3d::Identity();
@@ -246,7 +252,10 @@ struct LiveRobot {
             const Joint& j = model.joints[memberJoint[k]];
             Eigen::Matrix3d Rp = Rb; Eigen::Vector3d pp = pb;
             if (k > 0 && (k - 1) < int(poses.size())) { Rp = Rb * poses[k - 1].R; pp = Rb * poses[k - 1].p + pb; }
-            out.emplace_back(pp + Rp * j.ptree, (Rp * (j.Rtree * j.axis)).normalized());
+            // Draw the overlay THROUGH the axis point (the physical bore), not the frame origin. With
+            // chainFK==CAD (ptree = CAD origin) pp/Rp no longer accumulate, so the axis lands on the bore.
+            const Eigen::Vector3d aptP = j.hasAxisPoint ? j.axisPoint : j.ptree;
+            out.emplace_back(pp + Rp * aptP, (Rp * (j.Rtree * j.axis)).normalized());
         }
         return out;
     }

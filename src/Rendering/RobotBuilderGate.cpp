@@ -437,28 +437,33 @@ bool runBoreAnchorGate()
 
     const krs::robot::Robot r = g.toRobot();
     krs::dyn::SerialChain ch = r.toChain();
-    const krs::dyn::Pose p0 = ch.bodyPose(Eigen::VectorXd::Zero(ch.nq()), 0);
-    Eigen::VectorXd q(ch.nq()); for (int i = 0; i < ch.nq(); ++i) q[i] = 0.6;
-    const krs::dyn::Pose pq = ch.bodyPose(q, 0);
-    const Eigen::Vector3d worldOrigin = r.basePlacement.block<3,3>(0,0) * p0.p + r.basePlacement.block<3,1>(0,3);
-
     const Eigen::Vector3d b(bore.x, bore.y, bore.z), d(dir.x, dir.y, dir.z);
-    const Eigen::Vector3d w = worldOrigin - b;
-    const double perp = (w - w.dot(d) * d).norm();                 // (a) joint origin on the bore axis?
-    const bool onBore = perp < 1e-6;
-    const double originDrift = (pq.p - p0.p).norm();               // (b) origin invariant to q (on the axis)
-    const bool axisThroughOrigin = originDrift < 1e-9;
-    const Eigen::Vector3d linkOrigin(0.5, 0.2, 0.0);               // (c) the bug's center was genuinely off-axis
-    const Eigen::Vector3d wl = linkOrigin - b;
-    const double linkPerp = (wl - wl.dot(d) * d).norm();
-    const bool nonVacuous = linkPerp > 0.05;
+    const Eigen::Vector3d linkOrigin(0.5, 0.2, 0.0);
+    auto worldO = [&](double qv){ Eigen::VectorXd q(ch.nq()); for (int i=0;i<ch.nq();++i) q[i]=qv;
+        const krs::dyn::Pose p = ch.bodyPose(q, 0);
+        return Eigen::Vector3d(r.basePlacement.block<3,3>(0,0)*p.p + r.basePlacement.block<3,1>(0,3)); };
+    auto perpTo  = [&](const Eigen::Vector3d& x){ const Eigen::Vector3d w=x-b; return (w - w.dot(d)*d).norm(); };
+    auto alongTo = [&](const Eigen::Vector3d& x){ return (x-b).dot(d); };
 
-    const bool pass = onBore && axisThroughOrigin && nonVacuous;
-    printf("[rbuild]   joint frame on bore axis: perp=%.2e (<1e-6)=%s ; origin invariant to q: drift=%.2e=%s  %s\n",
-           perp, onBore ? "yes" : "NO", originDrift, axisThroughOrigin ? "yes" : "NO", (onBore && axisThroughOrigin) ? "PASS" : "FAIL");
-    printf("[rbuild]   NEG-CTRL child link origin was %.3f m OFF the bore (fix non-vacuous): %s\n",
-           linkPerp, nonVacuous ? "yes" : "NO");
-    printf("[rbuild] %s\n", pass ? "ALL PASS (the lowered revolute rotates about the bore axis, not the child link CAD origin)"
+    // NEW MODEL (rigid off-pivot axisPoint): the joint frame ORIGIN stays on the CAD child link origin
+    // (so chainFK(0)==CAD, no down-chain accumulation) and the child ROTATES ABOUT THE BORE axis.
+    const Eigen::Vector3d o0 = worldO(0.0), oP = worldO(0.6), oM = worldO(-0.6);
+    // (a) chainFK(0) reconstructs the CAD child origin exactly (the accumulation-death invariant).
+    const bool restOk = (o0 - linkOrigin).norm() < 1e-9;
+    // (b) rotates ABOUT THE BORE: perpendicular distance to the bore axis + along-axis coord invariant to q.
+    const double p0p = perpTo(o0);
+    const bool aboutBore = std::abs(perpTo(oP)-p0p) < 1e-6 && std::abs(perpTo(oM)-p0p) < 1e-6
+                        && std::abs(alongTo(oP)-alongTo(o0)) < 1e-6 && std::abs(alongTo(oM)-alongTo(o0)) < 1e-6;
+    // (c) non-vacuous: the child origin is genuinely OFF the bore axis, so (b) is a real circle not a point.
+    const bool nonVacuous = p0p > 0.05;
+
+    const bool pass = restOk && aboutBore && nonVacuous;
+    printf("[rbuild]   chainFK(0)==CAD origin: drift=%.2e=%s ; rotates about bore: perp invariant=%s (r=%.3f)  %s\n",
+           (o0 - linkOrigin).norm(), restOk ? "yes" : "NO", aboutBore ? "yes" : "NO", p0p,
+           (restOk && aboutBore) ? "PASS" : "FAIL");
+    printf("[rbuild]   NEG-CTRL child link origin %.3f m OFF the bore (rotation is a real circle): %s\n",
+           p0p, nonVacuous ? "yes" : "NO");
+    printf("[rbuild] %s\n", pass ? "ALL PASS (child origin on CAD link, rotates rigidly about the physical bore -- no accumulation)"
                                  : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;

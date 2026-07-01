@@ -75,7 +75,15 @@ void SerialChain::jointTransform(int b, double qv, Eigen::Matrix3d& R, Eigen::Ve
     else if (j.type == JType::Prismatic)
         pj = j.axis.normalized() * qv;
     R = j.Rtree * Rj;
-    p = j.ptree + j.Rtree * pj;
+    if (j.type == JType::Revolute && j.hasAxisPoint) {
+        // Rotate the child RIGIDLY about the axis line through axisPoint A (parent frame): the origin
+        // stays at ptree at q=0 and circles A as q turns. Rrot = the parent-frame rotation by q about
+        // the axis. p(q) = A + Rrot*(ptree - A). At q=0 -> ptree; with A==ptree -> ptree (classic model).
+        const Eigen::Matrix3d Rrot = j.Rtree * Rj * j.Rtree.transpose();
+        p = j.axisPoint + Rrot * (j.ptree - j.axisPoint);
+    } else {
+        p = j.ptree + j.Rtree * pj;
+    }
 }
 
 void SerialChain::fk(const Eigen::VectorXd& q, std::vector<Pose>& wp) const {
@@ -105,7 +113,13 @@ Eigen::MatrixXd SerialChain::jacobian(const Eigen::VectorXd& q, int body,
         const int d = dofIndex_[b];
         if (d < 0) continue;
         const Eigen::Vector3d aw = (wp[b].R * joints_[b].axis.normalized()).normalized();
-        const Eigen::Vector3d ow = wp[b].p;
+        // Pivot = a point on the axis in WORLD. With an axisPoint the axis passes through it (parent
+        // frame -> world), NOT through the child origin; else it is the child origin (classic no-op).
+        Eigen::Vector3d ow = wp[b].p;
+        if (joints_[b].hasAxisPoint) {
+            const int par = joints_[b].parent;
+            ow = (par < 0) ? joints_[b].axisPoint : (wp[par].p + wp[par].R * joints_[b].axisPoint);
+        }
         if (joints_[b].type == JType::Revolute) {
             J.block<3,1>(0, d) = aw.cross(pw - ow);   // linear
             J.block<3,1>(3, d) = aw;                  // angular

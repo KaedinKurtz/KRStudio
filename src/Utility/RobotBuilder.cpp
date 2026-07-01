@@ -270,9 +270,43 @@ bool runAutoParseReport()
     // Per-joint axes of the chain ACTUALLY used at boot (J0 = base turntable). Confirms the base
     // verticality prior + flags any axis the user must refine via the Joint Axis Direction field.
     bool onLinkFail = false;
+    int  overlayFloat = 0;   // G1+G2: ACTUAL overlay/rotation origins that float off the robot / off the bore line
     {
         const Eigen::Vector3d bz = gn.bodies[gn.base].placement.block<3,1>(0,2);
         printf("[autoparse]   base part-Z (mounting normal) = (%.3f, %.3f, %.3f)\n", bz.x(), bz.y(), bz.z());
+        // GROUND TRUTH: the ACTUAL overlay origins the Robot View draws = LiveRobot::jointAxesWorld()
+        // (chain-FK * ptree), which is what the user sees -- NOT the RBJoint axisPos. Dump them + the
+        // whole-robot world AABB so a floating axis is obvious.
+        {
+            krs::robot::LiveRobot lr; lr.model = gn.toRobot(); lr.rebuild();
+            glm::vec3 rmn(1e9f), rmx(-1e9f);
+            for (const auto& b : gn.bodies) {
+                const glm::vec3 bo(float(b.placement(0,3)), float(b.placement(1,3)), float(b.placement(2,3)));
+                rmn = glm::min(rmn, bo); rmx = glm::max(rmx, bo);
+                for (const auto& f : b.faces) { const BRepFace w = faceToWorld(f, b.placement);
+                    rmn = glm::min(rmn, w.axisPos); rmx = glm::max(rmx, w.axisPos); }
+            }
+            printf("[autoparse]   robot world AABB: min=(%.0f,%.0f,%.0f) max=(%.0f,%.0f,%.0f)\n",
+                   rmn.x,rmn.y,rmn.z, rmx.x,rmx.y,rmx.z);
+            const auto axes = lr.jointAxesWorld();
+            for (size_t k = 0; k < axes.size(); ++k) {
+                const glm::vec3 o(float(axes[k].first.x()), float(axes[k].first.y()), float(axes[k].first.z()));
+                const glm::vec3 m(50.0f);
+                // G1: the ACTUAL overlay/rotation origin must sit within the robot (no down-chain float).
+                const bool within = glm::all(glm::greaterThanEqual(o, rmn - m)) && glm::all(glm::lessThanEqual(o, rmx + m));
+                // G2: it must lie ON the physical bore line (RBJoint axisPos/axisDir) -- the reporter points
+                // through the bore, not the diverged chain frame. (overlay joint k == graph joint k, serial.)
+                bool onBore = true;
+                if (k < gn.joints.size()) { const auto& jj = gn.joints[k];
+                    const glm::vec3 w = o - jj.axisPos; const glm::vec3 d = glm::normalize(jj.axisDir);
+                    onBore = glm::length(w - glm::dot(w, d) * d) < 1.0f; }   // 1 mm
+                if (!within || !onBore) ++overlayFloat;
+                printf("[autoparse]     OVERLAY J%zu origin=(%.1f,%.1f,%.1f) dir=(%.3f,%.3f,%.3f) within-robot=%s on-bore=%s\n",
+                       k, o.x,o.y,o.z, float(axes[k].second.x()),float(axes[k].second.y()),float(axes[k].second.z()),
+                       within ? "YES" : "NO(FLOATING)", onBore ? "YES" : "NO");
+            }
+            printf("[autoparse]   OVERLAY axes on-robot + on-bore: %d floating (want 0)\n", overlayFloat);
+        }
         // ON-LINK CHECK (verifies the trimmed-bore-midpoint origin fix): each joint origin (axisPos, world)
         // must lie within the CHILD link's world extent (from its analytic-face reference points + a margin).
         // Pre-fix, axisPos = cy.Axis().Location() floated far up the axis (often the CAD origin, metres off);
@@ -306,7 +340,7 @@ bool runAutoParseReport()
 
     // Gate passes iff a real 6-joint serial chain in the NAMED order was produced with every joint
     // origin ON its link (axes may still be ambiguous on the wrist -- that is honest, user defines those).
-    const bool pass = parts.size() >= 2 && revs == 6 && orderOk && !onLinkFail;
+    const bool pass = parts.size() >= 2 && revs == 6 && orderOk && !onLinkFail && overlayFloat == 0;
     printf("[autoparse] %s\n", pass ? "PASS (named 6-DoF serial chain in correct order; axes from bores; ambiguous wrist axes flagged for manual definition)"
                                     : "FAIL (named serial chain not 6 joints in order)");
     std::fflush(stdout);
