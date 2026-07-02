@@ -191,6 +191,17 @@ FetchContent_Populate(nanort)
 add_library(nanort INTERFACE)
 target_include_directories(nanort INTERFACE "${nanort_SOURCE_DIR}")
 
+# xatlas (MIT) -- per-body UV unwrap + atlas packing for face texturing (Phase C). Single .cpp/.h, zero
+# external deps; build as a static lib (sqlite pattern) and expose its include dir.
+FetchContent_Declare(
+  xatlas
+  GIT_REPOSITORY https://github.com/jpcy/xatlas.git
+  GIT_TAG        f700c7790aaa030e794b52ba7791a05c085faf0c   # master tip (pinned; xatlas has no version tags)
+)
+FetchContent_Populate(xatlas)
+add_library(xatlas STATIC "${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp")
+target_include_directories(xatlas PUBLIC "${xatlas_SOURCE_DIR}/source/xatlas")
+
 
 # -----------------------------
 #  Add Submodules (Optional)
@@ -333,6 +344,7 @@ target_link_libraries(RoboticsSoftware PRIVATE
   QtNodes # Use direct target name as in the old file
   sqlite3
   nanort  # MIT header-only BVH ray-picker (mate-connector placement)
+  xatlas  # MIT per-body UV unwrap / atlas packing (face texturing)
 )
 
 # HIL bridges: high-resolution timer (winmm) + Winsock for the UDP loopback

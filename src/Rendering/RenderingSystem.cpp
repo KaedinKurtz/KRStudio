@@ -35,6 +35,7 @@
 #include "SelectionService.hpp"   // krs::sel selection-highlight gates
 #include "RobotBuilder.hpp"        // krs::rbuild robot-builder gates (Phase 0 recon)
 #include "RaycastService.hpp"      // krs::pick nanort BVH ray/mesh picking gate
+#include "UvAtlasService.hpp"       // krs::uv xatlas per-body UV unwrap gate
 #include "RobotBuilderScene.hpp"   // krs::rbuild demo graph + body->entity render bridge + gate
 #include "SelfCollisionMatrix.hpp" // krs::plan self-collision matrix gates
 #include "RobotConfig.hpp"         // krs::rcfg property hot-swap + provenance gates
@@ -1064,6 +1065,15 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // XATLAS UV-ATLAS gate in isolation (fast iteration): xatlas per-body UV unwrap. (KRS_UV_SELFTEST is
+    // already taken by the pre-existing world-scale UV suite, so this uses a distinct env var.)
+    if (qEnvironmentVariableIntValue("KRS_XATLAS_SELFTEST") != 0) {
+        std::printf("\n================= KRS_XATLAS_SELFTEST =================\n");
+        const bool ok = krs::uv::runUvAtlasGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // JOINT-AUTHORING SUITE in isolation (fast iteration): the big body-frame real-path suite alone.
     if (qEnvironmentVariableIntValue("KRS_JOINT_SUITE") != 0) {
         std::printf("\n================= KRS_JOINT_SUITE =================\n");
@@ -1830,6 +1840,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE SUBTREE-DETACH (mid-joint delete detaches subtree intact; tag tracks membership; re-mate restores; destroy & stale-tag neg-ctrls)", krs::rbuild::runSubtreeDetachGate() },
             { "GATE MATE-CONNECTOR (body-local mates survive dynamic move/far-snap/save-load-open/delete; faceKey re-anchors; world-anchor stale neg-ctrl)", krs::rbuild::runMateSelftest() },
             { "GATE RAYCAST (nanort BVH ray/mesh pick hits the right face; honors tMin/tMax; misses cleanly; oblique rays; rim-snap nearest)", krs::pick::runRaycastGate() },
+            { "GATE UV-ATLAS (xatlas unwrap preserves triangle topology + triFace map; UVs in [0,1]; charts packed; deterministic; degenerate rejected)", krs::uv::runUvAtlasGate() },
             { "GATE SELFCOLLISION-MATRIX (classify pairs vs brute-force GT; SOMETIMES pairs never disabled; ALWAYS/NEVER disabled; density-monotone)", krs::plan::runSelfCollisionMatrixGate() },
             { "GATE SELFCOLLISION-FEEDS-PLANNER (validity skips disabled but catches a kept pair's collision; buggy-disable-real-pair neg-ctrl misses it)", krs::plan::runSelfCollisionFeedsPlannerGate() },
             { "GATE PROPERTY-HOTSWAP (limit edit propagates LIVE to the planner's limits; stale-cache neg-ctrl mis-judges)", krs::rcfg::runPropertyHotswapGate() },
