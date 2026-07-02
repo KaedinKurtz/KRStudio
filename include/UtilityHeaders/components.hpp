@@ -13,6 +13,7 @@
 #include <any>
 #include <memory>
 #include <cstdint>
+#include <cmath>
 
 #include "GridLevel.hpp"
 #include "Camera.hpp"
@@ -561,8 +562,76 @@ struct BRepFace {
     // the nearest rim instead of floating mid-wall. Both zero on synthetic/demo faces (no trimmed B-Rep).
     glm::vec3 axisEnd0{ 0.0f };
     glm::vec3 axisEnd1{ 0.0f };
+    // STABLE topological id (persistent-mate architecture): a geometry-INVARIANT hash of the face
+    // (surface type + quantized axisDir + radius + rim-centroid), computed at import. Lets a MateConnector
+    // re-anchor to the same physical face across re-tessellation / re-import / array reordering -- the
+    // topological-naming-problem mitigation. 0 = unset/synthetic. See krs::mate::computeFaceKey.
+    std::uint64_t faceKey = 0;
 };
 struct BRepFaceComponent { std::vector<BRepFace> faces; };  // indexed: faces[triFace[triangle]]
+
+// ===================== PERSISTENT MATE CONNECTORS (Onshape-style) =====================
+// A MateConnector is a durable, body-LOCAL oriented frame rigidly attached to a body's geometry. It is
+// NEVER stored in world coords -- it moves with the body for free, which kills the world-anchored joint-
+// axis fragility (the RBJoint world frame becomes a DERIVED artifact). Authored from a picked face, then
+// an independent local datum referenced by a STABLE id.
+struct MateConnector {
+    std::uint32_t id = 0;                        // STABLE within the owner body (monotonic, never reused)
+    std::string   name;                          // user-facing, e.g. "J2_bore"
+    glm::vec3     localPos{ 0.0f };              // frame ORIGIN in the OWNER body's local frame
+    glm::vec3     localZ{ 0.0f, 0.0f, 1.0f };    // primary axis (revolute/joint axis), body-local unit
+    glm::vec3     localX{ 1.0f, 0.0f, 0.0f };    // reference dir (roll about Z), body-local unit
+    std::uint64_t sourceFaceKey = 0;             // BRepFace.faceKey it was authored from (re-anchor on re-import)
+    int           sourceFaceType = 1;            // cyl/plane/... fallback for re-solve
+    float         radius = 0.0f;                 // bore radius (rim snap + mate compatibility check)
+};
+struct MateConnectorComponent {
+    std::vector<MateConnector> connectors;
+    std::uint32_t nextConnectorId = 1;           // monotonic per body (0 = unassigned)
+};
+
+// A mate = a constraint between two connectors, referenced by STABLE handles (owner entity + connector id),
+// NEVER array indices -- so split/merge/reorder/re-import cannot invalidate it.
+struct MateConstraint {
+    enum class Type { Revolute, Cylindrical, Planar, Fastened, Slider };
+    std::uint64_t id = 0;                         // STABLE mate id (monotonic, never reused)
+    Type          type = Type::Revolute;
+    entt::entity  bodyA = entt::null; std::uint32_t connA = 0;
+    entt::entity  bodyB = entt::null; std::uint32_t connB = 0;
+    double        offset = 0.0;                   // along the shared axis (Onshape mate param)
+    double        angle  = 0.0;                   // about the shared axis
+};
+// ctx singleton graph of all mates (mirrors the RobotRegistry / SelectionState ctx pattern).
+struct MateGraphComponent {
+    std::vector<MateConstraint> mates;
+    std::uint64_t nextMateId = 1;                // monotonic, never reused (0 = unassigned)
+};
+
+// Geometry-INVARIANT face key (FNV-1a-64) for the topological-naming mitigation: the SAME physical face
+// hashes to the SAME key across re-tessellation / re-import / array reordering, so a MateConnector can
+// re-anchor by key. Input MUST be a body-LOCAL BRepFace (placement-invariant channels only). 0 = degenerate.
+inline std::uint64_t computeFaceKey(const BRepFace& f) {
+    std::uint64_t h = 1469598103934665603ull;                    // FNV-1a offset basis
+    auto mix = [&](std::int64_t v) { for (int b = 0; b < 8; ++b) { h ^= std::uint64_t((v >> (b * 8)) & 0xff); h *= 1099511628211ull; } };
+    mix(f.type);                                                 // 1) surface type
+    // 2) canonical axis (cyl/cone) or normal (plane), hemisphere-folded so a reversed twin keys identically
+    glm::vec3 d = (f.type == 1 || f.type == 2) ? f.axisDir : f.normal;
+    const float L = glm::length(d); d = (L > 1e-9f) ? d / L : glm::vec3(0, 0, 1);
+    const float pick = (std::abs(d.z) > 1e-6f) ? d.z : (std::abs(d.y) > 1e-6f ? d.y : d.x);
+    if (pick < 0.0f) d = -d;
+    mix(std::llround(d.x / 1e-3)); mix(std::llround(d.y / 1e-3)); mix(std::llround(d.z / 1e-3));  // ~0.06 deg
+    mix(std::llround(double(f.radius) / 1e-4));                   // 3) radius, 0.1 mm
+    if (f.type == 1 || f.type == 2) {                            // 4) placement-invariant bore anchor:
+        const glm::vec3 mid = 0.5f * (f.axisEnd0 + f.axisEnd1);
+        const glm::vec3 w = mid - f.axisPos;
+        const glm::vec3 perp = w - glm::dot(w, d) * d;           //   perp offset of rim centroid off the axis
+        mix(std::llround(double(glm::length(perp)) / 1e-4));
+        mix(std::llround(double(glm::length(f.axisEnd1 - f.axisEnd0)) / 1e-4));  // along-axis rim separation
+    } else {
+        mix(std::llround(double(glm::dot(f.axisPos, d)) / 1e-4));  // plane signed distance from local origin
+    }
+    return h;
+}
 
 struct RenderResourceComponent
 {

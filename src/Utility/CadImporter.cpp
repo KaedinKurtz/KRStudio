@@ -275,6 +275,7 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
             }
         }
         const int thisFaceId = int(brepFaces.size());
+        bf.faceKey = computeFaceKey(bf);                       // stable topological id (persistent-mate re-anchor)
         brepFaces.push_back(bf);
         for (int i = 1; i <= tri->NbNodes(); ++i) {
             gp_Pnt p = tri->Node(i); p.Transform(trsf);    // -> assembly coords
@@ -455,6 +456,7 @@ std::vector<BRepFace> analyticFacesScaled(const TopoDS_Shape& shape, double s) {
                 bf.radius = float(sp.Radius()*s); break; }
             default: bf.type = 4; break;
         }
+        bf.faceKey = computeFaceKey(bf);                       // stable topological id (part-local, placement-invariant)
         faces.push_back(bf);
     }
     return faces;

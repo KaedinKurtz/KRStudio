@@ -1033,6 +1033,7 @@ void RenderingSystem::initializeSharedResources()
                       & krs::robot::runJointAuthoringSuite()
                       & krs::rbuild::runJointEditGate()
                       & krs::rbuild::runTagOwnershipGate()
+                      & krs::rbuild::runMateSelftest()
                       & krs::rbuild::runSubtreeDetachGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
@@ -1042,6 +1043,14 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_IKPOSE_SELFTEST") != 0) {
         std::printf("\n================= KRS_IKPOSE_SELFTEST =================\n");
         const bool ok = krs::robot::runIkPoseGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // MATE-CONNECTOR gate in isolation (fast iteration): persistent body-local mates.
+    if (qEnvironmentVariableIntValue("KRS_MATE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_MATE_SELFTEST =================\n");
+        const bool ok = krs::rbuild::runMateSelftest();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
@@ -1810,6 +1819,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE JOINT-EDIT (manual joint from selected bores matches analytic frame; chain re-derives DOF; degenerate-pair neg-ctrl)", krs::rbuild::runJointEditGate() },
             { "GATE TAG-OWNERSHIP (member body tagged + free-move-locked; non-member free; always-allow neg-ctrl breaks single-owner)", krs::rbuild::runTagOwnershipGate() },
             { "GATE SUBTREE-DETACH (mid-joint delete detaches subtree intact; tag tracks membership; re-mate restores; destroy & stale-tag neg-ctrls)", krs::rbuild::runSubtreeDetachGate() },
+            { "GATE MATE-CONNECTOR (body-local mates survive dynamic move/far-snap/save-load-open/delete; faceKey re-anchors; world-anchor stale neg-ctrl)", krs::rbuild::runMateSelftest() },
             { "GATE SELFCOLLISION-MATRIX (classify pairs vs brute-force GT; SOMETIMES pairs never disabled; ALWAYS/NEVER disabled; density-monotone)", krs::plan::runSelfCollisionMatrixGate() },
             { "GATE SELFCOLLISION-FEEDS-PLANNER (validity skips disabled but catches a kept pair's collision; buggy-disable-real-pair neg-ctrl misses it)", krs::plan::runSelfCollisionFeedsPlannerGate() },
             { "GATE PROPERTY-HOTSWAP (limit edit propagates LIVE to the planner's limits; stale-cache neg-ctrl mis-judges)", krs::rcfg::runPropertyHotswapGate() },

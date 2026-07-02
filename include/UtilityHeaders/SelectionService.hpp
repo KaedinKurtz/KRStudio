@@ -39,6 +39,7 @@ struct Selection {
     glm::vec3 axisDir{ 0.0f, 0.0f, 1.0f }; // unit axis direction (cyl/cone)
     glm::vec3 normal{ 0.0f, 0.0f, 1.0f };  // surface normal (plane)
     float radius = 0.0f;                   // metres
+    std::uint64_t faceKey = 0;             // stable topological id (BRepFace.faceKey) for mate-connector anchor
     glm::vec3 axisEnd0{ 0.0f };            // cylinder rim centres (world); both zero => no trimmed B-Rep
     glm::vec3 axisEnd1{ 0.0f };
 };
@@ -67,6 +68,7 @@ inline Selection resolveHit(entt::registry& reg, const krs::pick::PickHit& hit) 
     s.faceId = fid;
     s.type = static_cast<FeatureType>(bf.type);
     s.radius = bf.radius;                                 // scale-free B-Rep radius (part placed unit-scale)
+    s.faceKey = bf.faceKey;                               // carry the stable topological id to the mate author
     s.axisPos = glm::vec3(M * glm::vec4(bf.axisPos, 1.0f));
     s.axisDir = glm::normalize(R * bf.axisDir);
     s.normal = glm::normalize(R * bf.normal);

@@ -525,6 +525,75 @@ inline bool defineRevoluteFromSelection(const BRepFace& worldFaceA, const BRepFa
     return true;
 }
 
+// ============================ PERSISTENT MATE CONNECTORS ============================
+// A body-LOCAL MateConnector -> a WORLD BRepFace via the body placement (reuses faceToWorld). The world
+// frame is DERIVED on demand; the connector never stores world coords, so it survives any body motion.
+inline BRepFace connectorToWorldFace(const MateConnector& c, const Eigen::Matrix4d& placement) {
+    BRepFace f;
+    f.type    = (c.sourceFaceType > 0) ? c.sourceFaceType : 1;
+    f.axisPos = c.localPos; f.axisDir = c.localZ; f.normal = c.localZ;
+    f.axisEnd0 = c.localPos; f.axisEnd1 = c.localPos; f.radius = c.radius; f.faceKey = c.sourceFaceKey;
+    return faceToWorld(f, placement);
+}
+
+// resolveMate: RBJoint is DERIVED -- recomputed every call from the two body-LOCAL connector frames x the
+// CURRENT body placements. This is why a mate survives translate/join/unjoin: nothing world is stored.
+inline bool resolveMate(const MateConstraint& mc,
+                        const Eigen::Matrix4d& placeA, const MateConnector& connA, int bodyIdxA,
+                        const Eigen::Matrix4d& placeB, const MateConnector& connB, int bodyIdxB,
+                        RBJoint& out, double coaxTol = 5e-3) {
+    const BRepFace wa = connectorToWorldFace(connA, placeA);
+    const BRepFace wb = connectorToWorldFace(connB, placeB);
+    switch (mc.type) {
+        case MateConstraint::Type::Revolute:
+        case MateConstraint::Type::Cylindrical:
+            // IDENTICAL call the panel makes (requireCollinear=false: snap an offset-but-parallel pair coaxial).
+            return defineRevoluteFromSelection(wa, wb, bodyIdxA, bodyIdxB, out, coaxTol, /*requireCollinear*/false);
+        case MateConstraint::Type::Fastened:
+            if (bodyIdxA == bodyIdxB) return false;
+            out.parent = bodyIdxA; out.child = bodyIdxB; out.type = JType::Fixed;
+            out.axisPos = wa.axisPos; out.axisDir = wa.axisDir; out.orthonormalizeFrame();
+            out.prov = Prov::Manual; return true;
+        default:
+            if (bodyIdxA == bodyIdxB) return false;
+            out.parent = bodyIdxA; out.child = bodyIdxB; out.type = JType::Fixed;
+            out.axisPos = wa.axisPos;
+            out.axisDir = (glm::length(wa.normal) > 1e-6f) ? wa.normal : wa.axisDir;
+            out.orthonormalizeFrame(); out.prov = Prov::Manual; return true;
+    }
+}
+
+// Convert a WORLD BRepFace (the current two-bore pick) to a body-LOCAL MateConnector via inverse(placement).
+inline MateConnector makeConnectorLocal(const BRepFace& worldFace, const Eigen::Matrix4d& placement,
+                                        std::uint32_t id, const std::string& name) {
+    MateConnector c; c.id = id; c.name = name;
+    const Eigen::Matrix4d inv = placement.inverse();
+    const Eigen::Vector4d lp = inv * Eigen::Vector4d(worldFace.axisPos.x, worldFace.axisPos.y, worldFace.axisPos.z, 1.0);
+    Eigen::Vector3d ld = inv.block<3,3>(0,0) * Eigen::Vector3d(worldFace.axisDir.x, worldFace.axisDir.y, worldFace.axisDir.z);
+    const double L = ld.norm(); if (L > 1e-12) ld /= L;
+    c.localPos = { float(lp.x()), float(lp.y()), float(lp.z()) };
+    c.localZ   = { float(ld.x()), float(ld.y()), float(ld.z()) };
+    const glm::vec3 z = c.localZ, seed = (std::abs(z.x) < 0.9f) ? glm::vec3(1,0,0) : glm::vec3(0,1,0);
+    c.localX = glm::normalize(seed - glm::dot(seed, z) * z);     // any perpendicular for the roll reference
+    c.sourceFaceKey = worldFace.faceKey; c.sourceFaceType = worldFace.type; c.radius = worldFace.radius;
+    return c;
+}
+
+// Author a persistent concentric mate: mint a connector on EACH body (from the two-bore pick, stored LOCAL)
+// + append a MateConstraint to the ctx graph. Returns the minted mate id. Runs ALONGSIDE the existing
+// defineFromFeatures (which stays the immediate joint author); this records the durable provenance.
+inline std::uint64_t authorConcentricMate(MateGraphComponent& mg,
+        entt::entity eA, MateConnectorComponent& mcA, const Eigen::Matrix4d& placeA, const BRepFace& worldFaceA,
+        entt::entity eB, MateConnectorComponent& mcB, const Eigen::Matrix4d& placeB, const BRepFace& worldFaceB,
+        MateConstraint::Type type = MateConstraint::Type::Revolute) {
+    MateConnector cA = makeConnectorLocal(worldFaceA, placeA, mcA.nextConnectorId++, "mateA"); mcA.connectors.push_back(cA);
+    MateConnector cB = makeConnectorLocal(worldFaceB, placeB, mcB.nextConnectorId++, "mateB"); mcB.connectors.push_back(cB);
+    MateConstraint mc; mc.id = mg.nextMateId++; mc.type = type;
+    mc.bodyA = eA; mc.connA = cA.id; mc.bodyB = eB; mc.connB = cB.id;
+    mg.mates.push_back(mc);
+    return mc.id;
+}
+
 // ---- build a chain from parsed parts: greedily connect coaxial-cylinder
 //      interfaces (lowest residual first) into a SPANNING TREE rooted at `base`.
 //      Cycles are avoided (union-find); pairs with no coaxial interface are left
@@ -810,6 +879,7 @@ bool runJointEditGate();         // PHASE 2 (manual joint from selected features
 bool runTagOwnershipGate();      // PHASE 3 (single-owner lock-out; membership-tracked)
 bool runSubtreeDetachGate();     // PHASE 4 (downstream subtree detaches intact; tag tracks membership)
 bool runEditOpInvokedGate();     // CONFIG Phase 3 (panel controls invoke the proven ops; no-op/wrong-op neg-ctrls)
+bool runMateSelftest();          // PERSISTENT MATES (body-local connectors survive dynamic move/far-snap/save-load/delete; faceKey re-anchor; world-anchor neg-ctrl)
 
 // Export the connected component containing `baseBody` (spanning tree rooted there) as a URDF string --
 // the joint-primary "pick a base link, derive the chain from the joint tree" export. Defined in

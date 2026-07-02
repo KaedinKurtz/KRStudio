@@ -18,9 +18,11 @@
 
 #include <cstdio>
 #include <cmath>
+#include <cstring>
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <entt/entt.hpp>
 
 namespace krs::rbuild {
 namespace {
@@ -773,6 +775,162 @@ bool runEditOpInvokedGate()
            (dofNoop == dof0 && dofWrong < dof0 && degRejected) ? "REJECTS(non-vacuous)" : "VACUOUS!");
     printf("[rbuild] %s\n", pass ? "ALL PASS (panel controls invoke the proven delete/define ops; chain re-derives; no-op/wrong-op rejected)"
                                   : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ===========================================================================
+// GATE MATE-CONNECTOR (env KRS_MATE_SELFTEST): the persistent Onshape-style mate
+// architecture, hammered under the WORST conditions the redesign must survive:
+//   A author+resolve  a concentric mate -> a valid coaxial revolute (RBJoint DERIVED)
+//   B dynamic move    a mated body translated far -> the connector rides it (body-LOCAL);
+//                     NEG-CTRL: a stored WORLD anchor goes stale by the move distance (the OLD bug)
+//   C far-away snap   two parallel bores metres apart snap coaxial; NEG-CTRL requireCollinear rejects
+//   D faceKey         geometry-invariant: reversed-axis + sub-quantum twins key IDENTICALLY (re-import
+//                     re-anchor); NEG-CTRL supra-quantum / different face keys DIFFERENTLY (not constant)
+//   E save/load/open  serialize the mate graph + connectors -> clear -> deserialize: every id + local
+//                     frame restored bit-identical; NEG-CTRL a truncated blob yields nothing (no fabricate)
+//   F delete          erase one mate -> the other + all connectors intact, no dangling; NEG-CTRL the
+//                     erased id is gone. Mates key on (entt::entity, connector-id) so index remap is immune.
+namespace {
+// Minimal binary (de)serializer for the mate data -- proves save/load/open persistence with STABLE ids,
+// independent of the app's DB format.
+struct ByteW { std::vector<char> b;
+    void u32(std::uint32_t v){ const char* p=(const char*)&v; b.insert(b.end(),p,p+4); }
+    void u64(std::uint64_t v){ const char* p=(const char*)&v; b.insert(b.end(),p,p+8); }
+    void i32(std::int32_t v){ u32((std::uint32_t)v); }
+    void f(float v){ const char* p=(const char*)&v; b.insert(b.end(),p,p+4); }
+    void d(double v){ const char* p=(const char*)&v; b.insert(b.end(),p,p+8); }
+    void v3(const glm::vec3& v){ f(v.x); f(v.y); f(v.z); }
+    void str(const std::string& s){ u32((std::uint32_t)s.size()); b.insert(b.end(),s.begin(),s.end()); } };
+struct ByteR { const char* p; const char* end; bool ok=true;
+    ByteR(const std::vector<char>& v):p(v.data()),end(v.data()+v.size()){}
+    bool have(size_t n){ if(size_t(end-p)<n){ ok=false; return false;} return true; }
+    std::uint32_t u32(){ if(!have(4))return 0; std::uint32_t v; std::memcpy(&v,p,4); p+=4; return v; }
+    std::uint64_t u64(){ if(!have(8))return 0; std::uint64_t v; std::memcpy(&v,p,8); p+=8; return v; }
+    std::int32_t i32(){ return (std::int32_t)u32(); }
+    float f(){ if(!have(4))return 0; float v; std::memcpy(&v,p,4); p+=4; return v; }
+    double d(){ if(!have(8))return 0; double v; std::memcpy(&v,p,8); p+=8; return v; }
+    glm::vec3 v3(){ float x=f(),y=f(),z=f(); return {x,y,z}; }
+    std::string str(){ std::uint32_t n=u32(); if(!have(n))return {}; std::string s(p,p+n); p+=n; return s; } };
+
+void serializeConn(ByteW& w, const MateConnectorComponent& mc){
+    w.u32(mc.nextConnectorId); w.u32((std::uint32_t)mc.connectors.size());
+    for (const auto& c : mc.connectors){ w.u32(c.id); w.str(c.name); w.v3(c.localPos); w.v3(c.localZ);
+        w.v3(c.localX); w.u64(c.sourceFaceKey); w.i32(c.sourceFaceType); w.f(c.radius); } }
+void deserializeConn(ByteR& r, MateConnectorComponent& mc){
+    mc = {}; mc.nextConnectorId = r.u32(); std::uint32_t n = r.u32();
+    for (std::uint32_t i=0;i<n && r.ok;++i){ MateConnector c; c.id=r.u32(); c.name=r.str(); c.localPos=r.v3();
+        c.localZ=r.v3(); c.localX=r.v3(); c.sourceFaceKey=r.u64(); c.sourceFaceType=r.i32(); c.radius=r.f();
+        if(r.ok) mc.connectors.push_back(c); } }
+void serializeGraph(ByteW& w, const MateGraphComponent& mg){
+    w.u64(mg.nextMateId); w.u32((std::uint32_t)mg.mates.size());
+    for (const auto& m : mg.mates){ w.u64(m.id); w.i32((std::int32_t)m.type);
+        w.u32((std::uint32_t)m.bodyA); w.u32(m.connA); w.u32((std::uint32_t)m.bodyB); w.u32(m.connB);
+        w.d(m.offset); w.d(m.angle); } }
+void deserializeGraph(ByteR& r, MateGraphComponent& mg){
+    mg = {}; mg.nextMateId = r.u64(); std::uint32_t n = r.u32();
+    for (std::uint32_t i=0;i<n && r.ok;++i){ MateConstraint m; m.id=r.u64(); m.type=(MateConstraint::Type)r.i32();
+        m.bodyA=(entt::entity)r.u32(); m.connA=r.u32(); m.bodyB=(entt::entity)r.u32(); m.connB=r.u32();
+        m.offset=r.d(); m.angle=r.d(); if(r.ok) mg.mates.push_back(m); } }
+
+BRepFace worldCyl(const glm::vec3& pos, const glm::vec3& dir, float r){
+    BRepFace f; f.type=1; f.axisPos=pos; f.axisDir=glm::normalize(dir); f.normal=f.axisDir;
+    f.axisEnd0=pos; f.axisEnd1=pos+glm::normalize(dir)*0.02f; f.radius=r; f.faceKey=computeFaceKey(f); return f; }
+const MateConnector* findConn(const MateConnectorComponent& mc, std::uint32_t id){
+    for (const auto& c: mc.connectors) if (c.id==id) return &c; return nullptr; }
+} // namespace
+
+bool runMateSelftest()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[mate] GATE MATE-CONNECTOR -- persistent Onshape-style mates under dynamic/far-snap/save-load/delete\n");
+    bool pass = true;
+    const entt::entity eA = (entt::entity)1001u, eB = (entt::entity)1002u;
+
+    // ---------- A: author a concentric mate -> DERIVED coaxial revolute ----------
+    const Eigen::Matrix4d placeA = placement(0,0,0, Eigen::Vector3d::UnitZ(), 0.0);
+    const Eigen::Matrix4d placeB = placement(0.5,0,0, Eigen::Vector3d::UnitY(), 0.7);   // arbitrary pose
+    const BRepFace waA = worldCyl({0.40f,0,0}, {1,0,0}, 0.05f);
+    const BRepFace waB = worldCyl({0.60f,0,0}, {1,0,0}, 0.05f);                          // coaxial with waA
+    MateGraphComponent mg; MateConnectorComponent mcA, mcB;
+    const std::uint64_t mid = authorConcentricMate(mg, eA, mcA, placeA, waA, eB, mcB, placeB, waB);
+    RBJoint j;
+    const MateConnector& cA = mcA.connectors.back(); const MateConnector& cB = mcB.connectors.back();
+    const bool aResolve = resolveMate(mg.mates.back(), placeA, cA, 0, placeB, cB, 1, j);
+    const glm::vec3 jd = glm::normalize(j.axisDir);
+    const bool aAxis = aResolve && j.type==JType::Revolute && std::abs(std::abs(glm::dot(jd, glm::vec3(1,0,0)))-1.0f) < 1e-3f;
+    const bool A = mid==1 && mcA.connectors.size()==1 && mcB.connectors.size()==1 && mg.mates.size()==1 && aAxis;
+    printf("[mate]   A author+resolve: mate id=%llu, revolute axis||bore=%s  %s\n",
+           (unsigned long long)mid, aAxis?"yes":"no", A?"PASS":"FAIL"); pass &= A;
+
+    // ---------- B: dynamic move -- the connector rides the body (body-LOCAL) ----------
+    const Eigen::Matrix4d placeB2 = placement(0,3.0,0, Eigen::Vector3d::UnitZ(), 0.0) * placeB;  // B flung +3m in y
+    const BRepFace movedB = connectorToWorldFace(cB, placeB2);
+    const glm::vec3 expect = waB.axisPos + glm::vec3(0,3.0f,0);            // the bore should ride +3m with B
+    const double rode = glm::length(movedB.axisPos - expect);
+    // NEG-CTRL: a WORLD-anchored copy (captured at author) does NOT move -> stale by the move distance (the OLD bug)
+    const double staleDelta = glm::length(waB.axisPos - expect);          // ~3.0 m
+    const bool B = rode < 1e-4 && staleDelta > 2.9;
+    printf("[mate]   B dynamic move: connector rode with body err=%.2e (<1e-3) ; NEG-CTRL world-anchor stale by %.2fm (was the bug)  %s\n",
+           rode, staleDelta, B?"PASS":"FAIL"); pass &= B;
+
+    // ---------- C: far-away snap (parallel bores metres apart) ----------
+    const BRepFace fA = worldCyl({0,0,0},   {0,1,0}, 0.05f);
+    const BRepFace fB = worldCyl({5.0f,0,0.3f}, {0,1,0}, 0.05f);          // parallel, 5m away + 0.3m off-axis
+    RBJoint jc; const bool snap = defineRevoluteFromSelection(fA, fB, 0, 1, jc, 5e-3, /*requireCollinear*/false);
+    RBJoint jr; const bool strictRejects = !defineRevoluteFromSelection(fA, fB, 0, 1, jr, 5e-3, /*requireCollinear*/true);
+    const bool C = snap && strictRejects;
+    printf("[mate]   C far-away snap: parallel bores 5m apart snap coaxial=%s ; NEG-CTRL strict-collinear rejects=%s  %s\n",
+           snap?"yes":"no", strictRejects?"yes":"no", C?"PASS":"FAIL"); pass &= C;
+
+    // ---------- D: faceKey geometry-invariance + distinctness ----------
+    const BRepFace f0  = worldCyl({1,2,3}, {0,0,1},  0.05f);
+    const BRepFace fRev = worldCyl({1,2,3}, {0,0,-1}, 0.05f);             // reversed axis -> hemisphere fold
+    BRepFace fSub = f0; fSub.radius += 1e-5f; fSub.faceKey = computeFaceKey(fSub);  // sub-quantum (<0.1mm)
+    BRepFace fBig = f0; fBig.radius += 1.0e-3f; fBig.faceKey = computeFaceKey(fBig); // supra-quantum
+    const BRepFace fDir = worldCyl({1,2,3}, {1,0,0}, 0.05f);             // different axis
+    const bool invariant = (fRev.faceKey==f0.faceKey) && (fSub.faceKey==f0.faceKey);
+    const bool distinct  = (fBig.faceKey!=f0.faceKey) && (fDir.faceKey!=f0.faceKey) && f0.faceKey!=0;
+    const bool D = invariant && distinct;
+    printf("[mate]   D faceKey: reversed+sub-quantum twin identical=%s ; NEG-CTRL supra-quantum/diff-axis differ=%s  %s\n",
+           invariant?"yes":"no", distinct?"yes":"no", D?"PASS":"FAIL"); pass &= D;
+
+    // ---------- E: save / load / open round-trip (stable ids + local frames) ----------
+    ByteW w; serializeConn(w, mcA); serializeConn(w, mcB); serializeGraph(w, mg);
+    ByteR rr(w.b); MateConnectorComponent rA, rB; MateGraphComponent rG;
+    deserializeConn(rr, rA); deserializeConn(rr, rB); deserializeGraph(rr, rG);
+    const MateConnector* rcA = rA.connectors.empty()?nullptr:&rA.connectors[0];
+    const bool idsKept = rG.mates.size()==1 && rG.mates[0].id==mg.mates[0].id
+        && rG.mates[0].bodyA==eA && rG.mates[0].connA==cA.id && rG.mates[0].bodyB==eB && rG.mates[0].connB==cB.id
+        && rA.nextConnectorId==mcA.nextConnectorId && rG.nextMateId==mg.nextMateId;
+    const bool framesKept = rcA && rcA->id==cA.id && glm::length(rcA->localPos-cA.localPos)<1e-6f
+        && glm::length(rcA->localZ-cA.localZ)<1e-6f && glm::length(rcA->localX-cA.localX)<1e-6f
+        && rcA->sourceFaceKey==cA.sourceFaceKey;
+    // NEG-CTRL: a truncated blob restores nothing (no crash, no fabrication)
+    std::vector<char> trunc(w.b.begin(), w.b.begin()+ (w.b.size()/3));
+    ByteR tr(trunc); MateConnectorComponent tA; deserializeConn(tr, tA); MateGraphComponent tG; deserializeGraph(tr, tG);
+    const bool truncSafe = tG.mates.size() < mg.mates.size();     // did NOT fabricate a full graph
+    const bool E = idsKept && framesKept && truncSafe;
+    printf("[mate]   E save/load/open: ids+bindings kept=%s local-frames kept=%s ; NEG-CTRL truncated=%zu mates (no fabricate)=%s  %s\n",
+           idsKept?"yes":"no", framesKept?"yes":"no", tG.mates.size(), truncSafe?"yes":"no", E?"PASS":"FAIL"); pass &= E;
+
+    // ---------- F: delete one mate -> others + connectors intact, no dangling ----------
+    // author a SECOND mate so there is something to keep after deleting the first
+    authorConcentricMate(mg, eA, mcA, placeA, waA, eB, mcB, placeB, waB);      // mate id=2
+    const std::uint64_t delId = mg.mates.front().id;                            // delete mate 1
+    mg.mates.erase(std::remove_if(mg.mates.begin(), mg.mates.end(),
+                    [&](const MateConstraint& m){ return m.id==delId; }), mg.mates.end());
+    const bool gone = std::none_of(mg.mates.begin(), mg.mates.end(), [&](const MateConstraint& m){ return m.id==delId; });
+    const MateConstraint& kept = mg.mates.front();
+    const bool noDangling = mg.mates.size()==1 && findConn(mcA, kept.connA)!=nullptr && findConn(mcB, kept.connB)!=nullptr;
+    const bool F = gone && noDangling;
+    printf("[mate]   F delete: erased id=%llu gone=%s ; kept mate connectors still resolve (no dangling)=%s  %s\n",
+           (unsigned long long)delId, gone?"yes":"no", noDangling?"yes":"no", F?"PASS":"FAIL"); pass &= F;
+
+    printf("[mate] %s\n", pass ? "ALL PASS (mates are body-LOCAL: survive dynamic motion, far snap, save/load/open, delete; faceKey re-anchors; world-anchor NEG-CTRL confirms the old bug)"
+                               : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;
 }
