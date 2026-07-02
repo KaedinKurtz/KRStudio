@@ -180,6 +180,17 @@ FetchContent_Populate(sqlite_official_src)
 add_library(sqlite3 STATIC "${sqlite_official_src_SOURCE_DIR}/sqlite3.c")
 target_include_directories(sqlite3 PUBLIC "${sqlite_official_src_SOURCE_DIR}")
 
+# nanort (MIT) -- single-header BVH ray-triangle picker for mate-connector placement (Phase B).
+# Header-only: Populate (do NOT add_subdirectory -- its CMake builds examples) + expose the include dir.
+FetchContent_Declare(
+  nanort
+  GIT_REPOSITORY https://github.com/lighttransport/nanort.git
+  GIT_TAG        cdf474ae9176b87a9334c858bb06c9e028ed0e0d   # release branch tip (pinned; nanort has no version tags)
+)
+FetchContent_Populate(nanort)
+add_library(nanort INTERFACE)
+target_include_directories(nanort INTERFACE "${nanort_SOURCE_DIR}")
+
 
 # -----------------------------
 #  Add Submodules (Optional)
@@ -321,6 +332,7 @@ target_link_libraries(RoboticsSoftware PRIVATE
   ads::qtadvanceddocking-qt6
   QtNodes # Use direct target name as in the old file
   sqlite3
+  nanort  # MIT header-only BVH ray-picker (mate-connector placement)
 )
 
 # HIL bridges: high-resolution timer (winmm) + Winsock for the UDP loopback
