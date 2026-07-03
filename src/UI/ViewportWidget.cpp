@@ -395,6 +395,17 @@ void ViewportWidget::mousePressEvent(QMouseEvent* ev)
             CpuRay ray = makeCpuRay(cam, ev->pos().x(), ev->pos().y(), width(), height());
 
             entt::entity h = m_gizmo->pickHandle(ray);
+            // BORE-AIM EXCEPTION to gizmo priority: while the builder is collecting bores
+            // (fifoTwoBores armed) and the cursor is HOVERING a cylinder feature, the click is a
+            // bore pick, not a handle grab. Without this, picking bore 1 spawned the gizmo over the
+            // link and aiming at bore 2 nearby grabbed an axis handle and IK-dragged the very arm
+            // being mated -- the worst interaction hazard in the joint-authoring flow.
+            if (h != entt::null) {
+                if (const auto* st = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>())
+                    if (st->enabled && st->fifoTwoBores && st->hover.valid
+                        && st->hover.type == krs::sel::FeatureType::Cylinder)
+                        h = entt::null;                      // let the release-path feature pick win
+            }
             if (h != entt::null) {
                 // GIZMO PRIORITY: a click on a gizmo handle is a MOVE, never a feature pick -- even if
                 // the drag can't start (locked target). The handle sits over the robot, so without this

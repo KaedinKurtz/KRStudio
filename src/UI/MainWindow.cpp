@@ -3582,17 +3582,30 @@ void MainWindow::buildMenuBar()
         m_scene->getRegistry().ctx().get<SceneProperties>().showCollisionShapes = on;
     });
 
-    QAction* showFeatureSel = viewMenu->addAction(QStringLiteral("Show Feature Selection Highlights"));
+    // Honest label: this gates feature PICKING itself (featureCommit/featureHover early-return when
+    // disabled), not just highlight visibility -- the old "Show Feature Selection Highlights" text
+    // made unchecking it for a clean screenshot silently kill bore clicks ("Define says have 0").
+    QAction* showFeatureSel = viewMenu->addAction(QStringLiteral("Enable Feature (Bore) Picking"));
     showFeatureSel->setCheckable(true);
     if (m_scene)
         if (auto* st = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>())
             showFeatureSel->setChecked(st->enabled);
     showFeatureSel->setToolTip(QStringLiteral(
-        "Hover a CAD face to preview-highlight it (yellow); click to select (orange disk + axis arrow).\n"
-        "Indicators are derived from the exact B-Rep feature the ray resolves to."));
+        "When on, hovering a CAD face preview-highlights it (yellow) and clicking selects the feature\n"
+        "(orange disk + axis arrow) for joint definition. When off, clicks select bodies only.\n"
+        "Note: opening a robot for editing turns this back on."));
     connect(showFeatureSel, &QAction::toggled, this, [this](bool on) {
         if (!m_scene) return;
         if (auto* st = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>()) st->enabled = on;
+    });
+    // The Robot Builder silently re-enables picking when a robot is opened for editing; re-sync the
+    // check state every time the menu opens so it can never LIE about the live flag.
+    connect(viewMenu, &QMenu::aboutToShow, this, [this, showFeatureSel]() {
+        if (!m_scene) return;
+        if (auto* st = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>()) {
+            const QSignalBlocker b(showFeatureSel);
+            showFeatureSel->setChecked(st->enabled);
+        }
     });
 
     // --- Physics visualization (Phase 3): recolour MPM particles by a field ---
