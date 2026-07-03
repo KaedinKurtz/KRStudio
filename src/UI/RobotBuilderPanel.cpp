@@ -25,6 +25,8 @@
 #include <QSlider>
 #include <QTimer>
 #include <QMessageBox>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QSignalBlocker>
 #include <QMetaMethod>
 
@@ -113,6 +115,14 @@ void RobotBuilderPanel::initializeUI()
     m_dofLabel->setObjectName(QStringLiteral("rbDofLabel"));
     m_dofLabel->setStyleSheet(QStringLiteral("font-weight:bold;padding:2px;"));
     layout->addWidget(m_dofLabel);
+    // STATUS lives at the TOP: every action reports here (incl. Define failures), and at the old
+    // bottom-of-scroll-area position the feedback was routinely out of view -- errors looked like
+    // "the button did nothing".
+    m_status = new QLabel(QStringLiteral("No robot loaded."), content);
+    m_status->setObjectName(QStringLiteral("rbStatusLabel"));
+    m_status->setWordWrap(true);
+    m_status->setStyleSheet(QStringLiteral("color:#9fb4cc;padding:4px;border:1px solid #4a5260;"));
+    layout->addWidget(m_status);
 
     // --- Joints (delete) ---
     layout->addWidget(makeSectionHeader(QStringLiteral("Joints"), content));
@@ -266,13 +276,6 @@ void RobotBuilderPanel::initializeUI()
     m_applyDirBtn->setObjectName(QStringLiteral("rbApplyDirButton"));
     layout->addWidget(m_applyDirBtn);
 
-    // --- Status ---
-    m_status = new QLabel(QStringLiteral("No robot loaded."), content);
-    m_status->setObjectName(QStringLiteral("rbStatusLabel"));
-    m_status->setWordWrap(true);
-    m_status->setStyleSheet(QStringLiteral("color:#9fb4cc;padding:4px;"));
-    layout->addWidget(m_status);
-
     scroll->setWidget(content);
     outer->addWidget(scroll);
 }
@@ -288,6 +291,25 @@ void RobotBuilderPanel::setupConnections()
     connect(m_applyDirBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyAxisDir);
     connect(m_snapAxisBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onSnapAxisToBore);
     connect(m_jointsList,    &QListWidget::currentRowChanged, this, &RobotBuilderPanel::onJointSelected);
+    // Double-click a joint to RENAME it -- the name is its addressable identity (node graph drives
+    // by name, the catalog publishes q:<name>); there was no rename affordance anywhere.
+    connect(m_jointsList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
+        if (m_isUpdatingUI || !item) return;
+        auto* g = graph();
+        const int row = m_jointsList->row(item);
+        if (!g || row < 0 || row >= int(g->joints.size())) return;
+        bool ok = false;
+        const QString cur = QString::fromStdString(g->joints[row].name);
+        const QString name = QInputDialog::getText(this, QStringLiteral("Rename joint"),
+            QStringLiteral("Joint name (drives by name in the node graph):"),
+            QLineEdit::Normal, cur, &ok).trimmed();
+        if (!ok || name.isEmpty() || name == cur) return;
+        g->joints[row].name = name.toStdString();
+        setStatus(QStringLiteral("Renamed %1 -> %2.").arg(cur.isEmpty() ? QStringLiteral("(unnamed)") : cur, name));
+        refresh();
+        emit graphChanged();                       // re-applies + rebuilds the joint-name registry
+        m_jointsList->setCurrentRow(row);
+    });
     connect(m_jointType, QOverload<int>::of(&QComboBox::activated),
             this, &RobotBuilderPanel::onJointTypeChanged);
     connect(m_jogSlider, &QSlider::valueChanged, this, &RobotBuilderPanel::onJogMoved);
