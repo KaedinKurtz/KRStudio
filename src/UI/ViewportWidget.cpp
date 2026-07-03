@@ -704,6 +704,12 @@ void ViewportWidget::keyPressEvent(QKeyEvent* ev)
         for (auto eSel : m_scene->getRegistry().view<SelectedComponent>()) cur.push_back(eSel);
         emit selectionChanged(cur, getCamera());
     }
+    // Escape clears the committed FEATURE set (the glowing bore/plane overlays) -- previously the only
+    // ways out were re-clicking each feature or a button buried in the Robot Builder panel.
+    if (ev->key() == Qt::Key_Escape && m_scene) {
+        if (auto* st = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>())
+            krs::sel::clearSelection(*st);
+    }
     update();
 }
 

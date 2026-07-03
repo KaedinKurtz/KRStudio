@@ -10,6 +10,7 @@
 #include <QMenu>
 #include <QInputDialog>
 #include <QLineEdit>
+#include <QMessageBox>
 
 #include <functional>
 #include <cstdint>
@@ -77,12 +78,22 @@ OutlinerWidget::OutlinerWidget(Scene* scene, QWidget* parent)
         });
         menu.addAction(QStringLiteral("Delete"), [this, e]() {
             auto& r = m_scene->getRegistry();
-            if (r.valid(e) && !r.any_of<CameraComponent, GridComponent>(e)) {
-                r.destroy(e);
-                m_lastSig.clear();
-                refresh();
-                emit selectionEdited();
+            if (!r.valid(e) || r.any_of<CameraComponent, GridComponent>(e)) return;
+            // ROBOT-MEMBER GUARD: destroying a link solid leaves the joint listed and drivable
+            // while its geometry silently vanishes (writeBackRobotViz skips invalid entities --
+            // the robot visually decays with no error). Until a robot-aware "detach body" op
+            // exists, refuse and explain instead of dismembering.
+            if (r.any_of<RobotSubcomponentComponent, RobotRootComponent>(e)) {
+                QMessageBox::information(this, QStringLiteral("Part of a robot"),
+                    QStringLiteral("This entity belongs to a robot's kinematic chain and can't be "
+                                   "deleted on its own.\nCut a joint in the Robot Builder to detach "
+                                   "a subtree instead."));
+                return;
             }
+            r.destroy(e);
+            m_lastSig.clear();
+            refresh();
+            emit selectionEdited();
         });
         menu.exec(m_tree->mapToGlobal(pos));
     });

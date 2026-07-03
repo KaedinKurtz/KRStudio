@@ -245,6 +245,14 @@ struct SelectionState {
     std::vector<Selection> selected;     // committed set (accumulates across clicks)
 };
 
+// GLOBAL FIFO CAP: committed features accumulated without bound (every plane ever clicked stayed as
+// an always-on-top overlay until individually re-clicked or cleared -- the scene filled with orphan
+// glowing squares). Cap the whole set FIFO; no workflow holds more than a handful of features.
+inline void enforceSelectionCap(SelectionState& st, std::size_t cap = 8) {
+    while (st.selected.size() > cap)
+        st.selected.erase(st.selected.begin());          // evict the oldest committed feature
+}
+
 // Enforce the FIFO-two-bores rule: while more than two CYLINDER (bore) features are selected, drop the
 // OLDEST cylinder. Non-cylinder selections are left alone. No-op unless st.fifoTwoBores is set.
 inline void enforceFifoTwoBores(SelectionState& st) {
@@ -283,6 +291,7 @@ inline Selection commitSelection(SelectionState& st, entt::registry& reg,
     if (!additive) st.selected.clear();
     st.selected.push_back(s);
     enforceFifoTwoBores(st);                             // keep only the 2 most-recent bore edges (FIFO)
+    enforceSelectionCap(st);                             // global FIFO cap (no unbounded overlay pile-up)
     return s;
 }
 
@@ -303,6 +312,7 @@ inline Selection commitSelectionCycled(SelectionState& st, entt::registry& reg,
     if (!additive) st.selected.clear();
     st.selected.push_back(s);
     enforceFifoTwoBores(st);                             // keep only the 2 most-recent bore edges (FIFO)
+    enforceSelectionCap(st);                             // global FIFO cap (no unbounded overlay pile-up)
     return s;
 }
 

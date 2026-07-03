@@ -3347,7 +3347,14 @@ void MainWindow::onViewportContextMenu(const QPoint& globalPos, const glm::vec3&
                        });
         menu.addAction(QStringLiteral("Delete"), [this, hit]() {
             auto& r = m_scene->getRegistry();
-            if (r.valid(hit)) r.destroy(hit);
+            if (!r.valid(hit)) return;
+            // Robot-member guard: see OutlinerWidget -- generic delete dismembers the robot silently.
+            if (r.any_of<RobotSubcomponentComponent, RobotRootComponent>(hit)) {
+                statusBar()->showMessage(QStringLiteral(
+                    "That body belongs to a robot -- cut a joint in the Robot Builder to detach a subtree."), 5000);
+                return;
+            }
+            r.destroy(hit);
             refreshGizmoAndProperties();
         });
         menu.addSeparator();
@@ -3491,9 +3498,16 @@ void MainWindow::buildMenuBar()
         for (auto e : reg.view<SelectedComponent>()) {
             // Never delete cameras or grids through this path.
             if (reg.any_of<CameraComponent, GridComponent>(e)) continue;
+            // Robot-member guard: generic delete dismembers a robot silently (joints stay
+            // listed/drivable while the geometry vanishes). Route through the Robot Builder.
+            if (reg.any_of<RobotSubcomponentComponent, RobotRootComponent>(e)) continue;
             doomed.push_back(e);
         }
-        if (doomed.empty()) return;
+        if (doomed.empty()) {
+            statusBar()->showMessage(QStringLiteral(
+                "Nothing deletable selected (robot bodies can't be deleted directly -- cut a joint instead)."), 5000);
+            return;
+        }
         reg.destroy(doomed.begin(), doomed.end());
         refreshGizmoAndProperties();
         statusBar()->showMessage(QStringLiteral("Deleted %1 object(s)").arg(doomed.size()), 3000);
