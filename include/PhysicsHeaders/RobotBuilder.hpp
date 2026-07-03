@@ -579,6 +579,42 @@ inline MateConnector makeConnectorLocal(const BRepFace& worldFace, const Eigen::
     return c;
 }
 
+// RE-ANCHOR (the consumer half of the faceKey mitigation -- previously sourceFaceKey was written but
+// never read): after a re-import/re-tessellation replaces a body's faces, re-bind each connector to
+// the face whose faceKey matches its sourceFaceKey and refresh the stored local frame from that
+// face's analytic params. Face-list ORDER is untrusted (re-import may shuffle); the key is the
+// binding. A multi-match (rare now that the key carries a position channel) disambiguates by frame
+// proximity; a connector with no matching key is left UNTOUCHED (an orphan for user repair, never a
+// silent rebind to the wrong face). Returns the number re-anchored.
+inline int reanchorConnectors(MateConnectorComponent& mc, const std::vector<BRepFace>& faces) {
+    int n = 0;
+    for (auto& c : mc.connectors) {
+        if (c.sourceFaceKey == 0) continue;                      // unanchored (synthetic) -> skip
+        const BRepFace* best = nullptr; float bestD = 1e30f;
+        for (const auto& f : faces) {
+            if (f.faceKey != c.sourceFaceKey) continue;
+            const float d = glm::length(f.axisPos - c.localPos); // frame-proximity tie-break
+            if (d < bestD) { bestD = d; best = &f; }
+        }
+        if (!best) continue;                                     // orphan: no such face any more
+        c.localPos = best->axisPos;
+        glm::vec3 z = (glm::length(best->axisDir) > 1e-6f) ? glm::normalize(best->axisDir)
+                                                           : glm::normalize(best->normal);
+        if (glm::dot(z, c.localZ) < 0.0f) z = -z;                // keep the AUTHORED axis sense
+        c.localZ = z;
+        glm::vec3 x = c.localX - glm::dot(c.localX, z) * z;      // preserve the authored roll reference
+        if (glm::length(x) < 1e-6f) {
+            const glm::vec3 seed = (std::abs(z.x) < 0.9f) ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+            x = seed - glm::dot(seed, z) * z;
+        }
+        c.localX = glm::normalize(x);
+        c.radius = best->radius;
+        c.sourceFaceType = best->type;
+        ++n;
+    }
+    return n;
+}
+
 // Author a persistent concentric mate: mint a connector on EACH body (from the two-bore pick, stored LOCAL)
 // + append a MateConstraint to the ctx graph. Returns the minted mate id. Runs ALONGSIDE the existing
 // defineFromFeatures (which stays the immediate joint author); this records the durable provenance.

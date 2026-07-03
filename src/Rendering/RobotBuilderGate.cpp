@@ -985,6 +985,46 @@ bool runMateSelftest()
     printf("[mate]   F delete: erased id=%llu gone=%s ; kept mate connectors still resolve (no dangling)=%s  %s\n",
            (unsigned long long)delId, gone?"yes":"no", noDangling?"yes":"no", F?"PASS":"FAIL"); pass &= F;
 
+    // ---------- G: faceKey RE-ANCHOR (the consumer half -- previously unimplemented) ----------
+    // Simulate a re-import: the SAME body comes back with its face list REORDERED and a decoy bore
+    // (same radius, different position -> different key) inserted ahead. The connector must re-bind
+    // to its true face BY KEY (order is untrusted) and refresh its local frame from that face's
+    // params. NEG-CTRL: a connector whose face no longer exists stays untouched (orphan, no silent
+    // rebind to the decoy).
+    {
+        auto mkTrimmed = [](glm::vec3 mid, glm::vec3 dir, float r, float halfLen) {
+            BRepFace f; f.type = 1; f.axisDir = glm::normalize(dir); f.normal = f.axisDir; f.radius = r;
+            f.axisEnd0 = mid - f.axisDir * halfLen; f.axisEnd1 = mid + f.axisDir * halfLen;
+            f.axisPos = mid; f.faceKey = computeFaceKey(f); return f;
+        };
+        const BRepFace trueFace = mkTrimmed({0.10f, 0.02f, 0.0f}, {0, 0, 1}, 0.006f, 0.008f);
+        MateConnectorComponent rc;
+        rc.connectors.push_back(makeConnectorLocal(trueFace, Eigen::Matrix4d::Identity(), rc.nextConnectorId++, "reanchor"));
+        // Perturb the stored frame (simulates drift / an older import's slightly different params).
+        rc.connectors[0].localPos += glm::vec3(0.003f, -0.001f, 0.002f);
+        rc.connectors[0].localZ = glm::normalize(glm::vec3(0.05f, 0.02f, 1.0f));
+        // Re-imported face list: decoy FIRST (same radius, different position), then the true face.
+        const std::vector<BRepFace> reimported = {
+            mkTrimmed({-0.10f, 0.02f, 0.0f}, {0, 0, 1}, 0.006f, 0.008f),   // decoy: different key
+            trueFace,
+        };
+        const int re = reanchorConnectors(rc, reimported);
+        const bool rebound = (re == 1)
+            && glm::length(rc.connectors[0].localPos - trueFace.axisPos) < 1e-6f
+            && std::abs(glm::dot(rc.connectors[0].localZ, trueFace.axisDir)) > 0.9999f
+            && std::abs(glm::dot(rc.connectors[0].localZ, rc.connectors[0].localX)) < 1e-5f;
+        // NEG-CTRL: key not present -> untouched orphan.
+        MateConnectorComponent orphan;
+        orphan.connectors.push_back(makeConnectorLocal(trueFace, Eigen::Matrix4d::Identity(), orphan.nextConnectorId++, "orphan"));
+        orphan.connectors[0].sourceFaceKey = 0xDEADBEEFull;                 // no such face
+        const glm::vec3 keepPos = orphan.connectors[0].localPos;
+        const int re2 = reanchorConnectors(orphan, reimported);
+        const bool orphanKept = (re2 == 0) && glm::length(orphan.connectors[0].localPos - keepPos) < 1e-9f;
+        const bool G = rebound && orphanKept;
+        printf("[mate]   G re-anchor: rebinds by key across reorder+decoy, frame refreshed=%s ; NEG-CTRL missing key stays orphan=%s  %s\n",
+               rebound?"yes":"no", orphanKept?"yes":"no", G?"PASS":"FAIL"); pass &= G;
+    }
+
     printf("[mate] %s\n", pass ? "ALL PASS (mates are body-LOCAL: survive dynamic motion, far snap, save/load/open, delete; faceKey re-anchors; world-anchor NEG-CTRL confirms the old bug)"
                                : "FAILURES PRESENT");
     std::fflush(stdout);
