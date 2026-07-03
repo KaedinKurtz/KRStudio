@@ -3773,11 +3773,75 @@ void MainWindow::importStepFile()
     if (path.isEmpty() || !m_scene) return;
     // Scale per the user's CAD import unit (Settings: units/cadImportUnit).
     const float metersPerUnit = float(krs::units::cadMetersPerUnit());
-    krs::cad::ImportResult r = krs::cad::importStep(*m_scene, path.toStdString(), metersPerUnit);
-    QMessageBox::information(this, QStringLiteral("Import CAD"),
-        QString::fromStdString(r.message) +
-        QStringLiteral("\nSolids: %1   Faces: %2   Attachment frames: %3\nTotal B-Rep volume: %4 m^3")
-            .arg(r.solids).arg(r.faces).arg(r.attachments).arg(r.totalVolume, 0, 'g', 4));
+
+    // ASSEMBLY-AWARE import (named parts + placements + part-local analytic faces) so the imported
+    // CAD can become a ROBOT. The old path (krs::cad::importStep) spawned loose entities with no
+    // RobotGraph registration -- the advertised golden path (import STEP -> pick bores -> define
+    // joints) was impossible for any user CAD; only the boot FANUC and the demo were authorable.
+    auto& reg = m_scene->getRegistry();
+    std::vector<krs::rbuild::ParsedPart> parts =
+        krs::cad::importStepAssembly(*m_scene, path.toStdString(), metersPerUnit);
+    if (parts.empty()) {
+        // Not an assembly/solid STEP the CAF reader could walk -- fall back to the flattened import.
+        krs::cad::ImportResult r = krs::cad::importStep(*m_scene, path.toStdString(), metersPerUnit);
+        QMessageBox::information(this, QStringLiteral("Import CAD"),
+            QString::fromStdString(r.message) +
+            QStringLiteral("\nSolids: %1   Faces: %2   Attachment frames: %3\nTotal B-Rep volume: %4 m^3")
+                .arg(r.solids).arg(r.faces).arg(r.attachments).arg(r.totalVolume, 0, 'g', 4));
+        refreshGizmoAndProperties();
+        return;
+    }
+
+    const auto ans = QMessageBox::question(this, QStringLiteral("Create robot from import?"),
+        QStringLiteral("Imported %1 named bodies from %2.\n\n"
+                       "Create a ROBOT from them? Coaxial-bore joints are inferred where the geometry "
+                       "supports them (never faked); everything is editable afterwards in the Robot "
+                       "Builder -- pick two bores and Define to add joints.\n\n"
+                       "Choosing No keeps them as loose bodies.")
+            .arg(int(parts.size())).arg(QFileInfo(path).fileName()),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    if (ans != QMessageBox::Yes) { refreshGizmoAndProperties(); return; }
+
+    // Fresh robotId beyond every registered robot (0 = boot FANUC, 1 = demo, splits mint upward).
+    int rid = 2;
+    if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>())
+        for (auto& rp : rr->robots) if (rp) rid = std::max(rid, rp->robotId + 1);
+
+    // Geometric inference: spanning tree of coaxial-bore joints (honest -- bodies with no coaxial
+    // interface stay unjointed and can be Defined manually). Then make it the ACTIVE authoring graph,
+    // parking the outgoing one (same no-clobber rule as the Builder).
+    krs::rbuild::RobotGraph g = krs::rbuild::buildGraphFromParts(parts, /*base*/ 0);
+    g.robotId = rid;
+    auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
+    if (!gp) gp = &reg.ctx().emplace<krs::rbuild::RobotGraph>();
+    else if (!gp->bodies.empty()) {
+        auto* store = reg.ctx().find<krs::rbuild::AuthoringGraphStore>();
+        if (!store) store = &reg.ctx().emplace<krs::rbuild::AuthoringGraphStore>();
+        store->byRobot[gp->robotId] = *gp;
+    }
+    *gp = std::move(g);
+
+    const std::string rname = QFileInfo(path).completeBaseName().toStdString();
+    if (krs::robot::LiveRobot* lr = krs::robot::instantiateFromGraph(*m_scene, *gp, rid)) {
+        lr->name = lr->model.name = rname.empty() ? ("Robot " + std::to_string(rid)) : rname;
+        lr->useRobotFkViz = true;                   // FK drives the imported solids (FANUC pattern)
+        if (reg.valid(lr->root)) {
+            reg.emplace_or_replace<RobotRootComponent>(lr->root, RobotRootComponent{ lr->name, rid });
+            reg.emplace_or_replace<TagComponent>(lr->root, lr->name);
+        }
+        statusBar()->showMessage(QStringLiteral(
+            "Robot \"%1\" created: %2 bodies, %3 inferred joint(s), DOF %4 -- pick two bores + Define to add joints.")
+            .arg(QString::fromStdString(lr->name)).arg(int(gp->bodies.size()))
+            .arg(int(gp->joints.size())).arg(gp->dof()), 8000);
+    }
+    krs::robot::rebuildJointNameRegistry(reg);
+    if (m_robotBuilderPanel) {
+        m_robotBuilderPanel->editRobot(rid);        // bind + enable bore picking
+        if (auto* rbDock = m_dockManager ? m_dockManager->findDockWidget(QStringLiteral("Robot Builder")) : nullptr) {
+            rbDock->toggleView(true); rbDock->setAsCurrentTab(); rbDock->raise();
+        }
+    }
+    if (m_robotViewport) m_robotViewport->refreshFromLive();
     refreshGizmoAndProperties();
 }
 
