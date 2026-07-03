@@ -14,6 +14,7 @@
 #include <QKeyEvent>
 #include <QCloseEvent>
 #include <QDebug>
+#include <QToolTip>
 #include <glm/gtc/type_ptr.hpp>
 #include <stdexcept>
 #include <QMessageBox>
@@ -544,8 +545,14 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
                 const int idx = ((m_xrayIdx % n) + n) % n;
                 const auto& h = allHits[idx];
                 CpuPickHit b; b.entity = h.entity; b.worldPos = h.worldPos; b.worldT = h.t; hit = b;
-                if (n > 1)
+                if (n > 1) {
+                    // Surface the x-ray depth ON-SCREEN (it lived only in qDebug, so users could
+                    // never discover that clicking the same spot walks to occluded bodies/bores).
+                    QToolTip::showText(mapToGlobal(ev->pos()),
+                        QStringLiteral("x-ray %1/%2 — click the same spot to go deeper").arg(idx + 1).arg(n),
+                        this);
                     qDebug() << "[XRay] body" << (idx + 1) << "/" << n << "(click same spot to go deeper)";
+                }
             }
 
             if (!isShiftPressed) {
@@ -561,12 +568,17 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
                 }
             }
 
-            // SUB-FEATURE SELECT: commit the clicked feature into the accumulating set. Uses the
-            // CYLINDER-PREFERRED pick so clicking "on a bore" selects the BORE, not the flat face in
-            // front of it (the reason picking bores did nothing). Features ACCUMULATE on plain clicks
-            // (re-click toggles off) -- the CAD mate-pick model for collecting the two bores a joint
-            // needs. The highlight is OPERATOR-VISUAL-CONFIRM; the resolved identity is gated.
-            featureCommit(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(), width(), height(), /*additive*/ true);
+            // SUB-FEATURE SELECT: commit the clicked feature into the accumulating set, at the SAME
+            // x-ray depth as the body pick above -- so clicking the same pixel again walks BOTH the
+            // body and the feature to the occluded candidate (featureCommitCycled existed for exactly
+            // this but had no caller: an occluded bore was unselectable, and the same-pixel re-click
+            // just toggled the front bore OFF). Depth 0 keeps the CYLINDER-PREFERRED pick so clicking
+            // "on a bore" selects the BORE, not the flat face in front of it. Features ACCUMULATE on
+            // plain clicks (re-click toggles off) -- the CAD mate-pick model for collecting two bores.
+            if (m_xrayIdx > 0 && std::isfinite(ray.dir.x))
+                featureCommitCycled(*m_scene, ray, m_xrayIdx, /*additive*/ true);
+            else
+                featureCommit(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(), width(), height(), /*additive*/ true);
 
             QVector<entt::entity> currentSelection;
             for (auto eSel : reg.view<SelectedComponent>()) currentSelection.push_back(eSel);
