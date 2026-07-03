@@ -127,6 +127,12 @@ inline Selection pickPreferCylinder(entt::registry& reg, const krs::pick::Ray& r
         const glm::mat4 invM = glm::inverse(M);
         const glm::vec3 roL = glm::vec3(invM * glm::vec4(ray.origin, 1.0f));
         const glm::vec3 rdL = glm::normalize(glm::vec3(invM * glm::vec4(ray.dir, 0.0f)));
+        // AABB pre-cull: this runs on EVERY mouse move (updateHover) over every renderable; skip
+        // whole meshes the local ray cannot hit. Unset AABBs (min==max) are never culled.
+        if (mesh.aabbMin != mesh.aabbMax) {
+            float tE, tX;
+            if (!krs::pick::rayAABB(roL, rdL, mesh.aabbMin - 1e-4f, mesh.aabbMax + 1e-4f, tE, tX)) continue;
+        }
         for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
             const glm::vec3& a = mesh.vertices[mesh.indices[i]].position;
             const glm::vec3& b = mesh.vertices[mesh.indices[i + 1]].position;

@@ -83,6 +83,13 @@ inline std::optional<PickHit> pickMesh(entt::registry& reg, const Ray& ray)
         const glm::mat4 invM = glm::inverse(M);
         const glm::vec3 roL = glm::vec3(invM * glm::vec4(ray.origin, 1.0f));
         const glm::vec3 rdL = glm::normalize(glm::vec3(invM * glm::vec4(ray.dir, 0.0f)));
+        // AABB pre-cull (mesh-local, matching the local ray): skip the whole mesh when the ray
+        // misses its box -- hover picking was O(every triangle of every entity) per mouse move.
+        // Meshes without a computed AABB (min==max default) are never culled.
+        if (mesh.aabbMin != mesh.aabbMax) {
+            float tE, tX;
+            if (!rayAABB(roL, rdL, mesh.aabbMin - 1e-4f, mesh.aabbMax + 1e-4f, tE, tX)) continue;
+        }
         for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
             const glm::vec3& a = mesh.vertices[mesh.indices[i]].position;
             const glm::vec3& b = mesh.vertices[mesh.indices[i + 1]].position;
@@ -116,6 +123,10 @@ inline std::vector<PickHit> pickMeshAll(entt::registry& reg, const Ray& ray)
         const glm::mat4 invM = glm::inverse(M);
         const glm::vec3 roL = glm::vec3(invM * glm::vec4(ray.origin, 1.0f));
         const glm::vec3 rdL = glm::normalize(glm::vec3(invM * glm::vec4(ray.dir, 0.0f)));
+        if (mesh.aabbMin != mesh.aabbMax) {               // AABB pre-cull (see pickMesh)
+            float tE, tX;
+            if (!rayAABB(roL, rdL, mesh.aabbMin - 1e-4f, mesh.aabbMax + 1e-4f, tE, tX)) continue;
+        }
         PickHit eBest;                                    // nearest hit on THIS entity only
         for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
             const glm::vec3& a = mesh.vertices[mesh.indices[i]].position;
