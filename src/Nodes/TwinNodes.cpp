@@ -10,6 +10,8 @@
 #include "NodeFactory.hpp"
 #include "PropertyCatalog.hpp"
 #include "Scene.hpp"
+#include "RobotModel.hpp"          // publishRobotState: LiveRobot q/limits/FK -> catalog
+#include "RobotBuilderScene.hpp"   // buildDemoGraph (ROBOT-PUBLISH gate fixture)
 
 #include <cstdio>
 #include <cmath>
@@ -39,6 +41,7 @@ public:
         auto& reg = m_scene->getRegistry();
         // keep the catalog fresh from the live scene so the Property node reads current introspection+values.
         publishSceneState(catalog(), reg, m_time, m_dt, m_accel);
+        publishRobotState(catalog(), reg, m_time);   // robots too (q/limits/links/EE per LiveRobot)
         m_time += m_dt;
         const int sel = getParam<int>("objId", -1);
         if (sel < 0) return;                                  // no selection -> no output
@@ -430,10 +433,104 @@ bool runTwinGate() {
         allOk = allOk && ok;
     }
 
-    printf("[twin] %s\n", allOk ? "ALL PASS (catalog introspection; Object/Property value fidelity; stale-aware frequency)"
+    // ---- ROBOT-PUBLISH: LiveRobot joint state reaches the catalog (avoidance-field integration) ----
+    {
+        Scene rs;
+        auto& reg = rs.getRegistry();
+        krs::rbuild::RobotGraph g = krs::rbuild::buildDemoGraph();
+        krs::rbuild::spawnGraphBodies(rs, g, 0);
+        krs::robot::LiveRobot* lr = krs::robot::instantiateFromGraph(rs, g, 0);
+        bool robotOk = false, followOk = false, negOk = false;
+        if (lr && lr->root != entt::null) {
+            const std::uint32_t rid = std::uint32_t(entt::to_integral(lr->root));
+            publishRobotState(catalog(), reg, 100.0);
+            const auto* dofP = catalog().get(rid, "dof");
+            const int nd = lr->ndof();
+            const std::string j0 = lr->model.joints[lr->memberJoint[0]].name.empty()
+                                       ? "J0" : lr->model.joints[lr->memberJoint[0]].name;
+            const auto* q0 = catalog().get(rid, "q:" + j0);
+            const auto* lo0 = catalog().get(rid, "qMin:" + j0);
+            const auto* ee = catalog().get(rid, "endEffector");
+            // per-link positions: one per chain body, matching FK
+            int links = 0;
+            for (const auto& pn2 : catalog().propertiesOf(rid))
+                if (pn2.rfind("linkPos:", 0) == 0) ++links;
+            const auto poses = lr->fkLinks();
+            bool eeOk = false;
+            if (ee && !poses.empty()) {
+                const Eigen::Vector3d p = lr->model.basePlacement.block<3, 3>(0, 0) * poses.back().p
+                                        + lr->model.basePlacement.block<3, 1>(0, 3);
+                eeOk = std::abs(ee->v[0] - p.x()) < 1e-9 && std::abs(ee->v[1] - p.y()) < 1e-9
+                    && std::abs(ee->v[2] - p.z()) < 1e-9;
+            }
+            robotOk = dofP && int(dofP->v[0]) == nd && q0 && std::abs(q0->v[0] - lr->q[0]) < 1e-12
+                   && lo0 && links == int(poses.size()) && eeOk;
+            // FOLLOW: move a joint, republish -> q and the end-effector both track.
+            Eigen::VectorXd qc = lr->q; qc[0] = 0.6;
+            lr->setCommandedQ(qc);
+            publishRobotState(catalog(), reg, 100.1);
+            const auto* q0b = catalog().get(rid, "q:" + j0);
+            const auto* eeB = catalog().get(rid, "endEffector");
+            const auto posesB = lr->fkLinks();
+            const Eigen::Vector3d pB = lr->model.basePlacement.block<3, 3>(0, 0) * posesB.back().p
+                                     + lr->model.basePlacement.block<3, 1>(0, 3);
+            followOk = q0b && std::abs(q0b->v[0] - 0.6) < 1e-12
+                    && eeB && std::abs(eeB->v[0] - pB.x()) < 1e-9 && std::abs(eeB->v[2] - pB.z()) < 1e-9;
+            // NEG-CTRL: a scene with NO RobotRegistry publishes no robot objects.
+            Scene bare;
+            const int before = catalog().objectCount();
+            publishRobotState(catalog(), bare.getRegistry(), 100.2);
+            negOk = catalog().objectCount() == before;
+        }
+        const bool ok = robotOk && followOk && negOk;
+        printf("[twin]   ROBOT-PUBLISH: dof/q/limits/links/EE in catalog=%d; joint move tracks (q + endEffector)=%d; "
+               "NEG no-registry publishes nothing=%d  %s\n",
+               int(robotOk), int(followOk), int(negOk), ok ? "PASS" : "FAIL");
+        allOk = allOk && ok;
+    }
+
+    printf("[twin] %s\n", allOk ? "ALL PASS (catalog introspection; Object/Property value fidelity; stale-aware frequency; robot state published)"
                                  : "FAILURES PRESENT");
     fflush(stdout);
     return allOk;
+}
+
+// AVOIDANCE-FIELD INTEGRATION -- see PropertyCatalog.hpp. Publishes each LiveRobot's authored joint
+// state under its ROOT entity id: the root carries the TagComponent the Object combo lists, so a
+// Property node can select the robot and read q/limits/link positions/end-effector live.
+void publishRobotState(PropertyCatalog& cat, entt::registry& reg, double t)
+{
+    auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
+    if (!rr) return;
+    for (auto& rp : rr->robots) {
+        if (!rp || rp->root == entt::null) continue;
+        krs::robot::LiveRobot& lr = *rp;
+        const std::uint32_t id = std::uint32_t(entt::to_integral(lr.root));
+        const std::string& name = lr.name;
+        const double dof[1] = { double(lr.ndof()) };
+        cat.publish(id, name, "dof", PropType::Scalar, dof, t);
+        for (int k = 0; k < lr.ndof() && k < int(lr.memberJoint.size()); ++k) {
+            const auto& mj = lr.model.joints[lr.memberJoint[k]];
+            const std::string jn = mj.name.empty() ? ("J" + std::to_string(k)) : mj.name;
+            const double q[1]  = { lr.q[k] };
+            const double lo[1] = { mj.qLower };
+            const double hi[1] = { mj.qUpper };
+            cat.publish(id, name, "q:" + jn,    PropType::Scalar, q,  t);
+            cat.publish(id, name, "qMin:" + jn, PropType::Scalar, lo, t);   // live: panel edits show up
+            cat.publish(id, name, "qMax:" + jn, PropType::Scalar, hi, t);
+        }
+        // Per-chain-link world positions -- the skeleton an avoidance field needs to follow.
+        const auto poses = lr.fkLinks();
+        const Eigen::Matrix3d Rb = lr.model.basePlacement.block<3, 3>(0, 0);
+        const Eigen::Vector3d pb = lr.model.basePlacement.block<3, 1>(0, 3);
+        for (size_t k = 0; k < poses.size(); ++k) {
+            const Eigen::Vector3d p = Rb * poses[k].p + pb;
+            const double v[3] = { p.x(), p.y(), p.z() };
+            cat.publish(id, name, "linkPos:" + std::to_string(k), PropType::Vec3, v, t);
+            if (k + 1 == poses.size())
+                cat.publish(id, name, "endEffector", PropType::Vec3, v, t);
+        }
+    }
 }
 
 // GATE QUATERNION-OUTPUT (KRS_QUATOUT_SELFTEST): the rigid-body Property node's NEW quaternion output matches the

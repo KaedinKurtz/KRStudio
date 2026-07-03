@@ -186,8 +186,17 @@ inline void publishSceneState(PropertyCatalog& cat, entt::registry& reg, double 
     }
 }
 
+// AVOIDANCE-FIELD INTEGRATION: publish every LiveRobot's authored joint state into the catalog --
+// per-joint q + live limits ("q:<name>", "qMin:<name>", "qMax:<name>"), per-chain-link world
+// positions ("linkPos:<k>"), the end-effector ("endEffector"), and "dof" -- under the robot's ROOT
+// entity id (which carries the TagComponent the Object combo lists). Before this, only rigid
+// bodies published: Object/Property nodes could not observe the actual robot, so a robot-avoidance
+// field could not follow the arm. Defined in TwinNodes.cpp (needs the robot model); a scene with
+// no RobotRegistry publishes nothing.
+void publishRobotState(PropertyCatalog& cat, entt::registry& reg, double t);
+
 // GATE TWIN (env KRS_TWIN_SELFTEST; in the bench): PUBLISH-CATALOG /
-// OBJECT-PROPERTY-NODES / FREQUENCY-OUTPUT. Returns true iff all pass.
+// OBJECT-PROPERTY-NODES / FREQUENCY-OUTPUT / ROBOT-PUBLISH. Returns true iff all pass.
 bool runTwinGate();
 
 // GATE QUATERNION-OUTPUT (env KRS_QUATOUT_SELFTEST; in the bench): the rigid-body Property node's quaternion
