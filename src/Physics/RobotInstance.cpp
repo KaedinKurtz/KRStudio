@@ -181,6 +181,7 @@ LiveRobot* instantiateFromGraph(Scene& scene, const krs::rbuild::RobotGraph& g, 
     // nbody > ndof, and an ndof-sized array + the old `k-1 < ndof` guard DROPPED every solid past
     // the Fixed joint from linkEntities -> those bodies were never FK-driven (static) = shatter.
     lr.linkEntities.assign(lr.chain.nbody(), {});
+    lr.baseEntities.clear();
     for (size_t k = 0; k < order.size(); ++k) {
         const int bodyIdx = order[k];
         if (bodyIdx < 0 || bodyIdx >= int(g.bodies.size())) continue;
@@ -195,6 +196,7 @@ LiveRobot* instantiateFromGraph(Scene& scene, const krs::rbuild::RobotGraph& g, 
             reg.emplace_or_replace<ParentComponent>(e, root);
             reg.emplace_or_replace<RobotSubcomponentComponent>(e, robotId);
             if (k >= 1 && int(k - 1) < int(lr.linkEntities.size())) lr.linkEntities[k - 1].push_back(e);
+            else if (k == 0) lr.baseEntities.push_back(e);   // base solids: kept for the graph round-trip
         }
     }
     captureRobotRest(scene, lr);   // q is still 0 here -> rest = the authored pose
@@ -213,13 +215,28 @@ krs::rbuild::RobotGraph buildGraphFromLiveRobot(const LiveRobot& lr)
     krs::rbuild::RobotGraph g;
     g.robotId = lr.robotId;
     g.base    = 0;
-    const int n = lr.ndof();
 
     RBBody base; base.name = lr.name + "_base"; base.placement = lr.model.basePlacement;
+    // Base solids (recorded by instantiateFromGraph): without them, every graph round-trip
+    // dropped the base's entity mapping and a bore on the base could never be Defined again
+    // (bodyIndexForEntity returned -1 -> "must be on two distinct robot bodies (a=-1 ...)").
+    for (entt::entity e : lr.baseEntities) {
+        const int eid = int(static_cast<std::uint32_t>(e));
+        if (base.entity < 0) base.entity = eid; else base.extraEntities.push_back(eid);
+    }
     g.bodies.push_back(base);
 
-    const auto axes = lr.jointAxesWorld();   // world (pos,dir) of each member joint at q=0
-    for (int k = 0; k < n; ++k) {
+    // CHAIN-BODY indexed mirror: one RBBody per chain body -- ALL member joints INCLUDING Fixed.
+    // restLinkWorld/linkEntities are chain-body indexed (captureRobotRest uses nbody); the old
+    // `k < ndof()` loop read them with DOF indices, so one Fixed member joint dropped its welded
+    // body and shifted every downstream placement/entity group by one (the shatter class of
+    // 926520fb, reintroduced at the graph-mirror layer).
+    std::vector<int> chainJoint;              // chain body k -> model.joints index
+    for (int i = 0; i < int(lr.model.joints.size()); ++i)
+        if (lr.model.joints[i].member) chainJoint.push_back(i);
+    const int nb = int(chainJoint.size());    // == chain.nbody()
+
+    for (int k = 0; k < nb; ++k) {
         RBBody b; b.name = lr.name + "_link" + std::to_string(k + 1);
         if (k < int(lr.restLinkWorld.size())) b.placement = lr.restLinkWorld[k];
         if (k < int(lr.linkEntities.size())) {
@@ -230,33 +247,45 @@ krs::rbuild::RobotGraph buildGraphFromLiveRobot(const LiveRobot& lr)
         }
         g.bodies.push_back(b);
     }
-    for (int k = 0; k < n; ++k) {
-        const krs::robot::Joint& mj = lr.model.joints[lr.memberJoint[k]];
-        // Tree parent body: treeParent -1 = base (graph body 0); >=0 = chain idx t -> graph body t+1;
-        // < -1 (unset) = serial fallback (parent = previous body k). Serial robots reconstruct
-        // unchanged while a branched robot recovers its true parent.
-        const int parentBody = (mj.treeParent < -1) ? k
-                             : (mj.treeParent == -1) ? 0
-                                                     : (mj.treeParent + 1);
-        RBJoint j; j.parent = parentBody; j.child = k + 1;     // link parent -> link k+1
+
+    // Joint frames for ALL member joints (chain-body indexed, tree-aware parents).
+    const auto frames = lr.memberJointFramesWorld(Eigen::VectorXd::Zero(std::max(0, lr.chain.nq())));
+    int prevBody = -1;
+    for (int k = 0; k < nb; ++k) {
+        const krs::robot::Joint& mj = lr.model.joints[chainJoint[k]];
+        // Tree parent: same rule toChain applies (treeParent is a chain-body index; -1 = base;
+        // < -1 unset = serial fallback to the previous chain body). Graph body = chain body + 1.
+        const int parentChain = (mj.treeParent < -1) ? prevBody : mj.treeParent;
+        RBJoint j;
+        j.parent = (parentChain >= 0) ? parentChain + 1 : 0;
+        j.child  = k + 1;
         j.type = (mj.type == krs::dyn::JType::Fixed)     ? JType::Fixed
                : (mj.type == krs::dyn::JType::Prismatic) ? JType::Prismatic
                                                          : JType::Revolute;
-        if (k < int(axes.size())) {
-            j.axisPos = glm::vec3(float(axes[k].first.x()),  float(axes[k].first.y()),  float(axes[k].first.z()));
-            j.axisDir = glm::vec3(float(axes[k].second.x()), float(axes[k].second.y()), float(axes[k].second.z()));
+        if (k < int(frames.size())) {
+            j.axisPos = glm::vec3(float(frames[k].first.x()),  float(frames[k].first.y()),  float(frames[k].first.z()));
+            j.axisDir = glm::vec3(float(frames[k].second.x()), float(frames[k].second.y()), float(frames[k].second.z()));
         }
         j.orthonormalizeFrame();
-        j.limits.lower = mj.qLower; j.limits.upper = mj.qUpper; j.limits.enabled = true;
-        j.prov = krs::rbuild::Prov::Inferred;
+        // Limits: PRESERVE Continuous. toRobot lowers enabled=false to +-1e9 bounds; forcing
+        // enabled=true here silently re-typed every Continuous joint to a limited Revolute (and
+        // showed +-1e9 limits in the panel) after one round-trip.
+        if (mj.qUpper >= 1e8) { j.limits.enabled = false; }
+        else { j.limits.lower = mj.qLower; j.limits.upper = mj.qUpper; j.limits.enabled = true; }
+        // Provenance: a user-edited joint stays Manual across the round-trip (was: always reset
+        // to Inferred, erasing the user's authorship the panel displays and gates assert).
+        j.prov = (mj.frameProv == krs::robot::Provenance::UserSupplied ||
+                  mj.engProv   == krs::robot::Provenance::UserSupplied) ? krs::rbuild::Prov::Manual
+                                                                        : krs::rbuild::Prov::Inferred;
         // Preserve joint identity across the live<->graph round-trip (else selection/names reset
         // every refresh). Trust the live model's id/nodeId only when it carries a real identity
         // (id != 0, i.e. it came through toRobot); otherwise let addJoint mint a fresh one with a
-        // canonical "J{dof}" name and dof-indexed nodeId on this first build.
+        // canonical "J{k}" name and chain-indexed nodeId on this first build.
         j.id     = mj.id;
         j.name   = !mj.name.empty() ? mj.name : ("J" + std::to_string(k));
         j.nodeId = (mj.id != 0) ? mj.nodeId : k;
         g.addJoint(j);                                   // mints identity iff still unassigned
+        prevBody = k;
     }
     return g;
 }
@@ -1000,6 +1029,52 @@ bool runRobotOwnerGate() {
         pass = pass && step9b;
         printf("[robotowner]   STEP9b joint identity: minted=%s carried=%s  %s\n",
                minted ? "yes" : "no", carried ? "yes" : "no", step9b ? "OK" : "FAIL");
+
+        // STEP9c -- FIXED-JOINT round-trip (chain-body vs DOF index space): weld the middle joint,
+        // then mirror the live robot back to a graph. The graph must keep ALL THREE joints (the weld
+        // included), keep every body (nbody+1 = 4), keep body placements aligned to restLinkWorld
+        // (the old ndof-indexed loop dropped the welded body and shifted the rest by one), and keep
+        // CONTINUOUS limits + Manual provenance (both were silently reset every round-trip).
+        {
+            LiveRobot c;
+            c.model.joints = { mkJ({0,0,1},{0,0,0.2},-2,2), mkJ({0,1,0},{0.3,0,0},-1,1), mkJ({0,1,0},{0.4,0,0},-2,2) };
+            c.model.joints[1].type = krs::dyn::JType::Fixed;                       // the weld
+            c.model.joints[2].qLower = -1e9; c.model.joints[2].qUpper = 1e9;       // continuous
+            c.model.joints[2].frameProv = krs::robot::Provenance::UserSupplied;    // user-edited
+            c.model.nLinks = 4;
+            c.rebuild();
+            { std::vector<krs::dyn::Pose> p; c.chain.fk(Eigen::VectorXd::Zero(std::max(0, c.chain.nq())), p);
+              const int nb = c.chain.nbody();
+              c.restLinkWorld.assign(nb, Eigen::Matrix4d::Identity());
+              for (int k = 0; k < nb && k < int(p.size()); ++k) c.restLinkWorld[k] = c.model.basePlacement * poseToEig(p[k]);
+              c.linkEntities.assign(nb, {}); }
+
+            const krs::rbuild::RobotGraph gf = buildGraphFromLiveRobot(c);
+            const bool counts = (int(gf.bodies.size()) == c.chain.nbody() + 1)
+                             && (int(gf.joints.size()) == c.chain.nbody())      // weld kept as a joint
+                             && (gf.dof() == c.ndof());                          // weld carries no DOF
+            bool weldKept = counts && gf.joints[1].type == krs::rbuild::JType::Fixed;
+            bool placeOk = counts;
+            for (int k = 0; k < c.chain.nbody() && placeOk; ++k)
+                placeOk = (gf.bodies[k + 1].placement - c.restLinkWorld[k]).cwiseAbs().maxCoeff() < 1e-9;
+            const bool contKept = counts && !gf.joints[2].limits.enabled;        // continuous survives
+            const bool provKept = counts && gf.joints[2].prov == krs::rbuild::Prov::Manual;
+            // Full circle: the mirrored graph re-lowers to the SAME FK at a test config.
+            LiveRobot d; d.model = gf.toRobot(); d.rebuild();
+            double fkErr = 1e9;
+            if (d.ndof() == c.ndof() && c.ndof() > 0) {
+                Eigen::VectorXd q(c.ndof()); for (int i = 0; i < c.ndof(); ++i) q[i] = 0.25 * (i + 1);
+                std::vector<krs::dyn::Pose> pc, pd; c.chain.fk(q, pc); d.chain.fk(q, pd);
+                fkErr = 0;
+                for (size_t k = 0; k < pc.size() && k < pd.size(); ++k)
+                    fkErr = std::max(fkErr, (poseToEig(pc[k]) - poseToEig(pd[k])).cwiseAbs().maxCoeff());
+            }
+            const bool step9c = counts && weldKept && placeOk && contKept && provKept && fkErr < 1e-9;
+            pass = pass && step9c;
+            printf("[robotowner]   STEP9c FIXED round-trip: counts=%s weldKept=%s placements=%s continuous=%s manualProv=%s FKerr=%.2e  %s\n",
+                   counts ? "yes" : "no", weldKept ? "yes" : "no", placeOk ? "yes" : "no",
+                   contKept ? "yes" : "no", provKept ? "yes" : "no", fkErr, step9c ? "OK" : "FAIL");
+        }
     }
 
     printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only + live-limit-edit + graph-round-trip)"

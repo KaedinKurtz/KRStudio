@@ -142,6 +142,11 @@ struct LiveRobot {
     Eigen::Matrix3d       dragBodyAnchorR   = Eigen::Matrix3d::Identity(); // dragged body FK world ORIENTATION @ start
     std::vector<int>      memberJoint;            // DOF index -> model.joints index
     std::vector<std::vector<entt::entity>> linkEntities;  // chain body idx -> entities it drives
+    std::vector<entt::entity> baseEntities;       // solids of the BASE link (chain body -1). Recorded by
+                                                  // instantiateFromGraph so buildGraphFromLiveRobot can
+                                                  // carry them; without this, base bores lost their
+                                                  // entity mapping after any graph round-trip and
+                                                  // Define-at-the-base failed with body index -1.
     std::vector<Eigen::Matrix4d> restLinkWorld;   // per chain-body rest world pose (q=0) for delta viz
     std::vector<std::vector<Eigen::Matrix4d>> linkEntityRestWorld;  // per chain-body, per entity rest world xf
     entt::entity          root = entt::null;       // the RobotRootComponent entity
@@ -235,29 +240,50 @@ struct LiveRobot {
         return poses;
     }
 
-    // World-frame (axisPos, axisDir) of each member joint at HOME (q=0), for the Robot
-    // View joint-axis overlay. Joint origin = parent link frame * ptree; axis = parent
-    // rotation * Rtree * axis. Parent of member joint k is chain body k-1 (base for k=0).
-    std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> jointAxesWorld() const {
-        return jointAxesWorld(Eigen::VectorXd::Zero(std::max(0, chain.nq())));
-    }
-    // World-frame (axisPos, axisDir) of each member joint at an ARBITRARY config q (so the
-    // axis overlay can FOLLOW the robot when it moves, not stay stuck at home).
-    std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> jointAxesWorld(const Eigen::VectorXd& q) const {
+    // World-frame (axisPos, axisDir) of EVERY member joint (INCLUDING Fixed) at config q, indexed by
+    // CHAIN BODY -- the same index space as restLinkWorld/linkEntities. The parent pose honors the
+    // tree edge (Joint.treeParent, exactly as toChain lowers it), NOT a serial poses[k-1] assumption:
+    // the old serial rule read the WRONG parent for branched trees (post-merge robots) and for chains
+    // with a Fixed member joint (DOF index != chain-body index past the weld).
+    std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> memberJointFramesWorld(const Eigen::VectorXd& qIn) const {
         std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> out;
-        if (chain.nq() <= 0) return out;
-        Eigen::VectorXd qq = (q.size() == chain.nq()) ? q : Eigen::VectorXd::Zero(chain.nq());
+        const int nb = chain.nbody();
+        if (nb <= 0) return out;
+        Eigen::VectorXd qq = (qIn.size() == chain.nq()) ? qIn : Eigen::VectorXd::Zero(std::max(0, chain.nq()));
         std::vector<krs::dyn::Pose> poses; chain.fk(qq, poses);
         const Eigen::Matrix3d Rb = model.basePlacement.block<3, 3>(0, 0);
         const Eigen::Vector3d pb = model.basePlacement.block<3, 1>(0, 3);
-        for (int k = 0; k < int(memberJoint.size()); ++k) {
-            const Joint& j = model.joints[memberJoint[k]];
+        int prevBody = -1;   // replicate toChain's parent rule so chain-body indices line up exactly
+        for (const auto& j : model.joints) {
+            if (!j.member) continue;
+            const int parent = (j.treeParent < -1) ? prevBody : j.treeParent;
             Eigen::Matrix3d Rp = Rb; Eigen::Vector3d pp = pb;
-            if (k > 0 && (k - 1) < int(poses.size())) { Rp = Rb * poses[k - 1].R; pp = Rb * poses[k - 1].p + pb; }
-            // Draw the overlay THROUGH the axis point (the physical bore), not the frame origin. With
+            if (parent >= 0 && parent < int(poses.size())) { Rp = Rb * poses[parent].R; pp = Rb * poses[parent].p + pb; }
+            // Frame THROUGH the axis point (the physical bore), not the frame origin. With
             // chainFK==CAD (ptree = CAD origin) pp/Rp no longer accumulate, so the axis lands on the bore.
             const Eigen::Vector3d aptP = j.hasAxisPoint ? j.axisPoint : j.ptree;
             out.emplace_back(pp + Rp * aptP, (Rp * (j.Rtree * j.axis)).normalized());
+            prevBody = int(out.size()) - 1;
+        }
+        return out;
+    }
+
+    // World-frame (axisPos, axisDir) of each DOF joint at HOME (q=0), for the Robot
+    // View joint-axis overlay (one entry per DOF -- the Fixed-filtered view of
+    // memberJointFramesWorld, preserving this function's historical contract).
+    std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> jointAxesWorld() const {
+        return jointAxesWorld(Eigen::VectorXd::Zero(std::max(0, chain.nq())));
+    }
+    // World-frame (axisPos, axisDir) of each DOF joint at an ARBITRARY config q (so the
+    // axis overlay can FOLLOW the robot when it moves, not stay stuck at home).
+    std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> jointAxesWorld(const Eigen::VectorXd& q) const {
+        const auto frames = memberJointFramesWorld(q);
+        std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> out;
+        int k = 0;
+        for (const auto& j : model.joints) {
+            if (!j.member) continue;
+            if (j.type != krs::dyn::JType::Fixed && k < int(frames.size())) out.push_back(frames[k]);
+            ++k;
         }
         return out;
     }
