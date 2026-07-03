@@ -13,6 +13,7 @@
 // ===========================================================================
 #include <QWidget>
 #include <memory>
+#include <vector>
 #include <cstdint>
 #include "IMenu.hpp"
 
@@ -28,6 +29,8 @@ class QTimer;
 
 namespace krs::rbuild { struct RobotGraph; }
 namespace krs::rcfg  { struct RobotConfig; }
+
+struct EditSnapshot;   // cpp-only: graph + live-robot state captured before a mutating edit
 
 class RobotBuilderPanel : public QWidget, public IMenu
 {
@@ -65,6 +68,7 @@ private slots:
     void onSnapAxisToBore();    // snap the selected joint's axis to the selected bore feature
     void onJointTypeChanged(int comboIndex);   // re-type the selected joint (Revolute/Continuous/Prismatic/Fixed)
     void onJogMoved(int sliderValue);          // jog the selected joint's DOF through LiveRobot::q
+    void onUndoEdit();                         // restore the last pre-edit snapshot (graph + pose + transforms)
 
 private:
     void initializeUI();
@@ -75,6 +79,7 @@ private:
     void refreshBoreSlots();                  // Bore A/B readout + Define/Snap enable gating (selection poll)
     int  dofIndexOfRow(int row) const;        // joints-list row -> chain DOF index (-1 = no DOF: Fixed/ambiguous)
     void syncJogToSelected(int row);          // point the jog slider at the selected joint's DOF + current q
+    void pushUndo(const QString& label);      // snapshot graph + robot state BEFORE a mutating edit
 
     Scene* m_scene = nullptr;
     bool   m_isUpdatingUI = false;
@@ -90,6 +95,11 @@ private:
     QListWidget*    m_jointsList    = nullptr;
     QComboBox*      m_jointType     = nullptr;
     QPushButton*    m_deleteBtn     = nullptr;
+    QPushButton*    m_undoBtn       = nullptr;   // Undo Last Edit (Ctrl+Z inside the panel)
+    // Pre-edit snapshots (graph + q + rest captures + entity transforms), newest last. Cut/split is
+    // NOT snapshotted (it creates robots; confirm-guarded instead). unique_ptr keeps the header
+    // light -- EditSnapshot is defined in the .cpp (needs Eigen + components).
+    std::vector<std::unique_ptr<EditSnapshot>> m_undoStack;
     QLabel*         m_defineHint    = nullptr;
     QLabel*         m_boreA         = nullptr;   // Bore A slot readout (body/radius of the older pick)
     QLabel*         m_boreB         = nullptr;   // Bore B slot readout (the newer pick)

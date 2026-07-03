@@ -27,11 +27,28 @@
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QLineEdit>
+#include <QShortcut>
+#include <QKeySequence>
 #include <QSignalBlocker>
 #include <QMetaMethod>
 
 #include <cstdio>
 #include <vector>
+
+// Pre-edit snapshot: everything a panel edit can touch. Restoring it (see onUndoEdit) rebuilds a
+// SELF-CONSISTENT state -- graph, live-robot model/pose/rest captures, and the member solids'
+// transforms all agree -- so the subsequent graphChanged reapply is a no-op over it, not a fight.
+struct EditSnapshot {
+    QString label;                                        // what the edit was ("Define", "Limits", ...)
+    int robotId = -1;
+    krs::rbuild::RobotGraph graph;
+    bool hasRobot = false;                                // false in headless fixtures with no LiveRobot
+    Eigen::VectorXd q;
+    Eigen::Matrix4d basePlacement = Eigen::Matrix4d::Identity();
+    std::vector<Eigen::Matrix4d> restLinkWorld;
+    std::vector<std::vector<Eigen::Matrix4d>> linkEntityRestWorld;
+    std::vector<std::pair<entt::entity, TransformComponent>> xforms;   // member solids' poses
+};
 
 namespace {
 // House-style section header (centered bold label over a line) -- mirrors
@@ -135,6 +152,14 @@ void RobotBuilderPanel::initializeUI()
     m_deleteBtn = new QPushButton(QStringLiteral("Cut Selected Joint (splits off a new robot)"), content);
     m_deleteBtn->setObjectName(QStringLiteral("rbDeleteJointButton"));
     layout->addWidget(m_deleteBtn);
+    m_undoBtn = new QPushButton(QStringLiteral("Undo Last Edit"), content);
+    m_undoBtn->setObjectName(QStringLiteral("rbUndoButton"));
+    m_undoBtn->setEnabled(false);
+    m_undoBtn->setToolTip(QStringLiteral(
+        "Restore the state before the last authoring edit (define, re-type, limits, axis, snap, "
+        "rename) -- including any geometry the mate snap moved. Ctrl+Z works while the panel has "
+        "focus. Cut is not undoable (it creates a robot; re-mate to merge back)."));
+    layout->addWidget(m_undoBtn);
 
     // --- Define joint from features ---
     layout->addWidget(makeSectionHeader(QStringLiteral("Define Joint"), content));
@@ -304,6 +329,7 @@ void RobotBuilderPanel::setupConnections()
             QStringLiteral("Joint name (drives by name in the node graph):"),
             QLineEdit::Normal, cur, &ok).trimmed();
         if (!ok || name.isEmpty() || name == cur) return;
+        pushUndo(QStringLiteral("Rename"));
         g->joints[row].name = name.toStdString();
         setStatus(QStringLiteral("Renamed %1 -> %2.").arg(cur.isEmpty() ? QStringLiteral("(unnamed)") : cur, name));
         refresh();
@@ -313,6 +339,12 @@ void RobotBuilderPanel::setupConnections()
     connect(m_jointType, QOverload<int>::of(&QComboBox::activated),
             this, &RobotBuilderPanel::onJointTypeChanged);
     connect(m_jogSlider, &QSlider::valueChanged, this, &RobotBuilderPanel::onJogMoved);
+    connect(m_undoBtn,   &QPushButton::clicked,  this, &RobotBuilderPanel::onUndoEdit);
+    // Ctrl+Z scoped to the panel + its children: the global shortcut stays with the gizmo
+    // transform-undo; authoring undo wins only while the Builder has focus.
+    auto* undoSc = new QShortcut(QKeySequence::Undo, this);
+    undoSc->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(undoSc, &QShortcut::activated, this, &RobotBuilderPanel::onUndoEdit);
 
     // SelectionState is a plain ctx struct mutated by the viewport with no change signal, so the
     // bore slots + button gating poll it (cheap: reads a tiny vector 5x/s, updates only on change).
@@ -326,6 +358,90 @@ krs::rbuild::RobotGraph* RobotBuilderPanel::graph() const
 {
     if (!m_scene) return nullptr;
     return m_scene->getRegistry().ctx().find<krs::rbuild::RobotGraph>();
+}
+
+// Snapshot everything the upcoming edit can touch. Called at the TOP of every mutating panel op
+// (except Cut -- it mints robots and is confirm-guarded instead).
+void RobotBuilderPanel::pushUndo(const QString& label)
+{
+    auto* g = graph();
+    if (!g || !m_scene) return;
+    auto& reg = m_scene->getRegistry();
+    auto snap = std::make_unique<EditSnapshot>();
+    snap->label = label;
+    snap->robotId = g->robotId;
+    snap->graph = *g;
+    for (const auto& b : g->bodies) {
+        std::vector<int> ids = b.extraEntities;
+        ids.insert(ids.begin(), b.entity);
+        for (int eid : ids) {
+            if (eid < 0) continue;
+            const entt::entity e = entt::entity(std::uint32_t(eid));
+            if (!reg.valid(e)) continue;
+            if (const auto* tc = reg.try_get<TransformComponent>(e)) snap->xforms.emplace_back(e, *tc);
+        }
+    }
+    if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>()) {
+        if (const krs::robot::LiveRobot* lr = rr->get(g->robotId)) {
+            snap->hasRobot = true;
+            snap->q = lr->q;
+            snap->basePlacement = lr->model.basePlacement;
+            snap->restLinkWorld = lr->restLinkWorld;
+            snap->linkEntityRestWorld = lr->linkEntityRestWorld;
+        }
+    }
+    m_undoStack.push_back(std::move(snap));
+    if (m_undoStack.size() > 16) m_undoStack.erase(m_undoStack.begin());
+    if (m_undoBtn) {
+        m_undoBtn->setEnabled(true);
+        m_undoBtn->setText(QStringLiteral("Undo: %1").arg(label));
+    }
+}
+
+// Restore the newest snapshot. The restore rebuilds a SELF-CONSISTENT state first (graph, model,
+// rest captures, solid transforms), so the graphChanged reapply that follows settles ONTO it
+// (home-snap -> re-instantiate -> re-capture reproduces the restored rest exactly); the saved pose
+// q is then re-applied on top.
+void RobotBuilderPanel::onUndoEdit()
+{
+    if (m_isUpdatingUI || m_undoStack.empty() || !m_scene) return;
+    auto& reg = m_scene->getRegistry();
+    auto* gp = graph();
+    std::unique_ptr<EditSnapshot> snap = std::move(m_undoStack.back());
+    m_undoStack.pop_back();
+    if (!gp || gp->robotId != snap->robotId) {
+        // The active graph changed robots since the snapshot (switch/park) -- stale history.
+        m_undoStack.clear();
+        if (m_undoBtn) { m_undoBtn->setEnabled(false); m_undoBtn->setText(QStringLiteral("Undo Last Edit")); }
+        setStatus(QStringLiteral("Undo history belonged to another robot -- cleared."));
+        return;
+    }
+
+    *gp = snap->graph;                                        // 1) authoring truth
+    for (const auto& [e, tc] : snap->xforms)                  // 2) solid poses (incl. any mate snap)
+        if (reg.valid(e)) reg.emplace_or_replace<TransformComponent>(e, tc);
+    krs::robot::LiveRobot* lr = nullptr;
+    if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>()) lr = rr->get(snap->robotId);
+    if (lr && snap->hasRobot) {                               // 3) live-robot kinematic truth
+        lr->model = gp->toRobot();
+        lr->model.name = lr->name;
+        lr->model.basePlacement = snap->basePlacement;
+        lr->rebuild();
+        lr->restLinkWorld = snap->restLinkWorld;
+        lr->linkEntityRestWorld = snap->linkEntityRestWorld;
+    }
+    emit graphChanged();                                      // 4) reapply settles onto the restored state
+    if (lr && snap->hasRobot && lr->ndof() == int(snap->q.size())) {
+        lr->setCommandedQ(snap->q);                           // 5) the pose the user had
+        krs::robot::writeBackRobotViz(*m_scene, *lr);
+    }
+    setStatus(QStringLiteral("Undid: %1.").arg(snap->label));
+    refresh();
+    if (m_undoBtn) {
+        m_undoBtn->setEnabled(!m_undoStack.empty());
+        m_undoBtn->setText(m_undoStack.empty() ? QStringLiteral("Undo Last Edit")
+                                               : QStringLiteral("Undo: %1").arg(m_undoStack.back()->label));
+    }
 }
 
 void RobotBuilderPanel::setStatus(const QString& msg)
@@ -645,6 +761,7 @@ void RobotBuilderPanel::onDefineFromFeatures()
         return;
     }
 
+    pushUndo(QStringLiteral("Define joint"));
     krs::rbuild::EditController ctrl{ g };
     const int before = ctrl.dof();
 
@@ -961,6 +1078,7 @@ void RobotBuilderPanel::onJointTypeChanged(int comboIndex)
     auto* g = graph();
     const int row = m_jointsList->currentRow();
     if (!g || row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to re-type.")); return; }
+    pushUndo(QStringLiteral("Joint type"));
 
     krs::rbuild::JType t = krs::rbuild::JType::Revolute;
     bool continuous = false;
@@ -990,6 +1108,7 @@ void RobotBuilderPanel::onApplyAxisOrigin()
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
     if (row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to adjust.")); return; }
+    pushUndo(QStringLiteral("Axis origin"));
     g->joints[row].axisPos = glm::vec3(float(m_axisX->value()), float(m_axisY->value()), float(m_axisZ->value()));
     g->joints[row].prov    = krs::rbuild::Prov::Manual;   // user-adjusted -> manual provenance
     setStatus(QStringLiteral("J%1 axis origin set to (%2, %3, %4).")
@@ -1006,6 +1125,7 @@ void RobotBuilderPanel::onApplyAxisDir()
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
     if (row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to set its axis.")); return; }
+    pushUndo(QStringLiteral("Axis direction"));
     const glm::vec3 dir(float(m_dirX->value()), float(m_dirY->value()), float(m_dirZ->value()));
     krs::rbuild::EditController ctrl{ g };
     if (!ctrl.setJointAxis(row, dir)) {   // normalizes + orthonormalizes the mate frame + marks Manual
@@ -1028,6 +1148,7 @@ void RobotBuilderPanel::onSnapAxisToBore()
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
     if (row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to snap.")); return; }
+    pushUndo(QStringLiteral("Snap to bore"));
     auto* sel = m_scene ? m_scene->getRegistry().ctx().find<krs::sel::SelectionState>() : nullptr;
     const krs::sel::Selection* bore = nullptr;
     if (sel) for (const auto& s : sel->selected)   // LAST selected cylinder = the most recent intent
@@ -1066,6 +1187,7 @@ void RobotBuilderPanel::onApplyLimit()
     const int dof = g->dof();
     const int idx = m_dofIndex->value();
     if (idx < 0 || idx >= dof) { setStatus(QStringLiteral("DOF index out of range.")); return; }
+    pushUndo(QStringLiteral("Limits"));
 
     const double lo = m_limitLo->value();
     const double hi = m_limitHi->value();
@@ -1230,6 +1352,28 @@ bool runRobotBuilderPanelGate()
         printf("[rbuild]   define control: DOF %d -> %d (want %d), frame-matches=%s, mate+connectors minted=%s  %s\n",
                before, after, before + 1, frameOk ? "yes" : "no", mateAuthored ? "yes" : "no",
                defineOk ? "PASS" : "FAIL");
+
+        // UNDO: one click restores the pre-define state -- joint gone, DOF back, and the solid the
+        // mate snap moved is back at the graph body's (restored) placement.
+        auto* undo = panel.findChild<QPushButton*>(QStringLiteral("rbUndoButton"));
+        if (undo) undo->click();
+        const bool undoDof   = (g.dof() == before);
+        const bool undoJoint = (g.jointBetween(2, 3) < 0);
+        bool undoXform = false;
+        {
+            const entt::entity e3 = entt::entity(std::uint32_t(g.bodies[3].entity));
+            if (reg.valid(e3)) {
+                const glm::vec3 nowPos = reg.get<TransformComponent>(e3).translation;
+                undoXform = glm::distance(nowPos, glm::vec3(float(g.bodies[3].placement(0, 3)),
+                                                            float(g.bodies[3].placement(1, 3)),
+                                                            float(g.bodies[3].placement(2, 3)))) < 1e-4f;
+            }
+        }
+        const bool undoOk = undo && undoDof && undoJoint && undoXform;
+        printf("[rbuild]   undo control: DOF back to %d=%s, joint gone=%s, solid transform restored=%s  %s\n",
+               before, undoDof ? "yes" : "no", undoJoint ? "yes" : "no", undoXform ? "yes" : "no",
+               undoOk ? "PASS" : "FAIL");
+        defineOk = defineOk && undoOk;
 
         // degenerate (NON-PARALLEL) bores -> rejected, DOF unchanged. (An offset-but-PARALLEL pair
         // is ACCEPTED by design since 8ed10f40: the manual define passes requireCollinear=false and
