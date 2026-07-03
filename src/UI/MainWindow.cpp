@@ -1,4 +1,5 @@
 #include "MainWindow.hpp"
+#include "AuthoringPersist.hpp"   // krs::persist -- authoring survives restart
 #include "StaticToolbar.hpp"
 #include "PropertiesPanel.hpp"
 #include "Scene.hpp"
@@ -893,6 +894,17 @@ MainWindow::MainWindow(QWidget* parent)
         std::vector<krs::rbuild::ParsedPart> parts = krs::cad::importStepAssembly(*m_scene, fanucStepPath);
         krs::rbuild::RobotGraph g = krs::rbuild::buildNamedSerialChain(parts);
         g.robotId = 0;
+        // AUTHORING PERSISTENCE: overlay the user's saved edits (joint definitions, axis fixes,
+        // limits, renames, connectors, mates) onto the freshly inferred graph. Keyed by the STEP's
+        // BASENAME (machine-agnostic) + body count; any mismatch refuses and keeps fresh inference.
+        {
+            const std::string src = std::filesystem::path(fanucStepPath).filename().string();
+            const std::string docPath = krs::persist::defaultAuthoringPath();
+            reg.ctx().emplace<krs::persist::AuthoringDocInfo>(krs::persist::AuthoringDocInfo{ src, docPath });
+            if (krs::persist::loadAuthoringOverlay(reg, g, src, docPath))
+                qInfo() << "[FANUC-BOOT] authoring overlay applied:" << int(g.joints.size())
+                        << "persisted joints (user edits survive restart)";
+        }
         if (!g.joints.empty() && !g.bodies.empty()) {
             qInfo() << "[FANUC-BOOT] base=" << QString::fromStdString(g.bodies[0].name)
                     << " J0 dir=(" << g.joints[0].axisDir.x << g.joints[0].axisDir.y << g.joints[0].axisDir.z << ")"
@@ -2299,6 +2311,11 @@ MainWindow::MainWindow(QWidget* parent)
                 // Refresh the joint-name registry (the "joint server" the Nodes drive by name/nodeId)
                 // so a freshly defined / deleted / renamed joint is immediately addressable.
                 krs::robot::rebuildJointNameRegistry(reg);
+                // AUTHORING PERSISTENCE: every committed edit saves the boot robot's document, so a
+                // crash/exit at any point loses nothing (the doc is a few KB of JSON).
+                if (gp && gp->robotId == 0)
+                    if (const auto* info = reg.ctx().find<krs::persist::AuthoringDocInfo>())
+                        krs::persist::saveAuthoring(reg, *gp, info->source, info->filePath);
             }
             if (m_renderingSystem) m_renderingSystem->requestViewportUpdates();
         });

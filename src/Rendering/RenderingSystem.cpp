@@ -34,6 +34,7 @@
 #include "SelectionHighlightPass.hpp"
 #include "SelectionService.hpp"   // krs::sel selection-highlight gates
 #include "RobotBuilder.hpp"        // krs::rbuild robot-builder gates (Phase 0 recon)
+#include "AuthoringPersist.hpp"    // krs::persist authoring save/load + gate
 #include "RaycastService.hpp"      // krs::pick nanort BVH ray/mesh picking gate
 #include "UvAtlasService.hpp"       // krs::uv xatlas per-body UV unwrap gate
 #include "RobotBuilderScene.hpp"   // krs::rbuild demo graph + body->entity render bridge + gate
@@ -1053,6 +1054,14 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_MATE_SELFTEST") != 0) {
         std::printf("\n================= KRS_MATE_SELFTEST =================\n");
         const bool ok = krs::rbuild::runMateSelftest();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Authoring persistence: edited joints + connectors + mates survive an app restart. Headless.
+    if (qEnvironmentVariableIntValue("KRS_PERSIST_SELFTEST") != 0) {
+        std::printf("\n================= KRS_PERSIST_SELFTEST =================\n");
+        const bool ok = krs::persist::runPersistGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
