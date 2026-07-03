@@ -41,7 +41,10 @@ RobotViewport::RobotViewport(Scene* mainScene, RenderingSystem* mainRender, QWid
 
     auto& reg = m_viewScene->getRegistry();
     reg.ctx().emplace<SceneProperties>();
-    reg.ctx().emplace<krs::sel::SelectionState>();
+    // Bore picking live in this view, same FIFO-2 rule as the Builder (its commits are forwarded
+    // to the MAIN SelectionState on release, re-resolved at the live pose -- see mouseReleaseEvent).
+    auto& vsel = reg.ctx().emplace<krs::sel::SelectionState>();
+    vsel.enabled = true; vsel.fifoTwoBores = true;
 
     // Point the protected base members at our OWN scene BEFORE creating the camera.
     m_scene = m_viewScene.get();
@@ -164,6 +167,12 @@ void RobotViewport::mousePressEvent(QMouseEvent* ev)
 
 void RobotViewport::mouseReleaseEvent(QMouseEvent* ev)
 {
+    // Snapshot the VIEW feature-selection set so the base pick's effect can be diffed and
+    // forwarded to the MAIN scene (Define reads only the main SelectionState).
+    std::vector<krs::sel::Selection> beforeSel;
+    krs::sel::SelectionState* vst = m_viewScene ? m_viewScene->getRegistry().ctx().find<krs::sel::SelectionState>() : nullptr;
+    if (vst) beforeSel = vst->selected;
+
     ViewportWidget::mouseReleaseEvent(ev);   // base picks (sets selection in the VIEW scene)
     m_manualNav = false;
     reseedOrbitFromCamera();                 // resume orbit from the current view
@@ -183,6 +192,44 @@ void RobotViewport::mouseReleaseEvent(QMouseEvent* ev)
                 if (mreg.valid(pr.first) && mreg.any_of<SelectedComponent>(pr.first))
                     mreg.remove<SelectedComponent>(pr.first);
             for (auto e : picked) mreg.emplace_or_replace<SelectedComponent>(e);
+        }
+
+        // Cross-viewport FEATURE forwarding (VIEW -> MAIN): a bore picked in this clean, isolated
+        // view must land in the MAIN SelectionState -- that is the set Define/Snap consume. The
+        // forwarded Selection is RE-RESOLVED from the main twin's (entity, faceId) at its CURRENT
+        // transform (resolveFace), so a pick made in Builder mode (view frozen at q0) still carries
+        // the live-scene world frame, not the frozen preview's.
+        if (vst) {
+            auto* mst = mreg.ctx().find<krs::sel::SelectionState>();
+            auto mainTwin = [&](entt::entity ve) -> entt::entity {
+                for (const auto& pr : m_bodyMap) if (pr.second == ve) return pr.first;
+                return entt::null;
+            };
+            auto inSet = [](const std::vector<krs::sel::Selection>& v, const krs::sel::Selection& s) {
+                for (const auto& x : v) if (krs::sel::sameFeature(x, s)) return true;
+                return false;
+            };
+            if (mst) {
+                for (const auto& s : vst->selected) {          // ADDED in this click
+                    if (!s.valid || inSet(beforeSel, s)) continue;
+                    const entt::entity me = mainTwin(s.entity);
+                    if (me == entt::null) continue;
+                    const krs::sel::Selection fwd = krs::sel::resolveFace(mreg, me, s.faceId);
+                    if (!fwd.valid || inSet(mst->selected, fwd)) continue;
+                    mst->selected.push_back(fwd);
+                    krs::sel::enforceFifoTwoBores(*mst);
+                }
+                for (const auto& s : beforeSel) {              // TOGGLED OFF in this click
+                    if (!s.valid || inSet(vst->selected, s)) continue;
+                    const entt::entity me = mainTwin(s.entity);
+                    if (me == entt::null) continue;
+                    for (std::size_t i = 0; i < mst->selected.size(); ++i)
+                        if (mst->selected[i].entity == me && mst->selected[i].faceId == s.faceId) {
+                            mst->selected.erase(mst->selected.begin() + std::ptrdiff_t(i));
+                            break;
+                        }
+                }
+            }
         }
     }
 }

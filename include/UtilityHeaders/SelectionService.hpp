@@ -83,6 +83,34 @@ inline Selection pick(entt::registry& reg, const krs::pick::Ray& ray) {
     return resolveHit(reg, *hit);
 }
 
+// Resolve a KNOWN (entity, faceId) into a Selection with world analytic params from the entity's
+// CURRENT transform -- no ray needed. This is the re-derivation primitive: anything holding a stable
+// (entity, faceId) reference (a mirrored-viewport pick, a stored selection after the body moved) can
+// refresh its world frame instead of trusting a frozen click-time snapshot.
+inline Selection resolveFace(entt::registry& reg, entt::entity e, int faceId) {
+    Selection s;
+    s.entity = e;
+    if (!reg.valid(e) || !reg.all_of<BRepFaceComponent>(e)) return s;
+    const auto& brep = reg.get<BRepFaceComponent>(e);
+    if (faceId < 0 || faceId >= int(brep.faces.size())) return s;
+    const BRepFace& bf = brep.faces[faceId];
+    glm::mat4 M(1.0f);
+    if (const auto* xf = reg.try_get<TransformComponent>(e)) M = xf->getTransform();
+    const glm::mat3 R = glm::mat3(glm::inverseTranspose(M));
+    s.valid = true;
+    s.faceId = faceId;
+    s.type = static_cast<FeatureType>(bf.type);
+    s.radius = bf.radius;
+    s.faceKey = bf.faceKey;
+    s.axisPos = glm::vec3(M * glm::vec4(bf.axisPos, 1.0f));
+    s.axisDir = glm::normalize(R * bf.axisDir);
+    s.normal = glm::normalize(R * bf.normal);
+    s.axisEnd0 = glm::vec3(M * glm::vec4(bf.axisEnd0, 1.0f));
+    s.axisEnd1 = glm::vec3(M * glm::vec4(bf.axisEnd1, 1.0f));
+    s.hitPoint = s.axisPos;
+    return s;
+}
+
 // CYLINDER-PREFERRED feature pick (the robot-builder mate workflow picks BORES). Clicking "on a bore"
 // usually lands the ray on the flat face AROUND/in front of the hole -- nearest-triangle picking then
 // returns that PLANE, never the bore, and one-hit-per-entity x-ray can't reach the cylinder on the

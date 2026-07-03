@@ -380,10 +380,41 @@ void transformRobot(Scene& scene, int robotId, const Eigen::Matrix4d& Tworld)
     auto& reg = scene.getRegistry();
     RobotRegistry* rr = reg.ctx().find<RobotRegistry>(); if (!rr) return;
     LiveRobot* lr = rr->get(robotId); if (!lr) return;
-    lr->model.basePlacement = Tworld * lr->model.basePlacement;   // world-left-multiply; restLinkWorld stays
+    lr->model.basePlacement = Tworld * lr->model.basePlacement;   // world-left-multiply
+    // Left-multiply the REST captures too. The viz delta is invariant under this (delta and rest
+    // transform together), but buildGraphFromLiveRobot reads restLinkWorld as the body world pose --
+    // leaving it at the pre-drag capture made every graph mirrored AFTER a drag place its bodies
+    // (and thus every subsequent panel edit, via reapplyGraphToRobot) back at the OLD location.
+    for (auto& m : lr->restLinkWorld) m = Tworld * m;
+    for (auto& v : lr->linkEntityRestWorld) for (auto& m : v) m = Tworld * m;
     if (lr->useRobotFkViz) writeBackRobotViz(scene, *lr);         // delta = base_new*base_old^-1 -> moves links
     if (reg.valid(lr->root)) if (auto* tc = reg.try_get<TransformComponent>(lr->root))
         setTransformFromEig(*tc, Tworld * eigFromTransform(*tc));
+
+    // Keep the ctx AUTHORING graph in world-sync when it mirrors THIS robot: its body placements and
+    // persisted joint frames are world-space, and the next graphChanged re-applies them to the live
+    // robot -- without this, a drag followed by any panel edit reverted the robot's kinematic frames
+    // to phantom pivots at the pre-drag pose.
+    if (auto* g = reg.ctx().find<krs::rbuild::RobotGraph>(); g && g->robotId == robotId) {
+        for (auto& b : g->bodies) b.placement = Tworld * b.placement;
+        const Eigen::Matrix3d R = Tworld.block<3, 3>(0, 0);
+        auto xp = [&](const glm::vec3& p) {
+            const Eigen::Vector4d r = Tworld * Eigen::Vector4d(p.x, p.y, p.z, 1.0);
+            return glm::vec3(float(r.x()), float(r.y()), float(r.z()));
+        };
+        auto xd = [&](const glm::vec3& d) {
+            const Eigen::Vector3d r = R * Eigen::Vector3d(d.x, d.y, d.z);
+            const double L = r.norm();
+            return (L > 1e-12) ? glm::vec3(float(r.x() / L), float(r.y() / L), float(r.z() / L)) : d;
+        };
+        for (auto& j : g->joints) {
+            // axisPos (0,0,0) is the "unset -> link origin" sentinel (same rule as toRobot);
+            // transforming it would MINT a fake bore point at T's translation.
+            if (glm::length(j.axisPos) > 1e-9f) j.axisPos = xp(j.axisPos);
+            j.axisDir = xd(j.axisDir);
+            j.refDir  = xd(j.refDir);
+        }
+    }
 }
 
 void translateRobot(Scene& scene, int robotId, const Eigen::Vector3d& deltaWorld)
@@ -700,10 +731,13 @@ int mirrorLiveRobotIntoScene(Scene& viewScene, Scene& mainScene, int robotId,
     for (auto me : mreg.view<RobotSubcomponentComponent, RenderableMeshComponent, TransformComponent>()) {
         if (mreg.get<RobotSubcomponentComponent>(me).robotId != robotId) continue;
         const entt::entity ve = vreg.create();
-        vreg.emplace<RenderableMeshComponent>(ve, mreg.get<RenderableMeshComponent>(me));
+        vreg.emplace<RenderableMeshComponent>(ve, mreg.get<RenderableMeshComponent>(me));  // incl. triFace
         vreg.emplace<TransformComponent>(ve, mreg.get<TransformComponent>(me));  // root is identity -> local == world
         if (auto* mat = mreg.try_get<MaterialComponent>(me)) vreg.emplace<MaterialComponent>(ve, *mat);
         if (auto* tag = mreg.try_get<TagComponent>(me))      vreg.emplace<TagComponent>(ve, *tag);
+        // ANALYTIC FACES: without these, resolveHit rejects every click in the Robot View -- the
+        // dedicated authoring viewport LOOKED pickable but bore selection was silently dead there.
+        if (auto* brep = mreg.try_get<BRepFaceComponent>(me)) vreg.emplace<BRepFaceComponent>(ve, *brep);
         // carry the material-type tag so the view picks the same shader path
         if (mreg.all_of<TriPlanarMaterialTag>(me))   vreg.emplace<TriPlanarMaterialTag>(ve);
         if (mreg.all_of<UVTexturedMaterialTag>(me))  vreg.emplace<UVTexturedMaterialTag>(ve);
