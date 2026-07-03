@@ -60,6 +60,7 @@ entt::entity spawnOneBody(entt::registry& reg, const RBBody& b, int robotId) {
     reg.emplace<TriPlanarMaterialTag>(e);
     reg.emplace<TagComponent>(e, b.name.empty() ? std::string("RBody") : b.name);
     reg.emplace<RobotSubcomponentComponent>(e, robotId);
+    reg.emplace<AutoCollisionComponent>(e);   // link actors cook the REAL shape, not an AABB box
     if (!b.faces.empty()) { BRepFaceComponent fc; fc.faces = b.faces; reg.emplace<BRepFaceComponent>(e, std::move(fc)); }
     return e;
 }

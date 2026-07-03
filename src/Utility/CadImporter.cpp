@@ -6,6 +6,7 @@
 // ===========================================================================
 #include "Scene.hpp"
 #include "components.hpp"
+#include "CollisionCookingService.hpp"   // speculative cooks: CAD bodies collide with their real shape
 
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
@@ -352,6 +353,13 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
     if (!brepFaces.empty()) reg.emplace<BRepFaceComponent>(e, std::move(brepFaces)); // GATE F
     reg.emplace<TransformComponent>(e, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
     reg.emplace<TagComponent>(e, tag);
+    // Collide with the REAL shape, like every other spawned mesh (SceneBuilder pattern): CAD bodies
+    // never carried AutoCollisionComponent, so loose imported scenery had NO collision at all and
+    // robot links fell back to coarse AABB boxes. Cook speculatively in the background so the data
+    // is warm before the first Play (cache-deduplicated across instances).
+    reg.emplace<AutoCollisionComponent>(e);
+    CollisionCookingService::instance().requestTriangleMesh(mesh.vertices, mesh.indices, tag);
+    CollisionCookingService::instance().requestConvexHull(mesh.vertices, tag);
     // A.1b: real per-vertex UVs (baked above) -> drop the world-space triplanar tag and mark for
     // the UV-texture path. A.3: albedoTiling.x is the TEXELS-PER-METRE control (1 => 1 texture per
     // 1 m^2, since UVs are world-scale metres); exposed via ObjectPropertiesWidget's tiling widget.
