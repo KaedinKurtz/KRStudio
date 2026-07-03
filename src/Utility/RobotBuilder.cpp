@@ -163,6 +163,7 @@ std::vector<BRepFace> extractAnalyticFaces(const TopoDS_Shape& shape)
                 bf.radius = float(sp.Radius()); break; }
             default: bf.type = 4; break;
         }
+        bf.faceKey = computeFaceKey(bf);   // faces are part-LOCAL here -- the key's contract frame
         faces.push_back(bf);
     }
     return faces;

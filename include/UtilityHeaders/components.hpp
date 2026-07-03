@@ -627,8 +627,22 @@ inline std::uint64_t computeFaceKey(const BRepFace& f) {
         const glm::vec3 perp = w - glm::dot(w, d) * d;           //   perp offset of rim centroid off the axis
         mix(std::llround(double(glm::length(perp)) / 1e-4));
         mix(std::llround(double(glm::length(f.axisEnd1 - f.axisEnd0)) / 1e-4));  // along-axis rim separation
+        // 5) POSITION channel (body-local): the trimmed-bore midpoint coordinates (axisPos is re-seeded
+        //    to the rim midpoint at import -- a GEOMETRIC point, not the arbitrary infinite-axis ref).
+        //    Without it, every same-radius/length parallel bore (a bolt circle, both halves of an OCCT
+        //    seam-split cylinder) hashed IDENTICALLY -- key-based re-anchoring would bind an arbitrary
+        //    wrong hole. Fold-safe: a reversed twin has the same midpoint.
+        mix(std::llround(double(f.axisPos.x) / 1e-4));
+        mix(std::llround(double(f.axisPos.y) / 1e-4));
+        mix(std::llround(double(f.axisPos.z) / 1e-4));
+    } else if (f.type == 3) {                                    // sphere: centre position (geometric)
+        mix(std::llround(double(f.axisPos.x) / 1e-4));
+        mix(std::llround(double(f.axisPos.y) / 1e-4));
+        mix(std::llround(double(f.axisPos.z) / 1e-4));
     } else {
         mix(std::llround(double(glm::dot(f.axisPos, d)) / 1e-4));  // plane signed distance from local origin
+        // (no raw-position channel for planes: pl.Location() is an arbitrary parametrization point,
+        //  not a geometric feature of the face -- hashing it would break key stability.)
     }
     return h;
 }

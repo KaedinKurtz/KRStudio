@@ -933,6 +933,26 @@ bool runMateSelftest()
     printf("[mate]   D faceKey: reversed+sub-quantum twin identical=%s ; NEG-CTRL supra-quantum/diff-axis differ=%s  %s\n",
            invariant?"yes":"no", distinct?"yes":"no", D?"PASS":"FAIL"); pass &= D;
 
+    // ---------- D2: BOLT-CIRCLE discrimination (importer-shaped faces) ----------
+    // The importer re-seeds axisPos to the trimmed-rim MIDPOINT, which zeroed the old hash's only
+    // positional signal (the rim-perp channel): every same-radius/length/direction hole -- a bolt
+    // circle, both halves of a seam-split cylinder -- keyed IDENTICALLY, so key-based re-anchoring
+    // would bind an arbitrary wrong hole. The position channel must discriminate them, while a
+    // REVERSED twin of the SAME hole (fold + same midpoint) must still key identically.
+    auto trimmedCyl = [](glm::vec3 mid, glm::vec3 dir, float r, float halfLen) {
+        BRepFace f; f.type = 1; f.axisDir = glm::normalize(dir); f.normal = f.axisDir; f.radius = r;
+        f.axisEnd0 = mid - f.axisDir * halfLen; f.axisEnd1 = mid + f.axisDir * halfLen;
+        f.axisPos = mid; f.faceKey = computeFaceKey(f); return f;
+    };
+    const BRepFace h0    = trimmedCyl({ 0.10f, 0.0f, 0.0f}, {0,0, 1}, 0.006f, 0.008f);  // bolt hole 1
+    const BRepFace h1    = trimmedCyl({-0.10f, 0.0f, 0.0f}, {0,0, 1}, 0.006f, 0.008f);  // opposite hole, else identical
+    const BRepFace h0rev = trimmedCyl({ 0.10f, 0.0f, 0.0f}, {0,0,-1}, 0.006f, 0.008f);  // hole 1 reversed twin
+    const bool boltDistinct = (h0.faceKey != h1.faceKey);
+    const bool revStable    = (h0rev.faceKey == h0.faceKey);
+    const bool D2 = boltDistinct && revStable && h0.faceKey != 0;
+    printf("[mate]   D2 bolt-circle: identical parallel holes at different positions differ=%s ; reversed same-hole twin identical=%s  %s\n",
+           boltDistinct?"yes":"no", revStable?"yes":"no", D2?"PASS":"FAIL"); pass &= D2;
+
     // ---------- E: save / load / open round-trip (stable ids + local frames) ----------
     ByteW w; serializeConn(w, mcA); serializeConn(w, mcB); serializeGraph(w, mg);
     ByteR rr(w.b); MateConnectorComponent rA, rB; MateGraphComponent rG;

@@ -208,7 +208,8 @@ int stitchBodyUVs(const TopoDS_Shape& body, double s, const std::vector<FaceSpan
 // the entity. Mutates res (faces/volume/attachments/solids). Returns the entity, or entt::null
 // if the shape produced no triangles. Reused by importStepAssembly (named-part assembly import).
 static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape& solid,
-                                        double s, const std::string& tag, ImportResult& res)
+                                        double s, const std::string& tag, ImportResult& res,
+                                        const Eigen::Matrix4d* localFromWorld = nullptr)
 {
     // --- meshing quality from the body's bounding box (adaptive deflection) ---
     Bnd_Box bb; BRepBndLib::Add(solid, bb);
@@ -275,7 +276,31 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
             }
         }
         const int thisFaceId = int(brepFaces.size());
-        bf.faceKey = computeFaceKey(bf);                       // stable topological id (persistent-mate re-anchor)
+        // KEY SPACE: computeFaceKey's contract is a BODY-LOCAL face (components.hpp) -- the same
+        // physical face must key identically here (world-baked BRepFaceComponent) and in
+        // analyticFacesScaled (part-local ParsedPart faces). This solid is already world-baked, so
+        // when the caller supplies the inverse placement, hash the params transformed BACK to the
+        // part frame. Hashing the world params minted a SECOND, placement-dependent key per face --
+        // any rotated assembly placement made the two keys disagree, defeating re-anchoring.
+        if (localFromWorld) {
+            BRepFace lf = bf;
+            const Eigen::Matrix4d& M = *localFromWorld;
+            const Eigen::Matrix3d  R = M.block<3, 3>(0, 0);
+            auto xp = [&](const glm::vec3& p) {
+                const Eigen::Vector4d r = M * Eigen::Vector4d(p.x, p.y, p.z, 1.0);
+                return glm::vec3(float(r.x()), float(r.y()), float(r.z()));
+            };
+            auto xd = [&](const glm::vec3& v) {
+                const Eigen::Vector3d r = R * Eigen::Vector3d(v.x, v.y, v.z);
+                const double L = r.norm();
+                return (L > 1e-12) ? glm::vec3(float(r.x() / L), float(r.y() / L), float(r.z() / L)) : v;
+            };
+            lf.axisPos = xp(bf.axisPos); lf.axisDir = xd(bf.axisDir); lf.normal = xd(bf.normal);
+            lf.axisEnd0 = xp(bf.axisEnd0); lf.axisEnd1 = xp(bf.axisEnd1);
+            bf.faceKey = computeFaceKey(lf);
+        } else {
+            bf.faceKey = computeFaceKey(bf);   // identity placement (flattened import): local == world
+        }
         brepFaces.push_back(bf);
         for (int i = 1; i <= tri->NbNodes(); ++i) {
             gp_Pnt p = tri->Node(i); p.Transform(trsf);    // -> assembly coords
@@ -483,10 +508,15 @@ void collectMeshParts(entt::registry& reg, const Handle(XCAFDoc_ShapeTool)& st,
             BRepBuilderAPI_Transform(local, parentLoc.Transformation(), Standard_True).Shape();
         krs::rbuild::ParsedPart p;
         p.name = cafLabelName(label);
-        const entt::entity e = meshShapeIntoEntity(reg, world, s, p.name, res);
+        // One key space: hand meshShapeIntoEntity the inverse placement so the world-baked
+        // BRepFaceComponent mints its faceKeys from PART-LOCAL params -- the same key space
+        // analyticFacesScaled uses below (a picked face and its ParsedPart twin now agree).
+        const Eigen::Matrix4d placeW  = trsfToMatrixScaled(parentLoc.Transformation(), s);   // world, metres
+        const Eigen::Matrix4d invPlace = placeW.inverse();
+        const entt::entity e = meshShapeIntoEntity(reg, world, s, p.name, res, &invPlace);
         if (e == entt::null) return;                                  // produced no triangles
         p.entity    = int(static_cast<std::uint32_t>(e));
-        p.placement = trsfToMatrixScaled(parentLoc.Transformation(), s);  // world, metres
+        p.placement = placeW;
         p.faces     = analyticFacesScaled(local, s);                      // part-local, metres
         out.push_back(std::move(p));
     }

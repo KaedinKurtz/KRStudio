@@ -38,6 +38,7 @@ void addBore(RBBody& b, const glm::vec3& axisPosLocal, const glm::vec3& axisDirL
     f.axisDir = glm::normalize(axisDirLocal);
     f.normal = f.axisDir;
     f.radius = radius;
+    f.faceKey = computeFaceKey(f);           // body-LOCAL params -> a real key (0 meant "un-anchorable")
     b.faces.push_back(f);
 }
 
