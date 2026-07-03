@@ -691,14 +691,41 @@ int drainCommandBusIntoRobots(entt::registry& reg)
     RobotRegistry* rr = reg.ctx().find<RobotRegistry>();
     const ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
     if (!rr || !cmd) return 0;
+
+    // The LEGACY positional lane has no robot key; it belongs to the DRIVE-OWNING robot (fallback:
+    // the first registered robot). It is NEVER broadcast -- the old "apply to every robot" drain made
+    // driving joint N on one robot silently write q[N] on all others (multi-robot cross-talk).
+    LiveRobot* legacyOwner = nullptr;
+    for (auto& rp : rr->robots) if (rp && rp->ownsDrive) { legacyOwner = rp.get(); break; }
+    if (!legacyOwner) for (auto& rp : rr->robots) if (rp) { legacyOwner = rp.get(); break; }
+
     int n = 0;
+    std::vector<float> target;
+    std::vector<char>  driven;
     for (auto& rp : rr->robots) {
         if (!rp) continue;
         // JOINT GROUND TRUTH: a robot being hand-dragged owns its q for the duration of the gesture.
         // Without this guard the auto-play node graph (time->sine->drive J1) re-stomps q[J1] EVERY
         // frame while the user drags, so the arm fights the drag and never settles ("still breaking").
         if (rp->dragActive) continue;
-        rp->applyCommand(cmd->target, cmd->driven);   // bus -> q (clamped, driven-only)
+        // Merge this robot's keyed entries (+ the legacy lane iff it is the legacy owner) into a
+        // per-robot target/driven pair sized to ITS dof count.
+        target.assign(rp->ndof(), 0.0f);
+        driven.assign(rp->ndof(), 0);
+        bool any = false;
+        for (const auto& e : cmd->entries) {
+            if (e.robotId != rp->robotId || e.dof < 0 || e.dof >= rp->ndof()) continue;
+            target[e.dof] = e.target; driven[e.dof] = 1; any = true;
+        }
+        if (rp.get() == legacyOwner) {
+            for (int d = 0; d < rp->ndof() && d < int(cmd->driven.size()); ++d) {
+                if (!cmd->driven[d] || driven[d]) continue;   // keyed entry outranks the legacy lane
+                target[d] = (d < int(cmd->target.size())) ? cmd->target[d] : 0.0f;
+                driven[d] = 1; any = true;
+            }
+        }
+        if (!any) continue;                            // nothing commands this robot -> it rests
+        rp->applyCommand(target, driven);              // bus -> q (clamped, driven-only)
         ++n;
     }
     return n;

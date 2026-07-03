@@ -658,15 +658,35 @@ struct JointComponent
 };
 
 // Node-graph -> live articulation command bus (node-ecosystem sprint). A registry-ctx singleton: the
-// node graph (physics_articulation_drive) writes a per-DOF target angle + a "driven" flag; the
-// SimulationController reads it each tick (applyArticulationCommands) and teleports the articulation to
-// those targets. This makes the NODE GRAPH the SINGLE writer of joint motion -- the hardcoded demo sweep
-// that used to fight it is removed, so the two-writer conflict cannot occur. DOFs with driven==0 are left
-// at their current position (rest), so an empty/absent command bus means the robot does not move.
+// node graph (physics_articulation_drive) writes per-joint targets; the SimulationController reads it
+// each tick (applyArticulationCommands) and teleports the articulation to those targets. This makes the
+// NODE GRAPH the SINGLE writer of joint motion -- the hardcoded demo sweep that used to fight it is
+// removed, so the two-writer conflict cannot occur. Joints nobody drives are left at their current
+// position (rest), so an empty/absent command bus means the robot does not move.
+//
+// LIFECYCLE: the bus is CLEARED at the start of every node-graph evaluation pass and re-asserted by
+// whatever drive nodes exist (MainWindow eval tick). A deleted/disconnected drive node therefore
+// releases its joint on the next pass instead of latching its last command forever.
 struct ArticulationCommandComponent
 {
+    // ROBOT-KEYED lane: one entry addresses ONE DOF of ONE robot. This is the primary lane -- a
+    // command can never leak onto another robot's same-numbered DOF (the multi-robot cross-talk bug).
+    struct Entry { int robotId = -1; int dof = -1; float target = 0.0f; };
+    std::vector<Entry> entries;
+
+    // LEGACY positional lane (no robot key): kept for the pre-robot PhysX path and the positional
+    // "Joint" index input. Drained into the DRIVE-OWNING robot only -- never broadcast to all robots.
     std::vector<float> target;   // per-DOF commanded angle (radians for revolute)
     std::vector<char>  driven;   // 1 if a node currently commands this DOF, else 0
+
+    // Upsert a robot-keyed command (last writer per (robotId, dof) wins within an eval pass).
+    void setEntry(int robotId, int dof, float t) {
+        for (auto& e : entries)
+            if (e.robotId == robotId && e.dof == dof) { e.target = t; return; }
+        entries.push_back({ robotId, dof, t });
+    }
+    // Start-of-eval-pass reset: nodes re-assert every pass, so stale commands cannot latch.
+    void clearForEvalPass() { entries.clear(); target.clear(); driven.clear(); }
 };
 
 struct ParentComponent {

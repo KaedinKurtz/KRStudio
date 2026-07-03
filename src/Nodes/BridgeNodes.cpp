@@ -120,14 +120,22 @@ void ArticulationDriveNode::compute() {
     auto angle = getInput<float>("Angle");
     if (!angle) return;                                // disconnected -> commands nothing (joint at rest)
     auto& reg = m_scene->getRegistry();
-    int joint = -1;
-    // Resolve a name/nodeId to the live DOF if given; else fall back to the legacy positional index.
+    // Resolve a name/nodeId to the live (robotId, dof) if given -- the ROBOT-KEYED lane, so driving
+    // "J2" of robot 0 can never write robot 1's DOF 2 (the multi-robot cross-talk fix).
     if (auto nameIn = getInput<std::string>("Joint Name"); nameIn && !nameIn->empty()) {
         krs::robot::rebuildJointNameRegistry(reg);
-        if (const auto* nr = reg.ctx().find<krs::robot::JointNameRegistry>())
-            if (const auto* jr = nr->resolve(*nameIn)) joint = jr->dof;
+        if (const auto* nr = reg.ctx().find<krs::robot::JointNameRegistry>()) {
+            if (const auto* jr = nr->resolve(*nameIn)) {
+                ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
+                if (!cmd) cmd = &reg.ctx().emplace<ArticulationCommandComponent>();
+                cmd->setEntry(jr->robotId, jr->dof, *angle);
+                return;
+            }
+        }
+        return;   // a named joint that fails to resolve commands NOTHING (never index 0 by accident)
     }
-    if (joint < 0) joint = getInput<int>("Joint").value_or(0);
+    // Legacy positional index -> the un-keyed lane (drained into the drive-owning robot only).
+    const int joint = getInput<int>("Joint").value_or(0);
     if (joint < 0) return;
     ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
     if (!cmd) cmd = &reg.ctx().emplace<ArticulationCommandComponent>();

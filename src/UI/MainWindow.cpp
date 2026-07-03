@@ -1401,8 +1401,14 @@ MainWindow::MainWindow(QWidget* parent)
     // is ~free, so this runs at the configurable eval rate (a tight control loop can ask for kHz).
     auto evalIterPerFire = std::make_shared<int>(1);
     auto* evalTimer = new QTimer(this);
-    connect(evalTimer, &QTimer::timeout, this, [graphModel, evalIterPerFire]() {
+    connect(evalTimer, &QTimer::timeout, this, [this, graphModel, evalIterPerFire]() {
         krs::nodes::NodeEditQueue::instance().drain();   // apply coalesced UI edits (off the per-event path)
+        // Command-bus lifecycle: clear, then let this pass's drive nodes re-assert. A deleted or
+        // disconnected Drive Joint node thus RELEASES its joint (no latched last command stomping q
+        // forever); manual control (jog/IK) resumes the moment nothing re-asserts the DOF.
+        if (m_scene)
+            if (auto* bus = m_scene->getRegistry().ctx().find<ArticulationCommandComponent>())
+                bus->clearForEvalPass();
         for (int i = 0; i < *evalIterPerFire; ++i) krs::nodes::evaluateGraphQuiet(*graphModel);
     });
     auto setEvalRate = [evalTimer, evalIterPerFire](double hz) {

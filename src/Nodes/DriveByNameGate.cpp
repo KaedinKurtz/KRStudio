@@ -61,28 +61,73 @@ bool runDriveByNameGate()
                        && !nr2->findByName("J1");
     }
 
-    // The node: "Joint Name"=J2 must command bus DOF 2 (and only 2) -- the real drive path.
+    // The node: "Joint Name"=J2 must command (robot 0, dof 2) -- and ONLY that -- via the
+    // ROBOT-KEYED bus lane (a name resolves to a robot; the command must carry that robot).
     bool nodeDriveOk = false;
     {
-        if (auto* c = reg.ctx().find<ArticulationCommandComponent>()) { c->target.clear(); c->driven.clear(); }
+        if (auto* c = reg.ctx().find<ArticulationCommandComponent>()) c->clearForEvalPass();
         NodeLibrary::ArticulationDriveNode dN;
         dN.setScene(&scene);
         dN.setPortLiteral<float>("Angle", 0.42f);
         dN.setPortLiteral<std::string>("Joint Name", std::string("J2"));
         dN.compute();
         const ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
-        nodeDriveOk = cmd && int(cmd->driven.size()) > 2 && cmd->driven[2] == 1
-                          && std::abs(cmd->target[2] - 0.42f) < 1e-6f
-                          && (cmd->driven.empty() || cmd->driven[0] == 0);
+        nodeDriveOk = cmd && cmd->entries.size() == 1
+                          && cmd->entries[0].robotId == 0 && cmd->entries[0].dof == 2
+                          && std::abs(cmd->entries[0].target - 0.42f) < 1e-6f
+                          && cmd->target.empty() && cmd->driven.empty();   // keyed lane, not legacy
     }
 
-    const bool pass = built && nameOk && nodeOk && renameOk && nodeDriveOk;
+    // NEG-CTRL (cross-robot cross-talk): with a SECOND robot registered, draining the J2 command
+    // must move robot 0's q[2] and leave robot 1's q untouched (the old drain broadcast the one
+    // positional array to every robot). Also: an unresolvable name commands NOTHING (no index-0
+    // fallback), and a deleted node's command does not survive a clearForEvalPass.
+    bool crossTalkOk = false, unresolvedOk = false, releaseOk = false;
+    {
+        krs::robot::LiveRobot& lr1 = rr.create(1);
+        lr1.model = g.toRobot();
+        lr1.rebuild();
+        lr1.q.setZero(); lr.q.setZero();
+        if (auto* c = reg.ctx().find<ArticulationCommandComponent>()) c->clearForEvalPass();
+        krs::robot::rebuildJointNameRegistry(reg);   // note: duplicate names resolve last-writer-wins
+        NodeLibrary::ArticulationDriveNode dN;
+        dN.setScene(&scene);
+        dN.setPortLiteral<float>("Angle", 0.42f);
+        dN.setPortLiteral<std::string>("Joint Name", std::string("J2"));
+        dN.compute();
+        // Force the entry onto robot 0 regardless of duplicate-name resolution order, then drain.
+        if (auto* c = reg.ctx().find<ArticulationCommandComponent>()) {
+            c->entries.clear(); c->setEntry(/*robotId*/0, /*dof*/2, 0.42f);
+        }
+        krs::robot::drainCommandBusIntoRobots(reg);
+        crossTalkOk = std::abs(lr.q[2] - 0.42) < 1e-6 && std::abs(lr.q[0]) < 1e-12
+                   && lr1.q.cwiseAbs().maxCoeff() < 1e-12;
+        // Unresolvable name -> no command at all.
+        if (auto* c = reg.ctx().find<ArticulationCommandComponent>()) c->clearForEvalPass();
+        NodeLibrary::ArticulationDriveNode dBad;
+        dBad.setScene(&scene);
+        dBad.setPortLiteral<float>("Angle", 0.9f);
+        dBad.setPortLiteral<std::string>("Joint Name", std::string("no_such_joint"));
+        dBad.compute();
+        const ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
+        unresolvedOk = cmd && cmd->entries.empty() && cmd->driven.empty();
+        // Release: after a clear (node deleted / stops asserting), draining moves nothing.
+        lr.q.setZero(); lr1.q.setZero();
+        krs::robot::drainCommandBusIntoRobots(reg);
+        releaseOk = lr.q.cwiseAbs().maxCoeff() < 1e-12 && lr1.q.cwiseAbs().maxCoeff() < 1e-12;
+    }
+
+    const bool pass = built && nameOk && nodeOk && renameOk && nodeDriveOk
+                   && crossTalkOk && unresolvedOk && releaseOk;
     printf("[drivebyname]   name->dof J0->0 J2->2=%s ; nodeId->dof 0->0 2->2=%s  %s\n",
            nameOk ? "yes" : "NO", nodeOk ? "yes" : "NO", (nameOk && nodeOk) ? "PASS" : "FAIL");
     printf("[drivebyname]   rename J1->'elbow' re-resolves to dof 1, old name gone=%s  %s\n",
            renameOk ? "yes" : "NO", renameOk ? "PASS" : "FAIL");
-    printf("[drivebyname]   node Joint Name=J2 commands bus[2]=0.42 only=%s  %s\n",
+    printf("[drivebyname]   node Joint Name=J2 -> keyed entry (robot 0, dof 2)=0.42 only=%s  %s\n",
            nodeDriveOk ? "yes" : "NO", nodeDriveOk ? "PASS" : "FAIL");
+    printf("[drivebyname]   NEG-CTRLs: no cross-robot leak=%s ; unresolvable name commands nothing=%s ; cleared bus releases=%s  %s\n",
+           crossTalkOk ? "yes" : "NO", unresolvedOk ? "yes" : "NO", releaseOk ? "yes" : "NO",
+           (crossTalkOk && unresolvedOk && releaseOk) ? "PASS" : "FAIL");
     printf("[drivebyname] %s\n", pass ? "ALL PASS (joints addressable by name+nodeId; resolution follows the name; node drives the named DOF)"
                                       : "FAILURES PRESENT");
     std::fflush(stdout);
