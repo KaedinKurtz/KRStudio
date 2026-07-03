@@ -1,5 +1,6 @@
 #include "MainWindow.hpp"
 #include "AuthoringPersist.hpp"   // krs::persist -- authoring survives restart
+#include <QFile>
 #include "StaticToolbar.hpp"
 #include "PropertiesPanel.hpp"
 #include "Scene.hpp"
@@ -3722,6 +3723,49 @@ void MainWindow::buildEngineeringToolbar()
 
     connect(tb->addAction(QStringLiteral("Import CAD (STEP)")), &QAction::triggered,
             this, &MainWindow::importStepFile);
+    // The authoring workflow finally has an OUTPUT: export the active authoring graph as URDF,
+    // with a mandatory validation report (silent-success export is the classic pipeline trap --
+    // fusion2urdf-style broken files that users debug in the simulator instead of here).
+    connect(tb->addAction(QStringLiteral("Export URDF")), &QAction::triggered, this, [this]() {
+        if (!m_scene) return;
+        auto& reg = m_scene->getRegistry();
+        auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
+        if (!gp || gp->bodies.empty()) {
+            QMessageBox::information(this, QStringLiteral("Export URDF"),
+                QStringLiteral("No robot is being edited. Select a robot in the outliner (or Import CAD) first."));
+            return;
+        }
+        std::string rname = "exported";
+        if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>())
+            if (auto* lr = rr->get(gp->robotId)) rname = lr->name;
+        const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Export URDF"),
+            QString::fromStdString(rname) + QStringLiteral(".urdf"), QStringLiteral("URDF (*.urdf)"));
+        if (path.isEmpty()) return;
+        const std::string urdf = krs::rbuild::exportGraphToUrdf(*gp, gp->base, rname);
+        QFile f(path);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            QMessageBox::warning(this, QStringLiteral("Export URDF"),
+                QStringLiteral("Could not write %1.").arg(path));
+            return;
+        }
+        f.write(urdf.data(), qint64(urdf.size()));
+        f.close();
+        // VALIDATION REPORT (mandatory): what was exported, what was NOT, and what downstream
+        // consumers still need -- never a bare "done".
+        const std::set<int> comp = gp->membersFrom(gp->base);
+        const int dropped = int(gp->bodies.size()) - int(comp.size());
+        int ambiguous = 0;
+        for (const auto& j : gp->joints) if (j.ambiguous) ++ambiguous;
+        QString warn;
+        if (dropped > 0)   warn += QStringLiteral("\n- %1 body(ies) outside the base's component were NOT exported").arg(dropped);
+        if (ambiguous > 0) warn += QStringLiteral("\n- %1 ambiguous joint(s) skipped (define their axes first)").arg(ambiguous);
+        warn += QStringLiteral("\n- links carry no inertia/mass/geometry yet (kinematics only)");
+        QMessageBox::information(this, QStringLiteral("Export URDF"),
+            QStringLiteral("Exported \"%1\": %2 links, %3 joints (DOF %4) to\n%5\n\nNotes:%6")
+                .arg(QString::fromStdString(rname)).arg(int(comp.size()))
+                .arg(int(gp->joints.size()) - ambiguous).arg(gp->dof()).arg(path).arg(warn));
+        statusBar()->showMessage(QStringLiteral("URDF exported: %1").arg(path), 6000);
+    });
     tb->addSeparator();
 
     // Visualization-mode dropdown -> the Phase 3 hot-swaps.
