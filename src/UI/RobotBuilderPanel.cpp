@@ -521,9 +521,12 @@ void RobotBuilderPanel::onDefineFromFeatures()
         setStatus(QStringLiteral("Merge failed.")); return;
     }
 
+    // Carry the FULL identity through the Selection -> BRepFace boundary: faceKey (the durable
+    // topological id the mate connector anchors to) and the rim centres. The old copy dropped both.
     auto toFace = [](const krs::sel::Selection& s) {
         BRepFace f; f.type = int(s.type); f.axisPos = s.axisPos; f.axisDir = s.axisDir;
-        f.normal = s.normal; f.radius = s.radius; return f;
+        f.normal = s.normal; f.radius = s.radius; f.faceKey = s.faceKey;
+        f.axisEnd0 = s.axisEnd0; f.axisEnd1 = s.axisEnd1; return f;
     };
     const int a = krs::rbuild::bodyIndexForEntity(*g, int(selA->entity));
     const int b = krs::rbuild::bodyIndexForEntity(*g, int(selB->entity));
@@ -540,9 +543,34 @@ void RobotBuilderPanel::onDefineFromFeatures()
     // not yet coaxial; the mate snap below makes them coaxial. (Auto-parse still requires collinearity.)
     const bool ok = ctrl.defineFromFeatures(toFace(*selA), a, toFace(*selB), b, &created, &parent, &child, false);
     if (!ok) {
-        setStatus(QStringLiteral("Cannot define joint: the two bores are not coaxial. Pick two bores that share an axis, "
-                                 "or set the axis directly in Joint Axis Direction."));
+        setStatus(QStringLiteral("Cannot define joint: the two bores are not parallel. Pick two bores that share an axis "
+                                 "direction, or set the axis directly in Joint Axis Direction."));
         return;
+    }
+
+    // PERSISTENT MATE (decision-doc wiring): mint a body-LOCAL MateConnector on EACH picked body +
+    // record the MateConstraint in the ctx mate graph -- the durable, faceKey-anchored provenance the
+    // architecture prescribes. RBJoint stays the immediate joint author (defineFromFeatures above);
+    // this records WHERE it came from so re-import/persistence can re-anchor. Minted from the
+    // PRE-SNAP world faces against the PRE-SNAP entity transforms (a consistent pair), so the stored
+    // local frames are exact regardless of the mate snap below.
+    {
+        auto* mgp = reg.ctx().find<MateGraphComponent>();
+        if (!mgp) mgp = &reg.ctx().emplace<MateGraphComponent>();
+        auto& mcA = reg.get_or_emplace<MateConnectorComponent>(selA->entity);
+        auto& mcB = reg.get_or_emplace<MateConnectorComponent>(selB->entity);
+        auto eigOf = [&](entt::entity e) {
+            Eigen::Matrix4d M = Eigen::Matrix4d::Identity();
+            if (const auto* tc = reg.try_get<TransformComponent>(e)) {
+                const glm::mat4 T = tc->getTransform();
+                for (int r = 0; r < 4; ++r) for (int c = 0; c < 4; ++c) M(r, c) = double(T[c][r]);  // glm is column-major
+            }
+            return M;
+        };
+        const std::uint64_t mateId = krs::rbuild::authorConcentricMate(
+            *mgp, selA->entity, mcA, eigOf(selA->entity), toFace(*selA),
+                  selB->entity, mcB, eigOf(selB->entity), toFace(*selB));
+        (void)mateId;
     }
 
     // MATE-SNAP: rigidly move the CHILD body + its subtree so the two SELECTED faces meet at their
@@ -1048,9 +1076,20 @@ bool runRobotBuilderPanelGate()
         const bool frameOk = (jbc >= 0) &&
             (std::abs(g.joints[jbc].axisPos.x - 1.0f) < 1e-3f) &&
             (std::abs(g.joints[jbc].axisDir.z - 1.0f) < 1e-3f);
-        defineOk = defineOk && frameOk;
-        printf("[rbuild]   define control: DOF %d -> %d (want %d), frame-matches=%s  %s\n",
-               before, after, before + 1, frameOk ? "yes" : "no", defineOk ? "PASS" : "FAIL");
+        // PERSISTENT MATE wiring: the define must ALSO mint a body-LOCAL connector on each picked
+        // entity + one MateConstraint in the ctx graph (the durable provenance the decision doc
+        // prescribes -- previously gate-only library code with no production caller).
+        const auto* mgc = reg.ctx().find<MateGraphComponent>();
+        const auto* ccA = reg.try_get<MateConnectorComponent>(s2.entity);
+        const auto* ccB = reg.try_get<MateConnectorComponent>(s3.entity);
+        const bool mateAuthored = mgc && mgc->mates.size() == 1
+            && ccA && ccA->connectors.size() == 1 && ccB && ccB->connectors.size() == 1
+            && mgc->mates[0].bodyA == s2.entity && mgc->mates[0].connA == ccA->connectors[0].id
+            && mgc->mates[0].bodyB == s3.entity && mgc->mates[0].connB == ccB->connectors[0].id;
+        defineOk = defineOk && frameOk && mateAuthored;
+        printf("[rbuild]   define control: DOF %d -> %d (want %d), frame-matches=%s, mate+connectors minted=%s  %s\n",
+               before, after, before + 1, frameOk ? "yes" : "no", mateAuthored ? "yes" : "no",
+               defineOk ? "PASS" : "FAIL");
 
         // degenerate (NON-PARALLEL) bores -> rejected, DOF unchanged. (An offset-but-PARALLEL pair
         // is ACCEPTED by design since 8ed10f40: the manual define passes requireCollinear=false and
