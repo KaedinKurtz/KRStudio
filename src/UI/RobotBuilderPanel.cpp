@@ -568,9 +568,13 @@ void RobotBuilderPanel::onDefineFromFeatures()
         const auto* s = reg.try_get<RobotSubcomponentComponent>(e); return s ? s->robotId : -1; };
     const int ridA = robotOf(selA->entity), ridB = robotOf(selB->entity);
     if (ridA >= 0 && ridB >= 0 && ridA != ridB) {
-        const int parentId = std::min(ridA, ridB), childId = std::max(ridA, ridB);
-        const krs::sel::Selection* pSel = (robotOf(selA->entity) == parentId) ? selA : selB;
-        const krs::sel::Selection* cSel = (pSel == selA) ? selB : selA;
+        // PICK ORDER decides the merge direction: the FIRST-picked bore's robot is the PARENT
+        // (stays put), the second-picked robot snaps onto it -- the CAD mate convention. The old
+        // min(robotId) rule was arbitrary: re-mating a detached branch could yank the MAIN robot
+        // onto the branch just because of id ordering.
+        const int parentId = ridA, childId = ridB;
+        const krs::sel::Selection* pSel = selA;
+        const krs::sel::Selection* cSel = selB;
         const krs::rbuild::RBJoint pf = rimFrame(*pSel), cf = rimFrame(*cSel);
         krs::robot::transformRobot(*m_scene, childId, krs::rbuild::RobotGraph::mateTransformConcentric(pf, cf));
         auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
