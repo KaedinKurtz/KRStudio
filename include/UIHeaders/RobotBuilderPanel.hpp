@@ -93,6 +93,7 @@ private:
     QLabel*         m_defineHint    = nullptr;
     QLabel*         m_boreA         = nullptr;   // Bore A slot readout (body/radius of the older pick)
     QLabel*         m_boreB         = nullptr;   // Bore B slot readout (the newer pick)
+    QComboBox*      m_alignCombo    = nullptr;   // Define alignment: Auto / Align axes / Oppose axes
     QPushButton*    m_defineBtn     = nullptr;
     QPushButton*    m_clearSelBtn   = nullptr;
     QTimer*         m_selPoll       = nullptr;   // polls SelectionState -> bore slots + enable gating

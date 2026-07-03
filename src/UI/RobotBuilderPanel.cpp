@@ -145,6 +145,20 @@ void RobotBuilderPanel::initializeUI()
     slotForm->addRow(QStringLiteral("Bore A"), m_boreA);
     slotForm->addRow(QStringLiteral("Bore B"), m_boreB);
     layout->addWidget(slotBox);
+    // Alignment: how the child bore's axis meets the parent's when Define snaps them coaxial.
+    auto* alignBox = new QGroupBox(content);
+    auto* alignForm = new QFormLayout(alignBox);
+    m_alignCombo = new QComboBox(alignBox);
+    m_alignCombo->setObjectName(QStringLiteral("rbAlignCombo"));
+    m_alignCombo->addItem(QStringLiteral("Auto (least rotation)"));       // 0
+    m_alignCombo->addItem(QStringLiteral("Align axes (same way)"));       // 1
+    m_alignCombo->addItem(QStringLiteral("Oppose axes (facing)"));        // 2
+    m_alignCombo->setToolTip(QStringLiteral(
+        "How the second (child) bore meets the first when Define snaps them coaxial:\n"
+        "Auto = smallest rotation; Align = both axes point the same way;\n"
+        "Oppose = axes face each other (child flipped 180°). Re-Define to change."));
+    alignForm->addRow(QStringLiteral("Alignment"), m_alignCombo);
+    layout->addWidget(alignBox);
     m_defineBtn = new QPushButton(QStringLiteral("Define Revolute from 2 Selected Bores"), content);
     m_defineBtn->setObjectName(QStringLiteral("rbDefineFromFeaturesButton"));
     layout->addWidget(m_defineBtn);
@@ -611,23 +625,67 @@ void RobotBuilderPanel::onDefineFromFeatures()
 
     krs::rbuild::EditController ctrl{ g };
     const int before = ctrl.dof();
-    krs::rbuild::RBJoint created;
+
+    // SNAP FIRST, define second. defineFromFeatures requires near-parallel axes (~5 deg) even with
+    // requireCollinear=false -- but on a POSED arm the two picked bores are almost never parallel,
+    // so the old define-then-snap order rejected the pair and Define appeared to do nothing. The
+    // mate snap (mateTransformConcentric) handles ARBITRARY rotations, so: rotate the child subtree
+    // coaxial first, THEN define from the now-clean pair.
+    //
+    // parent = the body NEARER the base in chain order (stays put; the child snaps) -- the same
+    // normalization defineFromFeatures applies, computed up front so the snap knows who moves.
+    const krs::rbuild::RobotGraph::ChainOrder co = g->chainOrder();
+    auto idxOf = [&](int bIdx) {
+        for (size_t i = 0; i < co.order.size(); ++i) if (co.order[i] == bIdx) return int(i);
+        return 1000000 + bIdx;   // unreached -> after ordered, stable by body index
+    };
     int parent = a, child = b;
-    // requireCollinear=false: the user may have dragged a body away, so the two bores are PARALLEL but
-    // not yet coaxial; the mate snap below makes them coaxial. (Auto-parse still requires collinearity.)
-    const bool ok = ctrl.defineFromFeatures(toFace(*selA), a, toFace(*selB), b, &created, &parent, &child, false);
+    if (idxOf(b) < idxOf(a)) { parent = b; child = a; }
+    const bool aIsParent = (a == parent);
+
+    auto faceFrame = [](const krs::sel::Selection& s) {
+        krs::rbuild::RBJoint f;
+        // the SELECTED rim = the bore end-cap nearest the click (the face the operator pointed at);
+        // fall back to the analytic axis point when no trimmed rim is available (synthetic faces).
+        f.axisPos = (glm::distance(s.axisEnd0, s.axisEnd1) > 1e-5f)
+                    ? (glm::distance(s.hitPoint, s.axisEnd0) <= glm::distance(s.hitPoint, s.axisEnd1)
+                       ? s.axisEnd0 : s.axisEnd1)
+                    : s.axisPos;
+        f.axisDir = s.axisDir; f.orthonormalizeFrame(); return f;
+    };
+    const krs::rbuild::RBJoint pf = aIsParent ? faceFrame(*selA) : faceFrame(*selB);  // parent face (stays)
+    krs::rbuild::RBJoint       cf = aIsParent ? faceFrame(*selB) : faceFrame(*selA);  // child face (snaps)
+
+    // ALIGNMENT control: how the child bore's axis meets the parent's after the snap.
+    //   Auto        = least rotation (flip the child sense if it points away)
+    //   Align axes  = both axes end pointing the SAME way
+    //   Oppose axes = the axes end FACING each other (child flipped 180 deg)
+    const int alignMode = m_alignCombo ? m_alignCombo->currentIndex() : 0;
+    if (alignMode == 0)      { if (glm::dot(cf.axisDir, pf.axisDir) < 0.0f) cf.flipAxis(); }
+    else if (alignMode == 2) cf.flipAxis();
+
+    // MATE-SNAP: rigidly rotate+translate the CHILD body + its subtree so the two SELECTED faces
+    // meet at their interface -- rims coincident, axes concentric. The parent stays fixed.
+    krs::robot::snapMateSubtree(*m_scene, *g, parent, child, pf, cf);
+
+    // The child moved: re-resolve both picks at the POST-snap transforms so the define and the
+    // minted connectors see a consistent, coaxial pair.
+    const krs::sel::Selection snapA = freshen(*selA);
+    const krs::sel::Selection snapB = freshen(*selB);
+
+    krs::rbuild::RBJoint created;
+    const bool ok = ctrl.defineFromFeatures(toFace(snapA), a, toFace(snapB), b, &created, &parent, &child, false);
     if (!ok) {
-        setStatus(QStringLiteral("Cannot define joint: the two bores are not parallel. Pick two bores that share an axis "
-                                 "direction, or set the axis directly in Joint Axis Direction."));
+        setStatus(QStringLiteral("Cannot define joint: the pair stayed degenerate even after the mate snap "
+                                 "(non-cylindrical or invalid geometry). The child body WAS snapped coaxial."));
         return;
     }
 
     // PERSISTENT MATE (decision-doc wiring): mint a body-LOCAL MateConnector on EACH picked body +
     // record the MateConstraint in the ctx mate graph -- the durable, faceKey-anchored provenance the
-    // architecture prescribes. RBJoint stays the immediate joint author (defineFromFeatures above);
-    // this records WHERE it came from so re-import/persistence can re-anchor. Minted from the
-    // PRE-SNAP world faces against the PRE-SNAP entity transforms (a consistent pair), so the stored
-    // local frames are exact regardless of the mate snap below.
+    // architecture prescribes. RBJoint stays the immediate joint author (defineFromFeatures above).
+    // Minted from the POST-snap world faces against the POST-snap entity transforms (a consistent
+    // pair), so the stored body-local frames are exact.
     {
         auto* mgp = reg.ctx().find<MateGraphComponent>();
         if (!mgp) mgp = &reg.ctx().emplace<MateGraphComponent>();
@@ -642,31 +700,10 @@ void RobotBuilderPanel::onDefineFromFeatures()
             return M;
         };
         const std::uint64_t mateId = krs::rbuild::authorConcentricMate(
-            *mgp, selA->entity, mcA, eigOf(selA->entity), toFace(*selA),
-                  selB->entity, mcB, eigOf(selB->entity), toFace(*selB));
+            *mgp, selA->entity, mcA, eigOf(selA->entity), toFace(snapA),
+                  selB->entity, mcB, eigOf(selB->entity), toFace(snapB));
         (void)mateId;
     }
-
-    // MATE-SNAP: rigidly move the CHILD body + its subtree so the two SELECTED faces meet at their
-    // INTERFACE -- the child's selected bore RIM coincides with the parent's, axes concentric. The
-    // parent (lower chain index) stays fixed. Then the joint's persisted frame is set to that interface
-    // (origin) + the concentric axis, exactly as the operator described.
-    auto faceFrame = [](const krs::sel::Selection& s) {
-        krs::rbuild::RBJoint f;
-        // the SELECTED rim = the bore end-cap nearest the click (the face the operator pointed at);
-        // fall back to the analytic axis point when no trimmed rim is available (synthetic faces).
-        f.axisPos = (glm::distance(s.axisEnd0, s.axisEnd1) > 1e-5f)
-                    ? (glm::distance(s.hitPoint, s.axisEnd0) <= glm::distance(s.hitPoint, s.axisEnd1)
-                       ? s.axisEnd0 : s.axisEnd1)
-                    : s.axisPos;
-        f.axisDir = s.axisDir; f.orthonormalizeFrame(); return f;
-    };
-    const krs::rbuild::RBJoint frA = faceFrame(*selA);   // bore on body `a`
-    const krs::rbuild::RBJoint frB = faceFrame(*selB);   // bore on body `b`
-    const bool aIsParent = (a == parent);
-    const krs::rbuild::RBJoint pf = aIsParent ? frA : frB;   // parent's selected face (stays)
-    const krs::rbuild::RBJoint cf = aIsParent ? frB : frA;   // child's selected face (snaps onto pf)
-    krs::robot::snapMateSubtree(*m_scene, *g, parent, child, pf, cf);
 
     // The joint frame = the interface: origin at the (now coincident) faces, axis concentric to both.
     const int pj = g->jointBetween(parent, child);

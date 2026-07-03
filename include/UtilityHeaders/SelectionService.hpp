@@ -287,6 +287,13 @@ inline void updateHover(SelectionState& st, entt::registry& reg, const krs::pick
 inline Selection commitSelection(SelectionState& st, entt::registry& reg,
                                  const krs::pick::Ray& ray, bool additive = true) {
     const Selection s = pickPreferCylinder(reg, ray);   // bores win over the flat face around them
+    // BORE-COLLECT mode (the Builder's fifoTwoBores): ONLY cylinders join the set, and clicking
+    // anything that is NOT a bore -- a flat face, empty space -- CLEARS it. Accidental plane picks
+    // used to persist as glowing overlays that later orphaned in space when their link moved.
+    if (st.fifoTwoBores && (!s.valid || s.type != FeatureType::Cylinder)) {
+        st.selected.clear();
+        return s;
+    }
     if (!s.valid) return s;                              // miss -> no change to the set
     for (std::size_t i = 0; i < st.selected.size(); ++i) {
         if (sameFeature(st.selected[i], s)) {            // toggle off if re-picked
@@ -308,6 +315,11 @@ inline Selection commitSelection(SelectionState& st, entt::registry& reg,
 inline Selection commitSelectionCycled(SelectionState& st, entt::registry& reg,
                                        const krs::pick::Ray& ray, int cycleIndex, bool additive = true) {
     const Selection s = pickCycled(reg, ray, cycleIndex);
+    // Same bore-collect rule as commitSelection: in fifoTwoBores mode a non-bore commit CLEARS.
+    if (st.fifoTwoBores && (!s.valid || s.type != FeatureType::Cylinder)) {
+        st.selected.clear();
+        return s;
+    }
     if (!s.valid) return s;                              // miss / non-B-Rep at this depth -> no change
     for (std::size_t i = 0; i < st.selected.size(); ++i) {
         if (sameFeature(st.selected[i], s)) {            // toggle off if re-picked
@@ -323,6 +335,27 @@ inline Selection commitSelectionCycled(SelectionState& st, entt::registry& reg,
 }
 
 inline void clearSelection(SelectionState& st) { st.selected.clear(); }
+
+// PER-FRAME REFRESH: re-derive every committed selection's world params from its (entity, faceId)
+// at the CURRENT transforms, so the highlight rings TRAVEL WITH a moving robot instead of orphaning
+// in space where the bore was clicked. The rim intent (nearest end at click time) is preserved and
+// re-expressed on the fresh frame. Selections whose entity died are dropped; synthetic selections
+// (no faceId) are left as-is. Cheap: the set is FIFO-capped at 8.
+inline void refreshSelections(SelectionState& st, entt::registry& reg) {
+    for (std::size_t i = 0; i < st.selected.size(); ) {
+        Selection& s = st.selected[i];
+        if (!s.valid || !reg.valid(s.entity)) { st.selected.erase(st.selected.begin() + std::ptrdiff_t(i)); continue; }
+        if (s.faceId >= 0) {
+            Selection f = resolveFace(reg, s.entity, s.faceId);
+            if (f.valid) {
+                const bool nearEnd0 = glm::distance(s.hitPoint, s.axisEnd0) <= glm::distance(s.hitPoint, s.axisEnd1);
+                f.hitPoint = nearEnd0 ? f.axisEnd0 : f.axisEnd1;
+                s = f;
+            }
+        }
+        ++i;
+    }
+}
 
 // ---------------------------------------------------------------------------
 // RENDER GEOMETRY -- the SINGLE builder the SelectionHighlightPass draws AND the

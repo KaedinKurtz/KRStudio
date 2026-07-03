@@ -91,9 +91,14 @@ void SelectionHighlightPass::drawLines(const RenderFrameContext& ctx,
 void SelectionHighlightPass::execute(const RenderFrameContext& context)
 {
     auto& reg = context.registry;
-    const auto* st = reg.ctx().find<krs::sel::SelectionState>();
+    auto* st = reg.ctx().find<krs::sel::SelectionState>();
     if (!st || !st->enabled) return;
     if (!st->hover.valid && st->selected.empty()) return;
+    // Selections TRAVEL WITH their body: re-derive each committed pick's world frame from its
+    // (entity, faceId) at the CURRENT transform every frame -- a bore selected on a link that then
+    // moves (FK drive, IK drag) used to leave its ring orphaned in space where it was clicked.
+    krs::sel::refreshSelections(*st, reg);
+    if (!st->hover.valid && st->selected.empty()) return;   // refresh may have dropped dead entries
 
     auto* gl = context.gl;
     // ALWAYS-ON-TOP: a selected bore's ring sits on the axis (often inside the part), so depth-testing
