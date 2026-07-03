@@ -20,6 +20,7 @@
 #include <vector>
 #include <set>
 #include <array>
+#include <unordered_map>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -501,6 +502,16 @@ struct RobotGraph {
         }
         return r;
     }
+};
+
+// ---- PARKED AUTHORING GRAPHS (per-robot) ------------------------------------------------------
+// The single ctx RobotGraph is the ACTIVE authoring graph; this ctx store is the garage. Switching
+// the Builder between robots used to OVERWRITE the one ctx slot with a bare live-robot mirror,
+// silently destroying graph-only authoring state (bore faces on bodies, un-jointed bodies,
+// ambiguity flags, CAD part names) -- merely clicking another robot in the outliner lost work.
+// editRobot/onLoadDemo now park the outgoing graph here and restore it on return.
+struct AuthoringGraphStore {
+    std::unordered_map<int, RobotGraph> byRobot;   // robotId -> parked authoring graph
 };
 
 // ---- manual joint definition from two SELECTED features (Phase 2) ----------

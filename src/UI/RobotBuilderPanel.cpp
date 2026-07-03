@@ -360,6 +360,13 @@ void RobotBuilderPanel::onLoadDemo()
 
     auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
     if (!gp) gp = &reg.ctx().emplace<krs::rbuild::RobotGraph>();
+    // Park the outgoing robot's authoring graph (e.g. the FANUC's, with its bore faces) so loading
+    // the demo doesn't destroy it -- clicking the robot in the outliner restores it.
+    else if (!gp->bodies.empty() && gp->robotId != demoId) {
+        auto* store = reg.ctx().find<krs::rbuild::AuthoringGraphStore>();
+        if (!store) store = &reg.ctx().emplace<krs::rbuild::AuthoringGraphStore>();
+        store->byRobot[gp->robotId] = *gp;
+    }
     *gp = krs::rbuild::buildDemoGraph();
     gp->robotId = demoId;   // carried on the graph so refresh()'s tag-sync keeps id 1 (not 0)
     krs::rbuild::spawnGraphBodies(*m_scene, *gp, demoId);
@@ -406,12 +413,58 @@ void RobotBuilderPanel::editRobot(int robotId)
     krs::robot::LiveRobot* lr = rr ? rr->get(robotId) : nullptr;
     if (!lr) { setStatus(QStringLiteral("Robot %1 not found in the live registry.").arg(robotId)); return; }
 
+    auto* store = reg.ctx().find<krs::rbuild::AuthoringGraphStore>();
+    if (!store) store = &reg.ctx().emplace<krs::rbuild::AuthoringGraphStore>();
+
     krs::rbuild::RobotGraph* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
     if (!gp) gp = &reg.ctx().emplace<krs::rbuild::RobotGraph>();
-    *gp = krs::robot::buildGraphFromLiveRobot(*lr);
+    // PARK the outgoing robot's graph -- switching must never destroy its authoring state
+    // (bore faces, un-jointed bodies, part names -- a bare live mirror has none of them).
+    else if (!gp->bodies.empty()) store->byRobot[gp->robotId] = *gp;
+
+    // RESTORE this robot's parked graph if we have one whose SHAPE still matches the live robot
+    // (same body count; every joint id present live) -- placements/joint frames are refreshed from
+    // the live mirror since the robot may have moved/been edited while parked. On any mismatch
+    // (split/merge changed the structure) fall back to a fresh mirror, exactly the old behavior.
+    krs::rbuild::RobotGraph fresh = krs::robot::buildGraphFromLiveRobot(*lr);
+    bool restored = false;
+    if (auto it = store->byRobot.find(robotId); it != store->byRobot.end()) {
+        krs::rbuild::RobotGraph& parked = it->second;
+        // The parked graph may legitimately hold MORE than the live mirror (un-jointed bodies,
+        // ambiguous joints are exactly the authoring state worth preserving) -- align its chain
+        // PREFIX to the mirror by ENTITY id (stable within the session) + joint identity; any
+        // mismatch (split/merge changed the structure while parked) falls back to the fresh
+        // mirror, which is exactly the old behavior.
+        std::vector<krs::rbuild::RBJoint*> committed;      // ambiguous joints never reach the live
+        for (auto& j : parked.joints)                      // mirror -- compare committed ones only
+            if (!j.ambiguous) committed.push_back(&j);
+        bool shapeOk = parked.bodies.size() >= fresh.bodies.size()
+                    && committed.size() == fresh.joints.size()
+                    && !fresh.bodies.empty();
+        for (size_t i = 0; shapeOk && i < committed.size(); ++i)
+            shapeOk = committed[i]->id == fresh.joints[i].id;
+        for (size_t i = 0; shapeOk && i < fresh.bodies.size(); ++i)
+            shapeOk = parked.bodies[i].entity == fresh.bodies[i].entity;
+        if (shapeOk) {
+            // kinematic truth from the live mirror (the robot may have moved while parked)...
+            for (size_t i = 0; i < fresh.bodies.size(); ++i)
+                parked.bodies[i].placement = fresh.bodies[i].placement;
+            for (size_t i = 0; i < committed.size(); ++i) {
+                committed[i]->axisPos = fresh.joints[i].axisPos;
+                committed[i]->axisDir = fresh.joints[i].axisDir;
+                committed[i]->refDir  = fresh.joints[i].refDir;
+            }
+            // ...authoring truth (faces, names, extra bodies, provenance) from the parked graph.
+            *gp = parked;
+            restored = true;
+        }
+        store->byRobot.erase(it);   // active again -> out of the garage either way
+    }
+    if (!restored) *gp = std::move(fresh);
     refresh();
-    setStatus(QStringLiteral("Editing %1 as a graph (%2 joints): re-type / define / delete / limits all take live effect.")
-                  .arg(QString::fromStdString(lr->name)).arg(int(gp->joints.size())));
+    setStatus(QStringLiteral("Editing %1 as a graph (%2 joints)%3: re-type / define / delete / limits all take live effect.")
+                  .arg(QString::fromStdString(lr->name)).arg(int(gp->joints.size()))
+                  .arg(restored ? QStringLiteral(" [session authoring restored]") : QString()));
 }
 
 void RobotBuilderPanel::onDeleteJoint()
@@ -1213,6 +1266,41 @@ bool runRobotBuilderPanelGate()
                zeroAxisRejected ? "yes" : "no", (axisDirOk && zeroAxisRejected) ? "PASS" : "FAIL");
     }
 
+    // PARK/RESTORE: switching the Builder between robots must NOT destroy graph-only authoring
+    // state. The old editRobot overwrote the single ctx graph with a bare live mirror (no bore
+    // faces, no un-jointed bodies) on every outliner click of another robot.
+    bool parkRestoreOk = false, parkNegOk = false;
+    {
+        Scene scene;
+        auto& reg = scene.getRegistry();
+        auto& g = reg.ctx().emplace<RobotGraph>(buildDemoGraph());       // robot 0 = the active graph
+        spawnGraphBodies(scene, g, 0);
+        krs::robot::instantiateFromGraph(scene, g, 0);
+        RobotGraph g1 = buildDemoGraph();                                // robot 1 = switch target
+        spawnGraphBodies(scene, g1, 1);
+        krs::robot::instantiateFromGraph(scene, g1, 1);
+        RobotBuilderPanel panel(&scene);
+        size_t facesBefore = 0, bodiesBefore = 0;
+        {
+            const RobotGraph* gp = reg.ctx().find<RobotGraph>();
+            for (const auto& b : gp->bodies) facesBefore += b.faces.size();
+            bodiesBefore = gp->bodies.size();
+        }
+        panel.editRobot(1);                                              // away: parks robot 0's graph
+        const RobotGraph* gp = reg.ctx().find<RobotGraph>();
+        const bool switched = gp && gp->robotId == 1;
+        // NEG-CTRL (documents the live-mirror baseline): the mirror of robot 1 carries NO faces.
+        size_t mirrorFaces = 0; for (const auto& b : gp->bodies) mirrorFaces += b.faces.size();
+        parkNegOk = switched && (mirrorFaces == 0) && (facesBefore > 0);
+        panel.editRobot(0);                                              // back: restores the parked graph
+        size_t facesAfter = 0; for (const auto& b : gp->bodies) facesAfter += b.faces.size();
+        parkRestoreOk = gp && gp->robotId == 0
+                     && gp->bodies.size() == bodiesBefore && facesAfter == facesBefore;
+        printf("[rbuild]   park/restore: faces before=%zu -> after switch-away-and-back=%zu (bodies %zu) ; live-mirror-has-none neg-ctrl=%s  %s\n",
+               facesBefore, facesAfter, bodiesBefore, parkNegOk ? "yes" : "NO",
+               (parkRestoreOk && parkNegOk) ? "PASS" : "FAIL");
+    }
+
     // EDIT-OP-INVOKED: bodyIndexForEntity must find a bore on an EXTRA solid of a collapsed link
     // (the FANUC case). This was the bug that made "Define from 2 bores" fail on most of the arm --
     // a bore clicked on an extraEntity returned -1 ("must be on two distinct bodies").
@@ -1227,7 +1315,7 @@ bool runRobotBuilderPanelGate()
 
     const bool pass = completeness && wiringDetector && loadDemoWired && deleteOk && !deleteWrongDir
                     && defineOk && !defineWrongDir && degenRejected && limitOk && typeModelOk
-                    && axisDirOk && zeroAxisRejected && extraMapOk;
+                    && axisDirOk && zeroAxisRejected && extraMapOk && parkRestoreOk && parkNegOk;
 
     printf("[rbuild]   NEG-CTRLs: delete-wrong-direction=%s define-wrong-direction=%s degenerate-rejected=%s  %s\n",
            deleteWrongDir ? "YES(bug)" : "no", defineWrongDir ? "YES(bug)" : "no",
