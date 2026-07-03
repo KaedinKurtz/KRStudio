@@ -509,12 +509,48 @@ bool runUrdfExportGate()
     const std::string bad = exportGraphToUrdf(g, 99, "bad");
     const bool negBad = bad.find("<link ") == std::string::npos && bad.find("<joint ") == std::string::npos;
 
-    const bool pass = links4 && joints3 && names && types && tree && limitCount && reroot && negBad;
+    // ROTATED-PLACEMENT fixture: URDF <axis> is expressed in the JOINT (child) frame, and the joint
+    // origin sits ON the bore. The old export used the PARENT frame + child CAD origin -- invisible
+    // to the identity-rotation fixture above, wrong on any real assembly. Child rotated 90 deg about
+    // X, world axis Z, bore at (0.4, 0.1, 0.2): expected axis in child frame = Rx(90)^T * Z = (0,1,0)
+    // (the buggy parent-frame export emits (0,0,1)); expected origin xyz = the bore point.
+    bool axisChildFrame = false, originOnBore = false, effortReal = false;
+    {
+        RobotGraph gr; gr.base = 0;
+        { RBBody b; b.name = "p"; b.placement = Eigen::Matrix4d::Identity(); gr.bodies.push_back(b); }
+        { RBBody b; b.name = "c"; b.placement = placement(0.7, -0.2, 0.3, Eigen::Vector3d(1, 0, 0), 1.5707963267948966);
+          gr.bodies.push_back(b); }
+        RBJoint j; j.parent = 0; j.child = 1; j.type = JType::Revolute; j.name = "rot";
+        j.axisDir = { 0, 0, 1 }; j.axisPos = { 0.4f, 0.1f, 0.2f }; j.orthonormalizeFrame();
+        j.limits.lower = -1.0; j.limits.upper = 1.0; gr.addJoint(j);
+        const std::string u = exportGraphToUrdf(gr, 0, "rotfix");
+        auto triple = [&u](const char* tag) -> Eigen::Vector3d {
+            const size_t t = u.find(tag);
+            if (t == std::string::npos) return Eigen::Vector3d(9, 9, 9);
+            const size_t a = u.find('"', t) + 1, b = u.find('"', a);
+            std::istringstream is(u.substr(a, b - a));
+            Eigen::Vector3d v(9, 9, 9); is >> v.x() >> v.y() >> v.z(); return v;
+        };
+        const Eigen::Vector3d ax = triple("<axis xyz=");
+        const Eigen::Vector3d og = triple("<origin xyz=");
+        axisChildFrame = (ax - Eigen::Vector3d(0, 1, 0)).cwiseAbs().maxCoeff() < 1e-6;
+        originOnBore   = (og - Eigen::Vector3d(0.4, 0.1, 0.2)).cwiseAbs().maxCoeff() < 1e-6;
+        // URDF requires effort/velocity; the 0 sentinel must be replaced by the enforced defaults.
+        effortReal = u.find("effort=\"0\"") == std::string::npos
+                  && u.find("velocity=\"0\"") == std::string::npos
+                  && u.find("effort=\"") != std::string::npos;
+    }
+
+    const bool pass = links4 && joints3 && names && types && tree && limitCount && reroot && negBad
+                   && axisChildFrame && originOnBore && effortReal;
     printf("[rbuild]   links=%d(4) joints=%d(3) names=%d types(rev/cont/prism)=%d tree=%d limitCount=%d(2)  %s\n",
            cnt(urdf, "<link "), cnt(urdf, "<joint "), names, types, tree, cnt(urdf, "<limit "),
            (links4 && joints3 && names && types && tree && limitCount) ? "PASS" : "FAIL");
     printf("[rbuild]   re-root from base 2 -> 4 links/3 joints=%d ; NEG-CTRL bad base -> empty=%d  %s\n",
            reroot, negBad, (reroot && negBad) ? "PASS" : "FAIL");
+    printf("[rbuild]   rotated placement: axis in CHILD/joint frame=%s ; origin on the bore=%s ; effort/velocity real (no 0 sentinel)=%s  %s\n",
+           axisChildFrame ? "yes" : "NO", originOnBore ? "yes" : "NO", effortReal ? "yes" : "NO",
+           (axisChildFrame && originOnBore && effortReal) ? "PASS" : "FAIL");
     printf("[rbuild] %s\n", pass ? "ALL PASS (URDF export: base-pick + tree-search; types+limits correct; re-rootable; bad base empty)"
                                  : "FAILURES PRESENT");
     std::fflush(stdout);
