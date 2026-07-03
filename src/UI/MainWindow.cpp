@@ -2338,11 +2338,17 @@ MainWindow::MainWindow(QWidget* parent)
         auto* outliner = new OutlinerWidget(m_scene.get(), this);
         connect(outliner, &OutlinerWidget::selectionEdited, this,
                 [this]() { refreshGizmoAndProperties(); });
-        // Selecting a robot in the outliner binds the Robot Builder to it for editing
-        // (the FANUC -> live limit editing; the demo -> graph authoring). Raises the
-        // Builder panel so the edit controls are visible.
+        // Selecting a robot in the outliner binds the Robot Builder to it for editing AND
+        // raises the Builder dock -- it boots tabbed behind Physics, so without the raise
+        // the bind was invisible ("select the robot, nothing happens").
         connect(outliner, &OutlinerWidget::robotSelected, this, [this](int robotId) {
-            if (robotId >= 0 && m_robotBuilderPanel) m_robotBuilderPanel->editRobot(robotId);
+            if (robotId < 0 || !m_robotBuilderPanel) return;
+            m_robotBuilderPanel->editRobot(robotId);
+            if (auto* rbDock = m_dockManager ? m_dockManager->findDockWidget(QStringLiteral("Robot Builder")) : nullptr) {
+                rbDock->toggleView(true);      // ensure it is open
+                rbDock->setAsCurrentTab();     // bring it to the front of its tab group
+                rbDock->raise();
+            }
         });
         auto* outDock = new ads::CDockWidget(QStringLiteral("Outliner"), this);
         outDock->setWidget(outliner);

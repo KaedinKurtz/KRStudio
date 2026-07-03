@@ -22,6 +22,9 @@
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QComboBox>
+#include <QSlider>
+#include <QTimer>
+#include <QMessageBox>
 #include <QSignalBlocker>
 #include <QMetaMethod>
 
@@ -116,24 +119,52 @@ void RobotBuilderPanel::initializeUI()
     m_jointsList = new QListWidget(content);
     m_jointsList->setObjectName(QStringLiteral("rbJointsList"));
     layout->addWidget(m_jointsList);
-    m_deleteBtn = new QPushButton(QStringLiteral("Delete Selected Joint"), content);
+    // Honest label: cutting a joint does not just remove an edge -- the child subtree becomes its
+    // OWN robot (drag it by its root; re-mate two bores to merge it back). The old "Delete Selected
+    // Joint" text hid a fairly dramatic side effect.
+    m_deleteBtn = new QPushButton(QStringLiteral("Cut Selected Joint (splits off a new robot)"), content);
     m_deleteBtn->setObjectName(QStringLiteral("rbDeleteJointButton"));
     layout->addWidget(m_deleteBtn);
 
     // --- Define joint from features ---
     layout->addWidget(makeSectionHeader(QStringLiteral("Define Joint"), content));
     m_defineHint = new QLabel(QStringLiteral(
-        "Click two coaxial bores in the viewport (each one highlights and stays selected; "
-        "click a bore again to deselect, or use Clear). Then Define a revolute about their shared axis."),
+        "Click two bores in the viewport (parallel is enough -- Define snaps them coaxial; "
+        "click a bore again to deselect, or use Clear)."),
         content);
     m_defineHint->setWordWrap(true);
     layout->addWidget(m_defineHint);
+    // The two-bore WORKING SET, always visible -- the user no longer has to infer from a status
+    // line how many bores are held and where they are. Filled by refreshBoreSlots() (selection poll).
+    auto* slotBox = new QGroupBox(content);
+    auto* slotForm = new QFormLayout(slotBox);
+    m_boreA = new QLabel(QStringLiteral("—"), slotBox);
+    m_boreA->setObjectName(QStringLiteral("rbBoreALabel"));
+    m_boreB = new QLabel(QStringLiteral("—"), slotBox);
+    m_boreB->setObjectName(QStringLiteral("rbBoreBLabel"));
+    slotForm->addRow(QStringLiteral("Bore A"), m_boreA);
+    slotForm->addRow(QStringLiteral("Bore B"), m_boreB);
+    layout->addWidget(slotBox);
     m_defineBtn = new QPushButton(QStringLiteral("Define Revolute from 2 Selected Bores"), content);
     m_defineBtn->setObjectName(QStringLiteral("rbDefineFromFeaturesButton"));
     layout->addWidget(m_defineBtn);
     m_clearSelBtn = new QPushButton(QStringLiteral("Clear Bore Selection"), content);
     m_clearSelBtn->setObjectName(QStringLiteral("rbClearSelectionButton"));
     layout->addWidget(m_clearSelBtn);
+
+    // --- Jog (test-drive) the selected joint ---
+    // The affordance every benchmark authoring tool has: define a joint, wiggle it SECONDS later to
+    // verify the axis/limits -- no node graph, no Play. Writes through LiveRobot::q (the single
+    // writer, limit-clamped), never the node command bus.
+    layout->addWidget(makeSectionHeader(QStringLiteral("Jog Selected Joint"), content));
+    m_jogSlider = new QSlider(Qt::Horizontal, content);
+    m_jogSlider->setObjectName(QStringLiteral("rbJogSlider"));
+    m_jogSlider->setRange(0, 1000);
+    m_jogSlider->setEnabled(false);
+    layout->addWidget(m_jogSlider);
+    m_jogLabel = new QLabel(QStringLiteral("select a joint to jog"), content);
+    m_jogLabel->setObjectName(QStringLiteral("rbJogLabel"));
+    layout->addWidget(m_jogLabel);
 
     // --- Joint type (Revolute / Continuous / Prismatic / Fixed) for the selected joint ---
     layout->addWidget(makeSectionHeader(QStringLiteral("Joint Type"), content));
@@ -245,6 +276,14 @@ void RobotBuilderPanel::setupConnections()
     connect(m_jointsList,    &QListWidget::currentRowChanged, this, &RobotBuilderPanel::onJointSelected);
     connect(m_jointType, QOverload<int>::of(&QComboBox::activated),
             this, &RobotBuilderPanel::onJointTypeChanged);
+    connect(m_jogSlider, &QSlider::valueChanged, this, &RobotBuilderPanel::onJogMoved);
+
+    // SelectionState is a plain ctx struct mutated by the viewport with no change signal, so the
+    // bore slots + button gating poll it (cheap: reads a tiny vector 5x/s, updates only on change).
+    m_selPoll = new QTimer(this);
+    m_selPoll->setInterval(200);
+    connect(m_selPoll, &QTimer::timeout, this, &RobotBuilderPanel::refreshBoreSlots);
+    m_selPoll->start();
 }
 
 krs::rbuild::RobotGraph* RobotBuilderPanel::graph() const
@@ -260,8 +299,6 @@ void RobotBuilderPanel::setStatus(const QString& msg)
 
 void RobotBuilderPanel::refresh()
 {
-    if (refreshFromLiveRobot()) return;   // bound to a LiveRobot (e.g. the FANUC) -> live-edit path
-
     const QSignalBlocker blocker(this);
     m_isUpdatingUI = true;
 
@@ -301,6 +338,7 @@ void RobotBuilderPanel::refresh()
     m_dofIndex->setRange(0, dof > 0 ? dof - 1 : 0);
 
     m_isUpdatingUI = false;
+    refreshBoreSlots();   // sync slot readout + Define gating NOW (not on the next poll tick)
 }
 
 void RobotBuilderPanel::onLoadDemo()
@@ -333,7 +371,6 @@ void RobotBuilderPanel::onLoadDemo()
             reg.emplace_or_replace<TagComponent>(lr->root, std::string("Demo Robot"));
         }
     }
-    m_editRobotId = -1;   // authoring the demo's RobotGraph (full feature editing), not a live-robot bind
     if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) { st->enabled = true; st->fifoTwoBores = true; }  // bore-picking live, FIFO 2
     setStatus(QStringLiteral("Loaded demo robot (robotId %1): %2 bodies, DOF %3. Click two bores to define a joint.")
                   .arg(demoId).arg(int(gp->bodies.size())).arg(gp->dof()));
@@ -342,11 +379,12 @@ void RobotBuilderPanel::onLoadDemo()
 }
 
 // Bind the builder to a first-class robot selected elsewhere (the outliner). If the
-// authoring graph already represents that robot (the demo), stay in graph-authoring
-// mode (define/delete/snap). Otherwise -- the boot FANUC, which is a LiveRobot with no
-// authoring graph -- bind to its live model for joint-LIMIT editing. The user's ask
-// "the default loaded robot is not editable" is met: select the FANUC, its joints +
-// limits populate, and edits write straight into the live model (see onApplyLimitLive).
+// authoring graph already represents that robot, edit it directly. Otherwise synthesize
+// an editable graph that MIRRORS the live robot -- even the boot FANUC becomes an
+// ordinary editable RobotGraph, and edits re-apply via reapplyGraphToRobot on
+// graphChanged. (The old m_editRobotId "live-bind" mode was dead code: nothing ever set
+// it >= 0, so its ~150 lines of branches -- including three "not editable here" status
+// messages -- were unreachable. Removed.)
 void RobotBuilderPanel::editRobot(int robotId)
 {
     if (m_isUpdatingUI || !m_scene) return;
@@ -359,15 +397,11 @@ void RobotBuilderPanel::editRobot(int robotId)
     // Authoring graph already represents this robot -> edit it directly (keeps any
     // un-jointed bodies / bore features authored this session).
     if (auto* g = reg.ctx().find<krs::rbuild::RobotGraph>(); g && g->robotId == robotId) {
-        m_editRobotId = -1;
         refresh();
         setStatus(QStringLiteral("Editing robot %1: re-type / define / delete joints, edit axes + limits.").arg(robotId));
         return;
     }
 
-    // Otherwise synthesize an editable graph that MIRRORS the live robot (the keystone:
-    // even the boot FANUC becomes an ordinary editable RobotGraph -- delete/define/re-type
-    // all work, and edits re-apply to the live robot via reapplyGraphToRobot on graphChanged).
     auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
     krs::robot::LiveRobot* lr = rr ? rr->get(robotId) : nullptr;
     if (!lr) { setStatus(QStringLiteral("Robot %1 not found in the live registry.").arg(robotId)); return; }
@@ -375,87 +409,9 @@ void RobotBuilderPanel::editRobot(int robotId)
     krs::rbuild::RobotGraph* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
     if (!gp) gp = &reg.ctx().emplace<krs::rbuild::RobotGraph>();
     *gp = krs::robot::buildGraphFromLiveRobot(*lr);
-    m_editRobotId = -1;   // it IS a graph now -> full graph-authoring mode
     refresh();
     setStatus(QStringLiteral("Editing %1 as a graph (%2 joints): re-type / define / delete / limits all take live effect.")
                   .arg(QString::fromStdString(lr->name)).arg(int(gp->joints.size())));
-}
-
-// Fill the controls from a bound LiveRobot's model (no RobotGraph round-trip, so the
-// FANUC's CAD-derived kinematics are never re-synthesized/perturbed). Returns true iff
-// it handled the refresh (m_editRobotId>=0 and the robot still exists).
-bool RobotBuilderPanel::refreshFromLiveRobot()
-{
-    if (m_editRobotId < 0 || !m_scene) return false;
-    auto& reg = m_scene->getRegistry();
-    auto* rr  = reg.ctx().find<krs::robot::RobotRegistry>();
-    krs::robot::LiveRobot* lr = rr ? rr->get(m_editRobotId) : nullptr;
-    if (!lr) { m_editRobotId = -1; return false; }   // robot gone -> fall back to graph mode
-
-    const QSignalBlocker blocker(this);
-    m_isUpdatingUI = true;
-    m_jointsList->clear();
-
-    // Bind the proven hot-swap config straight to the live model (a copy; Apply writes the
-    // live model directly in onApplyLimitLive). ensureNames() gives the joints stable labels.
-    m_cfg = std::make_unique<krs::rcfg::RobotConfig>();
-    m_cfg->robot = lr->model;
-    m_cfg->ensureNames();
-
-    static const char* kJTypeName[] = { "Revolute", "Prismatic", "Fixed" };
-    int dofSeen = 0;
-    for (int i = 0; i < int(lr->model.joints.size()); ++i) {
-        const auto& j = lr->model.joints[i];
-        const int t = int(j.type);
-        const bool isDof = j.member && j.type != krs::dyn::JType::Fixed;
-        const QString nm = j.name.empty() ? QStringLiteral("J%1").arg(i) : QString::fromStdString(j.name);
-        m_jointsList->addItem(QStringLiteral("%1  [node %2]   %3%4  limits [%5, %6]")
-            .arg(nm).arg(j.nodeId)
-            .arg(QString::fromLatin1((t >= 0 && t <= 2) ? kJTypeName[t] : "?"))
-            .arg(isDof ? QStringLiteral(" (dof %1)").arg(dofSeen) : QStringLiteral(" (fixed)"))
-            .arg(j.qLower, 0, 'f', 2).arg(j.qUpper, 0, 'f', 2));
-        if (isDof) ++dofSeen;
-    }
-    const int dof = dofSeen;
-    m_dofLabel->setText(QStringLiteral("DOF: %1   (live robot \"%2\", %3 joints)")
-                            .arg(dof).arg(QString::fromStdString(lr->name)).arg(int(lr->model.joints.size())));
-    m_dofIndex->setRange(0, dof > 0 ? dof - 1 : 0);
-
-    m_isUpdatingUI = false;
-    return true;
-}
-
-// Limit edit on a bound LiveRobot (the FANUC): write the new [lo,hi] straight into the
-// live model joint, then rebuild() (DOF count unchanged -> q PRESERVED, no pose jump;
-// the new limits are used by clampDof for every subsequent applyCommand).
-void RobotBuilderPanel::onApplyLimitLive()
-{
-    auto& reg = m_scene->getRegistry();
-    auto* rr  = reg.ctx().find<krs::robot::RobotRegistry>();
-    krs::robot::LiveRobot* lr = rr ? rr->get(m_editRobotId) : nullptr;
-    if (!lr) { setStatus(QStringLiteral("Live robot gone.")); m_editRobotId = -1; refresh(); return; }
-
-    const int idx = m_dofIndex->value();
-    // Map chain-DOF index -> model.joints[] array index (skip fixed / non-member).
-    int arrIdx = -1, dofSeen = 0;
-    for (int ji = 0; ji < int(lr->model.joints.size()); ++ji) {
-        const auto& jt = lr->model.joints[ji];
-        if (!jt.member || jt.type == krs::dyn::JType::Fixed) continue;
-        if (dofSeen == idx) { arrIdx = ji; break; }
-        ++dofSeen;
-    }
-    if (arrIdx < 0) { setStatus(QStringLiteral("DOF index out of range.")); return; }
-
-    const double lo = m_limitLo->value(), hi = m_limitHi->value();
-    if (hi < lo) { setStatus(QStringLiteral("Upper limit must be >= lower limit.")); return; }
-    lr->model.joints[arrIdx].qLower  = lo;
-    lr->model.joints[arrIdx].qUpper  = hi;
-    lr->model.joints[arrIdx].engProv = krs::robot::Provenance::UserSupplied;
-    lr->rebuild();   // DOF count unchanged -> q preserved; clampDof now honours the new limits
-    setStatus(QStringLiteral("Live robot %1 J%2 limits set [%3, %4] (now clamps the drive).")
-                  .arg(m_editRobotId).arg(arrIdx).arg(lo, 0, 'f', 3).arg(hi, 0, 'f', 3));
-    refresh();
-    emit graphChanged();
 }
 
 void RobotBuilderPanel::onDeleteJoint()
@@ -465,6 +421,20 @@ void RobotBuilderPanel::onDeleteJoint()
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
     if (row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to delete.")); return; }
+
+    // DESTRUCTIVE + no undo yet -> confirm, naming the joint and the consequence. Suppressed when the
+    // panel is not shown (the headless gates drive this button via click() on a never-shown panel).
+    if (isVisible()) {
+        const QString jn = g->joints[row].name.empty() ? QStringLiteral("J%1").arg(row)
+                                                       : QString::fromStdString(g->joints[row].name);
+        const auto r = QMessageBox::question(this, QStringLiteral("Cut joint?"),
+            QStringLiteral("Cut %1 (B%2-B%3)?\n\nThe child subtree becomes its OWN robot "
+                           "(drag it by its root; re-mate two bores to merge it back). "
+                           "There is no undo yet.")
+                .arg(jn).arg(g->joints[row].parent).arg(g->joints[row].child),
+            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (r != QMessageBox::Yes) { setStatus(QStringLiteral("Cut cancelled.")); return; }
+    }
 
     // DELETE = SPLIT: the cut joint's child subtree becomes its OWN first-class robot, so it moves as a
     // unit (drag its root) and stays articulated; re-mating it (Define across the two) merges it back.
@@ -659,42 +629,34 @@ void RobotBuilderPanel::onClearSelection()
     if (!m_scene) return;
     if (auto* sel = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>())
         krs::sel::clearSelection(*sel);
-    setStatus(QStringLiteral("Bore selection cleared. Click two coaxial bores to define a joint."));
+    setStatus(QStringLiteral("Bore selection cleared. Click two bores to define a joint."));
+    refreshBoreSlots();
+}
+
+// joints-list row -> chain DOF index: the joint's position among the committed, non-Fixed
+// joints (the DOF the limit editor and jog slider act on). -1 = carries no DOF.
+int RobotBuilderPanel::dofIndexOfRow(int row) const
+{
+    auto* g = graph();
+    if (!g || row < 0 || row >= int(g->joints.size())) return -1;
+    int dofSeen = 0;
+    for (int ji = 0; ji <= row; ++ji) {
+        if (g->joints[ji].ambiguous || g->joints[ji].type == krs::rbuild::JType::Fixed) continue;
+        if (ji == row) return dofSeen;
+        ++dofSeen;
+    }
+    return -1;
 }
 
 void RobotBuilderPanel::onJointSelected(int row)
 {
-    // Live-robot bind (FANUC): the row is a model.joints[] index. Reflect that joint's
-    // limits into the limit spins and point the DOF index at it, so Apply Limit acts on
-    // the joint the user clicked.
-    if (m_editRobotId >= 0 && m_scene) {
-        auto& reg = m_scene->getRegistry();
-        auto* rr  = reg.ctx().find<krs::robot::RobotRegistry>();
-        krs::robot::LiveRobot* lr = rr ? rr->get(m_editRobotId) : nullptr;
-        if (!lr || row < 0 || row >= int(lr->model.joints.size())) return;
-        const auto& j = lr->model.joints[row];
-        int dofIdx = -1, dofSeen = 0;
-        for (int ji = 0; ji <= row; ++ji) {
-            const auto& jt = lr->model.joints[ji];
-            if (!jt.member || jt.type == krs::dyn::JType::Fixed) continue;
-            if (ji == row) dofIdx = dofSeen;
-            ++dofSeen;
-        }
-        const QSignalBlocker bl(m_limitLo), bh(m_limitHi), bd(m_dofIndex), bt(m_jointType);
-        if (dofIdx >= 0) m_dofIndex->setValue(dofIdx);
-        m_limitLo->setValue(j.qLower);
-        m_limitHi->setValue(j.qUpper);
-        // Reflect the live joint's type (krs::dyn::JType has no 'continuous' notion).
-        int ti = 0;
-        if (j.type == krs::dyn::JType::Prismatic) ti = 2;
-        else if (j.type == krs::dyn::JType::Fixed) ti = 3;
-        m_jointType->setCurrentIndex(ti);
-        return;
-    }
-
     // Authoring graph: reflect the selected joint's axis origin + type into the controls.
     auto* g = graph();
-    if (!g || row < 0 || row >= int(g->joints.size()) || !m_axisX) { showSelectedJointAxis(-1); return; }
+    if (!g || row < 0 || row >= int(g->joints.size()) || !m_axisX) {
+        showSelectedJointAxis(-1);
+        syncJogToSelected(-1);
+        return;
+    }
     const auto& j = g->joints[row];
     const QSignalBlocker bx(m_axisX), by(m_axisY), bz(m_axisZ), bt(m_jointType),
                          dx(m_dirX), dy(m_dirY), dz(m_dirZ);
@@ -711,14 +673,8 @@ void RobotBuilderPanel::onJointSelected(int row)
     m_jointType->setCurrentIndex(ti);
 
     // Point the DOF field + limit spins at the selected joint, so the limit editor acts on
-    // the joint you clicked (the DOF index = this joint's position among the non-Fixed,
-    // committed joints). Fixed/ambiguous joints carry no DOF -> leave the field as-is.
-    int dofIdx = -1, dofSeen = 0;
-    for (int ji = 0; ji <= row; ++ji) {
-        if (g->joints[ji].ambiguous || g->joints[ji].type == krs::rbuild::JType::Fixed) continue;
-        if (ji == row) dofIdx = dofSeen;
-        ++dofSeen;
-    }
+    // the joint you clicked. Fixed/ambiguous joints carry no DOF -> leave the field as-is.
+    const int dofIdx = dofIndexOfRow(row);
     if (dofIdx >= 0) {
         const QSignalBlocker bd(m_dofIndex), bl(m_limitLo), bh(m_limitHi);
         m_dofIndex->setValue(dofIdx);
@@ -726,16 +682,121 @@ void RobotBuilderPanel::onJointSelected(int row)
         m_limitHi->setValue(j.limits.upper);
     }
     showSelectedJointAxis(row);   // glowing axis bar in the main viewport for the clicked joint
+    syncJogToSelected(row);       // point the jog slider at this joint's DOF + current q
+}
+
+// Point the jog slider at the selected joint's DOF: range = its limits, position = the live q.
+// Disabled for Fixed/ambiguous joints (no DOF) or when no live robot backs the graph.
+void RobotBuilderPanel::syncJogToSelected(int row)
+{
+    if (!m_jogSlider) return;
+    auto* g = graph();
+    const int dofIdx = dofIndexOfRow(row);
+    krs::robot::LiveRobot* lr = nullptr;
+    if (g && m_scene)
+        if (auto* rr = m_scene->getRegistry().ctx().find<krs::robot::RobotRegistry>())
+            lr = rr->get(g->robotId);
+    if (!g || dofIdx < 0 || !lr || dofIdx >= lr->ndof()) {
+        const QSignalBlocker bs(m_jogSlider);
+        m_jogSlider->setEnabled(false);
+        if (m_jogLabel) m_jogLabel->setText(QStringLiteral("select a drivable joint to jog"));
+        return;
+    }
+    const auto& lim = g->joints[row].limits;
+    const double lo = lim.enabled ? lim.lower : -3.14159265;
+    const double hi = lim.enabled ? lim.upper :  3.14159265;
+    const double q  = lr->q[dofIdx];
+    const QSignalBlocker bs(m_jogSlider);
+    m_jogSlider->setEnabled(true);
+    m_jogSlider->setValue((hi > lo) ? int(std::round((q - lo) / (hi - lo) * 1000.0)) : 500);
+    if (m_jogLabel)
+        m_jogLabel->setText(QStringLiteral("q = %1 rad (%2°)   range [%3, %4]")
+            .arg(q, 0, 'f', 3).arg(q * 57.2957795, 0, 'f', 1).arg(lo, 0, 'f', 2).arg(hi, 0, 'f', 2));
+}
+
+// Jog = write the selected joint's DOF through the SINGLE writer (LiveRobot::setCommandedQ, which
+// clamps) and refresh the FK viz. Never touches the node command bus (which is per-eval-pass and
+// would fight a hand jog).
+void RobotBuilderPanel::onJogMoved(int sliderValue)
+{
+    if (m_isUpdatingUI || !m_scene) return;
+    auto* g = graph();
+    const int row = m_jointsList ? m_jointsList->currentRow() : -1;
+    const int dofIdx = dofIndexOfRow(row);
+    if (!g || dofIdx < 0) return;
+    auto* rr = m_scene->getRegistry().ctx().find<krs::robot::RobotRegistry>();
+    krs::robot::LiveRobot* lr = rr ? rr->get(g->robotId) : nullptr;
+    if (!lr || dofIdx >= lr->ndof()) return;
+    const auto& lim = g->joints[row].limits;
+    const double lo = lim.enabled ? lim.lower : -3.14159265;
+    const double hi = lim.enabled ? lim.upper :  3.14159265;
+    Eigen::VectorXd qc = lr->q;
+    qc[dofIdx] = lo + (hi - lo) * (double(sliderValue) / 1000.0);
+    lr->setCommandedQ(qc);                                          // clamped by the joint's limits
+    if (lr->useRobotFkViz) krs::robot::writeBackRobotViz(*m_scene, *lr);
+    if (m_jogLabel)
+        m_jogLabel->setText(QStringLiteral("q = %1 rad (%2°)   range [%3, %4]")
+            .arg(lr->q[dofIdx], 0, 'f', 3).arg(lr->q[dofIdx] * 57.2957795, 0, 'f', 1)
+            .arg(lo, 0, 'f', 2).arg(hi, 0, 'f', 2));
+}
+
+// Bore A/B slot readout + Define/Snap enable gating. Polled (SelectionState has no change signal):
+// shows WHICH two bores are armed (body, radius) and disables Define until the pair is valid --
+// two cylinders on two distinct bodies (same robot) or on two different robots (re-mate/merge).
+void RobotBuilderPanel::refreshBoreSlots()
+{
+    if (!m_scene || !m_boreA || !m_boreB || !m_defineBtn) return;
+    auto& reg = m_scene->getRegistry();
+    auto* sel = reg.ctx().find<krs::sel::SelectionState>();
+    auto* g   = graph();
+
+    std::vector<const krs::sel::Selection*> cyls;
+    if (sel) for (const auto& s : sel->selected)
+        if (s.valid && s.type == krs::sel::FeatureType::Cylinder) cyls.push_back(&s);
+    const krs::sel::Selection* sA = cyls.size() >= 2 ? cyls[cyls.size() - 2]
+                                  : cyls.size() == 1 ? cyls[0] : nullptr;
+    const krs::sel::Selection* sB = cyls.size() >= 2 ? cyls[cyls.size() - 1] : nullptr;
+
+    auto describe = [&](const krs::sel::Selection* s) -> QString {
+        if (!s) return QStringLiteral("—");                        // em-dash: empty slot
+        QString nm = QStringLiteral("entity %1").arg(std::uint32_t(s->entity));
+        if (reg.valid(s->entity))
+            if (const auto* tag = reg.try_get<TagComponent>(s->entity))
+                if (!tag->tag.empty()) nm = QString::fromStdString(tag->tag);
+        const int b = g ? krs::rbuild::bodyIndexForEntity(*g, int(std::uint32_t(s->entity))) : -1;
+        return QStringLiteral("%1%2   r=%3 m")
+            .arg(nm).arg(b >= 0 ? QStringLiteral("  (B%1)").arg(b) : QString())
+            .arg(s->radius, 0, 'f', 4);
+    };
+    const QString a = describe(sA), b = describe(sB);
+    if (m_boreA->text() != a) m_boreA->setText(a);
+    if (m_boreB->text() != b) m_boreB->setText(b);
+
+    // Define is valid for: two bores on two DISTINCT bodies of the edited graph, or two bores on
+    // two DIFFERENT robots (the cross-robot re-mate/merge path).
+    bool canDefine = false;
+    if (sA && sB && g) {
+        const int ba = krs::rbuild::bodyIndexForEntity(*g, int(std::uint32_t(sA->entity)));
+        const int bb = krs::rbuild::bodyIndexForEntity(*g, int(std::uint32_t(sB->entity)));
+        auto robotOf = [&](entt::entity e) -> int {
+            const auto* sc = reg.try_get<RobotSubcomponentComponent>(e); return sc ? sc->robotId : -1; };
+        const int ra = robotOf(sA->entity), rb = robotOf(sB->entity);
+        canDefine = (ra >= 0 && rb >= 0 && ra != rb) || (ba >= 0 && bb >= 0 && ba != bb);
+    }
+    if (m_defineBtn->isEnabled() != canDefine) {
+        m_defineBtn->setEnabled(canDefine);
+        m_defineBtn->setToolTip(canDefine ? QString()
+            : QStringLiteral("Pick two bores on two different bodies (they show in the Bore A/B slots above)."));
+    }
+    if (m_snapAxisBtn) {
+        const bool canSnap = (sA || sB) && m_jointsList && m_jointsList->currentRow() >= 0;
+        if (m_snapAxisBtn->isEnabled() != canSnap) m_snapAxisBtn->setEnabled(canSnap);
+    }
 }
 
 void RobotBuilderPanel::onJointTypeChanged(int comboIndex)
 {
     if (m_isUpdatingUI) return;
-    if (m_editRobotId >= 0) {   // FANUC live-bind: structural re-type is a graph-authoring op (Phase 3)
-        setStatus(QStringLiteral("Joint-type editing applies to builder-authored robots. "
-                                 "Load Demo to author; the FANUC becomes fully editable in a later phase."));
-        return;
-    }
     auto* g = graph();
     const int row = m_jointsList->currentRow();
     if (!g || row < 0 || row >= int(g->joints.size())) { setStatus(QStringLiteral("Select a joint to re-type.")); return; }
@@ -764,11 +825,6 @@ void RobotBuilderPanel::onJointTypeChanged(int comboIndex)
 void RobotBuilderPanel::onApplyAxisOrigin()
 {
     if (m_isUpdatingUI) return;
-    if (m_editRobotId >= 0) {   // FANUC bind: axes are CAD-derived; only limits are live-editable here
-        setStatus(QStringLiteral("Axis origin editing applies to builder-authored joints. "
-                                 "The live robot's axes are CAD-derived -- edit its limits instead."));
-        return;
-    }
     auto* g = graph();
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
@@ -807,10 +863,6 @@ void RobotBuilderPanel::onApplyAxisDir()
 void RobotBuilderPanel::onSnapAxisToBore()
 {
     if (m_isUpdatingUI) return;
-    if (m_editRobotId >= 0) {   // FANUC bind: see onApplyAxisOrigin
-        setStatus(QStringLiteral("Snap-to-bore applies to builder-authored joints, not the CAD-derived live robot."));
-        return;
-    }
     auto* g = graph();
     if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int row = m_jointsList->currentRow();
@@ -841,7 +893,6 @@ void RobotBuilderPanel::onSnapAxisToBore()
 void RobotBuilderPanel::onApplyLimit()
 {
     if (m_isUpdatingUI) return;
-    if (m_editRobotId >= 0) { onApplyLimitLive(); return; }   // bound to a LiveRobot (the FANUC)
     auto* g = graph();
     if (!g || !m_cfg) { setStatus(QStringLiteral("No robot loaded.")); return; }
     const int dof = g->dof();
@@ -1001,7 +1052,9 @@ bool runRobotBuilderPanelGate()
         printf("[rbuild]   define control: DOF %d -> %d (want %d), frame-matches=%s  %s\n",
                before, after, before + 1, frameOk ? "yes" : "no", defineOk ? "PASS" : "FAIL");
 
-        // degenerate (offset) bores -> rejected, DOF unchanged.
+        // degenerate (NON-PARALLEL) bores -> rejected, DOF unchanged. (An offset-but-PARALLEL pair
+        // is ACCEPTED by design since 8ed10f40: the manual define passes requireCollinear=false and
+        // the mate snap makes the pair coaxial -- the old offset fixture asserted the pre-snap rule.)
         Scene scene2;
         auto& reg2 = scene2.getRegistry();
         auto& g2 = reg2.ctx().emplace<RobotGraph>(buildDemoGraph());
@@ -1009,13 +1062,13 @@ bool runRobotBuilderPanelGate()
         auto& sel2 = reg2.ctx().emplace<krs::sel::SelectionState>();
         krs::sel::Selection o2 = s2; o2.entity = entt::entity(std::uint32_t(g2.bodies[2].entity));
         krs::sel::Selection o3 = s2; o3.entity = entt::entity(std::uint32_t(g2.bodies[3].entity));
-        o3.axisPos = { 1.0f, 0.3f, 0 }; // offset -> not coaxial
+        o3.axisDir = { 1.0f, 0.0f, 0.0f }; o3.normal = { 1.0f, 0.0f, 0.0f };   // perpendicular axis -> no revolute
         sel2.selected = { o2, o3 };
         RobotBuilderPanel panel2(&scene2);
         auto* def2 = panel2.findChild<QPushButton*>(QStringLiteral("rbDefineFromFeaturesButton"));
         const int b2 = g2.dof(); def2->click(); const int a2 = g2.dof();
         degenRejected = (a2 == b2);
-        printf("[rbuild]   define degenerate pair: DOF %d -> %d (want unchanged)  %s\n",
+        printf("[rbuild]   define degenerate (non-parallel) pair: DOF %d -> %d (want unchanged)  %s\n",
                b2, a2, degenRejected ? "PASS" : "FAIL");
     }
 
