@@ -484,6 +484,23 @@ void RobotBuilderPanel::onDefineFromFeatures()
     const krs::sel::Selection* selA = cyls[cyls.size() - 2];
     const krs::sel::Selection* selB = cyls[cyls.size() - 1];
 
+    // STALENESS FIX: committed Selections are click-time world snapshots; if the robot moved since
+    // (an FK tick, an IK drag, a prior merge's transformRobot), the stored frames describe where the
+    // bore WAS and the joint would be authored at a stale interface. Re-derive each from the CURRENT
+    // entity transform at consume time (resolveFace); the user's rim CHOICE from click time (nearest
+    // end) is preserved and re-expressed on the fresh frame. Synthetic selections (no faceId, e.g.
+    // gate fixtures) keep their snapshot.
+    auto freshen = [&](const krs::sel::Selection& s) -> krs::sel::Selection {
+        if (s.faceId < 0 || !reg.valid(s.entity)) return s;
+        krs::sel::Selection f = krs::sel::resolveFace(reg, s.entity, s.faceId);
+        if (!f.valid) return s;
+        const bool nearEnd0 = glm::distance(s.hitPoint, s.axisEnd0) <= glm::distance(s.hitPoint, s.axisEnd1);
+        f.hitPoint = nearEnd0 ? f.axisEnd0 : f.axisEnd1;
+        return f;
+    };
+    const krs::sel::Selection freshA = freshen(*selA), freshB = freshen(*selB);
+    selA = &freshA; selB = &freshB;
+
     auto rimFrame = [](const krs::sel::Selection& s) {
         krs::rbuild::RBJoint f;
         f.axisPos = (glm::distance(s.axisEnd0, s.axisEnd1) > 1e-5f)
@@ -900,6 +917,13 @@ void RobotBuilderPanel::onSnapAxisToBore()
     if (sel) for (const auto& s : sel->selected)   // LAST selected cylinder = the most recent intent
         if (s.valid && s.type == krs::sel::FeatureType::Cylinder) bore = &s;
     if (!bore) { setStatus(QStringLiteral("Select a cylindrical bore in the viewport to snap to.")); return; }
+    // Staleness fix (see onDefineFromFeatures): snap to where the bore IS, not where it was clicked.
+    krs::sel::Selection freshBore = *bore;
+    if (bore->faceId >= 0 && m_scene->getRegistry().valid(bore->entity)) {
+        const krs::sel::Selection f = krs::sel::resolveFace(m_scene->getRegistry(), bore->entity, bore->faceId);
+        if (f.valid) freshBore = f;
+    }
+    bore = &freshBore;
     g->joints[row].axisPos = bore->axisPos;
     krs::rbuild::EditController ctrl{ g };
     ctrl.setJointAxis(row, bore->axisDir);         // normalizes + orthonormalizes the mate frame + marks Manual
