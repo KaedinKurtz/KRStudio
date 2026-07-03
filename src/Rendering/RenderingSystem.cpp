@@ -1066,6 +1066,14 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Authored-robot collision: link entities are kinematic PhysX obstacles that follow FK.
+    if (qEnvironmentVariableIntValue("KRS_ROBOTCOLLIDE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ROBOTCOLLIDE_SELFTEST =================\n");
+        const bool ok = SimulationController::runRobotCollisionGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // RAYCAST/PICK gate in isolation (fast iteration): nanort BVH ray/mesh picking.
     if (qEnvironmentVariableIntValue("KRS_PICK_SELFTEST") != 0) {
         std::printf("\n================= KRS_PICK_SELFTEST =================\n");

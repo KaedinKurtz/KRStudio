@@ -5,6 +5,7 @@
 #include "HardwareCaps.hpp"
 #include "RobotDynamics.hpp"   // planned-config FK for the glass/ghost robot (independent of live state)
 #include "RobotModel.hpp"      // krs::robot::RobotRegistry / LiveRobot (first-class Robot owner)
+#include "RobotBuilderScene.hpp"   // buildDemoGraph / spawnGraphBodies (ROBOT-COLLIDE gate fixture)
 #include "SettingsManager.hpp" // user-set physics knobs (gravity, solver, CCD, GPU gate, rate)
 
 #include <QDebug>
@@ -373,6 +374,54 @@ struct SimulationController::PxImpl
         }
         return true;
     }
+
+    /// ROBOT LINK collision: a KINEMATIC actor per robot member solid. Robot links carry
+    /// ParentComponent (identity-root parenting), so the static-scenery path rejects them --
+    /// authored robots had NO collision at all: fluids, rigid bodies, and raycasts passed
+    /// straight through the arm (SimulationController never referenced
+    /// RobotSubcomponentComponent). Kinematic actors are infinite-mass movers that follow the
+    /// FK-driven TransformComponent via the existing pushKinematicTargets each tick -- PhysX
+    /// FOLLOWS q (the documented design), it never writes it. Shapes: explicit/auto colliders
+    /// when present, else an AABB box from the render mesh (honest v1 for dense CAD links).
+    bool createRobotLinkActor(entt::registry& reg, entt::entity e)
+    {
+        if (!scene || !reg.valid(e)) return false;
+        if (!reg.any_of<RobotSubcomponentComponent>(e)) return false;
+        if (reg.any_of<RigidBodyComponent>(e)) return false;   // explicit rigid bodies keep their path
+        if (actors.count(e)) return false;                     // already built
+        const auto* xfPtr = reg.try_get<TransformComponent>(e);
+        if (!xfPtr) return false;
+
+        std::vector<PxShape*> shapes;
+        if (PxShape* s = buildExplicitShape(reg, e, *xfPtr)) shapes.push_back(s);
+        if (shapes.empty()) shapes = buildAutoShapes(reg, e, *xfPtr, nullptr);
+        if (shapes.empty()) {
+            // AABB-box fallback (CAD imports carry no AutoCollisionComponent): geometry is baked
+            // in the entity's local frame, so the box is the mesh AABB, offset to its centre.
+            const auto* mesh = reg.try_get<RenderableMeshComponent>(e);
+            if (!mesh || !(mesh->aabbMin != mesh->aabbMax)) return false;
+            const glm::vec3 he = glm::max((mesh->aabbMax - mesh->aabbMin) * 0.5f * xfPtr->scale,
+                                          glm::vec3(1e-3f));
+            const glm::vec3 c  = (mesh->aabbMin + mesh->aabbMax) * 0.5f * xfPtr->scale;
+            PxShape* s = physics->createShape(PxBoxGeometry(he.x, he.y, he.z), *defaultMaterial, true);
+            if (!s) return false;
+            s->setLocalPose(PxTransform(PxVec3(c.x, c.y, c.z)));
+            shapes.push_back(s);
+        }
+
+        const PxTransform pose(
+            PxVec3(xfPtr->translation.x, xfPtr->translation.y, xfPtr->translation.z),
+            PxQuat(xfPtr->rotation.x, xfPtr->rotation.y, xfPtr->rotation.z, xfPtr->rotation.w));
+        PxRigidDynamic* dyn = physics->createRigidDynamic(pose);
+        dyn->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);   // set BEFORE attach: tri-mesh
+                                                                    // shapes are kinematic-only
+        for (PxShape* s : shapes) { dyn->attachShape(*s); s->release(); }
+        dyn->setMass(1.0f);                                          // kinematics ignore mass in contacts
+        dyn->setMassSpaceInertiaTensor(PxVec3(1.0f));
+        scene->addActor(*dyn);
+        actors[e] = dyn;
+        return true;
+    }
 #endif
 };
 
@@ -459,6 +508,85 @@ bool SimulationController::runLifecycleSelfTest()
            ok ? "PASS" : "FAIL", base, int(balancedCycles), int(coreAfterA), int(bStillSteps), int(balancedFinal));
     fflush(stdout);
     return ok;
+#endif
+}
+
+// ===========================================================================
+// GATE ROBOT-COLLIDE -- an AUTHORED robot's links are REAL obstacles. Before this, robot link
+// entities carried ParentComponent so the scenery path rejected them and NOTHING gave them
+// actors: fluids/rigid bodies/raycasts passed straight through the arm. Now each link gets a
+// KINEMATIC actor that follows the FK viz. Asserts: (1) a ray through a link's body HITS;
+// (2) drive q -> the actor FOLLOWS (hit at the new pose, miss at the old); (3) NEG-CTRL: a ray
+// through empty space misses.
+// ===========================================================================
+bool SimulationController::runRobotCollisionGate()
+{
+#if !defined(KR_WITH_PHYSX)
+    return true;
+#else
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[robotcollide] GATE ROBOT-COLLIDE -- authored-robot links are kinematic obstacles that follow FK\n");
+
+    Scene scene;
+    auto& reg = scene.getRegistry();
+    krs::rbuild::RobotGraph g = krs::rbuild::buildDemoGraph();
+    krs::rbuild::spawnGraphBodies(scene, g, 0);
+    krs::robot::LiveRobot* lr = krs::robot::instantiateFromGraph(scene, g, 0);
+    if (!lr) { printf("[robotcollide] FAIL: no live robot\n"); return false; }
+    lr->useRobotFkViz = true;
+
+    SimulationController sim(&scene);
+    sim.play();                                        // buildPhysicsWorld -> link actors
+    if (!sim.m_px->scene) { printf("[robotcollide] FAIL: no PhysX scene\n"); return false; }
+
+    // Horizontal ray through the LAST driven link's world centre (horizontal => the ground
+    // plane can never bless a vacuous pass).
+    auto linkCentre = [&]() -> glm::vec3 {
+        for (int k = int(lr->linkEntities.size()) - 1; k >= 0; --k)
+            for (entt::entity e : lr->linkEntities[k])
+                if (reg.valid(e) && reg.all_of<TransformComponent, RenderableMeshComponent>(e)) {
+                    const auto& xf = reg.get<TransformComponent>(e);
+                    const auto& mesh = reg.get<RenderableMeshComponent>(e);
+                    const glm::vec3 c = (mesh.aabbMin + mesh.aabbMax) * 0.5f * xf.scale;
+                    return xf.translation + xf.rotation * c;
+                }
+        return glm::vec3(0);
+    };
+    auto rayHits = [&](const glm::vec3& p) {
+        physx::PxRaycastBuffer hit;
+        return sim.m_px->scene->raycast(physx::PxVec3(p.x - 3.0f, p.y, p.z),
+                                        physx::PxVec3(1, 0, 0), 6.0f, hit)
+            && hit.hasBlock && hit.block.actor != sim.m_px->groundPlane;
+    };
+
+    const glm::vec3 c0 = linkCentre();
+    const bool hitsAtRest = rayHits(c0);
+    const bool negMiss    = !rayHits(c0 + glm::vec3(0.0f, 5.0f, 0.0f));   // empty air above
+
+    // Drive the first joint far and step once: the kinematic actor must FOLLOW the FK viz.
+    Eigen::VectorXd qc = Eigen::VectorXd::Zero(lr->ndof());
+    if (lr->ndof() > 0) qc[0] = 1.2;
+    lr->setCommandedQ(qc);
+    krs::robot::writeBackRobotViz(scene, *lr);
+    sim.pushKinematicTargets();
+    sim.m_px->scene->simulate(1.0f / 60.0f);
+    sim.m_px->scene->fetchResults(true);
+    const glm::vec3 c1 = linkCentre();
+    const bool moved     = glm::distance(c0, c1) > 0.05f;   // the drive genuinely displaced the link
+    const bool followsFk = rayHits(c1);
+    const bool leftOld   = !rayHits(c0) || glm::distance(c0, c1) < 0.3f;  // old spot vacated (if far enough)
+
+    sim.stop();
+    const bool pass = hitsAtRest && negMiss && moved && followsFk && leftOld;
+    printf("[robotcollide]   at-rest link blocks ray=%s ; empty-air NEG-CTRL misses=%s ; drive moved link %.3f m=%s ; "
+           "actor follows FK=%s ; old spot vacated=%s  %s\n",
+           hitsAtRest?"yes":"NO", negMiss?"yes":"NO", glm::distance(c0, c1), moved?"yes":"NO",
+           followsFk?"yes":"NO", leftOld?"yes":"NO", pass?"PASS":"FAIL");
+    printf("[robotcollide] %s\n", pass ? "ALL PASS (authored-robot links are kinematic obstacles; they follow the driven FK)"
+                                       : "FAILURES PRESENT");
+    fflush(stdout);
+    return pass;
 #endif
 }
 
@@ -775,6 +903,16 @@ void SimulationController::buildPhysicsWorld()
     for (auto e : reg.view<TransformComponent>()) {
         if (m_px->createStaticSceneryActor(reg, e)) ++staticCount;
     }
+
+    // Robot links: kinematic followers of the FK viz, so the arm is a real obstacle (fluids,
+    // rigid bodies, raycasts). Skipped when a legacy articulation owns the robot's collision --
+    // its links would fight infinite-mass kinematic twins occupying the same space.
+    int robotLinkCount = 0;
+    if (!m_hasRobotSpec)
+        for (auto e : reg.view<RobotSubcomponentComponent, TransformComponent>())
+            if (m_px->createRobotLinkActor(reg, e)) ++robotLinkCount;
+    if (robotLinkCount > 0)
+        qInfo() << "[Sim] robot links collide:" << robotLinkCount << "kinematic link actors (follow FK)";
 
     if (m_hasRobotSpec) buildArticulation();   // Phase G: live FANUC articulation
 

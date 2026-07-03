@@ -57,6 +57,7 @@ public:
     static int  physxCoreRefCount();   // # SimulationControllers holding the shared core
     static bool physxCoreAlive();      // is the shared PxPhysics valid
     static bool runLifecycleSelfTest();// G0b: create/destroy + coexist with no crash/double-free
+    static bool runRobotCollisionGate();// authored-robot links are REAL obstacles (kinematic FK followers)
 
     // Phase B (C3): a flip-to-Dynamic must continue from the body's LIVE motion. Kinematic bodies
     // report 0 velocity in PhysX, so writeBackTransforms estimates their velocity from the pose
