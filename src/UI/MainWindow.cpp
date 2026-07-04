@@ -1,6 +1,11 @@
 #include "MainWindow.hpp"
 #include "AuthoringPersist.hpp"   // krs::persist -- authoring survives restart
 #include "KSave.hpp"              // krs::ksave -- .kscene/.krobot/.kjoint/.kstate family
+#include "KGraph.hpp"             // krs::kgraph -- live model <-> .kgraph
+#include "KPack.hpp"              // krs::kpack -- .knodepack subgraph sharing
+#include "SubgraphNode.hpp"       // krs::nodes::registerDiscoveredKNodes
+#include "KParts.hpp"             // krs::parts::PartLibrary
+#include <QStandardPaths>
 #include <QFile>
 #include <QSettings>
 #include <QProcessEnvironment>
@@ -1324,6 +1329,7 @@ MainWindow::MainWindow(QWidget* parent)
     // --- Node Editor Setup (with combined Catalog and Editor) ---
     // ===================================================================
     auto nodeRegistry = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
+    m_nodeRegistry = nodeRegistry;   // member alias so importSubgraphPack can append newly-registered knode:<id> types
     for (auto const& [typeId, desc] : NodeFactory::instance().getRegisteredNodeTypes())
     {
         nodeRegistry->registerModel<NodeDelegate>(
@@ -1335,12 +1341,14 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     auto graphModel = std::make_shared<QtNodes::DataFlowGraphModel>(nodeRegistry);
+    m_graphModel = graphModel;                 // member alias so the Save/Load + pack handlers can reach the live model
     m_nodeScene = new CustomDataFlowScene(*graphModel, this);
     m_nodeView = new DroppableGraphicsView(m_nodeScene, this);
 
     auto* nodeEditorContainer = new QWidget();
     auto* splitter = new QSplitter(Qt::Horizontal, nodeEditorContainer);
     NodeCatalogWidget* catalog = new NodeCatalogWidget(splitter);
+    m_nodeCatalog = catalog;                    // keep a handle so an import can re-populate the palette
     catalog->setMaximumWidth(300);
     catalog->setMinimumWidth(200);
     splitter->addWidget(catalog);
@@ -3869,6 +3877,79 @@ void MainWindow::applyCtxToEnvironment()
     rs->setHdrEnabled(env->hdrEnabled);
 }
 
+// ---- node-graph + subgraph-pack persistence GUI (rides the gated krs::kgraph / krs::kpack cores) ----
+static QString krsUserPartsRoot() {
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/parts");
+}
+
+void MainWindow::saveNodeGraphTo(const QString& absPath) {
+    if (!m_graphModel) return;
+    krs::kgraph::saveKGraph(*m_graphModel, absPath, QFileInfo(absPath).completeBaseName());
+}
+
+void MainWindow::loadNodeGraphFrom(const QString& absPath) {
+    if (!m_graphModel || !QFile::exists(absPath)) return;
+    const auto ids = m_graphModel->allNodeIds();          // clear the live model (connections go with the nodes)
+    for (auto id : ids) m_graphModel->deleteNode(id);
+    QString err;
+    if (!krs::kgraph::loadKGraph(absPath, *m_graphModel, m_scene.get(), &err) && !err.isEmpty())
+        statusBar()->showMessage(QStringLiteral("Load graph: %1").arg(err), 6000);
+}
+
+void MainWindow::refreshNodePalette() {
+    // Re-scan the personal library for .knode and register each as a knode:<id> factory type; then append
+    // any NEW type to the QtNodes registry (so it is draggable + addNode-able, not just right-click-creatable)
+    // and re-populate the drag palette.
+    krs::parts::PartLibrary lib; lib.setSearchRoots({ krsUserPartsRoot() }); lib.rescan();
+    krs::nodes::registerDiscoveredKNodes(lib);
+    for (const auto& kv : NodeFactory::instance().getRegisteredNodeTypes()) {
+        const QString typeId = QString::fromStdString(kv.first);
+        if (!typeId.startsWith(QStringLiteral("knode:")) || m_registeredKnodeTypes.contains(typeId)) continue;
+        if (m_nodeRegistry) {
+            const std::string id = kv.first;
+            m_nodeRegistry->registerModel<NodeDelegate>([id]() { return std::make_unique<NodeDelegate>(id); },
+                                                        QString::fromStdString(kv.second.category));
+        }
+        m_registeredKnodeTypes.insert(typeId);
+    }
+    if (m_nodeCatalog) m_nodeCatalog->populateTree();
+}
+
+void MainWindow::exportSelectedSubgraphPack() {
+    const QString knodePath = QFileDialog::getOpenFileName(this, QStringLiteral("Export subgraph: pick a .knode"),
+        krsUserPartsRoot(), QStringLiteral("KNode subgraph (*.knode)"));
+    if (knodePath.isEmpty()) return;
+    const QString out = QFileDialog::getSaveFileName(this, QStringLiteral("Export as .knodepack"),
+        QFileInfo(knodePath).completeBaseName() + QStringLiteral(".knodepack"), QStringLiteral("KNode pack (*.knodepack)"));
+    if (out.isEmpty()) return;
+    // resolve the nested closure against the .knode's own folder + the personal library.
+    krs::parts::PartLibrary lib;
+    lib.setSearchRoots({ QFileInfo(knodePath).absolutePath(), krsUserPartsRoot() });
+    lib.rescan();
+    QString err;
+    const QString id = krs::kpack::writePack(knodePath, lib, out, &err);
+    if (id.isEmpty()) QMessageBox::warning(this, QStringLiteral("Export .knodepack"), err.isEmpty() ? QStringLiteral("Export failed.") : err);
+    else statusBar()->showMessage(QStringLiteral("Exported subgraph pack: %1").arg(out), 6000);
+}
+
+void MainWindow::importSubgraphPack() {
+    const QString packPath = QFileDialog::getOpenFileName(this, QStringLiteral("Import .knodepack"),
+        QString(), QStringLiteral("KNode pack (*.knodepack)"));
+    if (packPath.isEmpty()) return;
+    krs::parts::PartLibrary lib;
+    krs::kpack::InstallReport rep; QString err;
+    if (!krs::kpack::importPack(packPath, krsUserPartsRoot(), lib, rep, &err)) {
+        QMessageBox::warning(this, QStringLiteral("Import .knodepack"), err.isEmpty() ? QStringLiteral("Import failed.") : err);
+        return;
+    }
+    refreshNodePalette();
+    QString msg = QStringLiteral("Imported %1 member(s), skipped %2 duplicate(s).\nNew subgraph nodes: %3")
+        .arg(rep.installed).arg(rep.skippedDuplicate).arg(rep.registered.join(QStringLiteral(", ")));
+    if (!rep.missingDeps.isEmpty())
+        msg += QStringLiteral("\n\nMissing interior node types (a member needs these): %1").arg(rep.missingDeps.join(QStringLiteral(", ")));
+    QMessageBox::information(this, QStringLiteral("Import .knodepack"), msg);
+}
+
 void MainWindow::buildEngineeringToolbar()
 {
     QToolBar* tb = addToolBar(QStringLiteral("Engineering"));
@@ -3896,6 +3977,9 @@ void MainWindow::buildEngineeringToolbar()
             QMessageBox::warning(this, QStringLiteral("Save Scene"), rep.error);
             return;
         }
+        // The live node graph rides with the scene: a sibling <scene>.kgraph next to the .kscene.
+        { const QFileInfo si(QString::fromStdString(path));
+          saveNodeGraphTo(si.absoluteDir().filePath(si.completeBaseName() + QStringLiteral(".kgraph"))); }
         QString msg = QStringLiteral("Saved %1 robot(s), %2 joint(s), %3 light(s), %4 object(s) to %5")
             .arg(rep.robots).arg(rep.joints).arg(rep.lights).arg(rep.objects).arg(QString::fromStdString(path));
         if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
@@ -3914,6 +3998,10 @@ void MainWindow::buildEngineeringToolbar()
         }
         krs::robot::rebuildJointNameRegistry(m_scene->getRegistry());
         applyCtxToEnvironment();                       // v1.1: push the loaded environment/skybox knobs into the live renderer
+        // Restore the scene's node graph if it saved one (the sibling <scene>.kgraph).
+        { const QFileInfo si(p);
+          const QString gp = si.absoluteDir().filePath(si.completeBaseName() + QStringLiteral(".kgraph"));
+          if (QFile::exists(gp)) loadNodeGraphFrom(gp); }
         if (m_robotBuilderPanel) m_robotBuilderPanel->refresh();
         if (m_robotViewport)     m_robotViewport->refreshFromLive();
         refreshGizmoAndProperties();
@@ -3922,6 +4010,26 @@ void MainWindow::buildEngineeringToolbar()
         if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
         QMessageBox::information(this, QStringLiteral("Load Scene"), msg);
     });
+    // Node-graph persistence: save/load the live dataflow graph as a standalone .kgraph (it also rides
+    // with the scene automatically -- see the Save/Load Scene handlers).
+    connect(tb->addAction(QStringLiteral("Save Graph...")), &QAction::triggered, this, [this]() {
+        const QString p = QFileDialog::getSaveFileName(this, QStringLiteral("Save Node Graph"),
+            QStringLiteral("graph.kgraph"), QStringLiteral("KRobot node graph (*.kgraph)"));
+        if (p.isEmpty()) return;
+        saveNodeGraphTo(p);
+        statusBar()->showMessage(QStringLiteral("Node graph saved: %1").arg(p), 6000);
+    });
+    connect(tb->addAction(QStringLiteral("Load Graph...")), &QAction::triggered, this, [this]() {
+        const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Load Node Graph"),
+            QString(), QStringLiteral("KRobot node graph (*.kgraph)"));
+        if (p.isEmpty()) return;
+        loadNodeGraphFrom(p);
+        statusBar()->showMessage(QStringLiteral("Node graph loaded: %1").arg(p), 6000);
+    });
+    // Subgraph sharing: bundle a .knode (+ its nested closure) as a portable .knodepack, and import a
+    // received .knodepack into your personal library so its subgraph appears as a draggable node.
+    connect(tb->addAction(QStringLiteral("Export Subgraph...")), &QAction::triggered, this, [this]() { exportSelectedSubgraphPack(); });
+    connect(tb->addAction(QStringLiteral("Import Subgraph...")), &QAction::triggered, this, [this]() { importSubgraphPack(); });
     // The authoring workflow finally has an OUTPUT: export the active authoring graph as URDF,
     // with a mandatory validation report (silent-success export is the classic pipeline trap --
     // fusion2urdf-style broken files that users debug in the simulator instead of here).

@@ -12,6 +12,7 @@ class NodeCatalogWidget : public QWidget
 
 public:
     explicit NodeCatalogWidget(QWidget* parent = nullptr);
+    void populateTree();   // (re)build the palette from the NodeFactory registry -- call after importing subgraph types
 
 protected:
     // The QTreeWidget child consumes mouse events, so the press/move that should START a drag never
@@ -23,7 +24,6 @@ private slots:
 
 private:
     void startNodeDrag(const QPoint& viewportPos);
-    void populateTree();
 
     QPoint m_dragStart;
 

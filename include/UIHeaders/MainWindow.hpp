@@ -16,6 +16,7 @@
 #include "MenuFactory.hpp"
 #include "IMenu.hpp"
 #include <QMap>
+#include <QSet>
 
 // Forward declarations
 class QWidget;
@@ -37,6 +38,8 @@ class RobotViewport;
 class ManufacturerPartsPanel;
 class MaterialEditorPanel;
 class TextureBrowserWidget;
+class NodeCatalogWidget;                          // node palette (re-populated after a subgraph import)
+namespace QtNodes { class DataFlowGraphModel; class NodeDelegateModelRegistry; }   // live model + type registry
 
 namespace ads {
     class CDockManager;
@@ -171,6 +174,17 @@ private:
 
     QtNodes::BasicGraphicsScene* m_nodeScene; // Owned by GraphicsView
     QtNodes::GraphicsView* m_nodeView;
+    std::shared_ptr<QtNodes::DataFlowGraphModel> m_graphModel;   // aliases the live model; lets Save/Load reach it
+    std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_nodeRegistry;  // the QtNodes type registry (append knode:<id> on import)
+    NodeCatalogWidget* m_nodeCatalog = nullptr;                  // the drag palette (re-populate after import)
+    QSet<QString> m_registeredKnodeTypes;                        // knode:<id> already appended to m_nodeRegistry (no dup)
+
+    // --- node-graph + subgraph-pack persistence (the .kgraph / .knodepack GUI) ---
+    void saveNodeGraphTo(const QString& absPath);   // harvest the live model -> a .kgraph file
+    void loadNodeGraphFrom(const QString& absPath); // clear the live model + materialize a .kgraph into it
+    void exportSelectedSubgraphPack();              // Export a .knode as a shareable .knodepack (+ its closure)
+    void importSubgraphPack();                       // Import a .knodepack into the user library + refresh the palette
+    void refreshNodePalette();                       // re-register discovered .knode + re-populate the catalog
 
     void destroyCameraRig(entt::entity cameraEntity);
 
