@@ -7,6 +7,7 @@
 #include "KParts.hpp"             // krs::parts::PartLibrary
 #include "DataRecorderPanel.hpp"  // the Data Recorder / logging-graph dock panel
 #include "PropertyCatalog.hpp"    // krs::twin catalog + the unconditional per-tick state publisher
+#include "WorldState.hpp"         // krs::world task-level world model (P2), refreshed per eval tick
 #include <QStandardPaths>
 #include <QFile>
 #include <QSettings>
@@ -1483,6 +1484,8 @@ MainWindow::MainWindow(QWidget* parent)
             krs::twin::publishSceneState(krs::twin::catalog(), reg, s_pubTime, pubDt, s_accel);
             krs::twin::publishRobotState(krs::twin::catalog(), reg, s_pubTime);
             s_pubTime += pubDt;
+            // P2: refresh the task-level WorldState (poses-by-name + predicates) from the catalog.
+            krs::world::worldState(reg).updateFromCatalog(krs::twin::catalog());
         }
         // Environment mirror: while NO node drives the environment, keep the ctx tracking the live
         // renderer -- so a freshly dropped Environment node seeds its knobs from the CURRENT look
