@@ -1,6 +1,10 @@
 // Skill.cpp -- see Skill.hpp. The skill contract: body + bound params + postcondition, actuating
-// through the robot-keyed command bus under the per-pass re-assert lifecycle.
+// through the robot-keyed command bus under the per-pass re-assert lifecycle. P4 adds the typed
+// Predicate pre/effects + the Sequence composer with static validation.
 #include "Skill.hpp"
+#include "WorldState.hpp"
+#include "SkillRuntime.hpp"
+#include "PropertyCatalog.hpp"     // gate: seed the WorldState through a real catalog stream
 #include "Node.hpp"
 #include "NodeFactory.hpp"
 #include "SubgraphNode.hpp"
@@ -54,6 +58,84 @@ std::function<bool()> qNear(const krs::robot::LiveRobot* lr, const Eigen::Vector
         if (!lr || lr->q.size() != target.size()) return false;
         return (lr->q - target).cwiseAbs().maxCoeff() < tol;
     };
+}
+
+// ================================================================================================
+// P4: typed predicates + the Sequence composer
+// ================================================================================================
+bool Predicate::eval(const krs::world::WorldState& ws) const {
+    bool v = false;
+    switch (kind) {
+        case Kind::GripperOpen: v = ws.gripperOpen(robotId); break;
+        case Kind::Holding:     v = ws.isHolding(robotId, a); break;
+        case Kind::At:          v = ws.at(a, b, tol); break;
+        case Kind::Near:        v = ws.near(a, b, tol); break;
+        case Kind::Fresh:       v = ws.fresh(a, tol); break;
+    }
+    return negated ? !v : v;
+}
+void Predicate::apply(krs::world::WorldState& ws) const {
+    switch (kind) {
+        case Kind::GripperOpen: ws.setGripperOpen(robotId, !negated); break;
+        case Kind::Holding:     ws.setHolding(robotId, negated ? std::string() : a); break;
+        case Kind::At: case Kind::Near:
+            // asserting a spatial fact: pin the object's pose onto the frame (the symbolic effect a
+            // "place" establishes; perception later overwrites it with the observed truth).
+            if (!negated) if (const auto* f = ws.frame(b)) ws.setFrame(a + "@" + b, f->pos, f->rot);
+            break;
+        case Kind::Fresh: break;   // freshness is observed, never asserted
+    }
+}
+std::string Predicate::text() const {
+    std::string s = negated ? "!" : "";
+    switch (kind) {
+        case Kind::GripperOpen: return s + "gripperOpen(r" + std::to_string(robotId) + ")";
+        case Kind::Holding:     return s + "holding(r" + std::to_string(robotId) + ", " + a + ")";
+        case Kind::At:          return s + "at(" + a + ", " + b + ")";
+        case Kind::Near:        return s + "near(" + a + ", " + b + ")";
+        case Kind::Fresh:       return s + "fresh(" + a + ")";
+    }
+    return s + "?";
+}
+
+ComposeReport validateSequence(const std::vector<SkillStep>& steps, const krs::world::WorldState& start) {
+    krs::world::WorldState sim = start;             // simulate effects over a copy
+    for (size_t i = 0; i < steps.size(); ++i) {
+        const SkillSpec* sp = steps[i].spec;
+        if (!sp) return { false, "step " + std::to_string(i) + " has no spec" };
+        for (const auto& p : sp->pre)
+            if (!p.eval(sim))
+                return { false, "step " + std::to_string(i) + " (" + sp->name + "): precondition "
+                                + p.text() + " is not established" };
+        for (const auto& e : sp->eff) e.apply(sim);
+    }
+    return { true, "" };
+}
+
+krs::policy::NodePtr composeSequence(const std::vector<SkillStep>& steps, Scene* scene,
+                                     krs::world::WorldState& ws) {
+    using namespace krs::policy;
+    auto seq = std::make_unique<Sequence>();
+    for (const auto& step : steps) {
+        const SkillSpec* sp = step.spec;
+        if (!sp) continue;
+        // 1. the LIVE precondition guard (validation is static; the world can still diverge).
+        auto pre = sp->pre;
+        seq->add(std::make_unique<Condition>([pre, &ws](Blackboard&) {
+            for (const auto& p : pre) if (!p.eval(ws)) return false;
+            return true;
+        }));
+        // 2. the skill body under its timeout.
+        seq->add(std::make_unique<Timeout>(
+            std::make_unique<Action>(sp->realize(scene, step.params)), sp->timeoutSec));
+        // 3. effects onto the LIVE world on this step's success.
+        auto eff = sp->eff;
+        seq->add(std::make_unique<Action>([eff, &ws](double, Blackboard&) {
+            for (const auto& e : eff) e.apply(ws);
+            return Status::Success;
+        }));
+    }
+    return seq;
 }
 
 // ================================================================================================
@@ -170,6 +252,133 @@ bool runSkillGate() {
 
     printf("[skill] %s\n", allOk ? "ALL PASS (a manifest-carrying, role-tagged, shareable skill binds params, drives the robot-keyed bus to its goal under the per-pass lifecycle, releases on stop; impossible goals fail honestly)"
                                  : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return allOk;
+}
+
+// ================================================================================================
+// GATE PICK-PLACE (Process & Skills P4) -- composed skills execute a validated multi-step task.
+// ================================================================================================
+bool runPickPlaceGate() {
+    using std::printf;
+    using namespace krs::policy;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[pickplace] GATE PICK-PLACE -- pick+place SkillSpecs compose, validate, and execute closed-loop in sim\n");
+    auto& F = NodeFactory::instance();
+    bool allOk = true;
+
+    // ---- live demo robot + bus + world (cup on the table, a drop frame) ----
+    Scene scene; auto& reg = scene.getRegistry();
+    krs::rbuild::RobotGraph g = krs::rbuild::buildDemoGraph();
+    g.robotId = 0;
+    krs::rbuild::spawnGraphBodies(scene, g, 0);
+    krs::robot::LiveRobot* lr = krs::robot::instantiateFromGraph(scene, g, 0);
+    if (!lr) { printf("[pickplace] FAIL: no live robot\n"); return false; }
+    const int n = lr->ndof();
+    auto* bus = &reg.ctx().emplace<ArticulationCommandComponent>();
+    krs::world::WorldState& ws = krs::world::worldState(reg);
+    {
+        krs::twin::PropertyCatalog seedCat;
+        double p[3] = { 0.6, 0.1, 0.0 };
+        seedCat.publish(30, "cup", "position", krs::twin::PropType::Vec3, p, 0.05);
+        ws.updateFromCatalog(seedCat);
+    }
+    ws.setFrame("drop_pose", glm::vec3(1.2f, 0.4f, 0.3f));
+    ws.setGripperOpen(0, true);
+
+    // ---- the shared move-to-config subgraph body (the hybrid contract's simplest realization) ----
+    krs::knode::KNodeDoc moveDoc;
+    moveDoc.id = "pp-move"; moveDoc.name = "Move"; moveDoc.category = "Skills";
+    {
+        auto cfgDrive = F.createNode("physics_config_drive");
+        cfgDrive->setPortLiteral<int>("Robot", 0);
+        krs::knode::InteriorNode m; m.id = "d"; m.typeId = "physics_config_drive";
+        m.state = krs::kdoc::nodeToJson(*cfgDrive, "physics_config_drive");
+        moveDoc.nodes.push_back(m);
+    }
+    { krs::knode::ExposedPort p; p.name = "target"; p.interiorNode = "d"; p.interiorPort = "Config";
+      p.isInput = true; p.dataType = "joint_config"; p.role = "targetConfig"; moveDoc.ports.push_back(p); }
+
+    Eigen::VectorXd qGrasp(n), qPlace(n);
+    for (int i = 0; i < n; ++i) { qGrasp[i] = 0.10 + 0.02 * i; qPlace[i] = -0.10 - 0.02 * i; }
+    auto realizeMove = [&moveDoc, lr](const Eigen::VectorXd& target) {
+        return [&moveDoc, lr, target](Scene* sc, const ParamMap&) {
+            auto body = std::make_shared<krs::nodes::SubgraphNode>(moveDoc);
+            return makeSkillLeaf(body, sc, { { "target", ParamValue::cfg(target) } }, qNear(lr, target));
+        };
+    };
+
+    // ---- the two SkillSpecs: typed preconditions + effects ----
+    SkillSpec pick;
+    pick.name = "pick";
+    pick.pre = { { Predicate::Kind::GripperOpen, false, 0 },
+                 { Predicate::Kind::Fresh, false, 0, "cup", "", 10.0 } };
+    pick.eff = { { Predicate::Kind::Holding, false, 0, "cup" },
+                 { Predicate::Kind::GripperOpen, true, 0 } };          // negated => gripper CLOSED
+    pick.realize = realizeMove(qGrasp);
+    pick.timeoutSec = 2.0;
+
+    SkillSpec place;
+    place.name = "place";
+    place.pre = { { Predicate::Kind::Holding, false, 0, "cup" } };
+    place.eff = { { Predicate::Kind::Holding, true, 0, "cup" },       // negated => released
+                  { Predicate::Kind::GripperOpen, false, 0 },
+                  { Predicate::Kind::At, false, 0, "cup", "drop_pose", 0.1 } };
+    place.realize = realizeMove(qPlace);
+    place.timeoutSec = 2.0;
+
+    // ---- (1) static validation: [pick, place] valid; [place, pick] rejected with WHY ----
+    const std::vector<SkillStep> good = { { &pick, {} }, { &place, {} } };
+    const std::vector<SkillStep> bad  = { { &place, {} }, { &pick, {} } };
+    const ComposeReport vGood = validateSequence(good, ws);
+    const ComposeReport vBad  = validateSequence(bad,  ws);
+    const bool valOk = vGood.valid && !vBad.valid && vBad.why.find("holding") != std::string::npos;
+    printf("[pickplace]   (1) validation: [pick,place] ok=%d ; [place,pick] rejected=%d (\"%s\")  %s\n",
+           int(vGood.valid), int(!vBad.valid), vBad.why.c_str(), valOk ? "PASS" : "FAIL");
+    allOk = allOk && valOk;
+
+    // ---- (2) execute the validated task under the SkillRuntime (the real per-pass lifecycle) ----
+    {
+        SkillRuntime rt;
+        const int id = rt.start("pick+place", composeSequence(good, &scene, ws));
+        const double dt = 1.0 / 60.0;
+        int k = 0;
+        bool heldMidway = false;
+        for (; k < 600 && rt.anyRunning(); ++k) {
+            bus->clearForEvalPass();
+            rt.tick(dt);
+            krs::robot::drainCommandBusIntoRobots(reg);
+            if (ws.isHolding(0, "cup")) heldMidway = true;   // pick's effect observed mid-task
+        }
+        const double err = (lr->q - qPlace).cwiseAbs().maxCoeff();
+        const bool ok = rt.status(id) == Status::Success && err < 1e-4
+            && heldMidway && !ws.isHolding(0, "cup") && ws.gripperOpen(0);
+        printf("[pickplace]   (2) execution: Success=%d in %d ticks; q at place (err=%.2e); held-midway=%d released-at-end=%d gripper-open=%d  %s\n",
+               int(rt.status(id) == Status::Success), k, err, int(heldMidway),
+               int(!ws.isHolding(0, "cup")), int(ws.gripperOpen(0)), ok ? "PASS" : "FAIL");
+        allOk = allOk && ok;
+    }
+
+    // ---- NEG-CTRL: gripper already closed at runtime -> the pick step's LIVE guard fails the task ----
+    {
+        ws.setGripperOpen(0, false);
+        ws.setHolding(0, "");                                 // holding nothing, gripper jammed shut
+        SkillRuntime rt;
+        const int id = rt.start("pick+place-jammed", composeSequence(good, &scene, ws));
+        const double dt = 1.0 / 60.0;
+        for (int k = 0; k < 100 && rt.anyRunning(); ++k) {
+            bus->clearForEvalPass();
+            rt.tick(dt);
+            krs::robot::drainCommandBusIntoRobots(reg);
+        }
+        const bool negOk = rt.status(id) == Status::Failure;
+        printf("[pickplace]   NEG-CTRL gripper-jammed-closed -> runtime precondition fails the task=%d  %s\n",
+               int(negOk), negOk ? "REJECTS(non-vacuous)" : "VACUOUS!");
+        allOk = allOk && negOk;
+    }
+
+    printf("[pickplace] %s\n", allOk ? "ALL PASS (typed pre/eff validate composition statically + guard it live; the composed pick+place executes closed-loop to Success with correct facts; a jammed gripper fails honestly)"
+                                     : "FAILURES PRESENT");
     std::fflush(stdout);
     return allOk;
 }

@@ -8,6 +8,7 @@
 #include "DataRecorderPanel.hpp"  // the Data Recorder / logging-graph dock panel
 #include "PropertyCatalog.hpp"    // krs::twin catalog + the unconditional per-tick state publisher
 #include "WorldState.hpp"         // krs::world task-level world model (P2), refreshed per eval tick
+#include "SkillRuntime.hpp"       // krs::skill live closed-loop task executor (P3), pumped per eval tick
 #include <QStandardPaths>
 #include <QFile>
 #include <QSettings>
@@ -1470,7 +1471,7 @@ MainWindow::MainWindow(QWidget* parent)
     // is ~free, so this runs at the configurable eval rate (a tight control loop can ask for kHz).
     auto evalIterPerFire = std::make_shared<int>(1);
     auto* evalTimer = new QTimer(this);
-    connect(evalTimer, &QTimer::timeout, this, [this, graphModel, evalIterPerFire]() {
+    connect(evalTimer, &QTimer::timeout, this, [this, graphModel, evalIterPerFire, evalTimer]() {
         krs::nodes::NodeEditQueue::instance().drain();   // apply coalesced UI edits (off the per-event path)
         // UNCONDITIONAL state publisher: refresh the PropertyCatalog every eval pass (object poses/
         // velocities + robot joint state) so the Data Recorder + twin/property nodes always see live
@@ -1501,6 +1502,13 @@ MainWindow::MainWindow(QWidget* parent)
             if (auto* bus = m_scene->getRegistry().ctx().find<ArticulationCommandComponent>())
                 bus->clearForEvalPass();
         for (int i = 0; i < *evalIterPerFire; ++i) krs::nodes::evaluateGraphQuiet(*graphModel);
+        // P3: pump the SkillRuntime -- active tasks tick AFTER the graph so both write the same pass;
+        // their skills re-assert bus entries that SimulationController drains into the robots. A
+        // finished/cancelled task stops re-asserting -> its DOFs release next pass.
+        if (m_scene) {
+            const double evalDt = evalTimer->interval() > 0 ? evalTimer->interval() / 1000.0 : 1.0 / 60.0;
+            krs::skill::skillRuntime(m_scene->getRegistry()).tick(evalDt);
+        }
         // v1.1 environment nodes: if an Environment node drove the EnvironmentSettings ctx this pass,
         // push it into the live renderer so sun/skybox/exposure track the graph. Light nodes need no
         // push (they write LightComponents the renderer already reads from the registry each frame).

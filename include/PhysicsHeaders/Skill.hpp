@@ -27,6 +27,7 @@
 class Node;
 class Scene;
 namespace krs::robot { struct LiveRobot; }
+namespace krs::world { struct WorldState; }
 
 namespace krs::skill {
 
@@ -53,6 +54,52 @@ krs::policy::Action::Fn makeSkillLeaf(std::shared_ptr<Node> body, Scene* scene,
 
 // Canonical P1 postcondition: the live robot's q is within `tol` of `target` on every DOF.
 std::function<bool()> qNear(const krs::robot::LiveRobot* lr, const Eigen::VectorXd& target, double tol = 1e-4);
+
+// ---- P4: typed pre/post-conditions + composition ------------------------------------------------
+// A typed predicate over the WorldState (the enum-typed representation: new kinds are code, which
+// keeps evaluation + the composition validator gateable). `negated` flips the sense.
+struct Predicate {
+    enum class Kind { GripperOpen, Holding, At, Near, Fresh };
+    Kind kind = Kind::GripperOpen;
+    bool negated = false;
+    int robotId = 0;
+    std::string a, b;          // At/Near: a vs b ; Holding: a = object ; Fresh: a = object
+    double tol = 0.1;          // At/Near tolerance ; Fresh max age [s]
+    bool eval(const krs::world::WorldState& ws) const;
+    void apply(krs::world::WorldState& ws) const;   // assert this predicate as a FACT (skill effect)
+    std::string text() const;                        // human-readable ("holding(cup)")
+};
+
+// A composable SKILL SPEC: the outer contract a task layer sequences. `realize` builds the BT leaf
+// for one invocation (hybrid: a SubgraphNode body, or a wrapper over the C++ motion tower).
+struct SkillSpec {
+    std::string name;
+    std::vector<Predicate> pre;   // must hold before the body runs
+    std::vector<Predicate> eff;   // asserted onto the WorldState after the body succeeds
+    std::function<krs::policy::Action::Fn(Scene*, const ParamMap&)> realize;
+    double timeoutSec = 5.0;
+};
+struct SkillStep { const SkillSpec* spec = nullptr; ParamMap params; };
+
+// STATIC validation: walk the steps, simulating pre/effects over a COPY of the world -- a step whose
+// precondition is not established (by the start state or a prior step's effects) fails loud with WHY.
+struct ComposeReport { bool valid = false; std::string why; };
+ComposeReport validateSequence(const std::vector<SkillStep>& steps, const krs::world::WorldState& start);
+
+// Build the executable task: Sequence over [pre-Condition -> Timeout(leaf) -> apply-effects] per
+// step. A step whose runtime precondition fails ends the task Failure (validation is static; the
+// world can still diverge). Effects write the live WorldState on that step's success.
+krs::policy::NodePtr composeSequence(const std::vector<SkillStep>& steps, Scene* scene,
+                                     krs::world::WorldState& ws);
+
+// Headless gate (KRS_PICKPLACE_SELFTEST): pick + place SkillSpecs (typed pre/eff, subgraph bodies)
+// compose into a validated Sequence and execute under the SkillRuntime against a live demo robot +
+// WorldState: pick requires gripperOpen + establishes holding(cup); place requires holding(cup) +
+// releases it; the task ends Success with the robot at the place config and the facts correct.
+// Mis-ordered [place, pick] is REJECTED by static validation naming the unmet precondition;
+// NEG-CTRL: executing with the gripper already closed fails the pick step at RUNTIME (Failure), so
+// the pre-Conditions are live guards, not decoration.
+bool runPickPlaceGate();
 
 // Headless gate (KRS_SKILL_SELFTEST): a "move_to_config" skill -- a .knode whose interior is a
 // physics_config_drive, exposed input "target" tagged role=targetConfig with a manifest -- is
