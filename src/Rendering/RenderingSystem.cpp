@@ -45,6 +45,8 @@
 #include "KGraph.hpp"              // krs::kgraph live-model <-> .kgraph bridge (Phase 3) + gate
 #include "SubgraphNode.hpp"        // krs::nodes SubgraphNode + knode:<id> registration (Phase 5) + gate
 #include "KPack.hpp"               // krs::kpack .knodepack cross-user subgraph sharing + gate
+#include "KLut.hpp"                // krs::klut .klut LUT / characterized-data standard object + gate
+#include "Rec.hpp"                 // krs::rec DataTable + CSV/JSON recording format + gate
 #include "KParts.hpp"              // krs::parts manufacturer library + repository + gate
 #include "FaceMaterial.hpp"        // krs::facemat whole-body/per-face material + gate
 #include "ClearanceLimits.hpp"     // krs::climits self-intersection -> joint limits + gate
@@ -1246,6 +1248,18 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::kpack::runKPackGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Data ecosystem: .klut LUT / characterized-data standard object (curves + surfaces, LERP/cubic).
+    if (qEnvironmentVariableIntValue("KRS_KLUT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_KLUT_SELFTEST =================\n");
+        const bool ok = krs::klut::runKLutGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    // Data ecosystem: DataTable + CSV/JSON recording/log format.
+    if (qEnvironmentVariableIntValue("KRS_REC_SELFTEST") != 0) {
+        std::printf("\n================= KRS_REC_SELFTEST =================\n");
+        const bool ok = krs::rec::runRecGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     if (qEnvironmentVariableIntValue("KRS_MOTION_SELFTEST") != 0) {
         std::printf("\n================= KRS_MOTION_SELFTEST =================\n");
         const bool ok = krs::motion::runMotionPlanGate();
@@ -2142,6 +2156,8 @@ void RenderingSystem::initializeSharedResources()
             { "GATE KGRAPH (whole live DataFlowGraphModel <-> .kgraph: params/literals/wiring-by-name/positions + reconfigured-node materialize; content-hash detection; unknown-major + unknown-factory-id neg-ctrls)", krs::kgraph::runKGraphGate() },
             { "GATE SUBGRAPH (knode:<id> subgraph node instantiates + evaluates its interior end-to-end; nests to the 2-level result; self-referential-definition cycle-safe neg-ctrl)", krs::nodes::runSubgraphGate() },
             { "GATE KPACK (share a subgraph + nested closure as one .knodepack; fresh library imports the single file, members register + evaluate; content-dedupe; tamper/major/path-traversal/cycle neg-ctrls)", krs::kpack::runKPackGate() },
+            { "GATE KLUT (.klut LUT standard object: 1D linear/cubic + 2D bilinear sampling; clamp/linear extrap; characterizeFromSamples recovers a line; content round-trip; non-monotonic-axis neg-ctrl)", krs::klut::runKLutGate() },
+            { "GATE REC (DataTable + CSV/JSON recording: round-trip bit-equal + units; axis-agnostic interpolated sampling; malformed-row-skipped + missing-file + bad-major neg-ctrls)", krs::rec::runRecGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
