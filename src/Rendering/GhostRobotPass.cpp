@@ -12,6 +12,7 @@
 #include <QString>
 #include <Eigen/Dense>
 #include <cstdio>
+#include <functional>
 
 void GhostRobotPass::initialize(RenderingSystem&, QOpenGLFunctions_4_3_Core*)
 {
@@ -37,8 +38,10 @@ void GhostRobotPass::execute(const RenderFrameContext& context)
     if (envOff) enabled = false;
     if (!enabled) return;
 
-    // Draw a robot ONLY when a joint is actually clamped -> invisible in normal operation.
-    bool anyToDraw = false;
+    // Draw the auto clamped-validity ghost ONLY when a joint is actually clamped (invisible in
+    // normal operation); ALSO draw any explicit named GhostPoses (planned path, live state, ...).
+    GhostPoseSet* ghostSet = reg.ctx().find<GhostPoseSet>();
+    bool anyToDraw = (ghostSet && !ghostSet->ghosts.empty());
     for (auto& rp : rr->robots) if (rp && rp->anyJointInvalid()) { anyToDraw = true; break; }
 
     // KRS_GHOST_DBG=<file>: one-time file diagnostic (qInfo doesn't reach a redirected GUI stdout
@@ -91,44 +94,61 @@ void GhostRobotPass::execute(const RenderFrameContext& context)
     const glm::vec3 kGreen(0.16f, 0.95f, 0.34f);   // reachable
     const glm::vec3 kRed  (1.00f, 0.20f, 0.13f);   // a joint hit its limit (this link & all downstream)
 
-    for (auto& rp : rr->robots) {
-        if (!rp || !rp->anyJointInvalid()) continue;
-        LiveRobot& lr = *rp;
-        const std::vector<krs::dyn::Pose> ghost = lr.fkGhostLinks();   // FK(qCommandRaw)
-        const int n = lr.ndof();
-        bool cumulativeBad = false;   // a link is RED once any joint up the chain has been clamped
-        for (int k = 0; k < n; ++k) {
-            if (k < int(lr.jointValid.size()) && !lr.jointValid[k]) cumulativeBad = true;
-            if (k >= int(ghost.size()) || k >= int(lr.restLinkWorld.size()) ||
+    // Draw one robot's links at a given per-link FK, with per-link colors (or one flat color).
+    // `perLinkColor` null => use `flat`; else perLinkColor(k) picks the link tint.
+    auto drawGhost = [&](LiveRobot& lr, const std::vector<krs::dyn::Pose>& poses,
+                         const glm::vec4& flat, const std::function<glm::vec4(int)>* perLinkColor) {
+        const int nb = lr.chain.nbody();
+        for (int k = 0; k < nb; ++k) {
+            if (k >= int(poses.size()) || k >= int(lr.restLinkWorld.size()) ||
                 k >= int(lr.linkEntities.size()) || k >= int(lr.linkEntityRestWorld.size()))
                 continue;
-
-            // Ghost link world pose + delta-from-rest (mirrors writeBackRobotViz, with the ghost FK).
             Eigen::Matrix4d gp = Eigen::Matrix4d::Identity();
-            gp.block<3, 3>(0, 0) = ghost[k].R; gp.block<3, 1>(0, 3) = ghost[k].p;
+            gp.block<3, 3>(0, 0) = poses[k].R; gp.block<3, 1>(0, 3) = poses[k].p;
             const Eigen::Matrix4d linkWorld = lr.model.basePlacement * gp;
             const Eigen::Matrix4d delta     = linkWorld * lr.restLinkWorld[k].inverse();
-
-            const glm::vec3 tint = cumulativeBad ? kRed : kGreen;
-            shader->setVec4(gl, "uColor", glm::vec4(tint, alpha));
-
+            shader->setVec4(gl, "uColor", perLinkColor ? (*perLinkColor)(k) : flat);
             for (size_t ei = 0; ei < lr.linkEntities[k].size(); ++ei) {
                 const entt::entity e = lr.linkEntities[k][ei];
                 if (!reg.valid(e)) continue;
                 const auto* mesh = reg.try_get<RenderableMeshComponent>(e);
                 if (!mesh || mesh->indices.empty()) continue;
-
                 const Eigen::Matrix4d rest = (ei < lr.linkEntityRestWorld[k].size())
-                                                 ? lr.linkEntityRestWorld[k][ei]
-                                                 : Eigen::Matrix4d::Identity();
+                                                 ? lr.linkEntityRestWorld[k][ei] : Eigen::Matrix4d::Identity();
                 const Eigen::Matrix4f m = (delta * rest).cast<float>();
                 shader->setMat4(gl, "model", glm::make_mat4(m.data()));
-
                 const auto& buffers = context.renderer.getOrCreateMeshBuffers(
                     gl, QOpenGLContext::currentContext(), e);
                 gl->glBindVertexArray(buffers.VAO);
                 gl->glDrawElements(GL_TRIANGLES, GLsizei(mesh->indices.size()), GL_UNSIGNED_INT, nullptr);
             }
+        }
+    };
+
+    // (1) AUTO clamped-validity ghost: FK(qCommandRaw), per-link green (reachable) -> red (clamped
+    //     from this link down). Only when a joint is actually clamped.
+    for (auto& rp : rr->robots) {
+        if (!rp || !rp->anyJointInvalid()) continue;
+        LiveRobot& lr = *rp;
+        std::function<glm::vec4(int)> tint = [&lr, alpha, kGreen, kRed](int k) {
+            bool bad = false;
+            for (int j = 0; j <= k && j < int(lr.jointValid.size()); ++j) if (!lr.jointValid[j]) bad = true;
+            return glm::vec4(bad ? kRed : kGreen, alpha);
+        };
+        drawGhost(lr, lr.fkGhostLinks(), glm::vec4(kGreen, alpha), &tint);
+    }
+
+    // (2) EXPLICIT named ghosts: each at its own config q, in its own color (planned path yellow,
+    //     live state blue, etc.). A ghost with a bad-sized q is skipped.
+    if (ghostSet) {
+        for (const GhostPose& gpose : ghostSet->ghosts) {
+            if (!gpose.enabled) continue;
+            LiveRobot* lr = rr->get(gpose.robotId);
+            if (!lr || gpose.q.size() != lr->chain.nq()) continue;
+            std::vector<krs::dyn::Pose> poses;
+            lr->chain.fk(gpose.q, poses);
+            glm::vec4 c = gpose.color; if (c.a <= 0.0f) c.a = alpha;
+            drawGhost(*lr, poses, c, nullptr);
         }
     }
     gl->glBindVertexArray(0);

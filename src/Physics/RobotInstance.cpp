@@ -1167,7 +1167,38 @@ bool runRobotOwnerGate() {
         }
     }
 
-    printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only + live-limit-edit + graph-round-trip)"
+    // ---- STEP10: MULTI-GHOST pose set -- named/colored overlay poses, upsert/find/clear ----
+    {
+        GhostPoseSet gs;
+        Eigen::VectorXd qA(2); qA << 0.3, -0.2;
+        Eigen::VectorXd qB(2); qB << -0.5, 0.9;
+        gs.set(0, "planned", glm::vec4(1, 1, 0, 0.4f), qA);       // yellow
+        gs.set(0, "live",    glm::vec4(0, 0.4f, 1, 0.4f), qB);    // blue
+        const bool added = gs.ghosts.size() == 2 && gs.find(0, "planned") && gs.find(0, "live");
+        // upsert replaces (not duplicates) + updates color/pose
+        gs.set(0, "planned", glm::vec4(1, 0.5f, 0, 0.4f), qB);    // recolor orange, repose
+        const GhostPose* pl = gs.find(0, "planned");
+        const bool upsert = gs.ghosts.size() == 2 && pl && std::abs(pl->color.g - 0.5f) < 1e-6f
+                         && (pl->q - qB).cwiseAbs().maxCoeff() < 1e-12;
+        // clear one by name; clearRobot removes the rest
+        const bool clr1 = gs.clear(0, "planned") && gs.ghosts.size() == 1 && !gs.find(0, "planned");
+        gs.clearRobot(0);
+        const bool clrAll = gs.ghosts.empty();
+        // a ghost pose FKs at its own q (the pass draws FK(ghost.q)); different q -> different pose
+        LiveRobot lg; lg.model = demoRobot3(); lg.rebuild();
+        std::vector<krs::dyn::Pose> pa, pb;
+        lg.chain.fk(Eigen::VectorXd::Zero(lg.ndof()), pa);
+        Eigen::VectorXd qd(lg.ndof()); for (int i = 0; i < lg.ndof(); ++i) qd[i] = 0.4;
+        lg.chain.fk(qd, pb);
+        const bool fkDiffers = !pa.empty() && (pa.back().p - pb.back().p).norm() > 1e-3;
+        const bool step10 = added && upsert && clr1 && clrAll && fkDiffers;
+        pass = pass && step10;
+        printf("[robotowner]   STEP10 multi-ghost: add=%s upsert-replaces=%s clear-by-name=%s clear-robot=%s ghost-FK-at-q=%s  %s\n",
+               added?"yes":"no", upsert?"yes":"no", clr1?"yes":"no", clrAll?"yes":"no", fkDiffers?"yes":"no",
+               step10 ? "OK" : "FAIL");
+    }
+
+    printf("[robotowner] %s\n", pass ? "ALL PASS (LiveRobot is the q owner; FK exact; clamp + driven-only + live-limit-edit + graph-round-trip; multi-ghost)"
                                      : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;

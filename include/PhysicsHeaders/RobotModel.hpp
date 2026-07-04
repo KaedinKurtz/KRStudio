@@ -28,6 +28,8 @@
 #include <memory>
 #include <utility>
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>              // GhostPose color (vec4)
+#include <algorithm>               // GhostPoseSet remove_if
 #include "RobotDynamics.hpp"
 
 class Scene;
@@ -301,6 +303,45 @@ struct LiveRobot {
 struct GhostVizState {
     bool  enabled = true;
     float alpha   = 0.40f;
+};
+
+// MULTI-GHOST OVERLAYS: named, colored translucent robot poses drawn over the live scene, each for a
+// different purpose -- e.g. yellow = planned-path waypoint, blue = live read/estimated state, green =
+// a valid target, orange = a self-collision pose. This generalizes the single red/green clamped
+// ghost: GhostRobotPass draws every enabled GhostPose at its own config `q` in its own color, on top
+// of the auto clamped-validity ghost. A visualizer (planner, telemetry, clearance analysis) just
+// upserts a named ghost; clearing it removes the overlay. Held in registry.ctx().
+struct GhostPose {
+    int              robotId = -1;
+    std::string      name;                                  // stable key per (robotId, name)
+    glm::vec4        color{ 0.16f, 0.95f, 0.34f, 0.40f };   // rgb + alpha
+    Eigen::VectorXd  q;                                     // config to draw at (size = robot ndof)
+    bool             enabled = true;
+};
+struct GhostPoseSet {
+    std::vector<GhostPose> ghosts;
+
+    // Upsert by (robotId, name): set/replace this named ghost's color + pose.
+    void set(int robotId, const std::string& name, const glm::vec4& color, const Eigen::VectorXd& q) {
+        for (auto& g : ghosts)
+            if (g.robotId == robotId && g.name == name) { g.color = color; g.q = q; g.enabled = true; return; }
+        ghosts.push_back(GhostPose{ robotId, name, color, q, true });
+    }
+    // Remove a named ghost (returns true if one was removed).
+    bool clear(int robotId, const std::string& name) {
+        const size_t before = ghosts.size();
+        ghosts.erase(std::remove_if(ghosts.begin(), ghosts.end(),
+            [&](const GhostPose& g) { return g.robotId == robotId && g.name == name; }), ghosts.end());
+        return ghosts.size() != before;
+    }
+    void clearRobot(int robotId) {
+        ghosts.erase(std::remove_if(ghosts.begin(), ghosts.end(),
+            [&](const GhostPose& g) { return g.robotId == robotId; }), ghosts.end());
+    }
+    const GhostPose* find(int robotId, const std::string& name) const {
+        for (const auto& g : ghosts) if (g.robotId == robotId && g.name == name) return &g;
+        return nullptr;
+    }
 };
 
 // ctx-singleton registry of live robots (multi-robot). Mirrors the existing ctx
