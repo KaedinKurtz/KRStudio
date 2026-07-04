@@ -1,6 +1,9 @@
 #include "MainWindow.hpp"
 #include "AuthoringPersist.hpp"   // krs::persist -- authoring survives restart
+#include "KSave.hpp"              // krs::ksave -- .kscene/.krobot/.kjoint/.kstate family
 #include <QFile>
+#include <QSettings>
+#include <QProcessEnvironment>
 #include "StaticToolbar.hpp"
 #include "PropertiesPanel.hpp"
 #include "Scene.hpp"
@@ -915,6 +918,9 @@ MainWindow::MainWindow(QWidget* parent)
         { auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
           if (!gp) gp = &reg.ctx().emplace<krs::rbuild::RobotGraph>();
           *gp = g; }
+        // ksave provenance: which source + deterministic builder reproduces this robot's bodies
+        // (graph mirrors can't know; the ctx registry carries it for Save Scene).
+        reg.ctx().emplace<krs::ksave::RobotSourceRegistry>().set(0, fanucStepPath, /*named chain*/ 1);
         if (krs::robot::LiveRobot* lr = krs::robot::instantiateFromGraph(*m_scene, g, 0)) {
             lr->name = lr->model.name = "FANUC-430";
             lr->ownsDrive = true; lr->useRobotFkViz = true;
@@ -951,6 +957,30 @@ MainWindow::MainWindow(QWidget* parent)
             qWarning() << "[FANUC] setup failed:" << QString::fromStdString(fs.message);
         }
     }
+
+    // SESSION CONTINUITY (ksave): reopen the last scene document -- it REPLACES the default boot
+    // robots -- and rewrite its .kstate sidecar at exit, so the app comes back exactly where it
+    // closed (poses + camera; sim-agnostic by contract). Suppressed whenever ANY KRS_* env var is
+    // set: every selftest/gate/bench boots the app and measures the DEFAULT boot state -- a
+    // reopened user scene would corrupt their fingerprints non-deterministically.
+    bool anyKrsEnv = false;
+    for (const QString& k : QProcessEnvironment::systemEnvironment().keys())
+        if (k.startsWith(QStringLiteral("KRS_"))) { anyKrsEnv = true; break; }
+    if (bootFanuc && !anyKrsEnv) {
+        const QString last = QSettings().value(QStringLiteral("ksave/lastScene")).toString();
+        if (!last.isEmpty() && QFile::exists(last)) {
+            const krs::ksave::Report rep = krs::ksave::loadScene(*m_scene, last.toStdString());
+            qInfo() << "[ksave] reopened last scene" << last << ":" << rep.robots << "robot(s),"
+                    << rep.joints << "joint(s)," << rep.warnings.size() << "warning(s)";
+            for (const QString& w : rep.warnings) qInfo() << "[ksave]   " << w;
+        }
+    }
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() {
+        if (!m_scene) return;
+        if (auto* info = m_scene->getRegistry().ctx().find<krs::ksave::OpenSceneInfo>())
+            if (!info->kscenePath.empty())
+                krs::ksave::saveSessionState(*m_scene, info->kscenePath);
+    });
 
     // KRS_GHOST_DEMO: drive a joint PAST its limit so the translucent ghost validity robot is visible
     // (commanded-vs-clamped). Injects joint 1 (J2) beyond +/-pi into the command bus a couple seconds
@@ -3723,6 +3753,48 @@ void MainWindow::buildEngineeringToolbar()
 
     connect(tb->addAction(QStringLiteral("Import CAD (STEP)")), &QAction::triggered,
             this, &MainWindow::importStepFile);
+    // .kscene save/load (the ksave family): Save writes the scene document + nested .krobot/.kjoint
+    // definitions + the .kstate session sidecar; Load REPLACES the scene's robots from a document.
+    connect(tb->addAction(QStringLiteral("Save Scene")), &QAction::triggered, this, [this]() {
+        if (!m_scene) return;
+        auto& reg = m_scene->getRegistry();
+        std::string path;
+        if (const auto* info = reg.ctx().find<krs::ksave::OpenSceneInfo>()) path = info->kscenePath;
+        if (path.empty()) {
+            const QString p = QFileDialog::getSaveFileName(this, QStringLiteral("Save Scene"),
+                QStringLiteral("cell.kscene"), QStringLiteral("KRobot scene (*.kscene)"));
+            if (p.isEmpty()) return;
+            path = p.toStdString();
+        }
+        const krs::ksave::Report rep = krs::ksave::saveScene(*m_scene, path);
+        if (!rep.ok) {
+            QMessageBox::warning(this, QStringLiteral("Save Scene"), rep.error);
+            return;
+        }
+        QString msg = QStringLiteral("Saved %1 robot(s), %2 joint(s) to %3")
+            .arg(rep.robots).arg(rep.joints).arg(QString::fromStdString(path));
+        if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
+        statusBar()->showMessage(QStringLiteral("Scene saved: %1").arg(QString::fromStdString(path)), 6000);
+        if (!rep.warnings.isEmpty()) QMessageBox::information(this, QStringLiteral("Save Scene"), msg);
+    });
+    connect(tb->addAction(QStringLiteral("Load Scene...")), &QAction::triggered, this, [this]() {
+        if (!m_scene) return;
+        const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Load Scene"),
+            QString(), QStringLiteral("KRobot scene (*.kscene)"));
+        if (p.isEmpty()) return;
+        const krs::ksave::Report rep = krs::ksave::loadScene(*m_scene, p.toStdString());
+        if (!rep.ok) {
+            QMessageBox::warning(this, QStringLiteral("Load Scene"), rep.error);
+            return;
+        }
+        krs::robot::rebuildJointNameRegistry(m_scene->getRegistry());
+        if (m_robotBuilderPanel) m_robotBuilderPanel->refresh();
+        if (m_robotViewport)     m_robotViewport->refreshFromLive();
+        refreshGizmoAndProperties();
+        QString msg = QStringLiteral("Loaded %1 robot(s), %2 joint(s).").arg(rep.robots).arg(rep.joints);
+        if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
+        QMessageBox::information(this, QStringLiteral("Load Scene"), msg);
+    });
     // The authoring workflow finally has an OUTPUT: export the active authoring graph as URDF,
     // with a mandatory validation report (silent-success export is the classic pipeline trap --
     // fusion2urdf-style broken files that users debug in the simulator instead of here).
@@ -3866,6 +3938,11 @@ void MainWindow::importStepFile()
     *gp = std::move(g);
 
     const std::string rname = QFileInfo(path).completeBaseName().toStdString();
+    {   // ksave provenance for Save Scene (parts spanning-tree builder + this STEP source)
+        auto* sr = reg.ctx().find<krs::ksave::RobotSourceRegistry>();
+        if (!sr) sr = &reg.ctx().emplace<krs::ksave::RobotSourceRegistry>();
+        sr->set(rid, path.toStdString(), /*parts*/ 2);
+    }
     if (krs::robot::LiveRobot* lr = krs::robot::instantiateFromGraph(*m_scene, *gp, rid)) {
         lr->name = lr->model.name = rname.empty() ? ("Robot " + std::to_string(rid)) : rname;
         lr->useRobotFkViz = true;                   // FK drives the imported solids (FANUC pattern)

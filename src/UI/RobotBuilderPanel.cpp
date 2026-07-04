@@ -6,6 +6,7 @@
 #include "RobotBuilder.hpp"         // krs::rbuild::RobotGraph / EditController / RBJoint
 #include "RobotBuilderScene.hpp"    // buildDemoGraph / spawnGraphBodies / bodyIndexForEntity
 #include "RobotModel.hpp"           // krs::robot::instantiateFromGraph (demo as a first-class robot)
+#include "KSave.hpp"                // krs::ksave::RobotSourceRegistry (demo save provenance)
 #include "RobotConfig.hpp"          // krs::rcfg::RobotConfig (proven property hot-swap)
 #include "SceneBuilder.hpp"         // spawnPrimitive (selected-joint axis overlay bar)
 #include "PrimitiveBuilders.hpp"    // Primitive::Cylinder
@@ -531,6 +532,11 @@ void RobotBuilderPanel::onLoadDemo()
         }
     }
     if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) { st->enabled = true; st->fifoTwoBores = true; }  // bore-picking live, FIFO 2
+    {   // ksave provenance: the demo rebuilds from its recipe (builder 0, no CAD source)
+        auto* sr = reg.ctx().find<krs::ksave::RobotSourceRegistry>();
+        if (!sr) sr = &reg.ctx().emplace<krs::ksave::RobotSourceRegistry>();
+        sr->set(demoId, std::string(), /*demo recipe*/ 0);
+    }
     setStatus(QStringLiteral("Loaded demo robot (robotId %1): %2 bodies, DOF %3. Click two bores to define a joint.")
                   .arg(demoId).arg(int(gp->bodies.size())).arg(gp->dof()));
     refresh();

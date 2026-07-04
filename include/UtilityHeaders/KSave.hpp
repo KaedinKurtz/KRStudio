@@ -1,0 +1,82 @@
+#pragma once
+// ===========================================================================
+// KSAVE -- the .kscene / .krobot / .kjoint / .kstate file family (save architecture v1).
+//
+// COMPOSITION BY REFERENCE: a .kscene lists robot INSTANCES, each referencing a .krobot by
+// RELATIVE PATH + id + contentHash; a .krobot is the master dict for one robot, referencing its
+// .kjoint files (one per joint, nested in a sibling folder) the same way. Definitions are
+// reusable and human-diffable JSON; hashes are the lockfile: a definition swapped on disk is
+// DETECTED at load (re-parsed + reported), never silently trusted or silently ignored.
+//
+// GEOMETRY IS NOT INLINED: a .krobot records its CAD source (STEP path) + which deterministic
+// chain builder produced its body list; load re-imports the source and re-runs that builder, then
+// OVERLAYS the .kjoint files (the same strict-match-or-refuse policy as krs::persist). Demo/
+// primitive robots rebuild from their recipe. This keeps every file small and the parse honest.
+//
+// .kstate is the SESSION SIDECAR (sim-agnostic, deterministic state only -- per-robot joint poses
+// q, camera; explicitly NO PhysX/fluid buffers): best-effort by contract -- stale entries are
+// skipped with a report, and a missing/corrupt .kstate never blocks a scene load. Rewritten on
+// every save and at app exit, so reopening the last scene brings the program back where it closed.
+//
+// FAILURE POLICY (uniform): unknown format major -> refuse the FILE; malformed definition ->
+// refuse that ROBOT with a report entry (scene keeps loading others); state that no longer binds
+// -> skip + report. Nothing silently rebinds.
+// ===========================================================================
+#include <string>
+#include <vector>
+#include <QString>
+#include <QStringList>
+
+class Scene;
+
+namespace krs::ksave {
+
+// Per-robot provenance the graph mirrors would otherwise lose (buildGraphFromLiveRobot cannot know
+// where a graph came from): which CAD source + deterministic builder reproduces the body list.
+// ctx singleton, keyed by robotId; populated at boot / import / scene load.
+struct RobotSource {
+    int robotId = -1;
+    std::string sourceStep;                 // STEP path ("" = no CAD source)
+    int builder = 0;                        // 0 = demo recipe, 1 = named serial chain, 2 = parts spanning tree
+};
+struct RobotSourceRegistry {
+    std::vector<RobotSource> entries;
+    const RobotSource* find(int robotId) const {
+        for (const auto& e : entries) if (e.robotId == robotId) return &e;
+        return nullptr;
+    }
+    void set(int robotId, const std::string& step, int builder) {
+        for (auto& e : entries) if (e.robotId == robotId) { e.sourceStep = step; e.builder = builder; return; }
+        entries.push_back({ robotId, step, builder });
+    }
+};
+
+// The scene document currently open (ctx singleton): Save reuses it, the exit hook rewrites the
+// .kstate sidecar against it, and QSettings("ksave/lastScene") points at it for the boot reopen.
+struct OpenSceneInfo { std::string kscenePath; };
+
+struct Report {
+    bool ok = false;
+    int robots = 0, joints = 0;
+    QStringList warnings;                   // hash drift, skipped robots, stale state -- shown to the user
+    QString error;                          // fatal reason when !ok
+};
+
+// Write <kscenePath> + robots/<name>.krobot + robots/<name>/<joint>.kjoint + the .kstate sidecar.
+// Robots without a rebuildable source (e.g. a split-off branch) are skipped with a warning.
+Report saveScene(Scene& scene, const std::string& kscenePath);
+
+// Replace the scene's robots with the document's: clears the robot registry + member entities,
+// re-imports each robot's source through its recorded builder, overlays its .kjoint files, then
+// applies the .kstate sidecar (q, camera) best-effort. Non-robot entities are untouched (v1).
+Report loadScene(Scene& scene, const std::string& kscenePath);
+
+// Rewrite ONLY the .kstate sidecar for an already-saved scene (the cheap exit hook).
+bool saveSessionState(Scene& scene, const std::string& kscenePath);
+
+// Headless gate (KRS_KSAVE_SELFTEST): save -> fresh scene -> load round-trip (files, joints,
+// limits, names, connectors, q, DOF); tampered .kjoint is detected + honored; NEG-CTRLs: missing
+// .krobot / corrupt .kscene refuse cleanly; stale q (wrong length) is skipped without crashing.
+bool runKSaveGate();
+
+} // namespace krs::ksave

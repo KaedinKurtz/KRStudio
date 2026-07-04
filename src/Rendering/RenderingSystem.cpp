@@ -35,6 +35,7 @@
 #include "SelectionService.hpp"   // krs::sel selection-highlight gates
 #include "RobotBuilder.hpp"        // krs::rbuild robot-builder gates (Phase 0 recon)
 #include "AuthoringPersist.hpp"    // krs::persist authoring save/load + gate
+#include "KSave.hpp"               // krs::ksave .kscene family + gate
 #include "RaycastService.hpp"      // krs::pick nanort BVH ray/mesh picking gate
 #include "UvAtlasService.hpp"       // krs::uv xatlas per-body UV unwrap gate
 #include "RobotBuilderScene.hpp"   // krs::rbuild demo graph + body->entity render bridge + gate
@@ -1070,6 +1071,14 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_ROBOTCOLLIDE_SELFTEST") != 0) {
         std::printf("\n================= KRS_ROBOTCOLLIDE_SELFTEST =================\n");
         const bool ok = SimulationController::runRobotCollisionGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Save architecture: .kscene/.krobot/.kjoint/.kstate round-trip. Headless.
+    if (qEnvironmentVariableIntValue("KRS_KSAVE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_KSAVE_SELFTEST =================\n");
+        const bool ok = krs::ksave::runKSaveGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
