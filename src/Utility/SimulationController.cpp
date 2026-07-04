@@ -381,8 +381,14 @@ struct SimulationController::PxImpl
     /// straight through the arm (SimulationController never referenced
     /// RobotSubcomponentComponent). Kinematic actors are infinite-mass movers that follow the
     /// FK-driven TransformComponent via the existing pushKinematicTargets each tick -- PhysX
-    /// FOLLOWS q (the documented design), it never writes it. Shapes: explicit/auto colliders
-    /// when present, else an AABB box from the render mesh (honest v1 for dense CAD links).
+    /// FOLLOWS q (the documented design), it never writes it.
+    ///
+    /// COLLISION ACCURACY: robot links are KINEMATIC, so they can carry EXACT cooked triangle-mesh
+    /// shapes (PhysX forbids trimesh only on DYNAMIC bodies) -- the most accurate collision there is,
+    /// tighter than a convex hull. We GUARANTEE an accurate cook by ensuring every link has an
+    /// AutoExact AutoCollisionComponent, so buildAutoShapes returns the cooked triangle mesh
+    /// (blocking on the warm speculative cook kicked at import). The AABB box is a LAST RESORT only
+    /// when cooking genuinely fails, and it warns loudly so lost accuracy is never silent.
     bool createRobotLinkActor(entt::registry& reg, entt::entity e)
     {
         if (!scene || !reg.valid(e)) return false;
@@ -392,14 +398,23 @@ struct SimulationController::PxImpl
         const auto* xfPtr = reg.try_get<TransformComponent>(e);
         if (!xfPtr) return false;
 
+        // Guarantee an accurate cooked shape: force AutoExact (exact trimesh for these kinematic
+        // actors) on any link missing a collider component, and cook it now if not warm.
+        if (!reg.any_of<AutoCollisionComponent>(e)) {
+            reg.emplace<AutoCollisionComponent>(e);            // default mode == AutoExact
+            if (const auto* mesh = reg.try_get<RenderableMeshComponent>(e); mesh && !mesh->vertices.empty())
+                CollisionCookingService::instance().requestTriangleMesh(mesh->vertices, mesh->indices, debugNameFor(reg, e));
+        }
+
         std::vector<PxShape*> shapes;
         if (PxShape* s = buildExplicitShape(reg, e, *xfPtr)) shapes.push_back(s);
-        if (shapes.empty()) shapes = buildAutoShapes(reg, e, *xfPtr, nullptr);
+        if (shapes.empty()) shapes = buildAutoShapes(reg, e, *xfPtr, nullptr);   // exact trimesh (kinematic)
         if (shapes.empty()) {
-            // AABB-box fallback (CAD imports carry no AutoCollisionComponent): geometry is baked
-            // in the entity's local frame, so the box is the mesh AABB, offset to its centre.
+            // LAST-RESORT AABB box: cooking failed (degenerate mesh). Warn -- accuracy is lost here.
             const auto* mesh = reg.try_get<RenderableMeshComponent>(e);
             if (!mesh || !(mesh->aabbMin != mesh->aabbMax)) return false;
+            qWarning() << "[Sim] robot link" << debugNameFor(reg, e).c_str()
+                       << ": collision cook failed -- falling back to a coarse AABB box (accuracy lost).";
             const glm::vec3 he = glm::max((mesh->aabbMax - mesh->aabbMin) * 0.5f * xfPtr->scale,
                                           glm::vec3(1e-3f));
             const glm::vec3 c  = (mesh->aabbMin + mesh->aabbMax) * 0.5f * xfPtr->scale;
@@ -577,12 +592,28 @@ bool SimulationController::runRobotCollisionGate()
     const bool followsFk = rayHits(c1);
     const bool leftOld   = !rayHits(c0) || glm::distance(c0, c1) < 0.3f;  // old spot vacated (if far enough)
 
+    // ACCURACY: every link actor's shape must be an EXACT cooked mesh (triangle mesh, or a convex
+    // hull) -- NOT the coarse AABB box. This is the "accuracy, not AABBs" guarantee.
+    bool accurate = true; int linkActors = 0;
+    for (auto& [ent, actor] : sim.m_px->actors) {
+        if (!reg.valid(ent) || !reg.all_of<RobotSubcomponentComponent>(ent)) continue;
+        ++linkActors;
+        const physx::PxU32 nsh = actor->getNbShapes();
+        for (physx::PxU32 si = 0; si < nsh; ++si) {
+            physx::PxShape* sh = nullptr; actor->getShapes(&sh, 1, si);
+            const physx::PxGeometryType::Enum gt = sh->getGeometry().getType();
+            if (gt != physx::PxGeometryType::eTRIANGLEMESH && gt != physx::PxGeometryType::eCONVEXMESH)
+                accurate = false;   // a box (or sphere/capsule primitive) means we lost the real shape
+        }
+    }
+    accurate = accurate && linkActors > 0;
+
     sim.stop();
-    const bool pass = hitsAtRest && negMiss && moved && followsFk && leftOld;
+    const bool pass = hitsAtRest && negMiss && moved && followsFk && leftOld && accurate;
     printf("[robotcollide]   at-rest link blocks ray=%s ; empty-air NEG-CTRL misses=%s ; drive moved link %.3f m=%s ; "
-           "actor follows FK=%s ; old spot vacated=%s  %s\n",
+           "actor follows FK=%s ; old spot vacated=%s ; %d link actors ALL exact-mesh (no AABB box)=%s  %s\n",
            hitsAtRest?"yes":"NO", negMiss?"yes":"NO", glm::distance(c0, c1), moved?"yes":"NO",
-           followsFk?"yes":"NO", leftOld?"yes":"NO", pass?"PASS":"FAIL");
+           followsFk?"yes":"NO", leftOld?"yes":"NO", linkActors, accurate?"yes":"NO", pass?"PASS":"FAIL");
     printf("[robotcollide] %s\n", pass ? "ALL PASS (authored-robot links are kinematic obstacles; they follow the driven FK)"
                                        : "FAILURES PRESENT");
     fflush(stdout);
