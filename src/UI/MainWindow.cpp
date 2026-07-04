@@ -1640,6 +1640,11 @@ MainWindow::MainWindow(QWidget* parent)
 
     m_renderingSystem->initialize(m_scene.get());
 
+    // v1.1: a boot-reopened scene (loadScene above, before the renderer existed) may carry an
+    // EnvironmentSettings ctx -> push it into the now-initialized renderer so the lighting/skybox
+    // come back as saved. No-op when the scene had no environment section.
+    applyCtxToEnvironment();
+
     // --- Settings hot-swap routing ------------------------------------------
     // Route every persisted/changed setting to its owning subsystem so edits in
     // the Settings dialog apply live (the render loop shows them next frame).
@@ -3818,6 +3823,46 @@ entt::entity MainWindow::selectedEntity() const
     return entt::null;
 }
 
+// v1.1 save architecture: the renderer owns the live lighting/skybox knobs; the .kscene persists
+// them via an EnvironmentSettings ctx singleton. These two helpers bridge the two before a save and
+// after a load so what you see is what gets written, and what gets loaded is what you then see.
+void MainWindow::syncEnvironmentToCtx()
+{
+    if (!m_scene || !m_renderingSystem) return;
+    auto& reg = m_scene->getRegistry();
+    auto* env = reg.ctx().find<EnvironmentSettings>();
+    if (!env) env = &reg.ctx().emplace<EnvironmentSettings>();
+    RenderingSystem* rs = m_renderingSystem.get();
+    env->iblIntensity    = rs->getIblIntensity();
+    env->drawSkybox      = rs->drawSkybox();
+    env->roomColor       = rs->roomColor();
+    env->sunIntensity    = rs->getSunIntensity();
+    env->sunColor        = rs->getSunColor();
+    env->sunDirection    = rs->getSunDirection();
+    env->exposureEV      = rs->getExposureEV();
+    env->tonemapExposure = rs->getTonemapExposure();
+    env->hdrEnabled      = rs->getHdrEnabled();
+    // hdrPath: no renderer accessor yet -> leave whatever the ctx already holds (v1.2 will wire it).
+}
+
+void MainWindow::applyCtxToEnvironment()
+{
+    if (!m_scene || !m_renderingSystem) return;
+    auto& reg = m_scene->getRegistry();
+    auto* env = reg.ctx().find<EnvironmentSettings>();
+    if (!env) return;                                  // scene had no environment section
+    RenderingSystem* rs = m_renderingSystem.get();
+    rs->setIblIntensity(env->iblIntensity);
+    rs->setDrawSkybox(env->drawSkybox);
+    rs->setRoomColor(env->roomColor);
+    rs->setSunIntensity(env->sunIntensity);
+    rs->setSunColor(env->sunColor);
+    rs->setSunDirection(env->sunDirection);
+    rs->setExposureEV(env->exposureEV);
+    rs->setTonemapExposure(env->tonemapExposure);
+    rs->setHdrEnabled(env->hdrEnabled);
+}
+
 void MainWindow::buildEngineeringToolbar()
 {
     QToolBar* tb = addToolBar(QStringLiteral("Engineering"));
@@ -3839,13 +3884,14 @@ void MainWindow::buildEngineeringToolbar()
             if (p.isEmpty()) return;
             path = p.toStdString();
         }
+        syncEnvironmentToCtx();                       // v1.1: mirror the live renderer knobs into the ctx so they persist
         const krs::ksave::Report rep = krs::ksave::saveScene(*m_scene, path);
         if (!rep.ok) {
             QMessageBox::warning(this, QStringLiteral("Save Scene"), rep.error);
             return;
         }
-        QString msg = QStringLiteral("Saved %1 robot(s), %2 joint(s) to %3")
-            .arg(rep.robots).arg(rep.joints).arg(QString::fromStdString(path));
+        QString msg = QStringLiteral("Saved %1 robot(s), %2 joint(s), %3 light(s), %4 object(s) to %5")
+            .arg(rep.robots).arg(rep.joints).arg(rep.lights).arg(rep.objects).arg(QString::fromStdString(path));
         if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
         statusBar()->showMessage(QStringLiteral("Scene saved: %1").arg(QString::fromStdString(path)), 6000);
         if (!rep.warnings.isEmpty()) QMessageBox::information(this, QStringLiteral("Save Scene"), msg);
@@ -3861,10 +3907,12 @@ void MainWindow::buildEngineeringToolbar()
             return;
         }
         krs::robot::rebuildJointNameRegistry(m_scene->getRegistry());
+        applyCtxToEnvironment();                       // v1.1: push the loaded environment/skybox knobs into the live renderer
         if (m_robotBuilderPanel) m_robotBuilderPanel->refresh();
         if (m_robotViewport)     m_robotViewport->refreshFromLive();
         refreshGizmoAndProperties();
-        QString msg = QStringLiteral("Loaded %1 robot(s), %2 joint(s).").arg(rep.robots).arg(rep.joints);
+        QString msg = QStringLiteral("Loaded %1 robot(s), %2 joint(s), %3 light(s), %4 object(s).")
+            .arg(rep.robots).arg(rep.joints).arg(rep.lights).arg(rep.objects);
         if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
         QMessageBox::information(this, QStringLiteral("Load Scene"), msg);
     });

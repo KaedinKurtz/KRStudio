@@ -755,6 +755,31 @@ struct SceneProperties
     bool showCollisionShapes = false; // wireframe overlay of cooked collision geometry
 };
 
+// SAVABLE ENVIRONMENT: the renderer's lighting/skybox knobs mirrored into the ECS ctx so a .kscene
+// can persist them (RenderingSystem is not visible to the headless save layer). MainWindow syncs
+// RenderingSystem <-> this on save/load. Defaults mirror the RenderingSystem members.
+struct EnvironmentSettings {
+    float     iblIntensity   = 1.0f;
+    bool      drawSkybox     = true;
+    glm::vec3 roomColor      = glm::vec3(0.5f);
+    float     sunIntensity   = 1.0f;
+    glm::vec3 sunColor       = glm::vec3(1.0f);
+    glm::vec3 sunDirection   = glm::vec3(0.0f, -1.0f, 0.0f);
+    float     exposureEV     = 0.0f;
+    float     tonemapExposure= 1.0f;
+    bool      hdrEnabled     = true;
+    std::string hdrPath;                 // environment HDR (empty = procedural/default)
+};
+
+// OBJECT RECIPE: how a loose (non-robot) scene object was created, so a .kscene can reconstruct it.
+// primitive >= 0 => SceneBuilder::spawnPrimitive(primitive); else meshPath => a loaded mesh asset.
+// Stamped at spawn by SceneBuilder; entities without it (procedural/gizmo/robot) are not saved as
+// loose objects.
+struct SceneObjectComponent {
+    int         primitive = -1;          // krs::Primitive index, or -1 for a mesh asset
+    std::string meshPath;                // asset path when primitive < 0
+};
+
 enum class SplineType { Linear, CatmullRom, Bezier, Parametric };
 
 struct ParametricSpline { std::function<glm::vec3(float)> func; };

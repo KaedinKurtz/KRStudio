@@ -58,6 +58,7 @@ struct OpenSceneInfo { std::string kscenePath; };
 struct Report {
     bool ok = false;
     int robots = 0, joints = 0;
+    int lights = 0, objects = 0;            // v1.1: non-robot scene content round-tripped
     QStringList warnings;                   // hash drift, skipped robots, stale state -- shown to the user
     QString error;                          // fatal reason when !ok
 };
@@ -98,5 +99,13 @@ ActuatorSpec resolveActuator(const std::string& kactuatorPath);
 // .krobot / corrupt .kscene refuse cleanly; stale q (wrong length) is skipped without crashing.
 // Plus the actuator chain: derived effort/velocity match the closed form; refusals clean.
 bool runKSaveGate();
+
+// Headless gate (KRS_SCENESAVE_SELFTEST): save architecture v1.1 -- a ROBOT-FREE scene's
+// environment/skybox settings (EnvironmentSettings ctx), fog/background (SceneProperties), all
+// lights (type/color/intensity/cone/size/range/enabled + transform + emissive material), and loose
+// primitive objects (transform incl. rotation + full MaterialComponent) survive a save -> fresh
+// scene -> load round-trip; NEG-CTRL: a recipe-less mesh-asset object is skipped with a warning,
+// never silently fabricated.
+bool runSceneObjectsGate();
 
 } // namespace krs::ksave

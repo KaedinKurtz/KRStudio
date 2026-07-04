@@ -149,6 +149,8 @@ private:
     void addHeatSourceToSelection();  // Add/tune HeatSourceComponent on the selection
     void inspectSelection();          // dialog exposing Material + HeatSource of the selection
     void importStepFile();            // Import CAD (STEP) -> OCCT ingestion
+    void syncEnvironmentToCtx();       // v1.1: live RenderingSystem knobs -> EnvironmentSettings ctx (pre-save)
+    void applyCtxToEnvironment();      // v1.1: EnvironmentSettings ctx -> live RenderingSystem (post-load)
 
     entt::entity m_cameraEntity;
 

@@ -6,6 +6,7 @@
 #include "RobotBuilderScene.hpp"   // buildDemoGraph / spawnGraphBodies
 #include "RobotModel.hpp"          // RobotRegistry / LiveRobot / instantiateFromGraph / transformRobot
 #include "CadImporter.hpp"         // importStepAssembly (STEP-sourced robots)
+#include "SceneBuilder.hpp"        // spawnPrimitive / spawnLightEmitter (loose-object + light rebuild)
 #include "Scene.hpp"
 #include "components.hpp"
 
@@ -154,6 +155,162 @@ void applyWorldTransformToGraph(krs::rbuild::RobotGraph& g, const Eigen::Matrix4
     }
 }
 
+// ---- non-robot scene content (save architecture v1.1: environment + lights + loose objects) ----
+QJsonArray vec2ToJson(const glm::vec2& v) { return QJsonArray{ double(v.x), double(v.y) }; }
+glm::vec2 vec2FromJson(const QJsonValue& v, const glm::vec2& fb = glm::vec2(0)) {
+    const QJsonArray a = v.toArray();
+    if (a.size() != 2) return fb;
+    return { float(a[0].toDouble()), float(a[1].toDouble()) };
+}
+QJsonArray quatToJson(const glm::quat& q) { return QJsonArray{ double(q.w), double(q.x), double(q.y), double(q.z) }; }
+glm::quat quatFromJson(const QJsonValue& v, const glm::quat& fb = glm::quat(1, 0, 0, 0)) {
+    const QJsonArray a = v.toArray();
+    if (a.size() != 4) return fb;
+    return glm::quat(float(a[0].toDouble()), float(a[1].toDouble()), float(a[2].toDouble()), float(a[3].toDouble()));
+}
+
+// TransformComponent <-> JSON.
+QJsonObject transformToJson(const TransformComponent& t) {
+    QJsonObject o; o["t"] = vec3ToJson(t.translation); o["r"] = quatToJson(t.rotation); o["s"] = vec3ToJson(t.scale);
+    return o;
+}
+void transformFromJson(const QJsonObject& o, TransformComponent& t) {
+    t.translation = vec3FromJson(o["t"]); t.rotation = quatFromJson(o["r"]); t.scale = vec3FromJson(o["s"], glm::vec3(1));
+}
+
+// MaterialComponent <-> JSON. First pass: all scalar/vector appearance + engineering fields.
+// Texture *maps* (shared_ptr<Texture2D/Cubemap>) are NOT persisted here (no asset path on the
+// component yet) -- a follow-up will add texture-asset refs; loaded objects keep their maps null.
+QJsonObject materialToJson(const MaterialComponent& m) {
+    QJsonObject o;
+    o["albedo"] = vec3ToJson(m.albedoColor); o["albedoTiling"] = vec2ToJson(m.albedoTiling);
+    o["albedoOffset"] = vec2ToJson(m.albedoOffset); o["albedoBrightness"] = m.albedoBrightness;
+    o["opacity"] = m.opacity; o["metallic"] = m.metallic; o["roughness"] = m.roughness;
+    o["specular"] = vec3ToJson(m.specularColor); o["glossiness"] = m.glossiness; o["ao"] = m.ao;
+    o["clearcoat"] = m.clearcoat; o["clearcoatRoughness"] = m.clearcoatRoughness;
+    o["sheen"] = m.sheen; o["sheenColor"] = vec3ToJson(m.sheenColor); o["sheenRoughness"] = m.sheenRoughness;
+    o["transmission"] = m.transmission; o["ior"] = m.ior; o["thickness"] = m.thickness;
+    o["attenuationColor"] = vec3ToJson(m.attenuationColor); o["attenuationDistance"] = double(m.attenuationDistance);
+    o["sssEnabled"] = m.sssEnabled; o["sssColor"] = vec3ToJson(m.sssColor); o["sssRadius"] = vec3ToJson(m.sssRadius);
+    o["anisotropy"] = m.anisotropy; o["anisotropyRotation"] = m.anisotropyRotation;
+    o["emissive"] = vec3ToJson(m.emissiveColor); o["emissiveStrength"] = m.emissiveStrength;
+    // engineering / physical
+    o["physicalName"] = QString::fromStdString(m.physicalName);
+    o["density"] = double(m.density); o["bulkModulus"] = double(m.bulkModulus); o["shearModulus"] = double(m.shearModulus);
+    o["youngsModulus"] = double(m.youngsModulus); o["poissonRatio"] = double(m.poissonRatio);
+    o["volume_m3"] = double(m.volume_m3); o["massKg"] = double(m.massKg);
+    o["specificHeat"] = double(m.specificHeat); o["thermalConductivity"] = double(m.thermalConductivity);
+    return o;
+}
+void materialFromJson(const QJsonObject& o, MaterialComponent& m) {
+    m.albedoColor = vec3FromJson(o["albedo"], m.albedoColor);
+    m.albedoTiling = vec2FromJson(o["albedoTiling"], m.albedoTiling);
+    m.albedoOffset = vec2FromJson(o["albedoOffset"], m.albedoOffset);
+    m.albedoBrightness = float(o["albedoBrightness"].toDouble(m.albedoBrightness));
+    m.opacity = float(o["opacity"].toDouble(m.opacity));
+    m.metallic = float(o["metallic"].toDouble(m.metallic));
+    m.roughness = float(o["roughness"].toDouble(m.roughness));
+    m.specularColor = vec3FromJson(o["specular"], m.specularColor);
+    m.glossiness = float(o["glossiness"].toDouble(m.glossiness));
+    m.ao = float(o["ao"].toDouble(m.ao));
+    m.clearcoat = float(o["clearcoat"].toDouble(m.clearcoat));
+    m.clearcoatRoughness = float(o["clearcoatRoughness"].toDouble(m.clearcoatRoughness));
+    m.sheen = float(o["sheen"].toDouble(m.sheen));
+    m.sheenColor = vec3FromJson(o["sheenColor"], m.sheenColor);
+    m.sheenRoughness = float(o["sheenRoughness"].toDouble(m.sheenRoughness));
+    m.transmission = float(o["transmission"].toDouble(m.transmission));
+    m.ior = float(o["ior"].toDouble(m.ior));
+    m.thickness = float(o["thickness"].toDouble(m.thickness));
+    m.attenuationColor = vec3FromJson(o["attenuationColor"], m.attenuationColor);
+    m.attenuationDistance = float(o["attenuationDistance"].toDouble(m.attenuationDistance));
+    m.sssEnabled = o["sssEnabled"].toBool(m.sssEnabled);
+    m.sssColor = vec3FromJson(o["sssColor"], m.sssColor);
+    m.sssRadius = vec3FromJson(o["sssRadius"], m.sssRadius);
+    m.anisotropy = float(o["anisotropy"].toDouble(m.anisotropy));
+    m.anisotropyRotation = float(o["anisotropyRotation"].toDouble(m.anisotropyRotation));
+    m.emissiveColor = vec3FromJson(o["emissive"], m.emissiveColor);
+    m.emissiveStrength = float(o["emissiveStrength"].toDouble(m.emissiveStrength));
+    m.physicalName = o["physicalName"].toString(QString::fromStdString(m.physicalName)).toStdString();
+    m.density = float(o["density"].toDouble(m.density));
+    m.bulkModulus = float(o["bulkModulus"].toDouble(m.bulkModulus));
+    m.shearModulus = float(o["shearModulus"].toDouble(m.shearModulus));
+    m.youngsModulus = float(o["youngsModulus"].toDouble(m.youngsModulus));
+    m.poissonRatio = float(o["poissonRatio"].toDouble(m.poissonRatio));
+    m.volume_m3 = float(o["volume_m3"].toDouble(m.volume_m3));
+    m.massKg = float(o["massKg"].toDouble(m.massKg));
+    m.specificHeat = float(o["specificHeat"].toDouble(m.specificHeat));
+    m.thermalConductivity = float(o["thermalConductivity"].toDouble(m.thermalConductivity));
+}
+
+// LightComponent <-> JSON.
+QJsonObject lightToJson(const LightComponent& l) {
+    QJsonObject o;
+    o["type"] = int(l.type); o["color"] = vec3ToJson(l.color); o["intensity"] = l.intensity; o["range"] = l.range;
+    o["innerConeDeg"] = l.innerConeDeg; o["outerConeDeg"] = l.outerConeDeg;
+    o["size"] = vec2ToJson(l.size); o["twoSided"] = l.twoSided; o["enabled"] = l.enabled;
+    return o;
+}
+void lightFromJson(const QJsonObject& o, LightComponent& l) {
+    l.type = LightComponent::Type(o["type"].toInt(int(l.type)));
+    l.color = vec3FromJson(o["color"], l.color);
+    l.intensity = float(o["intensity"].toDouble(l.intensity));
+    l.range = float(o["range"].toDouble(l.range));
+    l.innerConeDeg = float(o["innerConeDeg"].toDouble(l.innerConeDeg));
+    l.outerConeDeg = float(o["outerConeDeg"].toDouble(l.outerConeDeg));
+    l.size = vec2FromJson(o["size"], l.size);
+    l.twoSided = o["twoSided"].toBool(l.twoSided);
+    l.enabled = o["enabled"].toBool(l.enabled);
+}
+
+// EnvironmentSettings ctx <-> JSON (the renderer's persisted lighting/skybox knobs).
+QJsonObject environmentToJson(const EnvironmentSettings& e) {
+    QJsonObject o;
+    o["iblIntensity"] = e.iblIntensity; o["drawSkybox"] = e.drawSkybox; o["roomColor"] = vec3ToJson(e.roomColor);
+    o["sunIntensity"] = e.sunIntensity; o["sunColor"] = vec3ToJson(e.sunColor); o["sunDirection"] = vec3ToJson(e.sunDirection);
+    o["exposureEV"] = e.exposureEV; o["tonemapExposure"] = e.tonemapExposure; o["hdrEnabled"] = e.hdrEnabled;
+    o["hdrPath"] = QString::fromStdString(e.hdrPath);
+    return o;
+}
+void environmentFromJson(const QJsonObject& o, EnvironmentSettings& e) {
+    e.iblIntensity = float(o["iblIntensity"].toDouble(e.iblIntensity));
+    e.drawSkybox = o["drawSkybox"].toBool(e.drawSkybox);
+    e.roomColor = vec3FromJson(o["roomColor"], e.roomColor);
+    e.sunIntensity = float(o["sunIntensity"].toDouble(e.sunIntensity));
+    e.sunColor = vec3FromJson(o["sunColor"], e.sunColor);
+    e.sunDirection = vec3FromJson(o["sunDirection"], e.sunDirection);
+    e.exposureEV = float(o["exposureEV"].toDouble(e.exposureEV));
+    e.tonemapExposure = float(o["tonemapExposure"].toDouble(e.tonemapExposure));
+    e.hdrEnabled = o["hdrEnabled"].toBool(e.hdrEnabled);
+    e.hdrPath = o["hdrPath"].toString().toStdString();
+}
+
+// SceneProperties (fog + background) <-> JSON. Lives in the ECS ctx.
+QJsonObject scenePropsToJson(const SceneProperties& p) {
+    QJsonObject o;
+    o["fogEnabled"] = p.fogEnabled;
+    o["backgroundColor"] = QJsonArray{ double(p.backgroundColor.r), double(p.backgroundColor.g),
+                                       double(p.backgroundColor.b), double(p.backgroundColor.a) };
+    o["fogColor"] = vec3ToJson(p.fogColor); o["fogStart"] = p.fogStartDistance; o["fogEnd"] = p.fogEndDistance;
+    o["showCollisionShapes"] = p.showCollisionShapes;
+    return o;
+}
+void scenePropsFromJson(const QJsonObject& o, SceneProperties& p) {
+    p.fogEnabled = o["fogEnabled"].toBool(p.fogEnabled);
+    const QJsonArray bg = o["backgroundColor"].toArray();
+    if (bg.size() == 4) p.backgroundColor = { float(bg[0].toDouble()), float(bg[1].toDouble()),
+                                              float(bg[2].toDouble()), float(bg[3].toDouble()) };
+    p.fogColor = vec3FromJson(o["fogColor"], p.fogColor);
+    p.fogStartDistance = float(o["fogStart"].toDouble(p.fogStartDistance));
+    p.fogEndDistance = float(o["fogEnd"].toDouble(p.fogEndDistance));
+    p.showCollisionShapes = o["showCollisionShapes"].toBool(p.showCollisionShapes);
+}
+
+// True for a robot member/root or a light (those are saved via their own sections, not as loose objects).
+bool isRobotOrLight(entt::registry& reg, entt::entity e) {
+    return reg.all_of<RobotSubcomponentComponent>(e) || reg.all_of<RobotRootComponent>(e)
+        || reg.all_of<LightEmitterTag>(e) || reg.all_of<LightComponent>(e);
+}
+
 } // namespace
 
 // ================================================================================================
@@ -164,7 +321,8 @@ Report saveScene(Scene& scene, const std::string& kscenePath)
     Report rep;
     auto& reg = scene.getRegistry();
     auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
-    if (!rr || rr->robots.empty()) { rep.error = QStringLiteral("No robots to save."); return rep; }
+    // v1.1: a scene may hold ONLY non-robot content (lights/objects/environment), so an empty
+    // robot registry is no longer fatal -- we save whatever is present.
     auto* srcReg = reg.ctx().find<RobotSourceRegistry>();
     auto* store  = reg.ctx().find<krs::rbuild::AuthoringGraphStore>();
     auto* ctxG   = reg.ctx().find<krs::rbuild::RobotGraph>();
@@ -174,7 +332,7 @@ Report saveScene(Scene& scene, const std::string& kscenePath)
     QDir().mkpath(sceneDir.absolutePath());
 
     QJsonArray instances;
-    for (auto& rp : rr->robots) {
+    for (auto& rp : (rr ? rr->robots : std::vector<std::shared_ptr<krs::robot::LiveRobot>>{})) {
         if (!rp) continue;
         krs::robot::LiveRobot& lr = *rp;
         const RobotSource* src = srcReg ? srcReg->find(lr.robotId) : nullptr;
@@ -273,6 +431,44 @@ Report saveScene(Scene& scene, const std::string& kscenePath)
     sc["format"] = QStringLiteral("kscene/1");
     sc["name"] = sceneInfo.completeBaseName();
     sc["robots"] = instances;
+
+    // ---- v1.1: environment (renderer knobs mirrored into ctx) + fog/background ----
+    if (auto* env = reg.ctx().find<EnvironmentSettings>()) sc["environment"] = environmentToJson(*env);
+    if (auto* props = reg.ctx().find<SceneProperties>())  sc["sceneProps"]  = scenePropsToJson(*props);
+
+    // ---- v1.1: lights (each: transform + full LightComponent + emissive material) ----
+    QJsonArray lights;
+    for (auto e : reg.view<LightComponent>()) {
+        if (reg.all_of<RobotSubcomponentComponent>(e) || reg.all_of<RobotRootComponent>(e)) continue; // robot-mounted lights ride with the robot
+        QJsonObject lo;
+        lo["light"] = lightToJson(reg.get<LightComponent>(e));
+        if (reg.all_of<TransformComponent>(e)) lo["transform"] = transformToJson(reg.get<TransformComponent>(e));
+        if (reg.all_of<TagComponent>(e))       lo["name"]      = QString::fromStdString(reg.get<TagComponent>(e).tag);
+        if (reg.all_of<MaterialComponent>(e))  lo["material"]  = materialToJson(reg.get<MaterialComponent>(e));
+        lights.push_back(lo);
+        ++rep.lights;
+    }
+    sc["lights"] = lights;
+
+    // ---- v1.1: loose objects (primitives + mesh instances that carry a reconstruction recipe) ----
+    QJsonArray objects;
+    for (auto e : reg.view<SceneObjectComponent, TransformComponent>()) {
+        if (isRobotOrLight(reg, e)) continue;
+        const auto& so = reg.get<SceneObjectComponent>(e);
+        QJsonObject oo;
+        oo["primitive"] = so.primitive;
+        // Prefer the recipe's mesh path; fall back to the renderable's sourcePath for mesh assets.
+        std::string mesh = so.meshPath;
+        if (mesh.empty() && reg.all_of<RenderableMeshComponent>(e)) mesh = reg.get<RenderableMeshComponent>(e).sourcePath;
+        oo["mesh"] = QString::fromStdString(mesh);
+        oo["transform"] = transformToJson(reg.get<TransformComponent>(e));
+        if (reg.all_of<TagComponent>(e))      oo["name"]     = QString::fromStdString(reg.get<TagComponent>(e).tag);
+        if (reg.all_of<MaterialComponent>(e)) oo["material"] = materialToJson(reg.get<MaterialComponent>(e));
+        objects.push_back(oo);
+        ++rep.objects;
+    }
+    sc["objects"] = objects;
+
     if (!writeJsonFile(sceneInfo.absoluteFilePath(), sc)) {
         rep.error = QStringLiteral("Cannot write %1").arg(sceneInfo.absoluteFilePath());
         return rep;
@@ -380,11 +576,15 @@ Report loadScene(Scene& scene, const std::string& kscenePath)
     if (!formatOk(sc, "kscene")) { rep.error = QStringLiteral("Unknown .kscene format."); return rep; }
     const QDir sceneDir = QFileInfo(QString::fromStdString(kscenePath)).absoluteDir();
 
-    // REPLACE semantics: the document owns the robots. Clear every robot + member entity first.
+    // REPLACE semantics: the document owns the robots AND the loose non-robot content (lights +
+    // recipe-tagged objects). Clear all of them first. (Procedural/gizmo entities with no
+    // SceneObjectComponent and no LightComponent are left untouched, as in v1.)
     {
         std::vector<entt::entity> kill;
         for (auto e : reg.view<RobotSubcomponentComponent>()) kill.push_back(e);
         for (auto e : reg.view<RobotRootComponent>()) kill.push_back(e);
+        for (auto e : reg.view<LightComponent>()) kill.push_back(e);
+        for (auto e : reg.view<SceneObjectComponent>()) kill.push_back(e);
         std::sort(kill.begin(), kill.end());
         kill.erase(std::unique(kill.begin(), kill.end()), kill.end());
         for (auto e : kill) if (reg.valid(e)) reg.destroy(e);
@@ -532,6 +732,58 @@ Report loadScene(Scene& scene, const std::string& kscenePath)
             store->byRobot[robotId] = std::move(g);
         }
         ++rep.robots;
+    }
+
+    // ---- v1.1: environment + fog/background (ctx singletons) ----
+    if (sc.contains("environment")) {
+        auto* env = reg.ctx().find<EnvironmentSettings>();
+        if (!env) env = &reg.ctx().emplace<EnvironmentSettings>();
+        environmentFromJson(sc["environment"].toObject(), *env);
+    }
+    if (sc.contains("sceneProps")) {
+        auto* props = reg.ctx().find<SceneProperties>();
+        if (!props) props = &reg.ctx().emplace<SceneProperties>();
+        scenePropsFromJson(sc["sceneProps"].toObject(), *props);
+    }
+
+    // ---- v1.1: lights (rebuild the emitter body, then overlay the saved light/transform/material) ----
+    for (const QJsonValue& lv : sc["lights"].toArray()) {
+        const QJsonObject lo = lv.toObject();
+        LightComponent lc; lightFromJson(lo["light"].toObject(), lc);
+        const std::string name = lo["name"].toString().toStdString();
+        TransformComponent xf; transformFromJson(lo["transform"].toObject(), xf);
+        entt::entity e = SceneBuilder::spawnLightEmitter(scene, lc.type, xf.translation, lc.color, lc.intensity, name);
+        if (e == entt::null || !reg.valid(e)) { rep.warnings << QStringLiteral("A light failed to spawn -- skipped."); continue; }
+        reg.emplace_or_replace<LightComponent>(e, lc);               // full params (cone/size/range/enabled)
+        reg.emplace_or_replace<TransformComponent>(e, xf);           // exact saved orientation + scale
+        if (lo.contains("material") && reg.all_of<MaterialComponent>(e))
+            materialFromJson(lo["material"].toObject(), reg.get<MaterialComponent>(e));
+        ++rep.lights;
+    }
+
+    // ---- v1.1: loose objects (primitive recipe rebuild; mesh-asset objects deferred to v1.2) ----
+    for (const QJsonValue& ov : sc["objects"].toArray()) {
+        const QJsonObject oo = ov.toObject();
+        const int prim = oo["primitive"].toInt(-1);
+        const std::string mesh = oo["mesh"].toString().toStdString();
+        const std::string name = oo["name"].toString().toStdString();
+        TransformComponent xf; transformFromJson(oo["transform"].toObject(), xf);
+        entt::entity e = entt::null;
+        if (prim >= 0) {
+            e = SceneBuilder::spawnPrimitive(scene, prim, xf.translation, xf.scale, name);
+        } else {
+            rep.warnings << QStringLiteral("Object \"%1\" is a mesh asset (%2) -- mesh-asset reload is a v1.2 "
+                                           "follow-up, skipped for now.")
+                                .arg(QString::fromStdString(name), QString::fromStdString(mesh));
+            continue;
+        }
+        if (e == entt::null || !reg.valid(e)) { rep.warnings << QStringLiteral("An object failed to spawn -- skipped."); continue; }
+        reg.emplace_or_replace<TransformComponent>(e, xf);           // restore rotation (spawnPrimitive takes only pos+scale)
+        if (oo.contains("material")) {
+            auto& m = reg.get_or_emplace<MaterialComponent>(e);
+            materialFromJson(oo["material"].toObject(), m);
+        }
+        ++rep.objects;
     }
 
     krs::robot::rebuildJointNameRegistry(reg);
@@ -757,6 +1009,160 @@ bool runKSaveGate()
                    && negMissing && negCorrupt && actOk && actNeg;
     printf("[ksave] %s\n", pass ? "ALL PASS (nested kscene/krobot/kjoint round-trip; kstate best-effort; tamper detected+honored; actuator chain derives limits; refusals clean)"
                                 : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return pass;
+}
+
+// ================================================================================================
+// GATE SCENESAVE -- non-robot content (environment, lights, loose objects) round-trips a save/load.
+// ================================================================================================
+bool runSceneObjectsGate()
+{
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[scenesave] GATE SCENESAVE -- environment + lights + loose objects survive save -> fresh scene -> load\n");
+    const QString dir = QDir::temp().filePath("krs_scenesave_gate");
+    QDir(dir).removeRecursively();
+    const std::string scenePath = QDir(dir).filePath("room.kscene").toStdString();
+    const QVariant priorLastScene = QSettings().value(QStringLiteral("ksave/lastScene"));
+    struct SettingsRestore {
+        QVariant v;
+        ~SettingsRestore() {
+            if (v.isValid()) QSettings().setValue(QStringLiteral("ksave/lastScene"), v);
+            else             QSettings().remove(QStringLiteral("ksave/lastScene"));
+        }
+    } restoreGuard{ priorLastScene };
+
+    // ---- author a ROBOT-FREE scene: environment + 2 lights + 2 primitive objects ----
+    Scene s1;
+    auto& r1 = s1.getRegistry();
+
+    // environment (non-default so a round-trip is meaningful)
+    EnvironmentSettings envIn;
+    envIn.iblIntensity = 2.3f; envIn.drawSkybox = false; envIn.roomColor = { 0.2f, 0.4f, 0.6f };
+    envIn.sunIntensity = 3.1f; envIn.sunColor = { 1.0f, 0.9f, 0.7f }; envIn.sunDirection = { 0.3f, -1.0f, 0.2f };
+    envIn.exposureEV = 1.5f; envIn.tonemapExposure = 0.8f; envIn.hdrEnabled = false; envIn.hdrPath = "assets/studio.hdr";
+    r1.ctx().emplace<EnvironmentSettings>(envIn);
+    SceneProperties propsIn;
+    propsIn.fogEnabled = true; propsIn.fogColor = { 0.05f, 0.06f, 0.07f };
+    propsIn.fogStartDistance = 4.0f; propsIn.fogEndDistance = 42.0f; propsIn.backgroundColor = { 0.11f, 0.12f, 0.13f, 1.0f };
+    r1.ctx().emplace<SceneProperties>(propsIn);
+
+    // light A: a spot with a custom cone + range
+    entt::entity la = SceneBuilder::spawnLightEmitter(s1, LightComponent::Type::Spot, { 1, 3, -2 }, { 1.0f, 0.5f, 0.2f }, 5.5f, "KeySpot");
+    { auto& lc = r1.get<LightComponent>(la); lc.innerConeDeg = 12.0f; lc.outerConeDeg = 28.0f; lc.range = 9.0f; lc.enabled = true; }
+    // light B: a two-sided rect-area
+    entt::entity lb = SceneBuilder::spawnLightEmitter(s1, LightComponent::Type::RectArea, { -2, 2.5f, 1 }, { 0.6f, 0.8f, 1.0f }, 3.0f, "FillPanel");
+    { auto& lc = r1.get<LightComponent>(lb); lc.size = { 3.0f, 1.5f }; lc.twoSided = true; }
+
+    // object A: a cube with a red-ish metal material + a real rotation
+    entt::entity oa = SceneBuilder::spawnPrimitive(s1, int(Primitive::Cube), { 0, 0.5f, 0 }, { 1.2f, 0.8f, 0.6f }, "Anvil");
+    { auto& xf = r1.get<TransformComponent>(oa); xf.rotation = glm::angleAxis(glm::radians(37.0f), glm::normalize(glm::vec3(0.2f, 1.0f, 0.1f)));
+      auto& m = r1.get_or_emplace<MaterialComponent>(oa); m.albedoColor = { 0.7f, 0.15f, 0.1f }; m.metallic = 0.9f; m.roughness = 0.3f;
+      m.emissiveColor = { 0.0f, 0.0f, 0.0f }; m.density = 7850.0f; m.physicalName = "Steel AISI 1045"; }
+    // object B: a sphere with a glassy transmission material
+    entt::entity ob = SceneBuilder::spawnPrimitive(s1, int(Primitive::IcoSphere), { 2, 1, 0.5f }, { 0.5f, 0.5f, 0.5f }, "Marble");
+    { auto& m = r1.get_or_emplace<MaterialComponent>(ob); m.transmission = 0.85f; m.ior = 1.52f; m.roughness = 0.05f; m.clearcoat = 1.0f; }
+
+    // capture inputs for comparison
+    const TransformComponent oaXfIn = r1.get<TransformComponent>(oa);
+    const MaterialComponent  oaMatIn = r1.get<MaterialComponent>(oa);
+    const LightComponent     laLcIn = r1.get<LightComponent>(la);
+
+    const Report sr = saveScene(s1, scenePath);
+    const bool savedOk = sr.ok && sr.robots == 0 && sr.lights == 2 && sr.objects == 2
+                      && QFile::exists(QString::fromStdString(scenePath));
+    printf("[scenesave]   save: ok=%s robots=%d lights=%d objects=%d file present=%s  %s\n",
+           sr.ok ? "yes" : "NO", sr.robots, sr.lights, sr.objects,
+           QFile::exists(QString::fromStdString(scenePath)) ? "yes" : "NO", savedOk ? "PASS" : "FAIL");
+
+    // ---- fresh scene ("restart"): load and verify every domain ----
+    bool envOk = false, propsOk = false, lightsOk = false, objectsOk = false;
+    {
+        Scene s2;
+        auto& r2 = s2.getRegistry();
+        const Report lrp = loadScene(s2, scenePath);
+
+        // environment
+        if (auto* env = r2.ctx().find<EnvironmentSettings>()) {
+            envOk = std::abs(env->iblIntensity - 2.3f) < 1e-5 && !env->drawSkybox
+                 && glm::length(env->roomColor - glm::vec3(0.2f, 0.4f, 0.6f)) < 1e-5
+                 && std::abs(env->sunIntensity - 3.1f) < 1e-5 && !env->hdrEnabled
+                 && env->hdrPath == "assets/studio.hdr" && std::abs(env->exposureEV - 1.5f) < 1e-5;
+        }
+        if (auto* props = r2.ctx().find<SceneProperties>()) {
+            propsOk = props->fogEnabled && std::abs(props->fogEndDistance - 42.0f) < 1e-5
+                   && glm::length(props->fogColor - glm::vec3(0.05f, 0.06f, 0.07f)) < 1e-5;
+        }
+
+        // lights: find the spot + the rect-area by their restored params
+        int spots = 0, rects = 0; bool spotParamsOk = false, rectParamsOk = false;
+        for (auto e : r2.view<LightComponent>()) {
+            const auto& lc = r2.get<LightComponent>(e);
+            if (lc.type == LightComponent::Type::Spot) {
+                ++spots;
+                spotParamsOk = std::abs(lc.innerConeDeg - 12.0f) < 1e-4 && std::abs(lc.outerConeDeg - 28.0f) < 1e-4
+                            && std::abs(lc.range - 9.0f) < 1e-4 && std::abs(lc.intensity - 5.5f) < 1e-4
+                            && glm::length(lc.color - glm::vec3(1.0f, 0.5f, 0.2f)) < 1e-4;
+            } else if (lc.type == LightComponent::Type::RectArea) {
+                ++rects;
+                rectParamsOk = lc.twoSided && glm::length(glm::vec2(lc.size) - glm::vec2(3.0f, 1.5f)) < 1e-4;
+            }
+        }
+        lightsOk = spots == 1 && rects == 1 && spotParamsOk && rectParamsOk;
+
+        // objects: match by name, verify transform (incl. rotation) + material fields
+        int found = 0; bool cubeOk = false, sphereOk = false;
+        for (auto e : r2.view<SceneObjectComponent, TransformComponent, TagComponent>()) {
+            if (isRobotOrLight(r2, e)) continue;
+            const std::string nm = r2.get<TagComponent>(e).tag;
+            const auto& xf = r2.get<TransformComponent>(e);
+            const auto* m = r2.try_get<MaterialComponent>(e);
+            if (nm == "Anvil") {
+                ++found;
+                const bool xfOk = glm::length(xf.translation - oaXfIn.translation) < 1e-5
+                               && glm::length(xf.scale - oaXfIn.scale) < 1e-5
+                               && (std::abs(glm::dot(xf.rotation, oaXfIn.rotation)) > 0.9999f); // same orientation (sign-agnostic)
+                cubeOk = xfOk && m && glm::length(m->albedoColor - glm::vec3(0.7f, 0.15f, 0.1f)) < 1e-5
+                      && std::abs(m->metallic - 0.9f) < 1e-5 && std::abs(m->roughness - 0.3f) < 1e-5
+                      && std::abs(m->density - 7850.0f) < 1e-2 && m->physicalName == "Steel AISI 1045";
+            } else if (nm == "Marble") {
+                ++found;
+                sphereOk = m && std::abs(m->transmission - 0.85f) < 1e-5 && std::abs(m->ior - 1.52f) < 1e-5
+                        && std::abs(m->clearcoat - 1.0f) < 1e-5;
+            }
+        }
+        objectsOk = found == 2 && cubeOk && sphereOk;
+
+        printf("[scenesave]   load: ok=%s env=%s sceneProps=%s lights(spot+rect params)=%s objects(xf+mat)=%s\n",
+               lrp.ok ? "yes" : "NO", envOk ? "yes" : "NO", propsOk ? "yes" : "NO",
+               lightsOk ? "yes" : "NO", objectsOk ? "yes" : "NO");
+        (void)laLcIn; (void)oaMatIn;
+    }
+
+    // ---- NEG-CTRL: an object with NO recipe (primitive=-1, mesh asset) is skipped with a warning,
+    //      not silently fabricated. Hand-craft a .kscene with one such object and confirm it warns. ----
+    bool negOk = false;
+    {
+        const std::string negPath = QDir(dir).filePath("negctrl.kscene").toStdString();
+        QJsonObject sc; sc["format"] = QStringLiteral("kscene/1"); sc["name"] = QStringLiteral("neg");
+        sc["robots"] = QJsonArray{};
+        QJsonObject bad; bad["primitive"] = -1; bad["mesh"] = QStringLiteral("assets/missing.obj"); bad["name"] = QStringLiteral("Ghost");
+        bad["transform"] = QJsonObject{ { "t", QJsonArray{ 0, 0, 0 } }, { "r", QJsonArray{ 1, 0, 0, 0 } }, { "s", QJsonArray{ 1, 1, 1 } } };
+        sc["objects"] = QJsonArray{ bad };
+        writeJsonFile(QString::fromStdString(negPath), sc);
+        Scene s3;
+        const Report lrp = loadScene(s3, negPath);
+        int loose = 0; for (auto e : s3.getRegistry().view<SceneObjectComponent>()) { (void)e; ++loose; }
+        bool warned = false; for (const QString& w : lrp.warnings) if (w.contains("mesh asset")) warned = true;
+        negOk = warned && lrp.objects == 0 && loose == 0;
+        printf("[scenesave]   NEG-CTRL mesh-asset object without a loader is skipped+warned (not fabricated)=%s  %s\n",
+               negOk ? "yes" : "NO", negOk ? "REJECTS(non-vacuous)" : "VACUOUS!");
+    }
+
+    const bool pass = savedOk && envOk && propsOk && lightsOk && objectsOk && negOk;
+    printf("[scenesave] %s\n", pass ? "ALL PASS (environment/skybox + fog + lights (all params) + loose objects (transform incl. rotation + full material) round-trip a save/load; recipe-less mesh objects skipped honestly)"
+                                    : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;
 }

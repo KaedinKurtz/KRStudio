@@ -36,6 +36,8 @@
 #include "RobotBuilder.hpp"        // krs::rbuild robot-builder gates (Phase 0 recon)
 #include "AuthoringPersist.hpp"    // krs::persist authoring save/load + gate
 #include "KSave.hpp"               // krs::ksave .kscene family + gate
+#include "ActuatorModel.hpp"       // krs::act gray-box actuator model + gate (Phase 1)
+#include "TelemetryProtocol.hpp"   // krs::ktp telemetry codec (COBS + samples + clock-sync) + gate
 #include "KParts.hpp"              // krs::parts manufacturer library + repository + gate
 #include "FaceMaterial.hpp"        // krs::facemat whole-body/per-face material + gate
 #include "ClearanceLimits.hpp"     // krs::climits self-intersection -> joint limits + gate
@@ -1092,6 +1094,30 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_KSAVE_SELFTEST") != 0) {
         std::printf("\n================= KRS_KSAVE_SELFTEST =================\n");
         const bool ok = krs::ksave::runKSaveGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Save architecture v1.1: non-robot scene content (environment/lights/objects) round-trip. Headless.
+    if (qEnvironmentVariableIntValue("KRS_SCENESAVE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SCENESAVE_SELFTEST =================\n");
+        const bool ok = krs::ksave::runSceneObjectsGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Actuator gray-box model (docs/ACTUATOR_MODEL.md Phase 1): torque-speed / friction / backlash / thermal. Headless.
+    if (qEnvironmentVariableIntValue("KRS_ACTUATOR_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ACTUATOR_SELFTEST =================\n");
+        const bool ok = krs::act::runActuatorModelGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Telemetry protocol codec (docs/TELEMETRY_PROTOCOL.md Phase 1): COBS framing + sample codec + clock-sync. Headless.
+    if (qEnvironmentVariableIntValue("KRS_TELEMETRY_SELFTEST") != 0) {
+        std::printf("\n================= KRS_TELEMETRY_SELFTEST =================\n");
+        const bool ok = krs::ktp::runTelemetryGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }

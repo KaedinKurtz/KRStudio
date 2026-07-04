@@ -134,6 +134,7 @@ entt::entity SceneBuilder::spawnPrimitive(Scene& scene, int primitive,
     registry.emplace<TransformComponent>(e, position, glm::quat(1, 0, 0, 0), scale);
     registry.emplace<TriPlanarMaterialTag>(e); // primitives have no UVs
     registry.emplace<TagComponent>(e, name.empty() ? std::string("Primitive") : name);
+    registry.emplace<SceneObjectComponent>(e, SceneObjectComponent{ primitive, std::string() });  // .kscene recipe
 
     // Every mesh entering the scene collides with its real shape by default.
     // Cook both variants speculatively in the background so the data is warm
