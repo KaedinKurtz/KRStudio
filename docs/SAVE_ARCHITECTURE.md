@@ -150,10 +150,22 @@ mode over the feature-selection service.
 ADS `CDockManager::saveState()` → `QSettings("layout/dockState")` at exit, `restoreState()` at
 boot. A per-user preference, separate from `.kscene`; suppressed under any `KRS_*` env.
 
+## Delivered since v1
+
+- **Non-robot scene content (v1.1)** — `saveScene`/`loadScene` now persist, alongside robots: the
+  environment/skybox knobs (IBL intensity, sun dir/color/intensity, exposure/tonemap, HDR toggle) via
+  an `EnvironmentSettings` ctx singleton the app syncs to/from the live `RenderingSystem`; fog +
+  background via `SceneProperties`; every non-robot `LightComponent` (type/color/intensity/cone/
+  size/range/enabled) with its transform + emissive material; and loose objects that carry a
+  `SceneObjectComponent` recipe (primitive index or mesh path) with their transform (incl. rotation)
+  and full `MaterialComponent` (appearance + engineering fields). An empty robot registry is no
+  longer fatal; REPLACE-on-load also clears loose objects + lights. Gate `KRS_SCENESAVE_SELFTEST`
+  (`runSceneObjectsGate`). *Still open:* mesh-asset object reload (skipped with a warning today, a
+  v1.2 follow-up), fluids/MPM buffers, and a fully generic registry-driven component serializer
+  (this pass whitelists the components above rather than walking every component type).
+
 ## Remaining v2 backlog
 
-- Non-robot entities (loose primitives, lights, fluids) in `.kscene` — needs the registry-driven
-  component serializer (the DatabaseManager whitelist problem, done properly / fail-loud on save).
 - Instance-level **overrides** (scene-local sparse deviations from a SHARED library `.krobot`,
   applied on load, orphan-reported when they no longer bind) + a robot library search path. This
   is the step that turns scene-owned robot files into a shared-definition ecosystem.

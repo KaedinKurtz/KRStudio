@@ -104,6 +104,11 @@ nobody uses it; if it Just Shows Up in KRStudio with correct units, it's the sti
 1. **Transport + handshake + one hardcoded channel** — COBS framing, device UUID, JSON announce,
    device timestamps + host clock-sync. Gate: a simulated/loopback device round-trips a descriptor
    + timestamped stream; clock-sync recovers a known offset.
+   **✅ DONE (first pass, host-side codec)** — `krs::ktp` (`include/UtilityHeaders/TelemetryProtocol.hpp`):
+   COBS `cobsEncode`/`cobsDecode` + `FrameReader` streaming resync; self-describing little-endian
+   `Sample` codec; `ktp/1` `Descriptor`/`Channel` JSON handshake with a reorder-stable capability
+   hash; online least-squares `ClockSync`. Gate `KRS_TELEMETRY_SELFTEST` (`runTelemetryGate`) with a
+   corrupt-frame NEG-CTRL. *Still open:* the firmware/device side and node auto-population (step 2).
 2. **Channels → source nodes + reconfiguration** — announced channels auto-populate node outputs;
    PC enable/disable/re-rate. Gate: a fake device's channels appear as nodes with correct units; a
    reconfig RPC changes the stream.

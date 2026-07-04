@@ -130,6 +130,11 @@ nodes (GATE FILTER) to build this from.
 1. **Structural gray-box model + richer schema** — parameterized torque-speed/friction/backlash/
    stiffness, each `{value, provenance, uncertainty}`. Pure physics + manufacturer priors. Gate:
    reproduce a known torque-speed curve + backlash dead-zone from params.
+   **✅ DONE (first pass)** — `krs::act` (`include/PhysicsHeaders/ActuatorModel.hpp`): `Param{value,
+   prov, uncertainty}` + `ActuatorParams`/`ActuatorState`; torque-speed envelope (flat `Kt·Imax`
+   corner → back-EMF droop), Coulomb+viscous+Stribeck friction with direction asymmetry, backlash
+   dead-zone, first-order thermal derate; `describeParams` emits the `{value,source,uncertainty}`
+   view. Gate `KRS_ACTUATOR_SELFTEST` (`runActuatorModelGate`) with an ideal-params NEG-CTRL.
 2. **Runtime integration + confidence ghost** — model as per-joint transfer function; ghost renders
    the uncertainty envelope. Gate: commanded step lags per bandwidth/friction; ghost band brackets.
 3. **Characterization pipeline (offline first)** — `.kdyno` records + fitters that decompose
