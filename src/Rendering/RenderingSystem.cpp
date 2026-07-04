@@ -47,6 +47,7 @@
 #include "KPack.hpp"               // krs::kpack .knodepack cross-user subgraph sharing + gate
 #include "KLut.hpp"                // krs::klut .klut LUT / characterized-data standard object + gate
 #include "Rec.hpp"                 // krs::rec DataTable + CSV/JSON recording format + gate
+#include "DataNodes.hpp"           // krs::datanodes log / import / lut-sample / characterize nodes + gate
 #include "KParts.hpp"              // krs::parts manufacturer library + repository + gate
 #include "FaceMaterial.hpp"        // krs::facemat whole-body/per-face material + gate
 #include "ClearanceLimits.hpp"     // krs::climits self-intersection -> joint limits + gate
@@ -1260,6 +1261,12 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::rec::runRecGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Data ecosystem: log / import / lut-sample / characterize nodes (conditional logging, real-data LUTs).
+    if (qEnvironmentVariableIntValue("KRS_DATANODES_SELFTEST") != 0) {
+        std::printf("\n================= KRS_DATANODES_SELFTEST =================\n");
+        const bool ok = krs::datanodes::runDataNodesGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     if (qEnvironmentVariableIntValue("KRS_MOTION_SELFTEST") != 0) {
         std::printf("\n================= KRS_MOTION_SELFTEST =================\n");
         const bool ok = krs::motion::runMotionPlanGate();
@@ -2158,6 +2165,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE KPACK (share a subgraph + nested closure as one .knodepack; fresh library imports the single file, members register + evaluate; content-dedupe; tamper/major/path-traversal/cycle neg-ctrls)", krs::kpack::runKPackGate() },
             { "GATE KLUT (.klut LUT standard object: 1D linear/cubic + 2D bilinear sampling; clamp/linear extrap; characterizeFromSamples recovers a line; content round-trip; non-monotonic-axis neg-ctrl)", krs::klut::runKLutGate() },
             { "GATE REC (DataTable + CSV/JSON recording: round-trip bit-equal + units; axis-agnostic interpolated sampling; malformed-row-skipped + missing-file + bad-major neg-ctrls)", krs::rec::runRecGate() },
+            { "GATE DATANODES (log node conditional write to auto-created logs/ folder; import node parametric CSV/JSON sampling; lut_sample from .klut; characterize CSV->.klut; disabled-log + missing-file neg-ctrls)", krs::datanodes::runDataNodesGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");

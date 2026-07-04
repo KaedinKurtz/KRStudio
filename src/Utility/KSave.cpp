@@ -833,6 +833,23 @@ ActuatorSpec resolveActuator(const std::string& kactuatorPath)
     sp.jointVelocity = (sp.ratio > 0.0) ? sp.motorMaxSpeed / sp.ratio : 0.0;
     sp.ok = sp.kt > 0.0 && sp.maxCurrent > 0.0 && sp.motorMaxSpeed > 0.0;
     if (!sp.ok && sp.error.isEmpty()) sp.error = QStringLiteral(".kmotor missing Kt/current/speed.");
+
+    // Optional CHARACTERIZED reference: a .klut of real measured behavior. The actuator-level ref (resolved
+    // from the .kactuator's dir) wins; else a motor-level ref (from the .kmotor's dir). Non-fatal on miss.
+    auto loadCharacterized = [&](const QJsonObject& obj, const QDir& baseDir) {
+        const QJsonObject ch = obj["characterized"].toObject();
+        const QString cref = ch["ref"].toString();
+        if (cref.isEmpty()) return;
+        krs::klut::Lut lut; QString cerr;
+        if (krs::klut::loadKLut(baseDir.filePath(cref), lut, &cerr)) {
+            sp.hasCharacterized = true; sp.characterizedLut = std::move(lut);
+            sp.characterizedQuantity = ch["quantity"].toString().toStdString();
+        } else if (sp.error.isEmpty()) {
+            sp.error = QStringLiteral("(warning) characterized .klut: %1").arg(cerr);
+        }
+    };
+    loadCharacterized(ao, QFileInfo(apath).absoluteDir());
+    if (!sp.hasCharacterized) loadCharacterized(mo, QFileInfo(mpath).absoluteDir());
     return sp;
 }
 
@@ -995,6 +1012,25 @@ bool runKSaveGate()
         const double wantVel    = wmax / ratio;              // 8.0 rad/s
         actOk = sp.ok && std::abs(sp.jointEffort - wantEffort) < 1e-9
                       && std::abs(sp.jointVelocity - wantVel) < 1e-9;
+
+        // CHARACTERIZED: reference a real torque-speed .klut from the actuator -> resolveActuator loads it.
+        {
+            krs::klut::Lut curve; curve.name = "torque-speed"; curve.quantity = "torque"; curve.unit = "N*m";
+            krs::klut::Axis ax; ax.name = "speed"; ax.unit = "rad/s"; ax.breakpoints = { 0.0, 4.0, 8.0 };
+            curve.axes = { ax }; curve.values = { 20.0, 10.0, 0.0 };   // stall 20 N*m -> 0 at no-load 8 rad/s
+            krs::klut::saveKLut(curve, QDir(dir).filePath("lib/EC45_torque.klut"));
+            QJsonObject aoc = ao; QJsonObject ch;
+            ch["ref"] = QStringLiteral("EC45_torque.klut"); ch["quantity"] = QStringLiteral("torqueSpeed");
+            aoc["characterized"] = ch; writeJsonFile(apath, aoc);
+            const ActuatorSpec spc = resolveActuator(apath.toStdString());
+            const bool charOk = spc.hasCharacterized && spc.characterizedLut.axes.size() == 1
+                && std::abs(spc.characterizedLut.sample1D(4.0) - 10.0) < 1e-9
+                && spc.characterizedQuantity == "torqueSpeed";
+            printf("[ksave]   actuator CHARACTERIZED .klut ref: loaded=%s real torque@4rad/s=%.2f (want 10)  %s\n",
+                   spc.hasCharacterized ? "yes" : "no",
+                   spc.hasCharacterized ? spc.characterizedLut.sample1D(4.0) : -1.0, charOk ? "PASS" : "FAIL");
+            actOk = actOk && charOk;
+        }
         // NEG-CTRL: a missing .kmotor is refused, not silently zeroed.
         QFile::remove(mpath);
         const ActuatorSpec bad = resolveActuator(apath.toStdString());

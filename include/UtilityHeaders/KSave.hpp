@@ -26,6 +26,7 @@
 #include <vector>
 #include <QString>
 #include <QStringList>
+#include "KLut.hpp"   // krs::klut::Lut -- optional characterized-data reference on an ActuatorSpec
 
 class Scene;
 
@@ -91,6 +92,12 @@ struct ActuatorSpec {
     double kt = 0, maxCurrent = 0, motorMaxSpeed = 0;   // from .kmotor
     double ratio = 1, efficiency = 1;                   // from .kactuator
     double jointEffort = 0, jointVelocity = 0;          // derived joint-side limits
+    // Optional CHARACTERIZED data: a .klut of REAL measured behavior (e.g. torque-speed, Kt-vs-temp)
+    // referenced from the .kactuator (or .kmotor). When present, a consumer can sample the empirical
+    // curve/surface instead of (or alongside) the closed-form Kt*I*ratio derivation above.
+    bool hasCharacterized = false;
+    std::string characterizedQuantity;                  // what the LUT encodes (e.g. "torqueSpeed")
+    krs::klut::Lut characterizedLut;                    // the loaded LUT (query via sample1D/sample2D)
 };
 ActuatorSpec resolveActuator(const std::string& kactuatorPath);
 
