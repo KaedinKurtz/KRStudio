@@ -40,6 +40,12 @@
 #include "FaceMaterial.hpp"        // krs::facemat whole-body/per-face material + gate
 #include "ClearanceLimits.hpp"     // krs::climits self-intersection -> joint limits + gate
 #include "Redundancy.hpp"          // krs::redun null-space redundancy resolution + gate
+#include "CartesianPath.hpp"       // krs::path parametric task-space path + gate
+#include "CartesianFollower.hpp"   // krs::follow redundancy-aware path follower + gate
+#include "TrajectoryTiming.hpp"    // krs::traj time-parameterization + gate
+#include "SkeletonClip.hpp"        // krs::anim BVH skeleton clip + gate
+#include "Retarget.hpp"            // krs::retarget skeleton->robot fit + gate
+#include "BehaviorTree.hpp"        // krs::policy behavior tree + gate
 #include "RaycastService.hpp"      // krs::pick nanort BVH ray/mesh picking gate
 #include "UvAtlasService.hpp"       // krs::uv xatlas per-body UV unwrap gate
 #include "RobotBuilderScene.hpp"   // krs::rbuild demo graph + body->entity render bridge + gate
@@ -1117,6 +1123,39 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::redun::runRedundancyGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
+    }
+
+    // Cinematics stack: Cartesian path, redundancy-aware follower, trajectory timing, skeleton
+    // clip (BVH), motion retargeting, behavior-tree policy. All headless.
+    if (qEnvironmentVariableIntValue("KRS_CARTESIANPATH_SELFTEST") != 0) {
+        std::printf("\n================= KRS_CARTESIANPATH_SELFTEST =================\n");
+        const bool ok = krs::path::runCartesianPathGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_FOLLOWER_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FOLLOWER_SELFTEST =================\n");
+        const bool ok = krs::follow::runFollowerGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_TRAJECTORY_SELFTEST") != 0) {
+        std::printf("\n================= KRS_TRAJECTORY_SELFTEST =================\n");
+        const bool ok = krs::traj::runTrajectoryTimingGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_SKELETON_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SKELETON_SELFTEST =================\n");
+        const bool ok = krs::anim::runSkeletonClipGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_RETARGET_SELFTEST") != 0) {
+        std::printf("\n================= KRS_RETARGET_SELFTEST =================\n");
+        const bool ok = krs::retarget::runRetargetGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_BEHAVIORTREE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_BEHAVIORTREE_SELFTEST =================\n");
+        const bool ok = krs::policy::runBehaviorTreeGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
     // RAYCAST/PICK gate in isolation (fast iteration): nanort BVH ray/mesh picking.
