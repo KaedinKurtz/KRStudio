@@ -36,6 +36,7 @@
 #include "RobotBuilder.hpp"        // krs::rbuild robot-builder gates (Phase 0 recon)
 #include "AuthoringPersist.hpp"    // krs::persist authoring save/load + gate
 #include "KSave.hpp"               // krs::ksave .kscene family + gate
+#include "KParts.hpp"              // krs::parts manufacturer library + repository + gate
 #include "RaycastService.hpp"      // krs::pick nanort BVH ray/mesh picking gate
 #include "UvAtlasService.hpp"       // krs::uv xatlas per-body UV unwrap gate
 #include "RobotBuilderScene.hpp"   // krs::rbuild demo graph + body->entity render bridge + gate
@@ -1079,6 +1080,14 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_KSAVE_SELFTEST") != 0) {
         std::printf("\n================= KRS_KSAVE_SELFTEST =================\n");
         const bool ok = krs::ksave::runKSaveGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Manufacturer parts: library search-path index + repository publish/pull/sync. Headless.
+    if (qEnvironmentVariableIntValue("KRS_KPARTS_SELFTEST") != 0) {
+        std::printf("\n================= KRS_KPARTS_SELFTEST =================\n");
+        const bool ok = krs::parts::runKPartsGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
