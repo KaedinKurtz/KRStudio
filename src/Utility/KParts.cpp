@@ -92,7 +92,13 @@ bool partFormatOk(const QJsonObject& o, PartType t) {
 QStringList standardSearchRoots(const QString& sceneDir) {
     QStringList roots;
     if (!sceneDir.isEmpty()) roots << QDir(sceneDir).filePath(QStringLiteral("parts"));
-    const QByteArray src = qgetenv("KRS_SOURCE_DIR");
+    // Project parts (the shipped starter library): env override first, else the compile-time source
+    // dir (KRS_SOURCE_DIR is defined by CMake), so example .kmotor/.kactuator files under
+    // <repo>/parts are found out of the box.
+    QByteArray src = qgetenv("KRS_SOURCE_DIR");
+#ifdef KRS_SOURCE_DIR
+    if (src.isEmpty()) src = QByteArray(KRS_SOURCE_DIR);
+#endif
     if (!src.isEmpty()) roots << QDir(QString::fromLocal8Bit(src)).filePath(QStringLiteral("parts"));
     const QString userDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     if (!userDir.isEmpty()) roots << QDir(userDir).filePath(QStringLiteral("parts"));
@@ -363,7 +369,22 @@ bool runKPartsGate() {
            !remote->status().connected ? "yes" : "NO", !rerr.isEmpty() ? "yes" : "NO",
            remoteHonest ? "PASS" : "FAIL");
 
-    const bool pass = precedenceOk && repoOk && remoteHonest;
+    // ---- SHIPPED STARTER LIBRARY: the <repo>/parts seed indexes + its actuator chain resolves ----
+    bool seedOk = false;
+    {
+        PartLibrary shipLib;
+        shipLib.setSearchRoots(standardSearchRoots(QString()));   // project (KRS_SOURCE_DIR) + user
+        const int sn = shipLib.rescan();
+        const bool haveMotor = shipLib.findById(QStringLiteral("maxon-ec45flat-70w")) != nullptr;
+        const bool haveActuator = shipLib.findById(QStringLiteral("act-ec45-gp42-100")) != nullptr;
+        const bool haveCamera = !shipLib.byType(PartType::Camera).empty();
+        const bool haveImu = !shipLib.byType(PartType::Imu).empty();
+        seedOk = sn >= 5 && haveMotor && haveActuator && haveCamera && haveImu;
+        printf("[kparts]   shipped starter library: %d parts (motor=%d actuator=%d camera=%d imu=%d)  %s\n",
+               sn, haveMotor, haveActuator, haveCamera, haveImu, seedOk ? "PASS" : "note-only");
+    }
+
+    const bool pass = precedenceOk && repoOk && remoteHonest;   // seedOk is informational (dev tree only)
     printf("[kparts] %s\n", pass ? "ALL PASS (search-path precedence + union; local repo publish/pull/de-dupe/versioning; remote stub honest)"
                                  : "FAILURES PRESENT");
     std::fflush(stdout);

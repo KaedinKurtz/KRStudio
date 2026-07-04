@@ -1,0 +1,12 @@
+{
+    "format": "kmotor/1",
+    "id": "maxon-ec45flat-70w",
+    "name": "EC 45 flat 70W",
+    "manufacturer": "Maxon",
+    "torqueConstant": 0.0335,
+    "maxCurrent": 3.21,
+    "maxSpeed": 733.0,
+    "nominalVoltage": 24.0,
+    "windingResistance": 1.03,
+    "notes": "Brushless flat motor. torqueConstant N*m/A, maxSpeed rad/s (~7000 rpm), maxCurrent A."
+}

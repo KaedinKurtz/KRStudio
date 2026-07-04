@@ -1,0 +1,10 @@
+{
+    "format": "kactuator/1",
+    "id": "act-ec45-gp42-100",
+    "name": "EC45 flat + GP42C 100:1",
+    "manufacturer": "Maxon",
+    "gearRatio": 113.0,
+    "efficiency": 0.72,
+    "motor": { "ref": "../maxon/EC-45-flat-70W.kmotor" },
+    "notes": "Derived joint limits = Kt*Imax*ratio*eff (torque), motorMaxSpeed/ratio (speed). GP42C planetary, 3-stage."
+}

@@ -978,10 +978,14 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() {
-        if (!m_scene) return;
-        if (auto* info = m_scene->getRegistry().ctx().find<krs::ksave::OpenSceneInfo>())
-            if (!info->kscenePath.empty())
-                krs::ksave::saveSessionState(*m_scene, info->kscenePath);
+        if (m_scene)
+            if (auto* info = m_scene->getRegistry().ctx().find<krs::ksave::OpenSceneInfo>())
+                if (!info->kscenePath.empty())
+                    krs::ksave::saveSessionState(*m_scene, info->kscenePath);
+        // .klayout: the dock arrangement (which bays each panel lives in) is a per-USER preference,
+        // separate from the scene -- persist it to QSettings so the workspace comes back as arranged.
+        if (m_dockManager)
+            QSettings().setValue(QStringLiteral("layout/dockState"), m_dockManager->saveState());
     });
 
     // KRS_GHOST_DEMO: drive a joint PAST its limit so the translucent ghost validity robot is visible
@@ -2403,6 +2407,17 @@ MainWindow::MainWindow(QWidget* parent)
         registerPanelDock(QStringLiteral("Robot View"),    rvDock);
 
         physDock->setAsCurrentTab();
+
+        // Restore the user's saved dock arrangement (.klayout) if present -- their panels come back
+        // in whatever bays they dragged them to. Suppressed under any KRS_* env (gates/bench expect
+        // the default layout). A restore failure is harmless: the default arrangement stays.
+        bool krsEnvLayout = false;
+        for (const QString& k : QProcessEnvironment::systemEnvironment().keys())
+            if (k.startsWith(QStringLiteral("KRS_"))) { krsEnvLayout = true; break; }
+        if (!krsEnvLayout) {
+            const QByteArray st = QSettings().value(QStringLiteral("layout/dockState")).toByteArray();
+            if (!st.isEmpty()) m_dockManager->restoreState(st);
+        }
     }
 
     // --- Outliner: tabbed with GridProperties in the right column ---

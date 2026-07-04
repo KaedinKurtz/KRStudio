@@ -1,0 +1,12 @@
+{
+    "format": "kimu/1",
+    "id": "bosch-bmi088",
+    "name": "BMI088",
+    "manufacturer": "Bosch",
+    "accelRangeG": 24.0,
+    "gyroRangeDps": 2000.0,
+    "accelNoiseDensity": 0.00023,
+    "gyroNoiseDensity": 0.014,
+    "sampleRateHz": 400,
+    "notes": "6-axis IMU. Noise densities: accel m/s^2/sqrt(Hz), gyro deg/s/sqrt(Hz)."
+}

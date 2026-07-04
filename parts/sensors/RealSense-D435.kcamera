@@ -1,0 +1,14 @@
+{
+    "format": "kcamera/1",
+    "id": "intel-rs-d435",
+    "name": "RealSense D435",
+    "manufacturer": "Intel",
+    "widthPx": 1280,
+    "heightPx": 720,
+    "hfovDeg": 87.0,
+    "vfovDeg": 58.0,
+    "depthMinM": 0.28,
+    "depthMaxM": 3.0,
+    "fps": 30,
+    "notes": "Stereo depth + RGB. Mount frame is the optical center; +Z out of the lens."
+}

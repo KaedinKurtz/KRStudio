@@ -1,0 +1,9 @@
+{
+    "format": "kmaterial/1",
+    "id": "mat-anodized-al-black",
+    "name": "Anodized Aluminum (black)",
+    "manufacturer": "",
+    "albedo": [0.05, 0.05, 0.06],
+    "metallic": 0.85,
+    "roughness": 0.35
+}

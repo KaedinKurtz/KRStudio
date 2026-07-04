@@ -1,0 +1,12 @@
+{
+    "format": "kmotor/1",
+    "id": "maxon-dcx22s",
+    "name": "DCX 22 S",
+    "manufacturer": "Maxon",
+    "torqueConstant": 0.0212,
+    "maxCurrent": 2.9,
+    "maxSpeed": 942.0,
+    "nominalVoltage": 12.0,
+    "windingResistance": 0.72,
+    "notes": "Brushed DC. Pair with a GPX gearbox in a .kactuator to derive joint torque/speed."
+}
