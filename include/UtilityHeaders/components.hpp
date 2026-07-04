@@ -570,6 +570,21 @@ struct BRepFace {
 };
 struct BRepFaceComponent { std::vector<BRepFace> faces; };  // indexed: faces[triFace[triangle]]
 
+// PER-FACE MATERIAL OVERRIDE (the "color just this face" mode). A body's MaterialComponent is the
+// WHOLE-body look; this maps a picked B-Rep face id -> a PBR override painted onto just that face.
+// Render is via generated overlay sub-meshes (krs::facemat::rebuildFaceOverlays) -- the face's
+// triangles, offset a hair along their normal, as a child entity with the override MaterialComponent
+// -- so no gbuffer/vertex-format change is needed. The map is the source of truth; overlays derive.
+struct FaceMaterial {
+    glm::vec3 albedo    = glm::vec3(0.8f);
+    float     metallic  = 0.0f;
+    float     roughness = 0.5f;
+};
+struct FaceMaterialComponent {
+    std::unordered_map<int, FaceMaterial> byFace;     // B-Rep face id -> override
+    std::vector<std::uint32_t> overlayEntities;       // generated overlay children (entt ids as u32)
+};
+
 // ===================== PERSISTENT MATE CONNECTORS (Onshape-style) =====================
 // A MateConnector is a durable, body-LOCAL oriented frame rigidly attached to a body's geometry. It is
 // NEVER stored in world coords -- it moves with the body for free, which kills the world-anchored joint-
