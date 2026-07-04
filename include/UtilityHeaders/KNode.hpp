@@ -16,15 +16,17 @@
 #include <string>
 #include <vector>
 #include <QString>
+#include <QJsonObject>
 
 namespace krs::knode {
 
-// One interior node: its factory type-id + saved parameter/literal blob (opaque JSON string). The
-// geometry (canvas x/y) is UI-only and kept for faithful reconstruction.
+// One interior node: its factory type-id + its FULL restorable state as a structured record (the
+// krs::kdoc node object: typed params/literals + reconfigure selection + update policy -- lossless,
+// human-diffable, NOT an opaque blob). Geometry (canvas x/y) is UI-only, kept for faithful rebuild.
 struct InteriorNode {
     QString id;                 // stable-within-doc node id
-    QString typeId;             // NodeFactory type id (e.g. "logic_compare", or "knode:<uuid>" for a nested subgraph)
-    QString paramsJson;         // opaque JSON object of params/literals (round-tripped verbatim)
+    QString typeId;             // NodeFactory type id (e.g. "gen_sine", or "knode:<uuid>" for a nested subgraph)
+    QJsonObject state;          // krs::kdoc::nodeToJson record (params/literals/namedOption/policy)
     double  x = 0.0, y = 0.0;   // canvas position (UI)
 };
 
@@ -40,15 +42,22 @@ struct ExposedPort {
     QString interiorNode;       // interior node id it connects to
     QString interiorPort;       // that node's port name
     bool    isInput = true;     // true = subgraph input (feeds interior), false = output (from interior)
+    QString dataType;           // canonical port type name (PortTypes) so the outer port keeps its type
 };
+
+// A nested subgraph dependency: an interior node typed "knode:<uuid>" whose definition is itself a
+// .knode. Referenced by the content-addressed triple; Phase 5 resolves these + a pack bundles them.
+struct NestedRef { QString ref; QString id; QString contentHash; };
 
 struct KNodeDoc {
     QString id;                 // stable uuid (minted on save if empty)
     QString name;               // "PID + Clamp"
     QString category;           // palette grouping, e.g. "Control"
+    int     revision = 1;       // schema revision within the knode major (in-place schema evolution)
     std::vector<InteriorNode> nodes;
     std::vector<Connection>   connections;
     std::vector<ExposedPort>  ports;        // ordered; inputs then outputs as authored
+    std::vector<NestedRef>    nested;       // nested subgraph deps (knode:<uuid> interiors), content-addressed
 
     std::vector<ExposedPort> inputs()  const;   // ports with isInput==true, in order
     std::vector<ExposedPort> outputs() const;   // ports with isInput==false, in order

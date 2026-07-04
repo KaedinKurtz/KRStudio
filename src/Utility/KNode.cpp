@@ -1,6 +1,9 @@
 // KNode.cpp -- see KNode.hpp. The .knode subgraph document model + versioned JSON round-trip.
 #include "KNode.hpp"
 #include "KParts.hpp"
+#include "KDoc.hpp"          // the shared Node<->JSON codec the interior-node `state` records use
+#include "Node.hpp"          // gate: build interior state from real live nodes
+#include "NodeFactory.hpp"   // gate: createNode
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -12,6 +15,7 @@
 #include <QUuid>
 
 #include <cstdio>
+#include <cmath>
 #include <set>
 
 namespace krs::knode {
@@ -55,11 +59,6 @@ QString fileSha1(const QString& path) {
     if (!f.open(QIODevice::ReadOnly)) return {};
     return QString::fromLatin1(QCryptographicHash::hash(f.readAll(), QCryptographicHash::Sha1).toHex());
 }
-QJsonObject paramsToJson(const QString& blob) {
-    if (blob.isEmpty()) return {};
-    const QJsonDocument d = QJsonDocument::fromJson(blob.toUtf8());
-    return d.isObject() ? d.object() : QJsonObject{};
-}
 } // namespace
 
 QString saveKNode(KNodeDoc& doc, const QString& absPath) {
@@ -67,10 +66,11 @@ QString saveKNode(KNodeDoc& doc, const QString& absPath) {
     QJsonObject root;
     root["format"] = QStringLiteral("knode/1");
     root["id"] = doc.id; root["name"] = doc.name; root["category"] = doc.category;
+    root["revision"] = doc.revision;
     QJsonArray nodes;
     for (const auto& n : doc.nodes) {
         QJsonObject o; o["id"] = n.id; o["typeId"] = n.typeId; o["x"] = n.x; o["y"] = n.y;
-        o["params"] = paramsToJson(n.paramsJson);   // embed as a real object (round-trips + human-diffable)
+        o["state"] = n.state;   // structured krs::kdoc node record (typed params/literals/namedOption/policy)
         nodes.push_back(o);
     }
     root["nodes"] = nodes;
@@ -84,9 +84,16 @@ QString saveKNode(KNodeDoc& doc, const QString& absPath) {
     for (const auto& p : doc.ports) {
         QJsonObject o; o["name"] = p.name; o["node"] = p.interiorNode; o["port"] = p.interiorPort;
         o["dir"] = p.isInput ? QStringLiteral("in") : QStringLiteral("out");
+        if (!p.dataType.isEmpty()) o["dataType"] = p.dataType;
         ports.push_back(o);
     }
     root["ports"] = ports;
+    QJsonArray nested;                          // nested subgraph deps (content-addressed triples)
+    for (const auto& nr : doc.nested) {
+        QJsonObject o; o["ref"] = nr.ref; o["id"] = nr.id; o["contentHash"] = nr.contentHash;
+        nested.push_back(o);
+    }
+    root["nested"] = nested;
 
     QDir().mkpath(QFileInfo(absPath).absolutePath());
     QFile f(absPath);
@@ -109,11 +116,12 @@ bool loadKNode(const QString& absPath, KNodeDoc& out, QString* err) {
 
     KNodeDoc doc;
     doc.id = root["id"].toString(); doc.name = root["name"].toString(); doc.category = root["category"].toString();
+    doc.revision = root["revision"].toInt(1);
     for (const QJsonValue& v : root["nodes"].toArray()) {
         const QJsonObject o = v.toObject();
         InteriorNode n; n.id = o["id"].toString(); n.typeId = o["typeId"].toString();
         n.x = o["x"].toDouble(); n.y = o["y"].toDouble();
-        n.paramsJson = QString::fromUtf8(QJsonDocument(o["params"].toObject()).toJson(QJsonDocument::Compact));
+        n.state = o["state"].toObject();   // structured kdoc record (verbatim; applied to a live node by materialize)
         doc.nodes.push_back(std::move(n));
     }
     for (const QJsonValue& v : root["connections"].toArray()) {
@@ -126,7 +134,13 @@ bool loadKNode(const QString& absPath, KNodeDoc& out, QString* err) {
         const QJsonObject o = v.toObject();
         ExposedPort p; p.name = o["name"].toString(); p.interiorNode = o["node"].toString();
         p.interiorPort = o["port"].toString(); p.isInput = (o["dir"].toString() != QLatin1String("out"));
+        p.dataType = o["dataType"].toString();
         doc.ports.push_back(p);
+    }
+    for (const QJsonValue& v : root["nested"].toArray()) {
+        const QJsonObject o = v.toObject();
+        NestedRef nr; nr.ref = o["ref"].toString(); nr.id = o["id"].toString(); nr.contentHash = o["contentHash"].toString();
+        doc.nested.push_back(nr);
     }
     QString why;
     if (!doc.valid(&why)) return fail(QStringLiteral("invalid .knode document: %1").arg(why));
@@ -140,46 +154,63 @@ bool loadKNode(const QString& absPath, KNodeDoc& out, QString* err) {
 bool runKNodeGate() {
     using std::printf;
     setvbuf(stdout, nullptr, _IONBF, 0);
-    printf("[knode] GATE KNODE -- subgraph document round-trip + content hash + library index + validity\n");
+    printf("[knode] GATE KNODE -- subgraph .knode on the kdoc codec: LOSSLESS typed params/reconfigure + content hash + library index\n");
     const QString dir = QDir::temp().filePath("krs_knode_gate");
     QDir(dir).removeRecursively();
     const QString path = QDir(dir).filePath("PID_Clamp.knode");
+    auto& F = NodeFactory::instance();
 
-    // Author a subgraph: a Compare feeds an If; two exposed inputs, one exposed output.
+    // Author a subgraph from REAL live nodes, each serialized through the kdoc codec (not a hand blob):
+    // gen_sine (typed double params) -> twin_property (a reconfigured port layout + namedOption).
+    auto sine = F.createNode("gen_sine");
+    auto prop = F.createNode("twin_property");
+    if (!sine || !prop) { printf("[knode]   createNode returned null -- FAIL\n"); return false; }
+    sine->setParam<double>("freq", 2.5); sine->setParam<double>("amp", 1.5);
+    prop->selectNamedOption("orientation");                      // -> Quat layout (a Quaternion output port)
+
     KNodeDoc doc; doc.name = "PID + Clamp"; doc.category = "Control";
-    doc.nodes.push_back({ "n1", "logic_compare", R"({"op":"gt","threshold":0.5})", 0, 0 });
-    doc.nodes.push_back({ "n2", "flow_if",       R"({})",                          120, 0 });
-    doc.connections.push_back({ "n1", "Result", "n2", "Condition" });
-    doc.ports.push_back({ "value",  "n1", "A",    true  });   // input
-    doc.ports.push_back({ "enable", "n2", "In",   true  });   // input
-    doc.ports.push_back({ "out",    "n2", "True", false });   // output
+    doc.nodes.push_back({ "n1", "gen_sine",      krs::kdoc::nodeToJson(*sine, "gen_sine"),      0,   0 });
+    doc.nodes.push_back({ "n2", "twin_property", krs::kdoc::nodeToJson(*prop, "twin_property"), 120, 0 });
+    doc.connections.push_back({ "n1", "Out", "n2", "Object" });
+    doc.ports.push_back({ "freq_in", "n1", "t",          true,  "double"    });   // typed input
+    doc.ports.push_back({ "orient",  "n2", "Quaternion", false, "glm::quat" });   // typed output
+    doc.nested.push_back({ "lib/common_filter.knode", "filt-uuid", "deadbeef" }); // a nested dep ref
 
     const bool structOk = doc.valid();
     const QString id = saveKNode(doc, path);
     const QString h1 = fileSha1(path);
     const bool saved = !id.isEmpty() && QFile::exists(path) && !h1.isEmpty();
 
-    // Round-trip: reload and compare structure.
+    // Reload: structure + exposed-port TYPES + nested refs survive.
     KNodeDoc r; QString err;
     const bool loaded = loadKNode(path, r, &err);
-    const bool roundtrip = loaded && r.id == doc.id && r.name == doc.name
-        && r.nodes.size() == 2 && r.connections.size() == 1 && r.ports.size() == 3
-        && r.nodes[0].typeId == "logic_compare"
-        && r.connections[0].fromPort == "Result" && r.connections[0].toPort == "Condition"
-        && r.inputs().size() == 2 && r.outputs().size() == 1
-        && r.outputs()[0].name == "out";
-    // params round-trip (the opaque blob survives as an object)
-    const bool paramsOk = loaded && r.nodes[0].paramsJson.contains("threshold");
-    printf("[knode]   round-trip: valid=%s saved=%s reload struct-matches=%s params-kept=%s  %s\n",
-           structOk?"yes":"no", saved?"yes":"no", roundtrip?"yes":"no", paramsOk?"yes":"no",
-           (structOk && saved && roundtrip && paramsOk) ? "PASS" : "FAIL");
+    const bool structMatch = loaded && r.id == doc.id && r.name == doc.name && r.revision == 1
+        && r.nodes.size() == 2 && r.connections.size() == 1 && r.ports.size() == 2 && r.nested.size() == 1
+        && r.nodes[0].typeId == "gen_sine"
+        && r.outputs().size() == 1 && r.outputs()[0].dataType == "glm::quat"        // exposed-port type survives
+        && r.nested[0].contentHash == "deadbeef";                                    // nested dep ref survives
 
-    // Content-hash change detection: edit the doc + resave -> different hash (recognize-as-different).
-    r.nodes[0].paramsJson = R"({"op":"lt","threshold":0.9})";
+    // THE upgrade over the old opaque blob: the interior `state` reconstructs a LIVE node losslessly.
+    bool sineOk = false, propOk = false;
+    if (loaded) {
+        auto s2 = F.createNode("gen_sine");
+        if (s2) { krs::kdoc::applyJsonToNode(*s2, r.nodes[0].state, nullptr);
+                  sineOk = std::abs(s2->getParam<double>("freq", 0.0) - 2.5) < 1e-12; }
+        auto p2 = F.createNode("twin_property");
+        if (p2) { krs::kdoc::applyJsonToNode(*p2, r.nodes[1].state, nullptr);
+                  for (const auto& pr : p2->getPorts()) if (pr.name == "Quaternion") propOk = true; }  // namedOption survived
+    }
+    printf("[knode]   round-trip: valid=%s saved=%s struct+types+nested-match=%s ; kdoc state rebuilds live node (freq=2.5=%s reconfigure=%s)  %s\n",
+           structOk?"yes":"no", saved?"yes":"no", structMatch?"yes":"no", sineOk?"yes":"no", propOk?"yes":"no",
+           (structOk && saved && structMatch && sineOk && propOk) ? "PASS" : "FAIL");
+
+    // Content-hash change detection: edit an interior param + resave -> different hash.
+    sine->setParam<double>("freq", 9.9);
+    r.nodes[0].state = krs::kdoc::nodeToJson(*sine, "gen_sine");
     saveKNode(r, path);
     const QString h2 = fileSha1(path);
     const bool hashChanged = (h2 != h1) && !h2.isEmpty();
-    printf("[knode]   content hash changes on edit=%s  %s\n", hashChanged?"yes":"NO", hashChanged?"PASS":"FAIL");
+    printf("[knode]   content hash changes on interior edit=%s  %s\n", hashChanged?"yes":"NO", hashChanged?"PASS":"FAIL");
 
     // Library indexes .knode as PartType::Node.
     krs::parts::PartLibrary lib;
@@ -201,9 +232,9 @@ bool runKNodeGate() {
            danglingRejected?"yes":"NO", corruptRefused?"yes":"NO",
            (danglingRejected && corruptRefused) ? "REJECTS(non-vacuous)" : "VACUOUS!");
 
-    const bool pass = structOk && saved && roundtrip && paramsOk && hashChanged && indexed
+    const bool pass = structOk && saved && structMatch && sineOk && propOk && hashChanged && indexed
                    && danglingRejected && corruptRefused;
-    printf("[knode] %s\n", pass ? "ALL PASS (subgraph .knode round-trips; content-hash change detection; library-indexed as Node; dangling/corrupt refused)"
+    printf("[knode] %s\n", pass ? "ALL PASS (subgraph .knode round-trips LOSSLESS typed state via kdoc -- rebuilds live nodes incl. reconfigure; exposed-port types + nested refs survive; content-hash detection; library-indexed as Node; dangling/corrupt refused)"
                                 : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;
