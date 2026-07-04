@@ -150,6 +150,8 @@ public:
         if (t != m_outType) changePorts([this, t] { setOutputPorts(t); });
     }
     bool selectNamedOption(const std::string& opt) override { selectProperty(opt); return true; }
+    // Report the current selection so a serializer can re-drive selectNamedOption on load (rebuilds ports).
+    std::string namedOption() const override { return getParam<std::string>("prop", std::string()); }
 
     void compute() override {
         // reset outputs first: an early-return must leave NO stale output packet.

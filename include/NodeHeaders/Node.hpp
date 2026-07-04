@@ -330,6 +330,11 @@ public:
     // in-node combo uses, so it may reconfigure ports. Default no-op; lets tests + a restored param re-apply.
     virtual bool selectNamedOption(const std::string& /*option*/) { return false; }
 
+    // The READ side of selectNamedOption: a reconfigurable node reports its CURRENT named selection so a
+    // serializer (krs::kdoc) can persist it and, on load, re-drive selectNamedOption to rebuild the exact
+    // port layout BEFORE port literals + connections are restored. Empty => a fixed-port node (no reconfig).
+    virtual std::string namedOption() const { return {}; }
+
     // --- Phase 1 node PARAMETERS: tunable internal state that is NOT a wired input port. An in-node
     //     widget (slider/dial/spinbox) binds to a param by name and writes it via setParam(); compute()
     //     reads it via getParam(). This is the behaviorally-meaningful, headless-gateable layer of the
