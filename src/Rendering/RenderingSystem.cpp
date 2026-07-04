@@ -48,6 +48,7 @@
 #include "BehaviorTree.hpp"        // krs::policy behavior tree + gate
 #include "KNode.hpp"               // krs::knode subgraph/.knode custom nodes + gate
 #include "MotionPlan.hpp"          // krs::motion path->follower->timing pipeline + gate
+#include "MotionBehavior.hpp"      // krs::motion behavior-tree motion execution + gate
 #include "RaycastService.hpp"      // krs::pick nanort BVH ray/mesh picking gate
 #include "UvAtlasService.hpp"       // krs::uv xatlas per-body UV unwrap gate
 #include "RobotBuilderScene.hpp"   // krs::rbuild demo graph + body->entity render bridge + gate
@@ -1167,6 +1168,11 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_MOTION_SELFTEST") != 0) {
         std::printf("\n================= KRS_MOTION_SELFTEST =================\n");
         const bool ok = krs::motion::runMotionPlanGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    if (qEnvironmentVariableIntValue("KRS_MOTIONBEHAVIOR_SELFTEST") != 0) {
+        std::printf("\n================= KRS_MOTIONBEHAVIOR_SELFTEST =================\n");
+        const bool ok = krs::motion::runMotionBehaviorGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
 
