@@ -334,8 +334,11 @@ public:
 
     // --- Phase 5 live-backend bridge: the graph runner injects the active Scene so a node's
     //     compute() can read/write the real ECS registry (e.g. a SceneContext source node emits
-    //     the registry pointer the Physics nodes consume). Injected, never owned. ---
-    void setScene(Scene* s) { m_scene = s; }
+    //     the registry pointer the Physics nodes consume). Injected, never owned.
+    //     VIRTUAL so container nodes (SubgraphNode) can PROPAGATE the scene into their interior
+    //     nodes -- without this an interior drive node's `if (!m_scene) return` leaves a subgraph
+    //     unable to actuate anything. ---
+    virtual void setScene(Scene* s) { m_scene = s; }
     Scene* scene() const { return m_scene; }
 
     // --- Runtime PORT reconfiguration. A node whose port SET depends on runtime state (e.g. the Property

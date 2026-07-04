@@ -156,4 +156,42 @@ namespace {
     static ArticulationDriveRegistrar g_articulationDriveRegistrar;
 }
 
+// ---- ConfigDriveNode: a WHOLE joint_config -> per-DOF robot-keyed bus entries (Process&Skills P0) ----
+// The missing consumer: ik_target / the OMPL planner emit a joint_config (a bare Eigen::VectorXd --
+// positional, NO joint names) as port DATA, but nothing drove the bus with it. This node fans a config
+// out as setEntry(robotId, i, q[i]) on the ROBOT-KEYED lane (index i == DOF i of THAT robot, the same
+// convention LiveRobot::q uses), re-asserted every eval pass -- so a planned/IK pose actually moves a
+// robot, without cross-talk, and releases to manual control when disconnected.
+namespace {
+    class ConfigDriveNode : public Node {
+    public:
+        ConfigDriveNode() {
+            m_id = "physics_config_drive";
+            m_ports.push_back({ "Config", { "joint_config", "handle" }, Port::Direction::Input, this });
+            m_ports.push_back({ "Robot",  { "int", "id" },              Port::Direction::Input, this });
+            setPortLiteral<int>("Robot", 0);
+        }
+        void compute() override {
+            if (!m_scene) return;
+            auto cfg = getInput<Eigen::VectorXd>("Config");
+            if (!cfg || cfg->size() == 0) return;      // disconnected/empty -> commands nothing (releases)
+            const int robotId = getInput<int>("Robot").value_or(0);
+            auto& reg = m_scene->getRegistry();
+            ArticulationCommandComponent* cmd = reg.ctx().find<ArticulationCommandComponent>();
+            if (!cmd) cmd = &reg.ctx().emplace<ArticulationCommandComponent>();
+            for (int i = 0; i < cfg->size(); ++i)
+                cmd->setEntry(robotId, i, float((*cfg)[i]));
+        }
+    };
+    struct ConfigDriveRegistrar {
+        ConfigDriveRegistrar() {
+            NodeDescriptor desc = { "Drive Config", "Physics/Actions",
+                "Drives a whole joint_config onto ONE robot's DOFs via the robot-keyed command bus (index i -> DOF i)." };
+            NodeFactory::instance().registerNodeType("physics_config_drive", desc,
+                []() { return std::make_unique<ConfigDriveNode>(); });
+        }
+    };
+    static ConfigDriveRegistrar g_configDriveRegistrar;
+}
+
 } // namespace NodeLibrary

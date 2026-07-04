@@ -32,6 +32,14 @@ public:
     bool needsExecutionControls() const override { return false; }
     int  interiorCount() const { return int(m_interior.size()); }   // instantiated (non-skipped) interior nodes
 
+    // Propagate the live scene into every interior node (recursively, since an interior may itself be
+    // a SubgraphNode). Without this an interior scene-writing node (e.g. physics_articulation_drive)
+    // early-outs on !m_scene and the subgraph cannot actuate.
+    void setScene(Scene* s) override {
+        Node::setScene(s);
+        for (auto& n : m_interior) if (n) n->setScene(s);
+    }
+
 private:
     void evalInterior();
     krs::knode::KNodeDoc                 m_doc;
@@ -48,5 +56,12 @@ int registerDiscoveredKNodes(krs::parts::PartLibrary& lib);
 // the flattened math; a NESTED subgraph (one used inside another) yields the 2-level result; NEG-CTRL:
 // a self-referential/cyclic definition is instantiated safely (cyclic interior omitted), never wedged.
 bool runSubgraphGate();
+
+// Headless gate (KRS_SUBGRAPHACT_SELFTEST) -- Process & Skills P0, subgraph ACTUATION: a subgraph
+// containing a drive node writes the command bus ONLY after setScene propagates into its interior
+// (before: nothing -- the !m_scene early-out is real); propagation recurses into a NESTED subgraph;
+// the new physics_config_drive fans a whole joint_config onto the ROBOT-KEYED lane (index i -> DOF i
+// of the chosen robot); NEG-CTRL: a disconnected Config commands nothing (the DOFs release).
+bool runSubgraphActuationGate();
 
 } // namespace krs::nodes

@@ -6,8 +6,11 @@
 #include "NodeFactory.hpp"
 #include "KDoc.hpp"
 #include "KParts.hpp"
+#include "Scene.hpp"        // actuation gate: the live registry the command bus lives on
+#include "components.hpp"   // actuation gate: ArticulationCommandComponent
 
 #include <QString>
+#include <Eigen/Core>
 
 #include <cstdio>
 #include <cmath>
@@ -213,6 +216,109 @@ bool runSubgraphGate() {
 
     printf("[subgraph] %s\n", allOk ? "ALL PASS (knode:<id> subgraph instantiates + evaluates its interior; nests to the 2-level result; a cyclic definition is instantiated safely, not wedged)"
                                     : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return allOk;
+}
+
+// ================================================================================================
+// GATE SUBGRAPH-ACTUATION (Process & Skills P0) -- a subgraph drives the command bus.
+// ================================================================================================
+bool runSubgraphActuationGate() {
+    using std::printf;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[sgact] GATE SUBGRAPH-ACTUATION -- setScene propagates into subgraph interiors; joint_config fans onto the keyed bus\n");
+    auto& F = NodeFactory::instance();
+    bool allOk = true;
+
+    // ---- (1) a subgraph containing a drive node actuates ONLY once the scene propagates ----
+    Scene scene; auto& reg = scene.getRegistry();
+    {
+        // interior: a physics_articulation_drive with literals (legacy positional lane: Joint 2, Angle 0.7).
+        auto drv = F.createNode("physics_articulation_drive");
+        if (!drv) { printf("[sgact]   physics_articulation_drive missing -- FAIL\n"); return false; }
+        drv->setPortLiteral<float>("Angle", 0.7f);
+        drv->setPortLiteral<int>("Joint", 2);
+        KNodeDoc A; A.id = "sgactA"; A.name = "DriveWrap"; A.category = "Custom";
+        { krs::knode::InteriorNode m; m.id = "d"; m.typeId = "physics_articulation_drive";
+          m.state = krs::kdoc::nodeToJson(*drv, "physics_articulation_drive"); A.nodes.push_back(m); }
+
+        SubgraphNode sg(A);
+        sg.process();                                     // NO scene yet -> interior early-outs, bus untouched
+        const auto* preCmd = reg.ctx().find<ArticulationCommandComponent>();
+        const bool preClean = !preCmd || (preCmd->target.empty() && preCmd->entries.empty());
+
+        sg.setScene(&scene);                              // the P0 fix: propagate into the interior
+        sg.process();
+        const auto* cmd = reg.ctx().find<ArticulationCommandComponent>();
+        const bool drove = cmd && int(cmd->target.size()) > 2
+            && std::abs(cmd->target[2] - 0.7f) < 1e-6f && cmd->driven[2] == 1;
+        const bool ok = preClean && drove;
+        printf("[sgact]   (1) subgraph drive: pre-scene bus untouched=%d ; post-setScene target[2]=%.3f driven=%d  %s\n",
+               int(preClean), (cmd && int(cmd->target.size()) > 2) ? cmd->target[2] : -1.0f,
+               (cmd && int(cmd->driven.size()) > 2) ? int(cmd->driven[2]) : -1, ok ? "PASS" : "FAIL");
+        allOk = allOk && ok;
+    }
+
+    // ---- (2) propagation RECURSES into a nested subgraph ----
+    {
+        Scene s2; auto& r2 = s2.getRegistry();
+        auto drv = F.createNode("physics_articulation_drive");
+        drv->setPortLiteral<float>("Angle", 1.1f);
+        drv->setPortLiteral<int>("Joint", 0);
+        KNodeDoc A; A.id = "sgactInner"; A.name = "Inner"; A.category = "Custom";
+        { krs::knode::InteriorNode m; m.id = "d"; m.typeId = "physics_articulation_drive";
+          m.state = krs::kdoc::nodeToJson(*drv, "physics_articulation_drive"); A.nodes.push_back(m); }
+        F.registerNodeType("knode:sgactInner", { "Inner", "Custom", "gate" }, [A]() { return std::make_unique<SubgraphNode>(A); });
+        KNodeDoc B; B.id = "sgactOuter"; B.name = "Outer"; B.category = "Custom";
+        { krs::knode::InteriorNode m; m.id = "a"; m.typeId = "knode:sgactInner"; B.nodes.push_back(m); }
+
+        SubgraphNode outer(B);
+        outer.setScene(&s2);                              // must reach the drive node TWO levels down
+        outer.process();
+        const auto* cmd = r2.ctx().find<ArticulationCommandComponent>();
+        const bool ok = cmd && !cmd->target.empty() && std::abs(cmd->target[0] - 1.1f) < 1e-6f && cmd->driven[0] == 1;
+        printf("[sgact]   (2) NESTED propagation: 2-level-deep drive wrote target[0]=%.3f  %s\n",
+               (cmd && !cmd->target.empty()) ? cmd->target[0] : -1.0f, ok ? "PASS" : "FAIL");
+        allOk = allOk && ok;
+    }
+
+    // ---- (3) physics_config_drive: a whole joint_config -> per-DOF ROBOT-KEYED entries ----
+    {
+        Scene s3; auto& r3 = s3.getRegistry();
+        auto n = F.createNode("physics_config_drive");
+        if (!n) { printf("[sgact]   physics_config_drive missing -- FAIL\n"); return false; }
+        n->setScene(&s3);
+        Eigen::VectorXd q(3); q << 0.1, 0.2, 0.3;
+        PortDataPacket pk; pk.data = q; pk.type = { "joint_config", "handle" };
+        n->setInput("Config", pk);
+        n->setPortLiteral<int>("Robot", 1);
+        n->process();
+        const auto* cmd = r3.ctx().find<ArticulationCommandComponent>();
+        bool ok = cmd && cmd->entries.size() == 3;
+        if (ok) for (int i = 0; i < 3; ++i) {
+            bool found = false;
+            for (const auto& e : cmd->entries)
+                if (e.robotId == 1 && e.dof == i && std::abs(e.target - float(q[i])) < 1e-6f) found = true;
+            ok = ok && found;
+        }
+        printf("[sgact]   (3) config fan-out: %d keyed entries for robot 1 (want 3, index i -> dof i)  %s\n",
+               cmd ? int(cmd->entries.size()) : -1, ok ? "PASS" : "FAIL");
+        allOk = allOk && ok;
+
+        // NEG-CTRL: a fresh node with NO Config input commands nothing (the DOFs release).
+        auto n2 = F.createNode("physics_config_drive");
+        n2->setScene(&s3);
+        cmd ? (void)r3.ctx().find<ArticulationCommandComponent>()->clearForEvalPass() : (void)0;
+        n2->process();
+        const auto* cmd2 = r3.ctx().find<ArticulationCommandComponent>();
+        const bool negOk = !cmd2 || cmd2->entries.empty();
+        printf("[sgact]   NEG-CTRL disconnected Config commands nothing=%d  %s\n",
+               int(negOk), negOk ? "REJECTS(non-vacuous)" : "VACUOUS!");
+        allOk = allOk && negOk;
+    }
+
+    printf("[sgact] %s\n", allOk ? "ALL PASS (setScene propagates into (nested) subgraph interiors so they actuate; joint_config fans onto the robot-keyed bus; disconnected releases)"
+                                 : "FAILURES PRESENT");
     std::fflush(stdout);
     return allOk;
 }

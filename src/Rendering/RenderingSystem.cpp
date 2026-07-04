@@ -1243,6 +1243,12 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::nodes::runSubgraphGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Process & Skills P0: subgraph interiors actuate (setScene propagation) + joint_config -> keyed bus.
+    if (qEnvironmentVariableIntValue("KRS_SUBGRAPHACT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SUBGRAPHACT_SELFTEST =================\n");
+        const bool ok = krs::nodes::runSubgraphActuationGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     // Subgraph sharing: bundle a subgraph + nested closure as a portable .knodepack + cross-user import.
     if (qEnvironmentVariableIntValue("KRS_KPACK_SELFTEST") != 0) {
         std::printf("\n================= KRS_KPACK_SELFTEST =================\n");
@@ -2166,6 +2172,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE KLUT (.klut LUT standard object: 1D linear/cubic + 2D bilinear sampling; clamp/linear extrap; characterizeFromSamples recovers a line; content round-trip; non-monotonic-axis neg-ctrl)", krs::klut::runKLutGate() },
             { "GATE REC (DataTable + CSV/JSON recording: round-trip bit-equal + units; axis-agnostic interpolated sampling; malformed-row-skipped + missing-file + bad-major neg-ctrls)", krs::rec::runRecGate() },
             { "GATE DATANODES (log node conditional write to auto-created logs/ folder; import node parametric CSV/JSON sampling; lut_sample from .klut; characterize CSV->.klut; disabled-log + missing-file neg-ctrls)", krs::datanodes::runDataNodesGate() },
+            { "GATE SUBGRAPH-ACTUATION (setScene propagates into (nested) subgraph interiors so drive nodes actuate; physics_config_drive fans a joint_config onto the robot-keyed bus; disconnected-releases neg-ctrl)", krs::nodes::runSubgraphActuationGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
