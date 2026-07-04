@@ -291,6 +291,30 @@ public:
         }
     }
 
+    // --- type-erased packet plumbing (SUBGRAPH boundary marshaling): move whole PortDataPackets
+    //     across a boundary without knowing the payload type. setInput() (above) is the input side. ---
+    // An output port's current packet (after process()), or nullptr.
+    const PortDataPacket* outputPacket(const std::string& name) const {
+        for (const auto& p : m_ports)
+            if (p.direction == Port::Direction::Output && p.name == name && p.packet.has_value()) return &*p.packet;
+        return nullptr;
+    }
+    // An input port's live value: the connection packet if present, else the in-node literal, or nullptr.
+    const PortDataPacket* inputValue(const std::string& name) const {
+        for (const auto& p : m_ports)
+            if (p.direction == Port::Direction::Input && p.name == name) {
+                if (p.packet.has_value())       return &*p.packet;
+                if (p.literalValue.has_value()) return &*p.literalValue;
+                return nullptr;
+            }
+        return nullptr;
+    }
+    // Publish a whole packet onto an output port (marshal a subgraph interior output outward).
+    void setOutputPacket(const std::string& name, const PortDataPacket& pk) {
+        for (auto& p : m_ports)
+            if (p.direction == Port::Direction::Output && p.name == name) { p.packet = pk; return; }
+    }
+
     // Declare an ENUM input port: an in-node combo of `options`; the selection is stored as the port's
     // int-index literal and read by compute via getInput<int>(name). A wire still overrides the combo.
     void addEnumInputPort(const std::string& name, const std::vector<std::string>& options) {
