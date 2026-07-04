@@ -113,12 +113,52 @@ Nothing silently rebinds; nothing partially applies a definition.
 - Robots without a rebuildable source (e.g. a split-off branch) are skipped at save with a
   warning — re-merge before saving, or wait for durable BodyId (v2) which lifts this.
 
-## Known v1 limits (the v2 backlog)
+## Parts ecosystem (`krs::parts`, shipped — `KRS_KPARTS_SELFTEST`)
 
-- Non-robot entities (loose primitives, lights, fluids) are not yet in `.kscene` — needs the
-  registry-driven component serializer.
-- No instance-level **overrides** yet (scene-local deviations from a shared `.krobot`); today the
-  scene folder owns its robot files. Overrides + a library search path (scene → project → user)
-  are the ecosystem step, together with `.kactuator`/`.kmotor` vendor files.
-- Split-off robots aren't savable until bodies carry durable ids independent of a rebuild source.
-- `.klayout` (ADS dock state) is separate from `.kscene` by design; not yet written.
+Reusable component definitions, same reference/hash rules as the scene family:
+
+- `.kmotor` — vendor datasheet motor (`torqueConstant`, `maxCurrent`, `maxSpeed`, …).
+- `.kactuator` — motor + gearbox (`gearRatio`, `efficiency`, `motor:{ref,contentHash}`).
+  `krs::ksave::resolveActuator` derives joint effort = Kt·Imax·ratio·η, velocity = maxSpeed/ratio.
+- `.kgearbox` / `.kencoder` / `.kcamera` / `.kimu` / `.kmaterial` — indexed by type; schemas grow
+  as needed (unknown fields ignored).
+
+**Library** (`PartLibrary`): a SEARCH PATH — `<scene>/parts` → `<project>/parts` (KRS_SOURCE_DIR)
+→ `<user>/parts` — most-specific wins; new ids union in. The Manufacturer Parts panel lists it;
+a row drags as `application/x-krstudio-asset` (the mime the viewport/joint drops accept). A
+`.kactuator` dropped on a selected joint derives its limits + records `RBJoint.actuatorRef`.
+
+**Repository** (`PartRepository`): content-addressed store keyed by (id, hash) so parts de-dupe and
+a changed part is a NEW version. `LocalRepository` (shipped) is the offline cache and the on-disk
+wire format a remote mirrors. `RemoteRepository` is an honest offline stub; its HTTP contract
+(`GET /index`, `GET /part/<id>/<hash>`, `POST /part`, Bearer auth) is documented at the definition
+so a live QtNetwork backend swaps in behind the same signatures with zero caller changes.
+
+Starter library ships under `<repo>/parts` (Maxon EC-45/DCX, an EC45+GP42 actuator, RealSense
+D435, Bosch BMI088, an anodized-aluminum material).
+
+## Materials (`krs::facemat`, shipped — `KRS_FACEMAT_SELFTEST`)
+
+`FaceMaterialComponent` maps B-Rep faceId → {albedo, metallic, roughness}. Whole-body writes
+`MaterialComponent`; per-face generates overlay sub-meshes (that face's triangles, offset 0.5 mm
+proud, a child entity with the override material) — reuses the existing render path, no shader
+change. The Material Editor panel drives both via a Whole-body / This-face toggle + a Pick-Face
+mode over the feature-selection service.
+
+## `.klayout` (shipped)
+
+ADS `CDockManager::saveState()` → `QSettings("layout/dockState")` at exit, `restoreState()` at
+boot. A per-user preference, separate from `.kscene`; suppressed under any `KRS_*` env.
+
+## Remaining v2 backlog
+
+- Non-robot entities (loose primitives, lights, fluids) in `.kscene` — needs the registry-driven
+  component serializer (the DatabaseManager whitelist problem, done properly / fail-loud on save).
+- Instance-level **overrides** (scene-local sparse deviations from a SHARED library `.krobot`,
+  applied on load, orphan-reported when they no longer bind) + a robot library search path. This
+  is the step that turns scene-owned robot files into a shared-definition ecosystem.
+- Split-off robots aren't savable until bodies carry durable ids independent of a rebuild source
+  (**durable BodyId**).
+- **Live cloud backend** behind `RemoteRepository` (QtNetwork); the seam + contract are in place.
+- Per-face material **visual verification**: the overlay-mesh render is gated on data/geometry but
+  needs an eyes-on pass in the running app (z-offset tuning, robot-link tracking under motion).
