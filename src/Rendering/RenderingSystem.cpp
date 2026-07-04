@@ -44,6 +44,7 @@
 #include "KDoc.hpp"                // krs::kdoc Node<->JSON codec (graph+subgraph persistence Phase 1) + gate
 #include "KGraph.hpp"              // krs::kgraph live-model <-> .kgraph bridge (Phase 3) + gate
 #include "SubgraphNode.hpp"        // krs::nodes SubgraphNode + knode:<id> registration (Phase 5) + gate
+#include "KPack.hpp"               // krs::kpack .knodepack cross-user subgraph sharing + gate
 #include "KParts.hpp"              // krs::parts manufacturer library + repository + gate
 #include "FaceMaterial.hpp"        // krs::facemat whole-body/per-face material + gate
 #include "ClearanceLimits.hpp"     // krs::climits self-intersection -> joint limits + gate
@@ -1239,6 +1240,12 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::nodes::runSubgraphGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Subgraph sharing: bundle a subgraph + nested closure as a portable .knodepack + cross-user import.
+    if (qEnvironmentVariableIntValue("KRS_KPACK_SELFTEST") != 0) {
+        std::printf("\n================= KRS_KPACK_SELFTEST =================\n");
+        const bool ok = krs::kpack::runKPackGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     if (qEnvironmentVariableIntValue("KRS_MOTION_SELFTEST") != 0) {
         std::printf("\n================= KRS_MOTION_SELFTEST =================\n");
         const bool ok = krs::motion::runMotionPlanGate();
@@ -2134,6 +2141,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE KDOC (Node<->JSON codec: tagged std::any round-trip over the closed union; int64 string-encoded; reconfigure selection restored before literals; unknown-type fail-loud neg-ctrl)", krs::kdoc::runKDocGate() },
             { "GATE KGRAPH (whole live DataFlowGraphModel <-> .kgraph: params/literals/wiring-by-name/positions + reconfigured-node materialize; content-hash detection; unknown-major + unknown-factory-id neg-ctrls)", krs::kgraph::runKGraphGate() },
             { "GATE SUBGRAPH (knode:<id> subgraph node instantiates + evaluates its interior end-to-end; nests to the 2-level result; self-referential-definition cycle-safe neg-ctrl)", krs::nodes::runSubgraphGate() },
+            { "GATE KPACK (share a subgraph + nested closure as one .knodepack; fresh library imports the single file, members register + evaluate; content-dedupe; tamper/major/path-traversal/cycle neg-ctrls)", krs::kpack::runKPackGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
