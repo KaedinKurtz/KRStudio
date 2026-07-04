@@ -44,6 +44,7 @@
 #include "KDoc.hpp"                // krs::kdoc Node<->JSON codec (graph+subgraph persistence Phase 1) + gate
 #include "KGraph.hpp"              // krs::kgraph live-model <-> .kgraph bridge (Phase 3) + gate
 #include "SubgraphNode.hpp"        // krs::nodes SubgraphNode + knode:<id> registration (Phase 5) + gate
+#include "Skill.hpp"               // krs::skill parameterized-skill contract (Process & Skills P1) + gate
 #include "KPack.hpp"               // krs::kpack .knodepack cross-user subgraph sharing + gate
 #include "KLut.hpp"                // krs::klut .klut LUT / characterized-data standard object + gate
 #include "Rec.hpp"                 // krs::rec DataTable + CSV/JSON recording format + gate
@@ -1249,6 +1250,12 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::nodes::runSubgraphActuationGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Process & Skills P1: a parameterized shareable skill drives the keyed bus to a goal (per-pass lifecycle).
+    if (qEnvironmentVariableIntValue("KRS_SKILL_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SKILL_SELFTEST =================\n");
+        const bool ok = krs::skill::runSkillGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     // Subgraph sharing: bundle a subgraph + nested closure as a portable .knodepack + cross-user import.
     if (qEnvironmentVariableIntValue("KRS_KPACK_SELFTEST") != 0) {
         std::printf("\n================= KRS_KPACK_SELFTEST =================\n");
@@ -2173,6 +2180,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE REC (DataTable + CSV/JSON recording: round-trip bit-equal + units; axis-agnostic interpolated sampling; malformed-row-skipped + missing-file + bad-major neg-ctrls)", krs::rec::runRecGate() },
             { "GATE DATANODES (log node conditional write to auto-created logs/ folder; import node parametric CSV/JSON sampling; lut_sample from .klut; characterize CSV->.klut; disabled-log + missing-file neg-ctrls)", krs::datanodes::runDataNodesGate() },
             { "GATE SUBGRAPH-ACTUATION (setScene propagates into (nested) subgraph interiors so drive nodes actuate; physics_config_drive fans a joint_config onto the robot-keyed bus; disconnected-releases neg-ctrl)", krs::nodes::runSubgraphActuationGate() },
+            { "GATE SKILL (manifest-carrying, role-tagged, shareable skill binds params + drives the robot-keyed bus to its goal under the per-pass lifecycle; releases on stop; impossible-goal Timeout-Failure neg-ctrl)", krs::skill::runSkillGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");

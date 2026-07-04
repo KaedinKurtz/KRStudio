@@ -37,12 +37,17 @@ struct Connection {
 };
 
 // An exposed boundary port of the subgraph: the outer port `name` maps to an interior node's port.
+// For a SKILL, an exposed input doubles as a typed PARAMETER: `role` tags its meaning for a task
+// layer (e.g. "targetConfig", "targetFrame", "speedScale") and `defaultVal` (a krs::kdoc tagged
+// {t,v} object) supplies the value when an invocation does not bind one. Both optional.
 struct ExposedPort {
     QString name;               // the outer-facing port name
     QString interiorNode;       // interior node id it connects to
     QString interiorPort;       // that node's port name
     bool    isInput = true;     // true = subgraph input (feeds interior), false = output (from interior)
     QString dataType;           // canonical port type name (PortTypes) so the outer port keeps its type
+    QString role;               // skill-param role tag ("" = a plain wire port, not a parameter)
+    QJsonObject defaultVal;     // kdoc tagged {t,v} default ({} = required / no default)
 };
 
 // A nested subgraph dependency: an interior node typed "knode:<uuid>" whose definition is itself a
@@ -54,6 +59,12 @@ struct KNodeDoc {
     QString name;               // "PID + Clamp"
     QString category;           // palette grouping, e.g. "Control"
     int     revision = 1;       // schema revision within the knode major (in-place schema evolution)
+    // SKILL MANIFEST (all optional; empty = a plain subgraph). The identity a task layer + the
+    // .knodepack manifest surface: what this block does, who made it, how to find it.
+    QString description;        // tooltip / manifest text (was previously dropped by the codec)
+    QString version;            // semver-ish, author-owned ("1.0.0")
+    QString author;
+    QStringList tags;           // search/filter tags ("motion", "gripper", ...)
     std::vector<InteriorNode> nodes;
     std::vector<Connection>   connections;
     std::vector<ExposedPort>  ports;        // ordered; inputs then outputs as authored

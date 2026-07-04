@@ -66,6 +66,11 @@ QJsonObject docToJson(const KNodeDoc& doc, const QString& formatFamily) {
     root["format"] = formatFamily + QStringLiteral("/1");
     root["id"] = doc.id; root["name"] = doc.name; root["category"] = doc.category;
     root["revision"] = doc.revision;
+    // skill manifest (only written when set -- a plain subgraph stays byte-stable)
+    if (!doc.description.isEmpty()) root["description"] = doc.description;
+    if (!doc.version.isEmpty())     root["version"] = doc.version;
+    if (!doc.author.isEmpty())      root["author"] = doc.author;
+    if (!doc.tags.isEmpty())        root["tags"] = QJsonArray::fromStringList(doc.tags);
     QJsonArray nodes;
     for (const auto& n : doc.nodes) {
         QJsonObject o; o["id"] = n.id; o["typeId"] = n.typeId; o["x"] = n.x; o["y"] = n.y;
@@ -84,6 +89,8 @@ QJsonObject docToJson(const KNodeDoc& doc, const QString& formatFamily) {
         QJsonObject o; o["name"] = p.name; o["node"] = p.interiorNode; o["port"] = p.interiorPort;
         o["dir"] = p.isInput ? QStringLiteral("in") : QStringLiteral("out");
         if (!p.dataType.isEmpty()) o["dataType"] = p.dataType;
+        if (!p.role.isEmpty()) o["role"] = p.role;                       // skill-param role tag
+        if (!p.defaultVal.isEmpty()) o["default"] = p.defaultVal;        // kdoc tagged {t,v}
         ports.push_back(o);
     }
     root["ports"] = ports;
@@ -105,6 +112,9 @@ bool docFromJson(const QJsonObject& root, KNodeDoc& out, const QString& expected
     KNodeDoc doc;
     doc.id = root["id"].toString(); doc.name = root["name"].toString(); doc.category = root["category"].toString();
     doc.revision = root["revision"].toInt(1);
+    doc.description = root["description"].toString(); doc.version = root["version"].toString();
+    doc.author = root["author"].toString();
+    for (const QJsonValue& t : root["tags"].toArray()) doc.tags << t.toString();
     for (const QJsonValue& v : root["nodes"].toArray()) {
         const QJsonObject o = v.toObject();
         InteriorNode n; n.id = o["id"].toString(); n.typeId = o["typeId"].toString();
@@ -123,6 +133,7 @@ bool docFromJson(const QJsonObject& root, KNodeDoc& out, const QString& expected
         ExposedPort p; p.name = o["name"].toString(); p.interiorNode = o["node"].toString();
         p.interiorPort = o["port"].toString(); p.isInput = (o["dir"].toString() != QLatin1String("out"));
         p.dataType = o["dataType"].toString();
+        p.role = o["role"].toString(); p.defaultVal = o["default"].toObject();
         doc.ports.push_back(p);
     }
     for (const QJsonValue& v : root["nested"].toArray()) {

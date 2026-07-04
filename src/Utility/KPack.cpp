@@ -96,7 +96,8 @@ QString writePack(const QString& rootKnodeAbsPath, krs::parts::PartLibrary& lib,
         krs::knode::KNodeDoc d; krs::knode::loadKNode(p, d, nullptr);
         QJsonObject e;
         e["id"] = d.id; e["contentHash"] = sha1Hex(bytes); e["ext"] = QStringLiteral(".knode");
-        e["name"] = d.name; e["category"] = d.category; e["revision"] = d.revision; e["description"] = QString();
+        e["name"] = d.name; e["category"] = d.category; e["revision"] = d.revision;
+        e["description"] = d.description;   // the manifest text now round-trips (was written empty)
         e["bytes"] = QString::fromLatin1(bytes.toBase64());   // VERBATIM original bytes (hash-preserving)
         if (d.id == rootDoc.id) rootRef["contentHash"] = e["contentHash"];
         entries.push_back(e);
