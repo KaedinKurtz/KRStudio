@@ -28,6 +28,7 @@ const char* extensionFor(PartType t) {
         case PartType::Camera:   return ".kcamera";
         case PartType::Imu:      return ".kimu";
         case PartType::Material: return ".kmaterial";
+        case PartType::Node:     return ".knode";
         default:                 return "";
     }
 }
@@ -41,6 +42,7 @@ PartType typeForExtension(const QString& extIn) {
     if (e == "kcamera")   return PartType::Camera;
     if (e == "kimu")      return PartType::Imu;
     if (e == "kmaterial") return PartType::Material;
+    if (e == "knode")     return PartType::Node;
     return PartType::Unknown;
 }
 const char* displayName(PartType t) {
@@ -52,6 +54,7 @@ const char* displayName(PartType t) {
         case PartType::Camera:   return "Camera";
         case PartType::Imu:      return "IMU";
         case PartType::Material: return "Material";
+        case PartType::Node:     return "Node";
         default:                 return "Part";
     }
 }

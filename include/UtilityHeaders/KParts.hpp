@@ -28,7 +28,7 @@
 
 namespace krs::parts {
 
-enum class PartType { Unknown = 0, Motor, Actuator, Gearbox, Encoder, Camera, Imu, Material };
+enum class PartType { Unknown = 0, Motor, Actuator, Gearbox, Encoder, Camera, Imu, Material, Node };
 
 const char* extensionFor(PartType t);      // ".kmotor" ... (no dot -> "" for Unknown)
 PartType    typeForExtension(const QString& ext);   // "kmotor" / ".kmotor" -> Motor
