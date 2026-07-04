@@ -5,6 +5,7 @@
 #include "KPack.hpp"              // krs::kpack -- .knodepack subgraph sharing
 #include "SubgraphNode.hpp"       // krs::nodes::registerDiscoveredKNodes
 #include "KParts.hpp"             // krs::parts::PartLibrary
+#include "DataRecorderPanel.hpp"  // the Data Recorder / logging-graph dock panel
 #include <QStandardPaths>
 #include <QFile>
 #include <QSettings>
@@ -1377,6 +1378,15 @@ MainWindow::MainWindow(QWidget* parent)
     combinedNodeDock->setStyleSheet(sidePanelStyle);
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, combinedNodeDock, m_propertiesArea);
     registerPanelDock(QStringLiteral("Node Editor"), combinedNodeDock);
+
+    // Data Recorder: the logging/oscilloscope panel -- live channels (PropertyCatalog, incl. node outputs)
+    // -> trigger + record -> a .rec recording (CSV/JSON) -> bake a characterized .klut. Same formats the
+    // data_log / data_import / data_characterize nodes read/write.
+    auto* recorderDock = new ads::CDockWidget(QStringLiteral("Data Recorder"));
+    recorderDock->setWidget(new DataRecorderPanel(this));
+    recorderDock->setStyleSheet(sidePanelStyle);
+    m_dockManager->addDockWidget(ads::RightDockWidgetArea, recorderDock, m_propertiesArea);
+    registerPanelDock(QStringLiteral("Data Recorder"), recorderDock);
 
     connect(graphModel.get(), &QtNodes::AbstractGraphModel::nodeCreated,
         this, [this, graphModel](QtNodes::NodeId nodeId) {

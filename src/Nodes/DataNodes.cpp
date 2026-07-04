@@ -23,6 +23,15 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QWidget>
+#include <QLineEdit>
+#include <QSpinBox>
+#include <QComboBox>
+#include <QPushButton>
+#include <QLabel>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QFileDialog>
 
 #include <cstdio>
 #include <cmath>
@@ -55,6 +64,61 @@ krs::klut::Interp lutInterp(int idx) {
     }
 }
 
+// --- in-node widget builders (bind a control to a node param / enum-port, so the node is usable
+//     from the canvas without wiring a string/int source into it). Each row is a small QWidget. ---
+QWidget* labeledRow(const QString& label, QWidget* control) {
+    auto* row = new QWidget; auto* h = new QHBoxLayout(row);
+    h->setContentsMargins(2, 1, 2, 1); h->setSpacing(4);
+    auto* lab = new QLabel(label); lab->setMinimumWidth(58);
+    h->addWidget(lab); h->addWidget(control, 1);
+    return row;
+}
+// QLineEdit bound to a STRING param; optional Browse button (fileFilter != "" ; save = getSaveFileName).
+QWidget* strRow(Node* n, const QString& label, const std::string& param, const QString& fileFilter = {}, bool save = false) {
+    auto* edit = new QLineEdit(QString::fromStdString(n->getParam<std::string>(param, std::string())));
+    edit->setMinimumWidth(120);
+    QObject::connect(edit, &QLineEdit::editingFinished, [n, param, edit]() {
+        n->setParam<std::string>(param, edit->text().toStdString());
+    });
+    QWidget* control = edit;
+    if (!fileFilter.isEmpty()) {
+        control = new QWidget; auto* h = new QHBoxLayout(control); h->setContentsMargins(0, 0, 0, 0); h->setSpacing(2);
+        auto* browse = new QPushButton(QStringLiteral("...")); browse->setMaximumWidth(28);
+        QObject::connect(browse, &QPushButton::clicked, [n, param, edit, fileFilter, save]() {
+            const QString p = save ? QFileDialog::getSaveFileName(nullptr, QStringLiteral("Select file"), edit->text(), fileFilter)
+                                   : QFileDialog::getOpenFileName(nullptr, QStringLiteral("Select file"), edit->text(), fileFilter);
+            if (!p.isEmpty()) { edit->setText(p); n->setParam<std::string>(param, p.toStdString()); }
+        });
+        h->addWidget(edit, 1); h->addWidget(browse);
+    }
+    return labeledRow(label, control);
+}
+// QSpinBox bound to an INT param.
+QWidget* intRow(Node* n, const QString& label, const std::string& param, int lo, int hi) {
+    auto* sp = new QSpinBox; sp->setRange(lo, hi); sp->setValue(n->getParam<int>(param, lo));
+    QObject::connect(sp, QOverload<int>::of(&QSpinBox::valueChanged), [n, param](int v) { n->setParam<int>(param, v); });
+    return labeledRow(label, sp);
+}
+// QComboBox bound to an ENUM input-port literal (setPortLiteral<int>).
+QWidget* enumRow(Node* n, const QString& label, const std::string& enumPort, const QStringList& opts) {
+    auto* cb = new QComboBox; cb->addItems(opts);
+    cb->setCurrentIndex(n->getInput<int>(enumPort).value_or(0));
+    QObject::connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), [n, enumPort](int i) { n->setPortLiteral<int>(enumPort, i); });
+    return labeledRow(label, cb);
+}
+// A momentary button that sets a BOOL param true (a one-shot trigger, e.g. "bake now").
+QWidget* boolButtonRow(Node* n, const QString& label, const std::string& param) {
+    auto* b = new QPushButton(label);
+    QObject::connect(b, &QPushButton::clicked, [n, param]() { n->setParam<bool>(param, true); });
+    return b;
+}
+// Stack rows into one embeddable widget.
+QWidget* stackRows(std::initializer_list<QWidget*> rows) {
+    auto* w = new QWidget; auto* v = new QVBoxLayout(w); v->setContentsMargins(3, 3, 3, 3); v->setSpacing(2);
+    for (auto* r : rows) v->addWidget(r);
+    return w;
+}
+
 // ==================================================================================================
 // 1) data_log -- the LOG node.
 //    Accumulates (t, Value) into an internal DataTable while Enable is high (every Nth eval), and
@@ -78,6 +142,13 @@ public:
 
         m_table.columns.push_back({ "t",     "s"        });
         m_table.columns.push_back({ "value", "unitless" });
+    }
+
+    QWidget* createCustomWidget() override {
+        return stackRows({ strRow(this, QStringLiteral("Folder"), "folder"),
+                           strRow(this, QStringLiteral("File"),   "file"),
+                           enumRow(this, QStringLiteral("Format"), "Format", { QStringLiteral("CSV"), QStringLiteral("JSON") }),
+                           intRow(this, QStringLiteral("Every N"), "decimate", 1, 100000) });
     }
 
     bool needsExecutionControls() const override { return false; }
@@ -148,6 +219,13 @@ public:
         setParam<int>("valueCol", 1);
     }
 
+    QWidget* createCustomWidget() override {
+        return stackRows({ strRow(this, QStringLiteral("File"), "file", QStringLiteral("Data (*.csv *.json)")),
+                           intRow(this, QStringLiteral("Axis col"),  "axisCol",  0, 64),
+                           intRow(this, QStringLiteral("Value col"), "valueCol", 0, 64),
+                           enumRow(this, QStringLiteral("Interp"), "Interp", { QStringLiteral("Nearest"), QStringLiteral("Linear"), QStringLiteral("Cubic") }) });
+    }
+
     bool isPureInputFunction() const override { return true; }                     // Value = f(Axis) given a file
 
     void compute() override {
@@ -208,6 +286,10 @@ public:
         setParam<std::string>("file", "");
     }
 
+    QWidget* createCustomWidget() override {
+        return stackRows({ strRow(this, QStringLiteral("LUT"), "file", QStringLiteral("LUT (*.klut)")) });
+    }
+
     bool isPureInputFunction() const override { return true; }                     // Value = f(X,Y) given a file
 
     void compute() override {
@@ -261,6 +343,16 @@ public:
         setParam<int>("valueCol",      1);
         setParam<int>("nBreakpoints", 16);
         setParam<bool>("bake",       false);
+    }
+
+    QWidget* createCustomWidget() override {
+        return stackRows({ strRow(this, QStringLiteral("In CSV"), "inCsv", QStringLiteral("Data (*.csv *.json)")),
+                           strRow(this, QStringLiteral("Out LUT"), "outKlut", QStringLiteral("LUT (*.klut)"), /*save*/true),
+                           intRow(this, QStringLiteral("Axis col"),  "axisCol",  0, 64),
+                           intRow(this, QStringLiteral("Value col"), "valueCol", 0, 64),
+                           intRow(this, QStringLiteral("Breakpts"),  "nBreakpoints", 2, 4096),
+                           enumRow(this, QStringLiteral("Interp"), "Interp", { QStringLiteral("Nearest"), QStringLiteral("Linear"), QStringLiteral("Cubic") }),
+                           boolButtonRow(this, QStringLiteral("Bake now"), "bake") });
     }
 
     bool needsExecutionControls() const override { return false; }
