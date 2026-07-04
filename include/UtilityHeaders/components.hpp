@@ -769,6 +769,10 @@ struct EnvironmentSettings {
     float     tonemapExposure= 1.0f;
     bool      hdrEnabled     = true;
     std::string hdrPath;                 // environment HDR (empty = procedural/default)
+    // RUNTIME (not serialized): set true by an Environment node's compute() so the app pushes these
+    // ctx values into the live RenderingSystem each eval pass (a node is driving the environment).
+    // When false, the lighting panel / renderer own the settings and the ctx only mirrors on save.
+    bool      nodeDriven     = false;
 };
 
 // OBJECT RECIPE: how a loose (non-robot) scene object was created, so a .kscene can reconstruct it.

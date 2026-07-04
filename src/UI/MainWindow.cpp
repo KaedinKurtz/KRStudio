@@ -1459,6 +1459,12 @@ MainWindow::MainWindow(QWidget* parent)
             if (auto* bus = m_scene->getRegistry().ctx().find<ArticulationCommandComponent>())
                 bus->clearForEvalPass();
         for (int i = 0; i < *evalIterPerFire; ++i) krs::nodes::evaluateGraphQuiet(*graphModel);
+        // v1.1 environment nodes: if an Environment node drove the EnvironmentSettings ctx this pass,
+        // push it into the live renderer so sun/skybox/exposure track the graph. Light nodes need no
+        // push (they write LightComponents the renderer already reads from the registry each frame).
+        if (m_scene)
+            if (auto* env = m_scene->getRegistry().ctx().find<EnvironmentSettings>())
+                if (env->nodeDriven) applyCtxToEnvironment();
     });
     auto setEvalRate = [evalTimer, evalIterPerFire](double hz) {
         hz = std::clamp(hz, 1.0, 20000.0);

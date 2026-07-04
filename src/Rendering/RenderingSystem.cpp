@@ -38,6 +38,9 @@
 #include "KSave.hpp"               // krs::ksave .kscene family + gate
 #include "ActuatorModel.hpp"       // krs::act gray-box actuator model + gate (Phase 1)
 #include "TelemetryProtocol.hpp"   // krs::ktp telemetry codec (COBS + samples + clock-sync) + gate
+#include "EnvironmentNodes.hpp"    // krs::envnode Environment + Light nodes + gate
+#include "GltfAnim.hpp"            // krs::anim glTF/GLB animation import -> SkeletonClip + gate
+#include "RlEnv.hpp"               // krs::rl gym-style RL environment interface + gate
 #include "KParts.hpp"              // krs::parts manufacturer library + repository + gate
 #include "FaceMaterial.hpp"        // krs::facemat whole-body/per-face material + gate
 #include "ClearanceLimits.hpp"     // krs::climits self-intersection -> joint limits + gate
@@ -1122,6 +1125,30 @@ void RenderingSystem::initializeSharedResources()
         std::_Exit(ok ? 0 : 1);
     }
 
+    // Environment nodes: node-graph control of scene lighting/skybox/fog + per-light params. Headless.
+    if (qEnvironmentVariableIntValue("KRS_ENVNODE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_ENVNODE_SELFTEST =================\n");
+        const bool ok = krs::envnode::runEnvironmentNodesGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // glTF/GLB animation import -> SkeletonClip (docs/POLICY_AND_LEARNING.md step 4 earmark). Headless.
+    if (qEnvironmentVariableIntValue("KRS_GLTFANIM_SELFTEST") != 0) {
+        std::printf("\n================= KRS_GLTFANIM_SELFTEST =================\n");
+        const bool ok = krs::anim::runGltfAnimGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // RL environment interface (gym-style step API) (docs/POLICY_AND_LEARNING.md step 6 earmark). Headless.
+    if (qEnvironmentVariableIntValue("KRS_RLENV_SELFTEST") != 0) {
+        std::printf("\n================= KRS_RLENV_SELFTEST =================\n");
+        const bool ok = krs::rl::runRlEnvGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
     // Manufacturer parts: library search-path index + repository publish/pull/sync. Headless.
     if (qEnvironmentVariableIntValue("KRS_KPARTS_SELFTEST") != 0) {
         std::printf("\n================= KRS_KPARTS_SELFTEST =================\n");
@@ -2076,6 +2103,13 @@ void RenderingSystem::initializeSharedResources()
             { "GATE D FANUC SERIAL demo stability (D1-D4)",        krs::dyn::runDemoGateD() },
             { "GATE V solid->link assignment (V1 + V-assign)",     krs::dyn::runVisibleArticGateV() },
             { "GATE V.6 FANUC boot path moves (shared helper)",    krs::dyn::runFanucBootGateV6() },
+            { "GATE KSAVE (.kscene/.krobot/.kjoint/.kstate round-trip; tamper detected+honored; actuator chain derives limits; missing/corrupt neg-ctrls)", krs::ksave::runKSaveGate() },
+            { "GATE SCENESAVE (non-robot .kscene: environment/skybox + fog + lights(all params) + loose objects(xf incl. rotation + full material) round-trip; recipe-less mesh-object neg-ctrl skipped honestly)", krs::ksave::runSceneObjectsGate() },
+            { "GATE ACTUATOR (gray-box: torque-speed envelope+droop, Stribeck friction+dir-asym, backlash dead-zone, thermal derate, provenance; ideal-params neg-ctrl)", krs::act::runActuatorModelGate() },
+            { "GATE TELEMETRY (host codec: COBS+resync framing, self-describing sample codec, ktp/1 handshake hash, clock-sync recovery; corrupt-frame neg-ctrl)", krs::ktp::runTelemetryGate() },
+            { "GATE ENVNODE (Environment node writes sun/IBL/exposure/skybox/fog ctx+nodeDriven; Light node drives wired+named light's LightComponent+glow; no-target neg-ctrl)", krs::envnode::runEnvironmentNodesGate() },
+            { "GATE GLTF-ANIM (TRS keyframe core -> SkeletonClip: topo order + LERP/SLERP sampling + clamp + FK compose; missing-parent & cycle & anti-stub neg-ctrls)", krs::anim::runGltfAnimGate() },
+            { "GATE RLENV (gym-style residual-on-reference env: deterministic; reference maximizes imitation; residual steers task; scrambled-reward neg-ctrl)", krs::rl::runRlEnvGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
