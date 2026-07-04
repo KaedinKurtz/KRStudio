@@ -72,6 +72,7 @@ private slots:
     void onJointTypeChanged(int comboIndex);   // re-type the selected joint (Revolute/Continuous/Prismatic/Fixed)
     void onJogMoved(int sliderValue);          // jog the selected joint's DOF through LiveRobot::q
     void onUndoEdit();                         // restore the last pre-edit snapshot (graph + pose + transforms)
+    void onGenerateClearanceLimits();          // self-intersection -> joint limits for a surface clearance
 
 private:
     void initializeUI();
@@ -116,6 +117,8 @@ private:
     QDoubleSpinBox* m_limitLo       = nullptr;
     QDoubleSpinBox* m_limitHi       = nullptr;
     QPushButton*    m_applyLimitBtn = nullptr;
+    QDoubleSpinBox* m_clearanceSpin = nullptr;   // surface clearance (m) for limit discovery
+    QPushButton*    m_genLimitsBtn  = nullptr;   // Generate Joint Limits from self-collision
     // Joint axis origin (where the joint snaps to) -- adjusts RBJoint.axisPos.
     QDoubleSpinBox* m_axisX         = nullptr;
     QDoubleSpinBox* m_axisY         = nullptr;

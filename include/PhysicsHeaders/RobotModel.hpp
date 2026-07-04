@@ -32,6 +32,7 @@
 
 class Scene;
 namespace krs::rbuild { struct RobotGraph; struct RBJoint; }   // authoring schema (RobotBuilder.hpp)
+namespace krs::plan { class CollisionWorld; struct JointLimits; }  // PlanningWorld.hpp (clearance model)
 
 namespace krs::robot {
 
@@ -621,6 +622,13 @@ int drainCommandBusIntoRobots(entt::registry& reg);
 // Capture each link's rest world pose + each driven entity's rest world transform at
 // the current q (call while q==0). Required before writeBackRobotViz. (Steps 3 / 6.)
 void captureRobotRest(Scene& scene, LiveRobot& lr);
+
+// Capsule self-collision model from a live robot's geometry (one capsule per chain body, fit to the
+// link solids' AABBs in body-rest-local) + mechanical joint limits, for krs::climits clearance
+// discovery. Defined in RobotInstance.cpp. Returns false on an empty chain. (CollisionWorld /
+// JointLimits are krs::plan types -- forward-declared so RobotModel.hpp needn't pull PlanningWorld.)
+bool buildRobotCollisionModel(Scene& scene, const LiveRobot& lr,
+                              krs::plan::CollisionWorld& world, krs::plan::JointLimits& mech);
 
 // Drive the link entity TransformComponents from Robot FK(q) (delta-from-rest), making
 // the live Robot the viz source instead of PhysX. Rest poses are captured at q=0 on

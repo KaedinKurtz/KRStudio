@@ -10,6 +10,7 @@
 // foundation steps 1-5; each step extends runRobotOwnerGate with a measured check.
 // ===========================================================================
 #include "RobotModel.hpp"
+#include "PlanningWorld.hpp"   // krs::plan::CollisionWorld / LinkCapsule / JointLimits (clearance model)
 #include "RobotBuilder.hpp"        // krs::rbuild::RobotGraph (the authoring schema)
 #include "RobotBuilderScene.hpp"   // buildDemoGraph / spawnGraphBodies (gate)
 #include "ArticulationSpec.hpp"    // krs::dyn::RobotArticSpec (FANUC canonical spec)
@@ -92,6 +93,61 @@ Robot robotFromArticSpec(const krs::dyn::RobotArticSpec& spec) {
 // Capture each link's rest world pose + each driven entity's rest world transform
 // at the CURRENT q (call right after instantiation while q==0). Enables delta-from-
 // rest viz that works when one link drives several solids (the FANUC case).
+// Build a capsule self-collision model from a live robot's geometry, for clearance-limit discovery.
+// One capsule per CHAIN BODY, enclosing all that body's link solids: their mesh AABBs are folded
+// into the body's REST-LOCAL frame (so the capsule rides the body and FK moves it), and a capsule
+// is fit along the longest local axis with radius = half the larger cross-section. `world.capsules`
+// and `mech` (from the model's joint qLower/qUpper) are filled; the caller runs krs::climits on
+// lr.chain. Bodies with no mesh get a tiny placeholder capsule at the origin (harmless).
+bool buildRobotCollisionModel(Scene& scene, const LiveRobot& lr,
+                              krs::plan::CollisionWorld& world, krs::plan::JointLimits& mech) {
+    auto& reg = scene.getRegistry();
+    const int nb = lr.chain.nbody();
+    if (nb <= 0) return false;
+    world.capsules.clear();
+    for (int k = 0; k < nb; ++k) {
+        Eigen::Vector3d mn(1e30, 1e30, 1e30), mx(-1e30, -1e30, -1e30);
+        bool any = false;
+        Eigen::Matrix4d invBody = Eigen::Matrix4d::Identity();
+        if (k < int(lr.restLinkWorld.size())) invBody = lr.restLinkWorld[k].inverse();
+        if (k < int(lr.linkEntities.size())) {
+            for (size_t i = 0; i < lr.linkEntities[k].size(); ++i) {
+                const entt::entity e = lr.linkEntities[k][i];
+                const auto* mesh = reg.try_get<RenderableMeshComponent>(e);
+                if (!mesh || mesh->aabbMin == mesh->aabbMax) continue;
+                const Eigen::Matrix4d eWorld = (i < lr.linkEntityRestWorld[k].size())
+                                                   ? lr.linkEntityRestWorld[k][i] : Eigen::Matrix4d::Identity();
+                const Eigen::Matrix4d toBody = invBody * eWorld;   // entity-local -> body-rest-local
+                for (int c = 0; c < 8; ++c) {                      // 8 AABB corners
+                    const glm::vec3 cr((c & 1) ? mesh->aabbMax.x : mesh->aabbMin.x,
+                                       (c & 2) ? mesh->aabbMax.y : mesh->aabbMin.y,
+                                       (c & 4) ? mesh->aabbMax.z : mesh->aabbMin.z);
+                    const Eigen::Vector4d p = toBody * Eigen::Vector4d(cr.x, cr.y, cr.z, 1.0);
+                    mn = mn.cwiseMin(p.head<3>()); mx = mx.cwiseMax(p.head<3>()); any = true;
+                }
+            }
+        }
+        krs::plan::LinkCapsule cap; cap.body = k;
+        if (!any) { cap.a.setZero(); cap.b.setZero(); cap.radius = 0.01; world.capsules.push_back(cap); continue; }
+        const Eigen::Vector3d ext = mx - mn, ctr = 0.5 * (mn + mx);
+        int axis = 0; if (ext[1] > ext[axis]) axis = 1; if (ext[2] > ext[axis]) axis = 2;
+        const int a1 = (axis + 1) % 3, a2 = (axis + 2) % 3;
+        cap.radius = 0.5 * std::max(1e-3, std::max(ext[a1], ext[a2]));
+        Eigen::Vector3d half = Eigen::Vector3d::Zero();
+        half[axis] = std::max(0.0, 0.5 * ext[axis] - cap.radius);   // capsule segment = box minus the caps
+        cap.a = ctr - half; cap.b = ctr + half;
+        world.capsules.push_back(cap);
+    }
+    // Mechanical limits from the model's DOF joints (member, non-Fixed), DOF order.
+    const int nd = lr.ndof();
+    mech.qLower.resize(nd); mech.qUpper.resize(nd); mech.vMax.resize(nd);
+    for (int d = 0; d < nd && d < int(lr.memberJoint.size()); ++d) {
+        const krs::robot::Joint& j = lr.model.joints[lr.memberJoint[d]];
+        mech.qLower[d] = j.qLower; mech.qUpper[d] = j.qUpper; mech.vMax[d] = std::max(1e-3, j.vMax);
+    }
+    return true;
+}
+
 void captureRobotRest(Scene& scene, LiveRobot& lr) {
     auto& reg = scene.getRegistry();
     const std::vector<krs::dyn::Pose> poses = lr.fkLinks();  // indexed by CHAIN BODY (base-excluded)

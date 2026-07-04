@@ -6,6 +6,8 @@
 #include "RobotBuilder.hpp"         // krs::rbuild::RobotGraph / EditController / RBJoint
 #include "RobotBuilderScene.hpp"    // buildDemoGraph / spawnGraphBodies / bodyIndexForEntity
 #include "RobotModel.hpp"           // krs::robot::instantiateFromGraph (demo as a first-class robot)
+#include "ClearanceLimits.hpp"      // krs::climits self-intersection -> joint limits
+#include "PlanningWorld.hpp"        // krs::plan::CollisionWorld / JointLimits
 #include "KSave.hpp"                // krs::ksave::RobotSourceRegistry (demo save provenance)
 #include "RobotConfig.hpp"          // krs::rcfg::RobotConfig (proven property hot-swap)
 #include "SceneBuilder.hpp"         // spawnPrimitive (selected-joint axis overlay bar)
@@ -252,6 +254,25 @@ void RobotBuilderPanel::initializeUI()
     m_applyLimitBtn->setObjectName(QStringLiteral("rbApplyLimitButton"));
     layout->addWidget(m_applyLimitBtn);
 
+    // --- Clearance-based limit discovery (self-intersection -> mechanical limits) ---
+    layout->addWidget(makeSectionHeader(QStringLiteral("Clearance Limits (self-collision)"), content));
+    auto* clrBox = new QGroupBox(content);
+    auto* clrForm = new QFormLayout(clrBox);
+    m_clearanceSpin = new QDoubleSpinBox(clrBox);
+    m_clearanceSpin->setObjectName(QStringLiteral("rbClearanceSpin"));
+    m_clearanceSpin->setRange(0.0, 0.5); m_clearanceSpin->setDecimals(3);
+    m_clearanceSpin->setSingleStep(0.005); m_clearanceSpin->setValue(0.01);   // 1 cm default
+    m_clearanceSpin->setSuffix(QStringLiteral(" m"));
+    clrForm->addRow(QStringLiteral("Surface clearance"), m_clearanceSpin);
+    layout->addWidget(clrBox);
+    m_genLimitsBtn = new QPushButton(QStringLiteral("Generate Joint Limits"), content);
+    m_genLimitsBtn->setObjectName(QStringLiteral("rbGenLimitsButton"));
+    m_genLimitsBtn->setToolTip(QStringLiteral(
+        "Discover the joint limits that keep the whole robot at least this far from hitting itself, "
+        "for ANY combination of joint motion within the discovered box. Writes qLower/qUpper on every "
+        "DOF. Uses the capsule self-collision model."));
+    layout->addWidget(m_genLimitsBtn);
+
     // --- Joint axis origin (adjust where the selected joint snaps to) ---
     layout->addWidget(makeSectionHeader(QStringLiteral("Joint Axis Origin"), content));
     auto* axBox = new QGroupBox(content);
@@ -341,6 +362,7 @@ void RobotBuilderPanel::setupConnections()
             this, &RobotBuilderPanel::onJointTypeChanged);
     connect(m_jogSlider, &QSlider::valueChanged, this, &RobotBuilderPanel::onJogMoved);
     connect(m_undoBtn,   &QPushButton::clicked,  this, &RobotBuilderPanel::onUndoEdit);
+    connect(m_genLimitsBtn, &QPushButton::clicked, this, &RobotBuilderPanel::onGenerateClearanceLimits);
     // Ctrl+Z scoped to the panel + its children: the global shortcut stays with the gizmo
     // transform-undo; authoring undo wins only while the Builder has focus.
     auto* undoSc = new QShortcut(QKeySequence::Undo, this);
@@ -364,6 +386,52 @@ krs::rbuild::RobotGraph* RobotBuilderPanel::graph() const
 int RobotBuilderPanel::selectedJointRow() const
 {
     return m_jointsList ? m_jointsList->currentRow() : -1;
+}
+
+// Discover joint limits that keep the robot >= (surface clearance) from self-collision for ANY joint
+// combination in the box, and write them onto every DOF joint. Uses the live robot's capsule model.
+void RobotBuilderPanel::onGenerateClearanceLimits()
+{
+    if (m_isUpdatingUI || !m_scene) return;
+    auto* g = graph();
+    if (!g) { setStatus(QStringLiteral("No robot loaded.")); return; }
+    auto* rr = m_scene->getRegistry().ctx().find<krs::robot::RobotRegistry>();
+    krs::robot::LiveRobot* lr = rr ? rr->get(g->robotId) : nullptr;
+    if (!lr || lr->ndof() <= 0) { setStatus(QStringLiteral("No live robot with DOFs to analyze.")); return; }
+
+    krs::plan::CollisionWorld world;
+    krs::plan::JointLimits mech;
+    if (!krs::robot::buildRobotCollisionModel(*m_scene, *lr, world, mech)) {
+        setStatus(QStringLiteral("Could not build a collision model for this robot.")); return;
+    }
+    const double clearance = m_clearanceSpin ? m_clearanceSpin->value() : 0.01;
+    const krs::climits::ClearanceLimits box =
+        krs::climits::computeStaticLimits(lr->chain, world, clearance, mech);
+    if (!box.ok || !box.seedSafe) {
+        setStatus(QStringLiteral("The robot already violates %1 m clearance at its HOME pose -- "
+                                 "cannot derive limits from a self-colliding home.").arg(clearance, 0, 'f', 3));
+        return;
+    }
+    pushUndo(QStringLiteral("Generate limits"));
+
+    // Write the discovered box onto every DOF joint (map DOF index -> graph joint, skipping
+    // ambiguous/Fixed just like the limit editor).
+    int written = 0, gi = 0, dof = 0;
+    for (int ji = 0; ji < int(g->joints.size()); ++ji) {
+        if (g->joints[ji].ambiguous || g->joints[ji].type == krs::rbuild::JType::Fixed) continue;
+        if (dof < box.dof) {
+            g->joints[ji].limits.lower = box.qLower[dof];
+            g->joints[ji].limits.upper = box.qUpper[dof];
+            g->joints[ji].limits.enabled = true;
+            g->joints[ji].prov = krs::rbuild::Prov::Manual;
+            ++written;
+        }
+        ++dof; (void)gi;
+    }
+    setStatus(QStringLiteral("Generated clearance limits (%1 m) on %2 DOF -- safe for any joint "
+                             "combination within the box.").arg(clearance, 0, 'f', 3).arg(written));
+    refresh();
+    emit graphChanged();
 }
 
 // Snapshot everything the upcoming edit can touch. Called at the TOP of every mutating panel op
