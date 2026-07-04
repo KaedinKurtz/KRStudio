@@ -90,6 +90,11 @@ struct RBJoint {
     std::uint64_t id     = 0;                 // internal stable handle (0 = unassigned)
     int           nodeId = -1;                // CAN-style numeric node id (-1 = unassigned)
     std::string   name;                       // semantic name ("" = unassigned)
+    // Drive-train provenance (.kactuator ecosystem): the relative path of the actuator definition
+    // this joint's effort/velocity limits were DERIVED from ("" = hand-typed/unspecified). The
+    // derived numbers live in `limits` (so everything downstream just works); the ref records
+    // WHERE they came from and round-trips through .kjoint.
+    std::string   actuatorRef;
 
     // Re-derive refDir as a UNIT vector perpendicular to axisDir (a stable frame basis).
     // Call after setting axisDir from inference/snap; picks any perpendicular if refDir

@@ -109,6 +109,7 @@ QJsonObject jointToJson(const krs::rbuild::RBJoint& j) {
     lim["lower"] = j.limits.lower; lim["upper"] = j.limits.upper;
     lim["effort"] = j.limits.effort; lim["velocity"] = j.limits.velocity; lim["enabled"] = j.limits.enabled;
     o["limits"] = lim;
+    if (!j.actuatorRef.empty()) o["actuator"] = QString::fromStdString(j.actuatorRef);  // drive-train provenance
     return o;
 }
 bool jointFromJson(const QJsonObject& o, int bodyCount, krs::rbuild::RBJoint& j) {
@@ -129,6 +130,7 @@ bool jointFromJson(const QJsonObject& o, int bodyCount, krs::rbuild::RBJoint& j)
     j.limits.lower = lim["lower"].toDouble(-3.14159265); j.limits.upper = lim["upper"].toDouble(3.14159265);
     j.limits.effort = lim["effort"].toDouble(0.0); j.limits.velocity = lim["velocity"].toDouble(0.0);
     j.limits.enabled = lim["enabled"].toBool(true);
+    j.actuatorRef = o["actuator"].toString().toStdString();
     return true;
 }
 
@@ -545,6 +547,44 @@ Report loadScene(Scene& scene, const std::string& kscenePath)
 }
 
 // ================================================================================================
+// ACTUATOR CHAIN: .kactuator -> .kmotor -> derived joint-side effort/velocity
+// ================================================================================================
+ActuatorSpec resolveActuator(const std::string& kactuatorPath)
+{
+    ActuatorSpec sp;
+    const QString apath = QString::fromStdString(kactuatorPath);
+    QJsonObject ao;
+    if (!readJsonFile(apath, ao)) { sp.error = QStringLiteral("Cannot read .kactuator %1").arg(apath); return sp; }
+    if (!formatOk(ao, "kactuator")) { sp.error = QStringLiteral("Unknown .kactuator format."); return sp; }
+    sp.actuatorName = ao["name"].toString().toStdString();
+    sp.ratio = ao["gearRatio"].toDouble(1.0);
+    sp.efficiency = ao["efficiency"].toDouble(1.0);
+    if (sp.ratio <= 0.0) { sp.error = QStringLiteral("gearRatio must be > 0."); return sp; }
+
+    const QString mrel = ao["motor"].toObject()["ref"].toString();
+    if (mrel.isEmpty()) { sp.error = QStringLiteral(".kactuator has no motor ref."); return sp; }
+    const QString mpath = QFileInfo(apath).absoluteDir().filePath(mrel);
+    QString mhash;
+    QJsonObject mo;
+    if (!readJsonFile(mpath, mo, &mhash)) { sp.error = QStringLiteral("Cannot read .kmotor %1").arg(mpath); return sp; }
+    if (!formatOk(mo, "kmotor")) { sp.error = QStringLiteral("Unknown .kmotor format."); return sp; }
+    const QString wantHash = ao["motor"].toObject()["contentHash"].toString();
+    if (!wantHash.isEmpty() && wantHash != mhash)
+        sp.error = QStringLiteral("(warning) .kmotor changed on disk since the actuator was authored");  // non-fatal
+    sp.motorName = mo["name"].toString().toStdString();
+    sp.kt = mo["torqueConstant"].toDouble(0.0);           // N*m / A
+    sp.maxCurrent = mo["maxCurrent"].toDouble(0.0);       // A
+    sp.motorMaxSpeed = mo["maxSpeed"].toDouble(0.0);      // rad/s (motor shaft)
+
+    // DERIVED joint-side limits: torque multiplies through the gearbox, speed divides.
+    sp.jointEffort   = sp.kt * sp.maxCurrent * sp.ratio * sp.efficiency;
+    sp.jointVelocity = (sp.ratio > 0.0) ? sp.motorMaxSpeed / sp.ratio : 0.0;
+    sp.ok = sp.kt > 0.0 && sp.maxCurrent > 0.0 && sp.motorMaxSpeed > 0.0;
+    if (!sp.ok && sp.error.isEmpty()) sp.error = QStringLiteral(".kmotor missing Kt/current/speed.");
+    return sp;
+}
+
+// ================================================================================================
 // GATE KSAVE -- save -> fresh scene -> load round-trip + tamper detection + refusal NEG-CTRLs.
 // ================================================================================================
 bool runKSaveGate()
@@ -682,8 +722,40 @@ bool runKSaveGate()
                (negMissing && negCorrupt) ? "REJECTS(non-vacuous)" : "VACUOUS!");
     }
 
-    const bool pass = savedOk && loadOk && stateOk && connOk && tamperOk && staleOk && negMissing && negCorrupt;
-    printf("[ksave] %s\n", pass ? "ALL PASS (nested kscene/krobot/kjoint round-trip; kstate best-effort; tamper detected+honored; refusals clean)"
+    // ---- ACTUATOR CHAIN: .kactuator -> .kmotor -> derived joint limits match the closed form ----
+    bool actOk = false, actNeg = false;
+    {
+        // A Maxon-style EC-45flat-ish motor + a 100:1 gearbox at 80% efficiency.
+        const double kt = 0.036, imax = 6.0, wmax = 800.0, ratio = 100.0, eff = 0.8;
+        QJsonObject mo; mo["format"] = QStringLiteral("kmotor/1"); mo["name"] = QStringLiteral("EC-45flat");
+        mo["torqueConstant"] = kt; mo["maxCurrent"] = imax; mo["maxSpeed"] = wmax;
+        const QString mpath = QDir(dir).filePath("lib/EC45.kmotor");
+        writeJsonFile(mpath, mo);
+        QJsonObject ao; ao["format"] = QStringLiteral("kactuator/1"); ao["name"] = QStringLiteral("EC45+GP42");
+        ao["gearRatio"] = ratio; ao["efficiency"] = eff;
+        QJsonObject mref; mref["ref"] = QStringLiteral("EC45.kmotor"); mref["contentHash"] = fileSha1(mpath);
+        ao["motor"] = mref;
+        const QString apath = QDir(dir).filePath("lib/EC45_GP42.kactuator");
+        writeJsonFile(apath, ao);
+
+        const ActuatorSpec sp = resolveActuator(apath.toStdString());
+        const double wantEffort = kt * imax * ratio * eff;   // 0.036*6*100*0.8 = 17.28 N*m
+        const double wantVel    = wmax / ratio;              // 8.0 rad/s
+        actOk = sp.ok && std::abs(sp.jointEffort - wantEffort) < 1e-9
+                      && std::abs(sp.jointVelocity - wantVel) < 1e-9;
+        // NEG-CTRL: a missing .kmotor is refused, not silently zeroed.
+        QFile::remove(mpath);
+        const ActuatorSpec bad = resolveActuator(apath.toStdString());
+        actNeg = !bad.ok;
+        printf("[ksave]   actuator chain: derived effort=%.3f N*m (want %.3f) velocity=%.3f rad/s (want %.3f)=%s ; "
+               "NEG missing .kmotor refused=%s  %s\n",
+               sp.jointEffort, wantEffort, sp.jointVelocity, wantVel, actOk ? "yes" : "NO",
+               actNeg ? "yes" : "NO", (actOk && actNeg) ? "PASS" : "FAIL");
+    }
+
+    const bool pass = savedOk && loadOk && stateOk && connOk && tamperOk && staleOk
+                   && negMissing && negCorrupt && actOk && actNeg;
+    printf("[ksave] %s\n", pass ? "ALL PASS (nested kscene/krobot/kjoint round-trip; kstate best-effort; tamper detected+honored; actuator chain derives limits; refusals clean)"
                                 : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;

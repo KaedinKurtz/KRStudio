@@ -74,9 +74,29 @@ Report loadScene(Scene& scene, const std::string& kscenePath);
 // Rewrite ONLY the .kstate sidecar for an already-saved scene (the cheap exit hook).
 bool saveSessionState(Scene& scene, const std::string& kscenePath);
 
+// ---- .kactuator / .kmotor: the drive-train characterization chain --------------------------
+// A .kmotor is a VENDOR-CHARACTERIZABLE definition (Kt, current limits, speed -- real Maxon/etc.
+// datasheet values); a .kactuator composes motor + gearbox (ratio, efficiency) into a reusable
+// drive unit. resolveActuator() walks kactuator -> kmotor and DERIVES the joint-side limits:
+//   effort   = Kt * maxCurrent * ratio * efficiency        [N*m]
+//   velocity = motorMaxSpeed / ratio                        [rad/s]
+// Same reference semantics as the rest of the family (relative ref + id + contentHash, versioned,
+// refuse unknown majors). Intrinsic motor data lives in .kmotor; contextual data (which gearbox,
+// which joint) lives at the reference site -- the boundary that keeps reuse working.
+struct ActuatorSpec {
+    bool ok = false;
+    QString error;
+    std::string motorName, actuatorName;
+    double kt = 0, maxCurrent = 0, motorMaxSpeed = 0;   // from .kmotor
+    double ratio = 1, efficiency = 1;                   // from .kactuator
+    double jointEffort = 0, jointVelocity = 0;          // derived joint-side limits
+};
+ActuatorSpec resolveActuator(const std::string& kactuatorPath);
+
 // Headless gate (KRS_KSAVE_SELFTEST): save -> fresh scene -> load round-trip (files, joints,
 // limits, names, connectors, q, DOF); tampered .kjoint is detected + honored; NEG-CTRLs: missing
 // .krobot / corrupt .kscene refuse cleanly; stale q (wrong length) is skipped without crashing.
+// Plus the actuator chain: derived effort/velocity match the closed form; refusals clean.
 bool runKSaveGate();
 
 } // namespace krs::ksave
