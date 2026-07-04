@@ -38,6 +38,7 @@
 #include "KSave.hpp"               // krs::ksave .kscene family + gate
 #include "KParts.hpp"              // krs::parts manufacturer library + repository + gate
 #include "FaceMaterial.hpp"        // krs::facemat whole-body/per-face material + gate
+#include "ClearanceLimits.hpp"     // krs::climits self-intersection -> joint limits + gate
 #include "RaycastService.hpp"      // krs::pick nanort BVH ray/mesh picking gate
 #include "UvAtlasService.hpp"       // krs::uv xatlas per-body UV unwrap gate
 #include "RobotBuilderScene.hpp"   // krs::rbuild demo graph + body->entity render bridge + gate
@@ -1097,6 +1098,14 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_FACEMAT_SELFTEST") != 0) {
         std::printf("\n================= KRS_FACEMAT_SELFTEST =================\n");
         const bool ok = krs::facemat::runFaceMaterialGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // Clearance-based joint-limit discovery (self-intersection -> mechanical limits). Headless.
+    if (qEnvironmentVariableIntValue("KRS_CLEARANCE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_CLEARANCE_SELFTEST =================\n");
+        const bool ok = krs::climits::runClearanceGate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
