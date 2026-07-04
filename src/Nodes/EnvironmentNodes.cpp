@@ -9,6 +9,10 @@
 #include "EnvironmentNodes.hpp"
 #include "components.hpp"    // EnvironmentSettings, SceneProperties, LightComponent, MaterialComponent, TagComponent
 
+#include <QWidget>
+#include <QCheckBox>
+#include <QVBoxLayout>
+
 #include <cstdio>
 #include <cmath>
 #include <memory>
@@ -34,10 +38,15 @@ public:
         m_ports.push_back({ "Exposure EV",   { "double",    "EV"       }, Port::Direction::Input, this });
         m_ports.push_back({ "Skybox",        { "bool",      "unitless" }, Port::Direction::Input, this });
         m_ports.push_back({ "Fog",           { "bool",      "unitless" }, Port::Direction::Input, this });
-        // literal defaults so the in-node spinboxes show real values.
-        setPortLiteral<float>("Sun Intensity", 1.0f);
-        setPortLiteral<float>("IBL Intensity", 1.0f);
-        setPortLiteral<float>("Exposure EV",   0.0f);
+        // Auto Sun: when true, the sun ports are IGNORED and the skybox-derived sun (the renderer's
+        // Texture2D::analyzeHdrSun pipeline: brightest texel -> direction, surrounding region ->
+        // colour) stays authoritative -- "the sun follows the sky". Wire/toggle false to drive the
+        // sun manually through the three ports above.
+        m_ports.push_back({ "Auto Sun",      { "bool",      "unitless" }, Port::Direction::Input, this });
+        setPortLiteral<bool>("Auto Sun", true);
+        // NOTE: numeric literals are NOT seeded here -- they seed from the CURRENT environment on
+        // first compute (see below), so dropping this node into a graph changes NOTHING until the
+        // user actually edits a knob (no more viewport nuke from hardcoded defaults).
     }
     void compute() override {
         if (!m_scene) return;
@@ -47,16 +56,47 @@ public:
         auto* props = reg.ctx().find<SceneProperties>();
         if (!props) props = &reg.ctx().emplace<SceneProperties>();
 
+        // FIRST compute: seed the in-node literals from the CURRENT settings (the app mirrors the
+        // live renderer into the ctx while no node drives it), so the node starts as a no-op that
+        // *shows* the current look instead of overwriting it.
+        if (!m_seeded) {
+            setPortLiteral<double>("Sun Intensity", double(env->sunIntensity));
+            setPortLiteral<double>("IBL Intensity", double(env->iblIntensity));
+            setPortLiteral<double>("Exposure EV",   double(env->exposureEV));
+            m_seeded = true;
+        }
+
         env->sunIntensity = float(getInputD("Sun Intensity", env->sunIntensity));
         env->iblIntensity = float(getInputD("IBL Intensity", env->iblIntensity));
         env->exposureEV   = float(getInputD("Exposure EV",   env->exposureEV));
-        if (auto c = getInput<glm::vec3>("Sun Color"))     env->sunColor = *c;
-        if (auto d = getInput<glm::vec3>("Sun Direction")) env->sunDirection = *d;
+        const bool autoSun = getInput<bool>("Auto Sun").value_or(true);
+        if (!autoSun) {           // manual sun: the ports drive colour/direction
+            if (auto c = getInput<glm::vec3>("Sun Color"))     env->sunColor = *c;
+            if (auto d = getInput<glm::vec3>("Sun Direction")) env->sunDirection = *d;
+        }                          // auto: leave the skybox-derived values untouched
         if (auto s = getInput<bool>("Skybox"))             env->drawSkybox = *s;
         if (auto f = getInput<bool>("Fog"))                props->fogEnabled = *f;
 
         env->nodeDriven = true;   // tell the app to push these into the live renderer this pass
     }
+
+    // In-node checkboxes so the boolean gates read as booleans (a wire still overrides a checkbox).
+    QWidget* createCustomWidget() override {
+        auto* w = new QWidget; auto* v = new QVBoxLayout(w);
+        v->setContentsMargins(3, 3, 3, 3); v->setSpacing(2);
+        auto addCheck = [this, v](const char* label, const std::string& port, bool def) {
+            auto* cb = new QCheckBox(QString::fromUtf8(label));
+            cb->setChecked(getInput<bool>(port).value_or(def));
+            QObject::connect(cb, &QCheckBox::toggled, [this, port](bool on) { setPortLiteral<bool>(port, on); });
+            v->addWidget(cb);
+        };
+        addCheck("Skybox visible",           "Skybox",   true);
+        addCheck("Auto sun (from skybox)",   "Auto Sun", true);
+        addCheck("Fog",                      "Fog",      true);
+        return w;
+    }
+private:
+    bool m_seeded = false;        // literals seeded from the live environment on first compute
 };
 
 // ---------------------------------------------------------------------------
@@ -152,6 +192,7 @@ bool runEnvironmentNodesGate()
         const bool preAbsent = (reg.ctx().find<EnvironmentSettings>() == nullptr);
 
         EnvironmentNode en; en.setScene(&scene);
+        feedB(en, "Auto Sun", false);   // manual-sun mode: the sun ports drive colour/direction
         feedD(en, "Sun Intensity", 3.0); feedV(en, "Sun Color", glm::vec3(1.0f, 0.5f, 0.2f));
         feedV(en, "Sun Direction", glm::vec3(0.3f, -1.0f, 0.2f)); feedD(en, "IBL Intensity", 2.0);
         feedD(en, "Exposure EV", 1.0); feedB(en, "Skybox", false); feedB(en, "Fog", true);
@@ -173,10 +214,31 @@ bool runEnvironmentNodesGate()
         const bool partial = env2 && std::abs(env2->iblIntensity - 5.0f) < 1e-5
                           && std::abs(env2->sunIntensity - 1.0f) < 1e-5;   // sun kept its default
 
-        const bool ok = preAbsent && wrote && partial;
-        printf("[envnode]   ENVIRONMENT: ctx-absent-before=%d wrote(sun/ibl/ev/skybox/color/dir/fog/nodeDriven)=%d "
-               "unconnected-keeps-default=%d  %s\n",
-               int(preAbsent), int(wrote), int(partial), ok ? "PASS" : "FAIL");
+        // SEED-FROM-CURRENT: a node dropped into a scene whose environment is already customized
+        // must be a NO-OP on first compute (the viewport-nuke fix): the pre-set values survive.
+        Scene s3; auto& r3 = s3.getRegistry();
+        { auto& e3 = r3.ctx().emplace<EnvironmentSettings>(); e3.iblIntensity = 2.5f; e3.exposureEV = 1.25f; e3.sunIntensity = 4.0f; }
+        EnvironmentNode en3; en3.setScene(&s3); en3.process();             // NO inputs wired at all
+        const auto* env3 = r3.ctx().find<EnvironmentSettings>();
+        const bool seedOk = env3 && std::abs(env3->iblIntensity - 2.5f) < 1e-5
+                         && std::abs(env3->exposureEV - 1.25f) < 1e-5
+                         && std::abs(env3->sunIntensity - 4.0f) < 1e-5 && env3->nodeDriven;
+
+        // AUTO SUN (default true): wired sun ports are IGNORED -- the skybox-derived sun persists.
+        Scene s4; auto& r4 = s4.getRegistry();
+        { auto& e4 = r4.ctx().emplace<EnvironmentSettings>(); e4.sunColor = glm::vec3(0.9f, 0.8f, 0.7f);
+          e4.sunDirection = glm::vec3(0.1f, -1.0f, 0.0f); }
+        EnvironmentNode en4; en4.setScene(&s4);
+        feedV(en4, "Sun Color", glm::vec3(0, 1, 0)); feedV(en4, "Sun Direction", glm::vec3(1, 0, 0));
+        en4.process();                                                     // Auto Sun defaults TRUE
+        const auto* env4 = r4.ctx().find<EnvironmentSettings>();
+        const bool autoSunOk = env4 && glm::length(env4->sunColor - glm::vec3(0.9f, 0.8f, 0.7f)) < 1e-5
+                            && glm::length(env4->sunDirection - glm::vec3(0.1f, -1.0f, 0.0f)) < 1e-5;
+
+        const bool ok = preAbsent && wrote && partial && seedOk && autoSunOk;
+        printf("[envnode]   ENVIRONMENT: ctx-absent-before=%d wrote(manual-sun/ibl/ev/skybox/fog/nodeDriven)=%d "
+               "unconnected-keeps-default=%d seed-from-current(no-op drop-in)=%d auto-sun-ignores-wires=%d  %s\n",
+               int(preAbsent), int(wrote), int(partial), int(seedOk), int(autoSunOk), ok ? "PASS" : "FAIL");
         allOk = allOk && ok;
     }
 

@@ -26,12 +26,13 @@
 #include <QWidget>
 #include <QLineEdit>
 #include <QSpinBox>
-#include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QFileDialog>
+#include <QCoreApplication>
+#include "ProxyComboBox.hpp"   // combo that pops correctly inside a QtNodes proxy widget
 
 #include <cstdio>
 #include <cmath>
@@ -99,9 +100,10 @@ QWidget* intRow(Node* n, const QString& label, const std::string& param, int lo,
     QObject::connect(sp, QOverload<int>::of(&QSpinBox::valueChanged), [n, param](int v) { n->setParam<int>(param, v); });
     return labeledRow(label, sp);
 }
-// QComboBox bound to an ENUM input-port literal (setPortLiteral<int>).
+// Combo bound to an ENUM input-port literal (setPortLiteral<int>). MUST be a ProxyComboBox: a plain
+// QComboBox popup mis-positions/instantly closes inside the QtNodes graphics proxy (unclickable).
 QWidget* enumRow(Node* n, const QString& label, const std::string& enumPort, const QStringList& opts) {
-    auto* cb = new QComboBox; cb->addItems(opts);
+    auto* cb = new ProxyComboBox; cb->addItems(opts);
     cb->setCurrentIndex(n->getInput<int>(enumPort).value_or(0));
     QObject::connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), [n, enumPort](int i) { n->setPortLiteral<int>(enumPort, i); });
     return labeledRow(label, cb);
@@ -145,10 +147,33 @@ public:
     }
 
     QWidget* createCustomWidget() override {
+        // Live status + a manual flush: rows accumulate while Enable is high; the file is written on
+        // the Enable FALLING EDGE automatically, or on demand here.
+        auto* status = new QLabel(QStringLiteral("0 rows"));
+        auto* flushBtn = new QPushButton(QStringLiteral("Write file now"));
+        QObject::connect(flushBtn, &QPushButton::clicked, [this, status]() {
+            const QString p = flush();
+            status->setText(p.isEmpty() ? QStringLiteral("write FAILED")
+                                        : QStringLiteral("%1 rows -> %2").arg(sampleCount()).arg(p));
+            status->setToolTip(p);
+        });
+        m_statusLabel = status;
         return stackRows({ strRow(this, QStringLiteral("Folder"), "folder"),
                            strRow(this, QStringLiteral("File"),   "file"),
                            enumRow(this, QStringLiteral("Format"), "Format", { QStringLiteral("CSV"), QStringLiteral("JSON") }),
-                           intRow(this, QStringLiteral("Every N"), "decimate", 1, 100000) });
+                           intRow(this, QStringLiteral("Every N"), "decimate", 1, 100000),
+                           flushBtn, status });
+    }
+
+    // Push the live row count into the status label at the capped UI rate (never from compute()).
+    bool refreshUi() override {
+        if (!m_statusLabel) return false;
+        const QString txt = m_lastWritten.isEmpty()
+            ? QStringLiteral("%1 rows%2").arg(m_table.rows.size()).arg(m_lastEnable ? QStringLiteral(" (recording)") : QString())
+            : QStringLiteral("%1 rows -> %2").arg(m_table.rows.size()).arg(m_lastWritten);
+        if (txt == m_statusLabel->text()) return false;
+        m_statusLabel->setText(txt);
+        return true;
     }
 
     bool needsExecutionControls() const override { return false; }
@@ -167,23 +192,33 @@ public:
             m_time += kDt;                                                          // advance the monotonic clock
             ++m_evalIndex;
         }
+        // Enable FALLING EDGE -> auto-flush: stopping a recording writes the file without any extra
+        // click (the intuitive "I logged it, where is it?" contract).
+        if (m_lastEnable && !enable && !m_table.rows.empty()) m_lastWritten = flush();
+        m_lastEnable = enable;
         setOutput<double>("Count", double(m_table.rows.size()));
     }
 
     // Write the accumulated table to <folder>/<file>.<csv|json>. Creates the folder on first flush
-    // (the dedicated log folder generated on first log). Returns the absolute path written, or "".
+    // (the dedicated log folder generated on first log). A RELATIVE folder resolves against the
+    // application directory (predictable: logs land next to the exe), not the launch CWD. Returns
+    // the absolute path written, or "".
     QString flush() {
         const std::string folder = getParam<std::string>("folder", "logs");
         const std::string file   = getParam<std::string>("file",   "log");
         const int fmt            = getInput<int>("Format").value_or(0);            // 0=CSV 1=JSON
 
-        QDir dir(QString::fromStdString(folder));
+        QString folderQ = QString::fromStdString(folder);
+        if (QDir::isRelativePath(folderQ) && QCoreApplication::instance())
+            folderQ = QDir(QCoreApplication::applicationDirPath()).filePath(folderQ);
+        QDir dir(folderQ);
         dir.mkpath(".");                                                           // folder auto-created here
         const QString ext  = (fmt == 1) ? QStringLiteral(".json") : QStringLiteral(".csv");
-        const QString path = dir.filePath(QString::fromStdString(file) + ext);
+        const QString path = dir.absoluteFilePath(QString::fromStdString(file) + ext);
 
         const bool ok = (fmt == 1) ? krs::rec::writeJSON(m_table, path)
                                    : krs::rec::writeCSV(m_table, path);
+        if (ok) m_lastWritten = path;
         return ok ? path : QString();
     }
 
@@ -194,6 +229,9 @@ private:
     krs::rec::DataTable m_table;
     double m_time      = 0.0;
     long long m_evalIndex = 0;
+    bool m_lastEnable = false;            // falling-edge detector for auto-flush
+    QString m_lastWritten;                // last file written (shown in the node UI)
+    QLabel* m_statusLabel = nullptr;      // owned by the embedded widget
 };
 
 // ==================================================================================================

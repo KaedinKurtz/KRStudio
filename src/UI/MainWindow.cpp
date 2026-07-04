@@ -6,6 +6,7 @@
 #include "SubgraphNode.hpp"       // krs::nodes::registerDiscoveredKNodes
 #include "KParts.hpp"             // krs::parts::PartLibrary
 #include "DataRecorderPanel.hpp"  // the Data Recorder / logging-graph dock panel
+#include "PropertyCatalog.hpp"    // krs::twin catalog + the unconditional per-tick state publisher
 #include <QStandardPaths>
 #include <QFile>
 #include <QSettings>
@@ -1470,6 +1471,26 @@ MainWindow::MainWindow(QWidget* parent)
     auto* evalTimer = new QTimer(this);
     connect(evalTimer, &QTimer::timeout, this, [this, graphModel, evalIterPerFire]() {
         krs::nodes::NodeEditQueue::instance().drain();   // apply coalesced UI edits (off the per-event path)
+        // UNCONDITIONAL state publisher: refresh the PropertyCatalog every eval pass (object poses/
+        // velocities + robot joint state) so the Data Recorder + twin/property nodes always see live
+        // channels -- previously only a twin NODE in the graph populated the catalog, so an empty
+        // graph left the recorder blank.
+        if (m_scene) {
+            static krs::twin::AccelTracker s_accel;
+            static double s_pubTime = 0.0;
+            const double pubDt = 1.0 / 60.0;
+            auto& reg = m_scene->getRegistry();
+            krs::twin::publishSceneState(krs::twin::catalog(), reg, s_pubTime, pubDt, s_accel);
+            krs::twin::publishRobotState(krs::twin::catalog(), reg, s_pubTime);
+            s_pubTime += pubDt;
+        }
+        // Environment mirror: while NO node drives the environment, keep the ctx tracking the live
+        // renderer -- so a freshly dropped Environment node seeds its knobs from the CURRENT look
+        // instead of stomping the viewport with hardcoded defaults.
+        if (m_scene) {
+            auto* env = m_scene->getRegistry().ctx().find<EnvironmentSettings>();
+            if (!env || !env->nodeDriven) syncEnvironmentToCtx();
+        }
         // Command-bus lifecycle: clear, then let this pass's drive nodes re-assert. A deleted or
         // disconnected Drive Joint node thus RELEASES its joint (no latched last command stomping q
         // forever); manual control (jog/IK) resumes the moment nothing re-asserts the DOF.
