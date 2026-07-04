@@ -67,8 +67,19 @@ struct KNodeDoc {
     bool valid(QString* why = nullptr) const;
 };
 
+// ---- shared document family serializer (.knode AND .kgraph are the SAME schema; only the format
+//      family string differs -- a .kgraph is a KNodeDoc with no exposed ports). ----
+// doc <-> JSON. `formatFamily` is "knode" or "kgraph"; the object's "format" becomes "<family>/1".
+QJsonObject docToJson(const KNodeDoc& doc, const QString& formatFamily);
+bool        docFromJson(const QJsonObject& root, KNodeDoc& out, const QString& expectedFamily, QString* err = nullptr);
+// File I/O over the above (mkpath + indented write / read + parse + validate). writeDoc mints an id if
+// empty and returns it (or "" on I/O failure); readDoc returns false (doc untouched) on missing/corrupt
+// file, wrong/unknown format major, or a structurally-invalid document.
+QString writeDoc(KNodeDoc& doc, const QString& absPath, const QString& formatFamily);
+bool     readDoc(const QString& absPath, KNodeDoc& out, const QString& expectedFamily, QString* err = nullptr);
+
 // Save `doc` to `absPath` as versioned JSON ("format":"knode/1"); mints an id if empty. Returns the
-// doc id, or "" on I/O failure.
+// doc id, or "" on I/O failure. (Thin wrapper over writeDoc with family "knode".)
 QString saveKNode(KNodeDoc& doc, const QString& absPath);
 
 // Load a .knode document. Returns false (doc untouched) on missing/corrupt file, unknown format

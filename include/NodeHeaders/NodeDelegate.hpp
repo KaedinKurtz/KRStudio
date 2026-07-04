@@ -34,6 +34,9 @@ public:
     // nodeCreated handler runs -- so the widget must already exist then, or it is never embedded.
     void ensureBackend() const;
     Node* backendNode() const { ensureBackend(); return m_backendNode.get(); }
+    // The authoritative NodeFactory type-id (the string this delegate was created with) -- the stable key
+    // a .kgraph stores to recreate the node via model.addNode(typeId). Distinct from name()/caption().
+    const std::string& typeId() const { return m_typeId; }
     // re-run the backend node + notify QtNodes downstream (called when an in-node input widget is edited).
     void recomputeAndPropagate();
     // Install Node::reconfigurePorts so a backend that changes its OUTPUT port set at runtime (e.g. the

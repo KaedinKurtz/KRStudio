@@ -61,10 +61,9 @@ QString fileSha1(const QString& path) {
 }
 } // namespace
 
-QString saveKNode(KNodeDoc& doc, const QString& absPath) {
-    if (doc.id.isEmpty()) doc.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+QJsonObject docToJson(const KNodeDoc& doc, const QString& formatFamily) {
     QJsonObject root;
-    root["format"] = QStringLiteral("knode/1");
+    root["format"] = formatFamily + QStringLiteral("/1");
     root["id"] = doc.id; root["name"] = doc.name; root["category"] = doc.category;
     root["revision"] = doc.revision;
     QJsonArray nodes;
@@ -94,25 +93,14 @@ QString saveKNode(KNodeDoc& doc, const QString& absPath) {
         nested.push_back(o);
     }
     root["nested"] = nested;
-
-    QDir().mkpath(QFileInfo(absPath).absolutePath());
-    QFile f(absPath);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return {};
-    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    return doc.id;
+    return root;
 }
 
-bool loadKNode(const QString& absPath, KNodeDoc& out, QString* err) {
+bool docFromJson(const QJsonObject& root, KNodeDoc& out, const QString& expectedFamily, QString* err) {
     auto fail = [&](const QString& m) { if (err) *err = m; return false; };
-    QFile f(absPath);
-    if (!f.open(QIODevice::ReadOnly)) return fail(QStringLiteral("cannot open %1").arg(absPath));
-    QJsonParseError perr{};
-    const QJsonDocument d = QJsonDocument::fromJson(f.readAll(), &perr);
-    if (perr.error != QJsonParseError::NoError || !d.isObject()) return fail(QStringLiteral("parse error"));
-    const QJsonObject root = d.object();
     const QString fmt = root["format"].toString();
-    if (!fmt.startsWith(QLatin1String("knode/")) || fmt.section('/', 1, 1).toInt() != 1)
-        return fail(QStringLiteral("unknown .knode format: %1").arg(fmt));
+    if (!fmt.startsWith(expectedFamily + QStringLiteral("/")) || fmt.section('/', 1, 1).toInt() != 1)
+        return fail(QStringLiteral("unknown %1 format: %2").arg(expectedFamily, fmt));
 
     KNodeDoc doc;
     doc.id = root["id"].toString(); doc.name = root["name"].toString(); doc.category = root["category"].toString();
@@ -143,10 +131,33 @@ bool loadKNode(const QString& absPath, KNodeDoc& out, QString* err) {
         doc.nested.push_back(nr);
     }
     QString why;
-    if (!doc.valid(&why)) return fail(QStringLiteral("invalid .knode document: %1").arg(why));
+    if (!doc.valid(&why)) return fail(QStringLiteral("invalid %1 document: %2").arg(expectedFamily, why));
     out = std::move(doc);
     return true;
 }
+
+QString writeDoc(KNodeDoc& doc, const QString& absPath, const QString& formatFamily) {
+    if (doc.id.isEmpty()) doc.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const QJsonObject root = docToJson(doc, formatFamily);
+    QDir().mkpath(QFileInfo(absPath).absolutePath());
+    QFile f(absPath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return {};
+    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    return doc.id;
+}
+
+bool readDoc(const QString& absPath, KNodeDoc& out, const QString& expectedFamily, QString* err) {
+    auto fail = [&](const QString& m) { if (err) *err = m; return false; };
+    QFile f(absPath);
+    if (!f.open(QIODevice::ReadOnly)) return fail(QStringLiteral("cannot open %1").arg(absPath));
+    QJsonParseError perr{};
+    const QJsonDocument d = QJsonDocument::fromJson(f.readAll(), &perr);
+    if (perr.error != QJsonParseError::NoError || !d.isObject()) return fail(QStringLiteral("parse error"));
+    return docFromJson(d.object(), out, expectedFamily, err);
+}
+
+QString saveKNode(KNodeDoc& doc, const QString& absPath) { return writeDoc(doc, absPath, QStringLiteral("knode")); }
+bool    loadKNode(const QString& absPath, KNodeDoc& out, QString* err) { return readDoc(absPath, out, QStringLiteral("knode"), err); }
 
 // ================================================================================================
 // GATE KNODE

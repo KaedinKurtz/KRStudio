@@ -42,6 +42,7 @@
 #include "GltfAnim.hpp"            // krs::anim glTF/GLB animation import -> SkeletonClip + gate
 #include "RlEnv.hpp"               // krs::rl gym-style RL environment interface + gate
 #include "KDoc.hpp"                // krs::kdoc Node<->JSON codec (graph+subgraph persistence Phase 1) + gate
+#include "KGraph.hpp"              // krs::kgraph live-model <-> .kgraph bridge (Phase 3) + gate
 #include "KParts.hpp"              // krs::parts manufacturer library + repository + gate
 #include "FaceMaterial.hpp"        // krs::facemat whole-body/per-face material + gate
 #include "ClearanceLimits.hpp"     // krs::climits self-intersection -> joint limits + gate
@@ -1225,6 +1226,12 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::kdoc::runKDocGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Graph persistence Phase 3: whole live DataFlowGraphModel <-> .kgraph file round-trip.
+    if (qEnvironmentVariableIntValue("KRS_KGRAPH_SELFTEST") != 0) {
+        std::printf("\n================= KRS_KGRAPH_SELFTEST =================\n");
+        const bool ok = krs::kgraph::runKGraphGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     if (qEnvironmentVariableIntValue("KRS_MOTION_SELFTEST") != 0) {
         std::printf("\n================= KRS_MOTION_SELFTEST =================\n");
         const bool ok = krs::motion::runMotionPlanGate();
@@ -2118,6 +2125,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE GLTF-ANIM (TRS keyframe core -> SkeletonClip: topo order + LERP/SLERP sampling + clamp + FK compose; missing-parent & cycle & anti-stub neg-ctrls)", krs::anim::runGltfAnimGate() },
             { "GATE RLENV (gym-style residual-on-reference env: deterministic; reference maximizes imitation; residual steers task; scrambled-reward neg-ctrl)", krs::rl::runRlEnvGate() },
             { "GATE KDOC (Node<->JSON codec: tagged std::any round-trip over the closed union; int64 string-encoded; reconfigure selection restored before literals; unknown-type fail-loud neg-ctrl)", krs::kdoc::runKDocGate() },
+            { "GATE KGRAPH (whole live DataFlowGraphModel <-> .kgraph: params/literals/wiring-by-name/positions + reconfigured-node materialize; content-hash detection; unknown-major + unknown-factory-id neg-ctrls)", krs::kgraph::runKGraphGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
