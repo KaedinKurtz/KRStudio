@@ -34,6 +34,8 @@ class SimulationController;
 class PhysicsPropertiesWidget;
 class RobotBuilderPanel;
 class RobotViewport;
+class ManufacturerPartsPanel;
+class MaterialEditorPanel;
 class TextureBrowserWidget;
 
 namespace ads {
@@ -128,6 +130,8 @@ private:
     PhysicsPropertiesWidget* m_physicsPanel = nullptr;
     RobotBuilderPanel*       m_robotBuilderPanel = nullptr;
     RobotViewport*           m_robotViewport = nullptr;
+    ManufacturerPartsPanel*  m_partsPanel = nullptr;
+    MaterialEditorPanel*     m_materialPanel = nullptr;
     TextureBrowserWidget* m_textureBrowser = nullptr;
 
     void buildMenuBar();

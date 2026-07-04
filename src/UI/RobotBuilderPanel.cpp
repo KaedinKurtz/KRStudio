@@ -361,6 +361,11 @@ krs::rbuild::RobotGraph* RobotBuilderPanel::graph() const
     return m_scene->getRegistry().ctx().find<krs::rbuild::RobotGraph>();
 }
 
+int RobotBuilderPanel::selectedJointRow() const
+{
+    return m_jointsList ? m_jointsList->currentRow() : -1;
+}
+
 // Snapshot everything the upcoming edit can touch. Called at the TOP of every mutating panel op
 // (except Cut -- it mints robots and is confirm-guarded instead).
 void RobotBuilderPanel::pushUndo(const QString& label)

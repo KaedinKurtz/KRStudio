@@ -45,6 +45,9 @@ public:
     void shutdownAndSave() override;
     QWidget* widget() override { return this; }
 
+public:
+    int selectedJointRow() const;   // current joints-list row (-1 = none); for drop-to-apply actuator
+
 public slots:
     void refresh();   // re-read the live graph into the controls (guarded)
     // Bind the panel to a first-class robot for editing. If that robot IS the one the

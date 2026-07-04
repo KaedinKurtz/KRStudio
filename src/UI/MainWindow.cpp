@@ -55,6 +55,8 @@
 #include "PrimitiveBuilders.hpp"
 #include "PhysicsPropertiesWidget.hpp"
 #include "RobotBuilderPanel.hpp"   // robot-builder editing panel (invokes proven krs::rbuild ops)
+#include "ManufacturerPartsPanel.hpp"  // parts library browser (drag-drop) + repository/cloud
+#include "MaterialEditorPanel.hpp"     // whole-body / per-face PBR material editor
 #include "RobotViewport.hpp"       // robot-only spinning viewport bound to the live graph
 #include "RobotModel.hpp"          // krs::robot::instantiateFanucRobot (first-class Robot)
 #include "RobotBuilder.hpp"        // krs::rbuild::RobotGraph (re-apply edits to the live robot)
@@ -2369,6 +2371,26 @@ MainWindow::MainWindow(QWidget* parent)
         rvDock->setWidget(m_robotViewport);
         m_dockManager->addDockWidget(ads::BottomDockWidgetArea, rvDock);
 
+        // Manufacturer Parts library (drag parts into the scene / onto joints) + Material editor
+        // (whole-body vs per-face PBR), tabbed with the Robot Builder.
+        m_partsPanel = new ManufacturerPartsPanel(m_scene.get(), this);
+        auto* partsDock = new ads::CDockWidget(QStringLiteral("Manufacturer Parts"), this);
+        partsDock->setWidget(m_partsPanel);
+        partsDock->setStyleSheet(sidePanelStyle);
+        if (auto* rbArea = rbDock->dockAreaWidget())
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, partsDock, rbArea);
+        else
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, partsDock);
+
+        m_materialPanel = new MaterialEditorPanel(m_scene.get(), this);
+        auto* matDock = new ads::CDockWidget(QStringLiteral("Material Editor"), this);
+        matDock->setWidget(m_materialPanel);
+        matDock->setStyleSheet(sidePanelStyle);
+        if (auto* rbArea = rbDock->dockAreaWidget())
+            m_dockManager->addDockWidget(ads::CenterDockWidgetArea, matDock, rbArea);
+        else
+            m_dockManager->addDockWidget(ads::RightDockWidgetArea, matDock);
+
         // Register these always-docked panels for toolbar toggling (non-destructive).
         registerPanelDock(QStringLiteral("Physics"),       physDock);
         registerPanelDock(QStringLiteral("Fluid"),         fluidDock);
@@ -2376,6 +2398,8 @@ MainWindow::MainWindow(QWidget* parent)
         registerPanelDock(QStringLiteral("Lighting"),      lightingDock);
         registerPanelDock(QStringLiteral("Textures"),      texDock);
         registerPanelDock(QStringLiteral("Robot Builder"), rbDock);
+        registerPanelDock(QStringLiteral("Manufacturer Parts"), partsDock);
+        registerPanelDock(QStringLiteral("Material Editor"),    matDock);
         registerPanelDock(QStringLiteral("Robot View"),    rvDock);
 
         physDock->setAsCurrentTab();
@@ -3496,6 +3520,40 @@ void MainWindow::spawnSimSourceAt(SimSource kind, const glm::vec3& worldPos)
 void MainWindow::spawnMeshAssetAt(const QString& path, const glm::vec3& worldPos)
 {
     if (!m_scene) return;
+    // PART DROP: a .k* library part is not a mesh -- route it. .kactuator dropped while a joint is
+    // selected in the Robot Builder derives that joint's effort/velocity from the motor+gearbox;
+    // .kmaterial applies to the selected body via the material editor path.
+    const QString ext = QFileInfo(path).suffix().toLower();
+    if (ext == QLatin1String("kactuator") || ext == QLatin1String("kmotor")) {
+        const krs::ksave::ActuatorSpec sp = (ext == QLatin1String("kactuator"))
+            ? krs::ksave::resolveActuator(path.toStdString())
+            : krs::ksave::ActuatorSpec{};   // a bare motor needs a gearbox to give joint-side numbers
+        auto& reg = m_scene->getRegistry();
+        auto* g = reg.ctx().find<krs::rbuild::RobotGraph>();
+        int row = m_robotBuilderPanel ? m_robotBuilderPanel->selectedJointRow() : -1;
+        if (!g || row < 0 || row >= int(g->joints.size())) {
+            statusBar()->showMessage(QStringLiteral("Select a joint in the Robot Builder first, then drop the actuator on it."), 6000);
+            return;
+        }
+        if (!sp.ok) {
+            statusBar()->showMessage(QStringLiteral("Actuator: %1").arg(sp.error.isEmpty()
+                ? QStringLiteral("a .kactuator (motor + gearbox) is needed to derive joint limits") : sp.error), 6000);
+            return;
+        }
+        g->joints[row].limits.effort = sp.jointEffort;
+        g->joints[row].limits.velocity = sp.jointVelocity;
+        g->joints[row].actuatorRef = path.toStdString();
+        m_robotBuilderPanel->refresh();
+        emit m_robotBuilderPanel->graphChanged();
+        statusBar()->showMessage(QStringLiteral("Actuator \"%1\" -> joint: effort %2 N*m, velocity %3 rad/s")
+            .arg(QString::fromStdString(sp.actuatorName)).arg(sp.jointEffort, 0, 'f', 2).arg(sp.jointVelocity, 0, 'f', 2), 8000);
+        return;
+    }
+    if (ext == QLatin1String("kmaterial")) {
+        statusBar()->showMessage(QStringLiteral("Drop landed. Use the Material Editor panel to apply "
+            "this material to the selected body/face (drag-to-apply materials is a follow-up)."), 6000);
+        return;
+    }
     MeshID id = ResourceManager::instance().loadMesh(path);
     if (id == MeshID::None) {
         statusBar()->showMessage(QStringLiteral("Mesh load failed: %1").arg(path), 5000);
