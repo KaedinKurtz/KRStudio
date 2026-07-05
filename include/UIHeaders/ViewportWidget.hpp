@@ -58,6 +58,19 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* ev) override;
+
+    // Update the ctx SnapSessionState from the newest GPU pick (kind 0/1/2 = face/edge/vertex):
+    // candidate set for the hovered feature (Shift = face-lock, Ctrl = reveal the body's
+    // cylinder-axis points), nearest-to-cursor active candidate, per-feature correction reset.
+    void updateSnapSession(entt::registry& reg, bool hitValid, entt::entity hitEntity,
+                           int hitKind, int hitId, QMouseEvent* ev);
+
+public:
+    // mate-selector P4: project a world point to logical widget coords (false = behind camera).
+    // Public: the SNAPUI gate computes real cursor targets through it.
+    bool projectToScreen(const glm::vec3& w, QPoint& out);
+
+protected:
     void mouseDoubleClickEvent(QMouseEvent* ev) override;
     void dragEnterEvent(QDragEnterEvent* ev) override;
     void dragMoveEvent(QDragMoveEvent* ev) override;
@@ -96,6 +109,7 @@ private:
     QLabel* m_statsOverlay;
     class MeasureHud* m_measureHud = nullptr;    // measure-mode corner readout (self-hiding)
     class ConstraintIconOverlay* m_constraintIcons = nullptr;   // hovering constraint glyphs
+    bool m_lastSnapCtrl = false;                 // P4: Ctrl-reveal state at the last hover
 
     QPoint m_pressPos;
     bool   m_maybeClick = false;

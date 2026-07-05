@@ -3,6 +3,7 @@
 #include "ConstraintsPanel.hpp"
 #include "Constraint.hpp"            // krs::constraint -- the gated core (anchors, snap, graph)
 #include "ConstraintIconOverlay.hpp" // krs::ui::ConstraintFocusRequest (icon-click handshake)
+#include "SnapSession.hpp"           // krs::snapui -- P4 connector-authoring latch + commits
 #include "Scene.hpp"
 #include <DockWidget.h>              // raise our own ads dock on an icon click
 
@@ -95,6 +96,16 @@ ConstraintsPanel::ConstraintsPanel(Scene* scene, QWidget* parent)
     m_applyBtn->setEnabled(false);
     root->addWidget(m_applyBtn);
 
+    // ---- persistent MATE-CONNECTOR authoring (mate-selector P4) ----
+    root->addWidget(hint(QStringLiteral(
+        "Or author a durable MATE CONNECTOR: latch, hover a face -- inference dots wake up "
+        "(square = centroid, plus = centre, triangle = midpoint, circle = vertex, diamond = "
+        "axis) -- and click the one you want. F flips +Z, R turns the secondary axis 90°, "
+        "Shift locks the face, Ctrl reveals hole axes."), this));
+    m_placeConnBtn = new QPushButton(QStringLiteral("Place Mate Connector"), this);
+    m_placeConnBtn->setCheckable(true);
+    root->addWidget(m_placeConnBtn);
+
     root->addWidget(hint(QStringLiteral("Constraints in the scene (select to suppress/delete; "
                                         "click a hovering icon in the viewport to jump here):"), this));
     m_list = new QListWidget(this);
@@ -113,6 +124,25 @@ ConstraintsPanel::ConstraintsPanel(Scene* scene, QWidget* parent)
 
     connect(m_pickABtn, &QPushButton::toggled, this, &ConstraintsPanel::onPickA);
     connect(m_pickBBtn, &QPushButton::toggled, this, &ConstraintsPanel::onPickB);
+    connect(m_placeConnBtn, &QPushButton::toggled, this, [this](bool on) {
+        if (!m_scene) return;
+        auto& reg = m_scene->getRegistry();
+        auto& ss = krs::snapui::snapSession(reg);
+        ss.connectorAuthoring = on;
+        ss.hasResult = false;                                   // stale commits never fire the latch
+        auto* st = reg.ctx().find<krs::sel::SelectionState>();
+        if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
+        if (on) {
+            if (m_pickABtn->isChecked()) { QSignalBlocker b(m_pickABtn); m_pickABtn->setChecked(false); }
+            if (m_pickBBtn->isChecked()) { QSignalBlocker b(m_pickBBtn); m_pickBBtn->setChecked(false); }
+            m_armWhich = 0;
+            st->enabled = true; st->fifoTwoBores = false; st->measureMode = false; st->boreQuota = 0;
+            m_status->setText(QStringLiteral("Hover a face -- dots wake up; click the inference "
+                                             "point you want (F flip, R rotate, Shift lock, Ctrl axes)."));
+        } else {
+            st->enabled = false;
+        }
+    });
     connect(m_applyBtn, &QPushButton::clicked, this, &ConstraintsPanel::onApply);
     connect(delBtn, &QPushButton::clicked, this, &ConstraintsPanel::onDeleteSelected);
     connect(m_suppress, &QCheckBox::toggled, this, &ConstraintsPanel::onSuppressToggled);
@@ -197,6 +227,42 @@ void ConstraintsPanel::onTick()
             }
         }
     }
+    // P4: a snap commit while the Place-Connector latch is armed becomes a PERSISTENT
+    // MateConnector on the picked body (body-LOCAL frame + durable feature key -- the
+    // Onshape implicit-connector persistence model).
+    {
+        auto& ss = krs::snapui::snapSession(reg);
+        if (ss.connectorAuthoring && ss.hasResult) {
+            ss.hasResult = false;
+            const krs::snap::SnapCandidate c = ss.result;
+            if (reg.valid(c.entity)) {
+                glm::mat4 inv(1.0f);
+                if (const auto* xf = reg.try_get<TransformComponent>(c.entity))
+                    inv = glm::inverse(xf->getTransform());
+                auto& mcc = reg.get_or_emplace<MateConnectorComponent>(c.entity);
+                MateConnector mc;
+                mc.id = mcc.nextConnectorId++;
+                mc.name = "MC_" + std::to_string(mc.id);
+                mc.localPos = glm::vec3(inv * glm::vec4(c.pos, 1.0f));
+                const glm::mat3 invR(inv);
+                mc.localZ = glm::normalize(invR * c.z);
+                mc.localX = glm::normalize(invR * c.x);
+                mc.sourceFaceKey = c.key;
+                mc.sourceFaceType = (c.edgeId >= 0) ? 1 : 0;   // edge-derived vs face-derived
+                mcc.connectors.push_back(mc);
+                m_status->setText(QStringLiteral("Connector %1 placed on entity %2 (key %3) -- it "
+                                                 "re-anchors across re-import and rides the body.")
+                                      .arg(QString::fromStdString(mc.name))
+                                      .arg(std::uint32_t(c.entity))
+                                      .arg(QString::number(c.key, 16)));
+                QSignalBlocker b(m_placeConnBtn);              // one placement per latch
+                m_placeConnBtn->setChecked(false);
+                ss.connectorAuthoring = false;
+                if (auto* st2 = reg.ctx().find<krs::sel::SelectionState>()) st2->enabled = false;
+            }
+        }
+    }
+
     m_applyBtn->setEnabled(m_haveA && m_haveB);
     refreshList();
     // keep the icons checkbox honest if something else flips the ctx flag

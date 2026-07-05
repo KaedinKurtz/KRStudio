@@ -59,6 +59,7 @@ private:
     QWidget*        m_offsetRow = nullptr;
     QWidget*        m_angleRow = nullptr;
     QPushButton*    m_applyBtn = nullptr;
+    QPushButton*    m_placeConnBtn = nullptr;   // latch: next snap-commit becomes a MateConnector
     QListWidget*    m_list = nullptr;
     QCheckBox*      m_suppress = nullptr;
     QCheckBox*      m_showIcons = nullptr;

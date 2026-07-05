@@ -16,6 +16,7 @@
 #include "ConstraintsPanel.hpp"   // the Fusion-style constraint authoring dock
 #include "BRepEdge.hpp"           // synthetic edge rig for the KRS_PICK_SELFTEST gate
 #include "BRepVertex.hpp"         // synthetic vertex rig for the KRS_PICK_SELFTEST gate
+#include "SnapSession.hpp"        // krs::snapui -- the KRS_SNAPUI_SELFTEST gate asserts the session
 #include <QStandardPaths>
 #include <QCloseEvent>
 #include <QFile>
@@ -2152,6 +2153,124 @@ MainWindow::MainWindow(QWidget* parent)
             }
             for (const QString& l : rig->lines) qInfo().noquote() << "[pick]" << l;
             qInfo() << "[pick] selftest done, fails =" << rig->fails;
+            std::fflush(stdout);
+            std::_Exit(rig->fails == 0 ? 0 : 1);
+        });
+    }
+
+    // Test hook: KRS_SNAPUI_SELFTEST=<outDir> -- the P4 interaction gate, through the REAL event
+    // path: a synthetic B-Rep plane rig, real QMouseEvents (move -> GPU pick -> session update;
+    // press+release -> snap commit), assertions on the ctx SnapSessionState (candidates, active
+    // FaceCentroid) and on the PERSISTENT MateConnector the commit places, plus a screenshot of
+    // the dots + mate-frame triad. Exit code = fail count.
+    if (qEnvironmentVariableIsSet("KRS_SNAPUI_SELFTEST")) {
+        const QString outDir = qEnvironmentVariable("KRS_SNAPUI_SELFTEST");
+        struct SnapRig { entt::entity plane = entt::null; QStringList lines; int fails = 0; QPoint px; };
+        auto rig = std::make_shared<SnapRig>();
+        auto check = [rig](const char* name, bool ok, const QString& detail = QString()) {
+            rig->lines << QStringLiteral("%1  %2%3").arg(ok ? "PASS" : "FAIL", QLatin1String(name),
+                                                         detail.isEmpty() ? QString() : "  (" + detail + ")");
+            if (!ok) ++rig->fails;
+        };
+        QTimer::singleShot(4000, this, [this, rig]() {
+            auto& reg = m_scene->getRegistry();
+            // a 0.6 x 0.6 square plane at (3,1,0) facing +Z with FULL B-Rep wiring (face,
+            // 4 boundary edges, 4 corner vertices with adjacency) -- the SnapEngine's meal
+            rig->plane = reg.create();
+            reg.emplace<TransformComponent>(rig->plane, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+            auto& mesh = reg.emplace<RenderableMeshComponent>(rig->plane);
+            const float h = 0.3f;
+            const glm::vec3 c(3.0f, 1.0f, 0.0f);
+            const glm::vec3 P[4] = { c + glm::vec3(-h, -h, 0), c + glm::vec3(h, -h, 0),
+                                     c + glm::vec3(h, h, 0),   c + glm::vec3(-h, h, 0) };
+            for (const auto& p : P) { Vertex v; v.position = p; v.normal = { 0, 0, 1 }; mesh.vertices.push_back(v); }
+            mesh.indices = { 0, 1, 2, 0, 2, 3 };
+            mesh.triFace = { 0, 0 };
+            mesh.aabbMin = c - glm::vec3(h, h, 0.01f); mesh.aabbMax = c + glm::vec3(h, h, 0.01f);
+            BRepFace f; f.type = 0; f.normal = { 0, 0, 1 }; f.axisPos = c;
+            reg.emplace<BRepFaceComponent>(rig->plane).faces.push_back(f);
+            auto& ec = reg.emplace<BRepEdgeComponent>(rig->plane);
+            for (int i = 0; i < 4; ++i) {
+                BRepEdge e; e.kind = BRepEdge::Line;
+                e.p0 = P[i]; e.p1 = P[(i + 1) % 4];
+                e.axisDir = glm::normalize(e.p1 - e.p0);
+                e.polyline = { e.p0, e.p1 };
+                e.faceA = 0;
+                ec.edges.push_back(e);
+            }
+            auto& vc = reg.emplace<BRepVertexComponent>(rig->plane);
+            for (int i = 0; i < 4; ++i) {
+                BRepVertex bv; bv.pos = P[i];
+                bv.faces = { 0 };
+                bv.edges = { i, (i + 3) % 4 };
+                vc.verts.push_back(bv);
+            }
+            auto* st = reg.ctx().find<krs::sel::SelectionState>();
+            if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
+            st->enabled = true;
+            if (ViewportWidget* vp = primaryViewport())
+                vp->getCamera().forceRecalculateView(glm::vec3(3.0f, 1.0f, 2.0f), glm::vec3(3.0f, 1.0f, 0.0f), 2.0f);
+        });
+        auto sendMove = [this, rig]() {
+            ViewportWidget* vp = primaryViewport();
+            if (!vp || !vp->projectToScreen(glm::vec3(3.0f, 1.0f, 0.0f), rig->px)) return;
+            QMouseEvent mv(QEvent::MouseMove, QPointF(rig->px), vp->mapToGlobal(rig->px),
+                           Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(vp, &mv);
+        };
+        QTimer::singleShot(6000, this, sendMove);       // 1st move queues the GPU pick
+        QTimer::singleShot(6500, this, sendMove);       // 2nd move consumes it -> session fills
+        QTimer::singleShot(7000, this, [this, rig, check]() {
+            auto& reg = m_scene->getRegistry();
+            auto& ss = krs::snapui::snapSession(reg);
+            check("ARMED    session armed with feature picking", ss.armed);
+            check("CANDS    face candidates woke up (centroid + corners + midpoints)",
+                  int(ss.candidates.size()) >= 9,
+                  QStringLiteral("n=%1").arg(ss.candidates.size()));
+            const bool activeCentroid = ss.activeIdx >= 0
+                && ss.activeIdx < int(ss.candidates.size())
+                && ss.candidates[std::size_t(ss.activeIdx)].kind == krs::snap::SnapKind::FaceCentroid;
+            check("ACTIVE   cursor at the face centre -> FaceCentroid is the active candidate",
+                  activeCentroid,
+                  QStringLiteral("activeIdx=%1").arg(ss.activeIdx));
+            check("FRAME    active frame +Z out of material (== +globalZ here)",
+                  activeCentroid
+                  && glm::dot(ss.candidates[std::size_t(ss.activeIdx)].z, glm::vec3(0, 0, 1)) > 0.999f);
+            // arm the connector latch exactly as the panel button does, then CLICK
+            ss.connectorAuthoring = true;
+        });
+        QTimer::singleShot(7300, this, [this, rig]() {
+            ViewportWidget* vp = primaryViewport();
+            if (!vp) return;
+            QMouseEvent dn(QEvent::MouseButtonPress, QPointF(rig->px), vp->mapToGlobal(rig->px),
+                           Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(vp, &dn);
+            QMouseEvent upEv(QEvent::MouseButtonRelease, QPointF(rig->px), vp->mapToGlobal(rig->px),
+                             Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(vp, &upEv);
+        });
+        QTimer::singleShot(8200, this, [this, rig, check, outDir]() {
+            auto& reg = m_scene->getRegistry();
+            const auto* mcc = reg.try_get<MateConnectorComponent>(rig->plane);
+            check("COMMIT   click placed a PERSISTENT MateConnector on the body",
+                  mcc && mcc->connectors.size() == 1);
+            if (mcc && !mcc->connectors.empty()) {
+                const MateConnector& mc = mcc->connectors.front();
+                check("LOCAL    connector frame is body-local at the centroid, Z out",
+                      glm::distance(mc.localPos, glm::vec3(3.0f, 1.0f, 0.0f)) < 1e-4f
+                      && glm::dot(mc.localZ, glm::vec3(0, 0, 1)) > 0.999f,
+                      QStringLiteral("pos=(%1,%2,%3)").arg(mc.localPos.x).arg(mc.localPos.y).arg(mc.localPos.z));
+            }
+            if (ViewportWidget* vp = primaryViewport())
+                vp->grab().save(outDir + QStringLiteral("/snapui_overlay.png"));
+            QFile fres(outDir + QStringLiteral("/snapui_result.txt"));
+            if (fres.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream ts(&fres);
+                for (const QString& l : rig->lines) ts << l << "\n";
+                ts << rig->fails << " fails\n";
+            }
+            for (const QString& l : rig->lines) qInfo().noquote() << "[snapui]" << l;
+            qInfo() << "[snapui] selftest done, fails =" << rig->fails;
             std::fflush(stdout);
             std::_Exit(rig->fails == 0 ? 0 : 1);
         });

@@ -33,6 +33,7 @@
 #include "EdgeSelect.hpp"         // krs::sel::pickEdge -- TRUE B-Rep edge picking (circles/lines)
 #include "ConstraintIconOverlay.hpp"   // hovering constraint glyphs (screen-space, clickable)
 #include "BRepVertex.hpp"              // BRepVertexComponent -- GPU vertex picks resolve here
+#include "SnapSession.hpp"             // krs::snapui -- P4 inference session (dots/triad/commit)
 #include "Shader.hpp"
 #include "components.hpp"
 #include "IntersectionSystem.hpp"
@@ -179,7 +180,8 @@ static void featureHover(Scene& scene, const Camera& cam, int px, int py, int vp
 }
 
 static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int vpW, int vpH, bool additive,
-                          Qt::KeyboardModifiers mods = Qt::NoModifier)
+                          Qt::KeyboardModifiers mods = Qt::NoModifier,
+                          bool gpuHoverDriven = false)
 {
     auto& reg = scene.getRegistry();
     auto* st = reg.ctx().find<krs::sel::SelectionState>();
@@ -188,26 +190,34 @@ static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int v
     const glm::mat4 V = cam.getViewMatrix();
     const krs::pick::Ray ray = krs::pick::makeRayFromScreen(P, V, px, py, vpW, vpH);
     if (!std::isfinite(ray.dir.x)) return;
-    // TRUE-EDGE preference (except in bore-collect mode, which is cylinder-faces-only): an edge
-    // within a distance-scaled tolerance of the ray wins over the face behind it -- circles and
-    // lines are otherwise unpickable (infinitely thin). Tolerance ~6 px at the hit depth.
+    // P5: WYSIWYG COMMIT -- when the GPU pick drives the hover, a click commits EXACTLY the
+    // feature under the highlight (face/edge/vertex with correct occlusion + priority). The
+    // CPU-ray paths below only serve the first-frame bridge and the specialized bore-collect
+    // mode (cylinder-faces-only by design, gated).
+    const bool gpuHover = gpuHoverDriven && !st->fifoTwoBores;
+    if (st->measureMode) {
+        // Onshape-style measure buffer: plain click = new item, Shift = extend the current item
+        // (multi-face plane), Ctrl = vertex pick. FIFO-2 items.
+        if (mods.testFlag(Qt::ControlModifier))
+            krs::sel::commitMeasure(*st, reg, ray, mods.testFlag(Qt::ShiftModifier), /*vertex*/ true);
+        else if (gpuHover) {
+            if (st->hover.valid)
+                krs::sel::commitMeasureResolved(*st, st->hover, mods.testFlag(Qt::ShiftModifier));
+        } else
+            krs::sel::commitMeasure(*st, reg, ray, mods.testFlag(Qt::ShiftModifier), /*vertex*/ false);
+        return;
+    }
+    if (gpuHover) {
+        if (st->hover.valid) krs::sel::commitResolved(*st, st->hover, additive);
+        return;                                            // a highlighted MISS commits nothing
+    }
+    // CPU fallback (first frame / no renderer): true-edge preference within ~6 px, then faces.
     krs::sel::Selection edgePick;
     if (!st->fifoTwoBores) {
         float depth = 5.0f;
         if (const auto hit = krs::pick::pickMesh(reg, ray)) depth = hit->t;
         const float tol = std::max(0.003f, 0.006f * depth);
         edgePick = krs::sel::pickEdge(reg, ray, tol);
-    }
-    if (st->measureMode) {
-        // Onshape-style measure buffer: plain click = new item, Shift = extend the current item
-        // (multi-face plane), Ctrl = vertex pick. FIFO-2 items.
-        if (mods.testFlag(Qt::ControlModifier))
-            krs::sel::commitMeasure(*st, reg, ray, mods.testFlag(Qt::ShiftModifier), /*vertex*/ true);
-        else if (edgePick.valid)
-            krs::sel::commitMeasureResolved(*st, edgePick, mods.testFlag(Qt::ShiftModifier));
-        else
-            krs::sel::commitMeasure(*st, reg, ray, mods.testFlag(Qt::ShiftModifier), /*vertex*/ false);
-        return;
     }
     if (edgePick.valid) { krs::sel::commitResolved(*st, edgePick, additive); return; }
     krs::sel::commitSelection(*st, reg, ray, additive);
@@ -628,6 +638,27 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
                 }
             }
 
+            // SNAP COMMIT (P4): an ACTIVE inference candidate turns this click into a mate-frame
+            // result (corrections applied) -- consumers (connector authoring, joint/constraint
+            // pickers) read it from the session. Falls back to the bare-face centroid when the
+            // operator clicks a face without waking a dot (the Onshape one-click default).
+            {
+                auto& ss = krs::snapui::snapSession(reg);
+                if (ss.armed) {
+                    int commitIdx = ss.activeIdx;
+                    if (commitIdx < 0 && ss.connectorAuthoring && !ss.candidates.empty()
+                        && ss.candidates[0].kind == krs::snap::SnapKind::FaceCentroid)
+                        commitIdx = 0;
+                    if (commitIdx >= 0 && commitIdx < int(ss.candidates.size())) {
+                        krs::snap::SnapCandidate c = ss.candidates[std::size_t(commitIdx)];
+                        if (ss.flipped) c = krs::snap::flipZ(c);
+                        for (int r = 0; r < (ss.rotSteps & 3); ++r) c = krs::snap::rotateX90(c);
+                        ss.result = c;
+                        ss.hasResult = true;
+                    }
+                }
+            }
+
             // SUB-FEATURE SELECT: commit the clicked feature into the accumulating set, at the SAME
             // x-ray depth as the body pick above -- so clicking the same pixel again walks BOTH the
             // body and the feature to the occluded candidate (featureCommitCycled existed for exactly
@@ -639,7 +670,9 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
                 featureCommitCycled(*m_scene, ray, m_xrayIdx, /*additive*/ true);
             else
                 featureCommit(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(), width(), height(),
-                              /*additive*/ true, ev->modifiers());
+                              /*additive*/ true, ev->modifiers(),
+                              /*gpuHoverDriven*/ m_renderingSystem
+                                  && m_renderingSystem->latestPick(this).fromGpu);
 
             QVector<entt::entity> currentSelection;
             for (auto eSel : reg.view<SelectedComponent>()) currentSelection.push_back(eSel);
@@ -719,6 +752,7 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* ev)
                     }
                 }
                 st->hover = s;                     // a resolved MISS clears the hover (honest)
+                updateSnapSession(reg, hit.valid, hit.entity, hit.kind, hit.id, ev);   // P4
             } else {
                 featureHover(*m_scene, cam, ev->pos().x(), ev->pos().y(), width(), height());
             }
@@ -750,8 +784,99 @@ void ViewportWidget::wheelEvent(QWheelEvent* event) {
     update();
 }
 
+bool ViewportWidget::projectToScreen(const glm::vec3& w, QPoint& out)
+{
+    Camera& cam = getCamera();
+    const float aspect = float(width()) / float(std::max(1, height()));
+    const glm::vec4 clip = cam.getProjectionMatrix(aspect) * cam.getViewMatrix() * glm::vec4(w, 1.0f);
+    if (clip.w <= 1e-6f) return false;
+    const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+    out = QPoint(int((ndc.x * 0.5f + 0.5f) * float(width())),
+                 int((1.0f - (ndc.y * 0.5f + 0.5f)) * float(height())));
+    return true;
+}
+
+void ViewportWidget::updateSnapSession(entt::registry& reg, bool hitValid, entt::entity hitEntity,
+                                       int hitKind, int hitId, QMouseEvent* ev)
+{
+    auto& ss = krs::snapui::snapSession(reg);
+    auto* st = reg.ctx().find<krs::sel::SelectionState>();
+    ss.armed = st && st->enabled;
+    if (!ss.armed) { ss.candidates.clear(); ss.activeIdx = -1; return; }
+
+    const bool shift = ev->modifiers().testFlag(Qt::ShiftModifier);
+    const bool ctrl  = ev->modifiers().testFlag(Qt::ControlModifier);
+    ss.ctrlReveal = ctrl;
+
+    entt::entity e = hitValid ? hitEntity : entt::null;
+    int faceId = (hitValid && hitKind == 0) ? hitId : -1;
+    int edgeId = (hitValid && hitKind == 1) ? hitId : -1;
+    int vertId = (hitValid && hitKind == 2) ? hitId : -1;
+
+    // SHIFT FACE-LOCK (Onshape): while held, the candidate set stays frozen on the face it was
+    // on when Shift went down -- the negative-space affordance (work off a face you are no
+    // longer hovering).
+    if (shift && ss.shiftLock && reg.valid(ss.lockedEntity)) {
+        e = ss.lockedEntity; faceId = ss.lockedFaceId; edgeId = -1; vertId = -1;
+    } else if (shift && hitValid && hitKind == 0 && hitId >= 0) {
+        ss.shiftLock = true; ss.lockedEntity = e; ss.lockedFaceId = faceId;
+    } else if (!shift) {
+        ss.shiftLock = false; ss.lockedEntity = entt::null; ss.lockedFaceId = -1;
+    }
+
+    const bool changed = (e != ss.hoverEntity || faceId != ss.hoverFaceId
+                          || edgeId != ss.hoverEdgeId || vertId != ss.hoverVertexId
+                          || ctrl != m_lastSnapCtrl);
+    if (changed) {
+        ss.hoverEntity = e; ss.hoverFaceId = faceId; ss.hoverEdgeId = edgeId; ss.hoverVertexId = vertId;
+        m_lastSnapCtrl = ctrl;
+        ss.candidates.clear();
+        ss.rotSteps = 0; ss.flipped = false;               // corrections are per-feature
+        if (reg.valid(e)) {
+            if (faceId >= 0)      ss.candidates = krs::snap::candidatesForFace(reg, e, faceId);
+            else if (edgeId >= 0) ss.candidates = krs::snap::candidatesForEdge(reg, e, edgeId);
+            else if (vertId >= 0) {
+                const auto c = krs::snap::candidateForVertex(reg, e, vertId, -1);
+                if (c.entity != entt::null) ss.candidates.push_back(c);
+            }
+            // CTRL REVEAL (Fusion): every cylinder-axis point of the hovered BODY joins the set
+            // (obscured hole axes become reachable without x-ray gymnastics).
+            if (ctrl)
+                if (const auto* fc = reg.try_get<BRepFaceComponent>(e))
+                    for (int fi = 0; fi < int(fc->faces.size()); ++fi)
+                        if (fc->faces[fi].type == 1 && fi != faceId)
+                            for (const auto& c : krs::snap::candidatesForFace(reg, e, fi))
+                                if (c.kind == krs::snap::SnapKind::AxisPoint)
+                                    ss.candidates.push_back(c);
+        }
+    }
+
+    // ACTIVE candidate = nearest to the cursor within the wake radius (screen space).
+    ss.activeIdx = -1;
+    float best = 20.0f;                                    // logical px
+    for (std::size_t i = 0; i < ss.candidates.size(); ++i) {
+        QPoint p;
+        if (!projectToScreen(ss.candidates[i].pos, p)) continue;
+        const float d = std::hypot(float(p.x() - ev->pos().x()), float(p.y() - ev->pos().y()));
+        if (d < best) { best = d; ss.activeIdx = int(i); }
+    }
+}
+
 void ViewportWidget::keyPressEvent(QKeyEvent* ev)
 {
+    // mate-selector P4 frame corrections on the ACTIVE inference candidate:
+    // F flips the primary (+Z), R rotates the secondary 90 deg about Z (Onshape's two
+    // affordances as keys; in-canvas buttons can come later).
+    if (m_scene && (ev->key() == Qt::Key_F || ev->key() == Qt::Key_R)) {
+        auto& ss = krs::snapui::snapSession(m_scene->getRegistry());
+        if (ss.armed && ss.activeIdx >= 0) {
+            if (ev->key() == Qt::Key_F) ss.flipped = !ss.flipped;
+            else                        ss.rotSteps = (ss.rotSteps + 1) & 3;
+            update();
+            return;
+        }
+    }
+
     Camera& cam = getCamera();
 
     if (cam.navMode() == Camera::NavMode::FLY) {

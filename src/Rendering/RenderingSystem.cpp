@@ -25,6 +25,7 @@
 #include "FieldVisualizerPass.hpp"
 #include "PointCloudPass.hpp"
 #include "GizmoPass.hpp"
+#include "SnapOverlayPass.hpp"     // mate-selector P4: inference dots + mate-frame preview
 #include "JointAxisPass.hpp"
 #include "GhostRobotPass.hpp"
 #include "FluidPass.hpp"
@@ -781,6 +782,9 @@ void RenderingSystem::initializeSharedResources()
     // needed). Before the gizmo so the gizmo stays on absolute top.
     m_overlayPasses.push_back(std::make_unique<JointAxisPass>());
     m_overlayPasses.push_back(std::make_unique<GizmoPass>());
+    // mate-selector P4: Onshape-style inference dots + the active mate-frame triad/disk.
+    // Post-tonemap + last: the snap UI draws over everything, including the gizmo.
+    m_overlayPasses.push_back(std::make_unique<SnapOverlayPass>());
 
     // Fluid solver lives on the engine context alongside the passes.
     m_fluid = std::make_unique<FluidSystem>();
