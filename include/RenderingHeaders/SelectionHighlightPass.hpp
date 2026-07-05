@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IRenderPass.hpp"
+#include "SelectionService.hpp"   // krs::sel::Selection (quadrant-marker anchor derivation)
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -33,6 +34,14 @@ private:
     // P2: the pixel-exact fill + ID-discontinuity contour composite from the pick-ID buffer
     // (re-fetches the ctx SelectionState internally; no-op when no pick target exists yet).
     void drawIdHighlightComposite(const RenderFrameContext& ctx);
+    // Solid triangle fan through the same shader/exposure path as drawLines.
+    void drawFan(const RenderFrameContext& ctx, const std::vector<glm::vec3>& fan,
+                 const glm::vec3& color);
+    // The committed-selection marker: the compact JOINT-ORIGIN QUADRANT GLYPH (two accent +
+    // two white quadrants, outline circle, short axis stub) at the pick's true anchor point --
+    // replaces the retired concentric analytic rings.
+    void drawQuadrantMarker(const RenderFrameContext& ctx, const krs::sel::Selection& sel,
+                            const glm::vec3& accent);
 
     unsigned int m_vao = 0;
     unsigned int m_vbo = 0;

@@ -499,8 +499,13 @@ inline void refreshSelections(SelectionState& st, entt::registry& reg) {
         if (s.faceId >= 0) {
             Selection f = resolveFace(reg, s.entity, s.faceId);
             if (f.valid) {
+                // rim-anchored features re-snap to the rim NEAREST the original click; features
+                // without rims (planes: axisEnd0/1 both zero) KEEP the click point -- the old
+                // unconditional rim snap parked plane anchors at the world origin.
+                const bool hasRims = glm::dot(f.axisEnd0, f.axisEnd0)
+                                   + glm::dot(f.axisEnd1, f.axisEnd1) > 1e-12f;
                 const bool nearEnd0 = glm::distance(s.hitPoint, s.axisEnd0) <= glm::distance(s.hitPoint, s.axisEnd1);
-                f.hitPoint = nearEnd0 ? f.axisEnd0 : f.axisEnd1;
+                f.hitPoint = hasRims ? (nearEnd0 ? f.axisEnd0 : f.axisEnd1) : s.hitPoint;
                 f.groupId = s.groupId;                   // the measure ITEM id survives the re-derivation
                 s = f;
             }

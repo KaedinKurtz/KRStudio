@@ -4,6 +4,7 @@
 #include "components.hpp"
 #include "SelectionService.hpp"   // krs::sel::SelectionState / indicator / buildIndicatorLines
 #include "EdgeSelect.hpp"         // krs::sel::resolveEdge -- TRUE-edge picks travel with their body
+#include "Camera.hpp"             // Camera::fovDeg -- screen-constant marker sizing
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <glm/glm.hpp>
@@ -19,24 +20,9 @@ constexpr glm::vec3 kFeatColor[2] = {
     { 0.18f, 0.50f, 1.00f },   // [1] second pick = BLUE
 };
 constexpr float kGlow = 1.5f;                            // slight HDR lift for a glow WITHOUT clipping the hue to white
-constexpr float kHoverWidth = 2.5f;                       // px (driver-clamped on some GL profiles)
-constexpr float kSelectWidth = 6.0f;                      // thick "locked" ring (driver-clamped on core profiles)
-constexpr float kPlaneHalf = 0.03f;                       // planar-face outline half-size (was 0.01 -- too small to read)
-
-// Append an IndicatorLines (rim + arrow) into a flat GL_LINES vertex list.
-void appendIndicator(std::vector<glm::vec3>& out, const krs::sel::IndicatorLines& L)
-{
-    out.insert(out.end(), L.ring.begin(), L.ring.end());
-    out.insert(out.end(), L.arrow.begin(), L.arrow.end());
-}
-
-// A second concentric rim (scaled about the disk centre) so a COMMITTED selection
-// reads distinctly from a hover preview. Pure cosmetic; derived from the same rim.
-void appendOuterRing(std::vector<glm::vec3>& out, const krs::sel::IndicatorLines& L, float scale)
-{
-    for (const glm::vec3& p : L.ring)
-        out.push_back(L.diskCenter + scale * (p - L.diskCenter));
-}
+// (the concentric-ring helpers + widths retired with the ring UI -- the committed-selection
+// visual is the quadrant glyph now; krs::sel::indicator/buildIndicatorLines remain gated
+// backend geometry used by INDICATOR-GEOMETRY/HIGHLIGHT-MATCHES, not by this pass.)
 
 } // namespace
 
@@ -199,35 +185,105 @@ void SelectionHighlightPass::execute(const RenderFrameContext& context)
     // below stay for the axis arrows and the ordered pick colors.
     drawIdHighlightComposite(context);
 
-    // SELECTED features (committed): PER-FEATURE color so the operator sees the mate pair --
-    // first pick GREEN (parent/anchor), second pick BLUE (child that snaps), 3rd+ orange. Each is a
-    // double concentric ring at high HDR intensity so it reads as a glowing rim, not a hairline.
-    gl->glLineWidth(kSelectWidth);
+    // COMMITTED selections: the compact JOINT-ORIGIN QUADRANT GLYPH at each pick's true anchor
+    // (nearest rim for bores, the click point for planes) -- first pick GREEN-accented, second
+    // BLUE (the mate-pair cue survives), 3rd+ orange. The giant concentric analytic rings are
+    // RETIRED: the P2 fill/contour above carries the surface read; the marker pins the frame
+    // origin the pick actually means.
     std::size_t shown = 0;
     for (const auto& sel : st->selected) {
         if (!sel.valid) continue;
-        const krs::sel::IndicatorLines L =
-            krs::sel::buildIndicatorLines(krs::sel::indicator(sel, 64, kPlaneHalf));
-        std::vector<glm::vec3> one;
-        one.insert(one.end(), L.arrow.begin(), L.arrow.end());   // axis arrow (which way the joint turns)
-        // Stack several concentric rings into a THICK band -- desktop GL clamps glLineWidth to 1px on
-        // core profiles, so a band of rings is the only reliable way to read as a fat glowing rim.
-        for (float sc : { 0.92f, 0.97f, 1.00f, 1.05f, 1.10f, 1.15f }) appendOuterRing(one, L, sc);
-        const glm::vec3 base = (shown < 2) ? kFeatColor[shown] : kSelectColor;
-        drawLines(context, one, base * kGlow);       // >1 -> glows through the tonemap
+        drawQuadrantMarker(context, sel, (shown < 2) ? kFeatColor[shown] : kSelectColor);
         ++shown;
     }
+    // HOVER is carried by the P2 fill/contour + the SnapOverlay dots; the yellow ring is retired.
 
-    // HOVERED feature (preview): yellow, single ring. Drawn last so it sits on top.
-    if (st->hover.valid) {
-        std::vector<glm::vec3> hovLines;
-        appendIndicator(hovLines,
-            krs::sel::buildIndicatorLines(krs::sel::indicator(st->hover, 32, kPlaneHalf)));
-        gl->glLineWidth(kHoverWidth);
-        drawLines(context, hovLines, kHoverColor);
-    }
-
-    gl->glLineWidth(1.0f);
     gl->glDepthMask(GL_TRUE);
     gl->glEnable(GL_DEPTH_TEST);   // restore for later passes
+}
+
+void SelectionHighlightPass::drawFan(const RenderFrameContext& ctx,
+                                     const std::vector<glm::vec3>& fan, const glm::vec3& color)
+{
+    if (fan.size() < 3 || !m_vao) return;
+    Shader* shader = ctx.renderer.getShader("collision_debug");
+    if (!shader) return;
+    auto* gl = ctx.gl;
+    gl->glBindVertexArray(m_vao);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+    if (fan.size() > m_vboCapacity) {
+        gl->glBufferData(GL_ARRAY_BUFFER, GLsizeiptr(fan.size() * sizeof(glm::vec3)),
+                         fan.data(), GL_DYNAMIC_DRAW);
+        m_vboCapacity = fan.size();
+    } else {
+        gl->glBufferSubData(GL_ARRAY_BUFFER, 0, GLsizeiptr(fan.size() * sizeof(glm::vec3)), fan.data());
+    }
+    shader->use(gl);
+    shader->setMat4(gl, "u_mvp", ctx.projection * ctx.view);
+    shader->setVec3(gl, "u_color", color);
+    shader->setFloat(gl, "u_invExposure", 1.0f / ctx.renderer.exposureMultiplier());
+    gl->glDrawArrays(GL_TRIANGLE_FAN, 0, GLsizei(fan.size()));
+    gl->glBindVertexArray(0);
+}
+
+void SelectionHighlightPass::drawQuadrantMarker(const RenderFrameContext& ctx,
+                                                const krs::sel::Selection& s, const glm::vec3& accent)
+{
+    using FT = krs::sel::FeatureType;
+    glm::vec3 p = s.hitPoint, n(0.0f);
+    switch (s.type) {
+        case FT::Cylinder:
+        case FT::Cone:
+            n = s.axisDir;
+            if (glm::dot(p, p) < 1e-12f) p = s.axisPos;    // untrimmed bore: axis midpoint
+            break;
+        case FT::Plane:
+            n = s.normal;
+            if (glm::dot(p, p) < 1e-12f) p = s.axisPos;
+            break;
+        case FT::EdgeCircle:
+        case FT::EdgeLine:
+            n = s.axisDir;
+            p = s.axisPos;
+            break;
+        default:                                           // Vertex / Sphere / Other: face the camera
+            n = ctx.camera.getPosition() - p;
+            break;
+    }
+    if (glm::dot(n, n) < 1e-9f) n = glm::vec3(0, 0, 1);
+    n = glm::normalize(n);
+    glm::vec3 x = glm::cross(n, glm::vec3(0, 0, 1));
+    if (glm::dot(x, x) < 1e-8f) x = glm::cross(n, glm::vec3(0, 1, 0));
+    x = glm::normalize(x);
+    const glm::vec3 y = glm::normalize(glm::cross(n, x));
+
+    // screen-constant radius (~9 px at any zoom)
+    const float dist = glm::length(ctx.camera.getPosition() - p);
+    const float wpp = (2.0f * dist * std::tan(glm::radians(Camera::fovDeg() * 0.5f)))
+                      / float(std::max(1, ctx.viewportHeight));
+    const float r = 9.0f * wpp;
+
+    // four quadrant fans: opposite quadrants take the order accent, the others near-white
+    const glm::vec3 white(0.94f, 0.94f, 0.94f);
+    for (int q = 0; q < 4; ++q) {
+        std::vector<glm::vec3> fan;
+        fan.push_back(p);
+        const int segs = 8;
+        for (int i = 0; i <= segs; ++i) {
+            const float a = glm::radians(90.0f) * (float(q) + float(i) / float(segs));
+            fan.push_back(p + r * (std::cos(a) * x + std::sin(a) * y));
+        }
+        drawFan(ctx, fan, ((q & 1) == 0) ? accent : white);
+    }
+    // outline ring + a short axis stub so a bore still reads its direction
+    std::vector<glm::vec3> lines;
+    const int segs = 24;
+    for (int i = 0; i < segs; ++i) {
+        const float a0 = 6.2831853f * float(i) / segs, a1 = 6.2831853f * float(i + 1) / segs;
+        lines.push_back(p + r * (std::cos(a0) * x + std::sin(a0) * y));
+        lines.push_back(p + r * (std::cos(a1) * x + std::sin(a1) * y));
+    }
+    lines.push_back(p);
+    lines.push_back(p + n * (2.4f * r));
+    drawLines(ctx, lines, accent * kGlow);
 }

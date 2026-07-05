@@ -191,10 +191,19 @@ static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int v
     const krs::pick::Ray ray = krs::pick::makeRayFromScreen(P, V, px, py, vpW, vpH);
     if (!std::isfinite(ray.dir.x)) return;
     // P5: WYSIWYG COMMIT -- when the GPU pick drives the hover, a click commits EXACTLY the
-    // feature under the highlight (face/edge/vertex with correct occlusion + priority). The
-    // CPU-ray paths below only serve the first-frame bridge and the specialized bore-collect
-    // mode (cylinder-faces-only by design, gated).
-    const bool gpuHover = gpuHoverDriven && !st->fifoTwoBores;
+    // feature under the highlight (face/edge/vertex with correct occlusion + priority) in EVERY
+    // mode, bore-collect included (its cylinder-only FIFO filter still applies inside
+    // commitResolved -- only the far-side-bore CPU picker is gone). The CPU-ray paths below
+    // serve the first-frame bridge only.
+    const bool gpuHover = gpuHoverDriven;
+    // Pin the CLICK's surface point onto the committed selection so rim-nearest anchoring lands
+    // on the side of the body the operator actually clicked (the analytic hitPoint of a
+    // through-bore can be the FAR rim).
+    auto pinClickPoint = [&](krs::sel::Selection s) {
+        if (const auto mh = krs::pick::pickMesh(reg, ray); mh && mh->entity == s.entity)
+            s.hitPoint = mh->worldPos;
+        return s;
+    };
     if (st->measureMode) {
         // Onshape-style measure buffer: plain click = new item, Shift = extend the current item
         // (multi-face plane), Ctrl = vertex pick. FIFO-2 items.
@@ -202,13 +211,13 @@ static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int v
             krs::sel::commitMeasure(*st, reg, ray, mods.testFlag(Qt::ShiftModifier), /*vertex*/ true);
         else if (gpuHover) {
             if (st->hover.valid)
-                krs::sel::commitMeasureResolved(*st, st->hover, mods.testFlag(Qt::ShiftModifier));
+                krs::sel::commitMeasureResolved(*st, pinClickPoint(st->hover), mods.testFlag(Qt::ShiftModifier));
         } else
             krs::sel::commitMeasure(*st, reg, ray, mods.testFlag(Qt::ShiftModifier), /*vertex*/ false);
         return;
     }
     if (gpuHover) {
-        if (st->hover.valid) krs::sel::commitResolved(*st, st->hover, additive);
+        if (st->hover.valid) krs::sel::commitResolved(*st, pinClickPoint(st->hover), additive);
         return;                                            // a highlighted MISS commits nothing
     }
     // CPU fallback (first frame / no renderer): true-edge preference within ~6 px, then faces.
