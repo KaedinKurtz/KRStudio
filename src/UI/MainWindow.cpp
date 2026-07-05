@@ -1349,15 +1349,13 @@ MainWindow::MainWindow(QWidget* parent)
             }
         });
 
-    connect(viewportDock1, &ads::CDockWidget::closed, this, [this, viewportDock1]() {
-        if (auto* vp = qobject_cast<ViewportWidget*>(viewportDock1->widget())) {
-            destroyCameraRig(vp->getCameraEntity());
-        }
-        QTimer::singleShot(0, this, [this, viewportDock1]() {
-            m_dockContainers.removeAll(viewportDock1);
-            syncViewportManagerPopup();
-            });
-        });
+    // CLOSED != REMOVED: a closed viewport dock is only HIDDEN and can reopen at any time
+    // (viewport manager popup, layout restore) with the SAME live ViewportWidget. The old
+    // handler destroyed the camera rig here, so the reopened widget pointed at a DEAD camera
+    // entity -- blank-white viewport, or a fatal "camera entity handle is INVALID" crash (the
+    // hidden-viewport revive bug). Real teardown happens only through the TAGGED removal paths
+    // (removeViewport / onResetViewports -> onViewportDockClosed).
+    connect(viewportDock1, &ads::CDockWidget::closed, this, [this]() { syncViewportManagerPopup(); });
 
     // Connect the database panel's scene reload signal
     // This is connected here, but the panel itself is created on-demand.
@@ -1976,6 +1974,53 @@ MainWindow::MainWindow(QWidget* parent)
         QTimer::singleShot(14000, this, [this, outDir]() {
             this->grab().save(outDir + QStringLiteral("/tex_after.png"));
             qInfo() << "[LIGHTUI] textured emissive after grabbed";
+        });
+    }
+
+    // Test hook: KRS_VPREVIVE_SELFTEST=<outDir> -- the hidden-viewport revive bug: close the 3D
+    // viewport dock IMMEDIATELY (before its QOpenGLWidget ever initializes -- the state a layout-
+    // restored-closed viewport boots into), reopen it later, and PIXEL-VERIFY it actually renders.
+    // A broken revive is the blank-white widget the user reported. Exit code = verdict.
+    if (qEnvironmentVariableIsSet("KRS_VPREVIVE_SELFTEST")) {
+        const QString outDir = qEnvironmentVariable("KRS_VPREVIVE_SELFTEST");
+        QTimer::singleShot(0, this, [this]() {
+            if (!m_dockContainers.isEmpty()) {
+                qInfo() << "[VPREVIVE] closing viewport dock at boot (pre-first-show)";
+                m_dockContainers.first()->toggleView(false);
+            }
+        });
+        QTimer::singleShot(5000, this, [this]() {
+            if (!m_dockContainers.isEmpty()) {
+                qInfo() << "[VPREVIVE] reopening viewport dock";
+                auto* d = m_dockContainers.first();
+                d->toggleView(true);
+                d->setAsCurrentTab();
+                d->raise();
+            }
+        });
+        QTimer::singleShot(10000, this, [this, outDir]() {
+            ViewportWidget* vp = primaryViewport();
+            const QImage img = vp ? vp->grab().toImage().convertToFormat(QImage::Format_RGB32) : QImage();
+            int distinct = 0, nonWhite = 0;
+            QRgb first = img.isNull() ? 0 : img.pixel(0, 0);
+            for (int y = 0; y < img.height(); y += 8)
+                for (int x = 0; x < img.width(); x += 8) {
+                    const QRgb p = img.pixel(x, y);
+                    if (p != first) ++distinct;
+                    if (qRed(p) < 245 || qGreen(p) < 245 || qBlue(p) < 245) ++nonWhite;
+                }
+            img.save(outDir + QStringLiteral("/vprevive.png"));
+            const bool ok = !img.isNull() && img.width() > 50 && nonWhite > 20 && distinct > 20;
+            QFile f(outDir + QStringLiteral("/vprevive_result.txt"));
+            if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream ts(&f);
+                ts << "size " << img.width() << "x" << img.height()
+                   << "  nonWhiteSamples " << nonWhite << "  distinctSamples " << distinct
+                   << "  verdict " << (ok ? "RENDERS" : "BLANK") << "\n";
+            }
+            qInfo() << "[VPREVIVE]" << (ok ? "RENDERS" : "BLANK") << "nonWhite" << nonWhite << "distinct" << distinct;
+            std::fflush(stdout);
+            std::_Exit(ok ? 0 : 1);
         });
     }
 
@@ -3140,16 +3185,9 @@ void MainWindow::addViewport() {
 
     m_dockManager->addDockWidget(ads::CenterDockWidgetArea, dock, anchor);
 
-    // 6) hook its close so we resync
-    connect(dock, &ads::CDockWidget::closed, this, [this, dock]() {
-        if (auto* vp = qobject_cast<ViewportWidget*>(dock->widget())) {
-            destroyCameraRig(vp->getCameraEntity());
-        }
-        QTimer::singleShot(0, this, [this, dock]() {
-            m_dockContainers.removeAll(dock);
-            syncViewportManagerPopup();
-            });
-        });
+    // 6) hook its close so we resync. CLOSED != REMOVED (see viewportDock1's connect): the
+    //    camera rig stays alive for a reopen; Remove in the viewport manager is the teardown.
+    connect(dock, &ads::CDockWidget::closed, this, [this]() { syncViewportManagerPopup(); });
 
     // 7) set the little X icon
     if (auto* area = dock->dockAreaWidget())
@@ -3166,6 +3204,9 @@ void MainWindow::addViewport() {
 
 void MainWindow::removeViewport() {
     if (!m_dockContainers.isEmpty()) {
+        // Deliberate removal: tag it so onViewportDockClosed knows this is a REAL teardown,
+        // not a mere dock close/hide (which must keep the camera rig alive for a reopen).
+        m_dockContainers.last()->setProperty("krsRemovingViewport", true);
         m_dockManager->removeDockWidget(m_dockContainers.last());
     }
 }
@@ -3246,6 +3287,7 @@ void MainWindow::onSceneReloadRequested(const QString& sceneName)
 
 void MainWindow::onShowViewportRequested(ads::CDockWidget* dock) {
     if (dock) {
+        dock->toggleView(true);  // a CLOSED dock must actually reopen (raise alone does nothing)
         dock->setAsCurrentTab(); // This brings the tab to the front
         dock->raise();           // This raises the window if it's floating
     }
@@ -3254,6 +3296,7 @@ void MainWindow::onShowViewportRequested(ads::CDockWidget* dock) {
 void MainWindow::onResetViewports() {
     const auto docks = m_dockContainers;  // copy
     for (auto* dock : docks) {
+        dock->setProperty("krsRemovingViewport", true);   // real teardown (see onViewportDockClosed)
         m_dockManager->removeDockWidget(dock);
     }
     addViewport();
@@ -3278,6 +3321,18 @@ void MainWindow::onViewportDockClosed(ads::CDockWidget* closedDock)
 {
     if (!closedDock)
         return;
+
+    // ads lands here for docks that are merely CLOSED (hidden), not just truly removed. A closed
+    // viewport dock can come back any time (ribbon toggle, layout restore) with the SAME live
+    // ViewportWidget -- tearing its camera rig + GPU targets down here left that widget pointing
+    // at a DEAD camera entity: blank-white viewport on reopen, or a fatal "camera entity handle
+    // is INVALID" crash (the hidden-viewport revive bug). Only the deliberate removal paths
+    // (removeViewport / onResetViewports) tag the dock for a REAL teardown.
+    if (!closedDock->property("krsRemovingViewport").toBool()) {
+        qDebug() << "[VIEWPORT] dock closed (kept alive for reopen):" << closedDock->windowTitle();
+        syncViewportManagerPopup();
+        return;
+    }
 
     // Debug: which dock & widget is being closed
     qDebug() << "[VIEWPORT] Closing dock:" << closedDock->windowTitle();
