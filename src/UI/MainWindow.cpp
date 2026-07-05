@@ -37,6 +37,7 @@
 #include "CadImporter.hpp"
 #include "FanucArticulation.hpp"   // Phase V: shared FANUC-setup helper (default boot demo)
 #include <filesystem>
+#include <cstdlib>                 // std::_Exit (KRS_RIBBON_SELFTEST gate exit)
 #include <QActionGroup>
 #include <QToolBar>
 #include <QComboBox>
@@ -1963,6 +1964,91 @@ MainWindow::MainWindow(QWidget* parent)
         QTimer::singleShot(12800, this, [this, outDir]() { this->grab().save(outDir + QStringLiteral("/theme_dark.png")); qInfo() << "[TOOLBAR] selftest done"; });
     }
 
+    // Test hook: KRS_RIBBON_SELFTEST=<outDir> -- verifies the ribbon ACTION BUS end-to-end:
+    // dropdown menus attached (save/open/export/import/add-primitive/view-presets), gizmo-mode
+    // buttons switch the live mode, the collision-shape toggle flips the ctx flag, camera
+    // presets actually move the camera, E-STOP halts a playing sim, E-STOP buttons styled red,
+    // the factory layout snapshot exists, and unknown ids toast instead of crashing. Writes
+    // ribbon_result.txt and exits with the fail count (a gate, not a demo).
+    if (qEnvironmentVariableIsSet("KRS_RIBBON_SELFTEST")) {
+        const QString outDir = qEnvironmentVariable("KRS_RIBBON_SELFTEST");
+        // Raise the Goal Workspace first so the window grab documents the guided-flow panel.
+        QTimer::singleShot(4000, this, [this]() {
+            auto it = m_panelDocks.find(QStringLiteral("Goal Workspace"));
+            if (it != m_panelDocks.end() && it.value()) {
+                it.value()->toggleView(true);
+                it.value()->setAsCurrentTab();
+                it.value()->raise();
+            }
+        });
+        QTimer::singleShot(6000, this, [this, outDir]() {
+            QStringList lines; int fails = 0;
+            auto check = [&lines, &fails](const QString& name, bool ok) {
+                lines << QStringLiteral("%1  %2").arg(ok ? QStringLiteral("PASS") : QStringLiteral("FAIL"), name);
+                if (!ok) ++fails;
+            };
+            // 1) dropdown menus attached + populated
+            for (const char* id : { "save_project_button", "open_project_button", "export_button",
+                                    "import_button", "add_primative_button", "view_presets_button" }) {
+                QToolButton* b = m_fixedTopToolbar->buttonById(QLatin1String(id));
+                check(QStringLiteral("menu-attached:%1").arg(QLatin1String(id)),
+                      b && b->menu() && !b->menu()->actions().isEmpty());
+            }
+            // 2) gizmo modes via the bus
+            dispatchToolbarAction(QStringLiteral("translate_object_button"));
+            check(QStringLiteral("gizmo-translate"), m_gizmoSystem && m_gizmoSystem->getMode() == GizmoMode::Translate);
+            dispatchToolbarAction(QStringLiteral("rotate_object_button"));
+            check(QStringLiteral("gizmo-rotate"), m_gizmoSystem && m_gizmoSystem->getMode() == GizmoMode::Rotate);
+            dispatchToolbarAction(QStringLiteral("scale_object_button"));
+            check(QStringLiteral("gizmo-scale"), m_gizmoSystem && m_gizmoSystem->getMode() == GizmoMode::Scale);
+            dispatchToolbarAction(QStringLiteral("select_object_button"));
+            check(QStringLiteral("gizmo-select-none"), m_gizmoSystem && m_gizmoSystem->getMode() == GizmoMode::None);
+            // 3) collision-shape toggle flips the ctx flag (and back)
+            if (m_scene) {
+                const bool before = m_scene->getRegistry().ctx().get<SceneProperties>().showCollisionShapes;
+                dispatchToolbarAction(QStringLiteral("show_collision_shapes_button"));
+                const bool mid = m_scene->getRegistry().ctx().get<SceneProperties>().showCollisionShapes;
+                dispatchToolbarAction(QStringLiteral("show_collision_shapes_button"));
+                const bool after = m_scene->getRegistry().ctx().get<SceneProperties>().showCollisionShapes;
+                check(QStringLiteral("collision-toggle"), mid != before && after == before);
+            }
+            // 4) camera preset moves the camera onto the requested axis
+            if (ViewportWidget* vp = primaryViewport()) {
+                applyCameraPreset(QStringLiteral("front"));
+                const Camera& cam = vp->getCamera();
+                const glm::vec3 d = cam.getPosition() - cam.getFocalPoint();
+                check(QStringLiteral("camera-front(+Z)"), d.z > 0.99f * glm::length(d));
+            }
+            // 5) E-STOP halts a playing sim
+            if (m_simulation) {
+                m_simulation->play();
+                const bool playing = m_simulation->isPlaying();
+                dispatchToolbarAction(QStringLiteral("estop_button"));
+                check(QStringLiteral("estop-halts-sim"), playing && m_simulation->state() == SimulationState::Stopped);
+            }
+            // 6) E-STOP buttons styled as emergency controls
+            if (QToolButton* eb = m_fixedTopToolbar->buttonById(QStringLiteral("estop_button")))
+                check(QStringLiteral("estop-styled-red"), eb->styleSheet().contains(QLatin1String("b91c1c")));
+            // 7) factory layout snapshot captured (Reset Layout has a target)
+            check(QStringLiteral("factory-layout-snapshot"), !m_defaultLayoutState.isEmpty());
+            // 8) unknown id toasts, never crashes; measure with no selection guides, never crashes
+            dispatchToolbarAction(QStringLiteral("nonexistent_button_xyz"));
+            dispatchToolbarAction(QStringLiteral("measurement_tool"));
+            check(QStringLiteral("unknown-id+empty-measure-no-crash"), true);
+
+            QFile f(outDir + QStringLiteral("/ribbon_result.txt"));
+            if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream ts(&f);
+                for (const QString& l : lines) ts << l << "\n";
+                ts << QStringLiteral("%1 fails\n").arg(fails);
+            }
+            this->grab().save(outDir + QStringLiteral("/ribbon_window.png"));
+            qInfo() << "[RIBBON] selftest done, fails =" << fails;
+            std::fflush(stdout);
+            std::_Exit(fails == 0 ? 0 : 1);
+        });
+    }
+
     // Test hook: KRS_ROBOTVIEW_SELFTEST=<outDir> raises the Robot View dock (so its
     // QOpenGLWidget actually initializes + renders -- a hidden tab never does, which
     // is why it read "FPS 0.0"), lets it draw several frames, then grabs the widget
@@ -3199,10 +3285,65 @@ void MainWindow::destroyCameraRig(entt::entity cameraEntity)
     reg.destroy(cameraEntity);
 }
 
+namespace {
+// One palette -> the full panel stylesheet (the same structure as sidePanelStyle /
+// lightPanelStyle, which stay as the boot defaults). Every ribbon swatch maps to one.
+struct PanelPalette {
+    const char* bg;       // window background
+    const char* panel;    // group-box background
+    const char* border;   // control borders
+    const char* hover;    // hover fill / hover border
+    const char* pressed;  // pressed fill
+    const char* text;     // foreground text
+    const char* accent;   // checked buttons + slider handle
+    const char* comboBg;  // combo-box field
+};
+QString buildPanelStyle(const PanelPalette& p)
+{
+    return QStringLiteral(
+        "QWidget { background-color: %1; color: %6; font-family: \"Segoe UI\"; font-size: 9pt; }"
+        "QGroupBox { background-color: %2; border: 1px solid %3; border-radius: 4px; margin-top: 10px; }"
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top center;"
+        "  padding: 0 5px; background-color: %2; border: none; }"
+        "QToolButton, QPushButton { background-color: transparent; border: 1px solid %3;"
+        "  border-radius: 4px; padding: 5px; min-width: 65px; min-height: 20px; color: %6; }"
+        "QToolButton:hover, QPushButton:hover { background-color: %4; border: 1px solid %4; }"
+        "QToolButton:pressed, QPushButton:pressed { background-color: %5; }"
+        "QToolButton:checked { background-color: %7; color: white; border: 1px solid %7; }"
+        "QComboBox { background-color: %8; border: 1px solid %3; border-radius: 4px;"
+        "  padding: 5px; min-height: 20px; }"
+        "QComboBox:hover { border: 1px solid %4; }"
+        "QComboBox::drop-down { border: none; }"
+        "QComboBox::down-arrow { image: url(:/icons/chevron-down.png); width: 12px; height: 12px; }"
+        "QSlider::groove:horizontal { border: 1px solid %3; height: 4px; background: %2;"
+        "  margin: 2px 0; border-radius: 2px; }"
+        "QSlider::handle:horizontal { background: %7; border: 1px solid %7; width: 14px;"
+        "  margin: -5px 0; border-radius: 7px; }"
+        "QFrame[frameShape=\"VLine\"] { border: 1px solid %3; }"
+        "QFrame[frameShape=\"HLine\"] { border: 1px solid %3; }")
+        .arg(QLatin1String(p.bg), QLatin1String(p.panel), QLatin1String(p.border),
+             QLatin1String(p.hover), QLatin1String(p.pressed), QLatin1String(p.text),
+             QLatin1String(p.accent), QLatin1String(p.comboBg));
+}
+} // namespace
+
 void MainWindow::applyTheme(const QString& theme)
 {
-    const bool light = (theme.compare(QLatin1String("light"), Qt::CaseInsensitive) == 0);
-    const QString& style = light ? lightPanelStyle : sidePanelStyle;
+    // The 8 ribbon swatches. "dark" and "light" keep their hand-tuned boot sheets; the
+    // rest are palette-generated from the same structure.
+    static const QMap<QString, PanelPalette> kThemes = {
+        { QStringLiteral("slate"),    { "#232a36", "#2b3444", "#3d4a5f", "#4d5d77", "#5d6f8d", "#d7dde8", "#4f8cff", "#232a36" } },
+        { QStringLiteral("graphite"), { "#26262a", "#2f2f34", "#45454c", "#55555e", "#65656f", "#d6d6d8", "#e8833a", "#26262a" } },
+        { QStringLiteral("ocean"),    { "#1d2b30", "#24363c", "#35505a", "#457080", "#558898", "#d2e2e6", "#14b8a6", "#1d2b30" } },
+        { QStringLiteral("forest"),   { "#222b22", "#2a362b", "#3d503e", "#4d6a4f", "#5d8060", "#d5e0d4", "#4caf50", "#222b22" } },
+        { QStringLiteral("amber"),    { "#2b2620", "#363028", "#52483a", "#6a5c48", "#7e6e56", "#e2d9cc", "#ffb020", "#2b2620" } },
+        { QStringLiteral("contrast"), { "#000000", "#101010", "#9a9a9a", "#333333", "#4d4d4d", "#ffffff", "#ffd400", "#000000" } },
+    };
+    const QString t = theme.toLower();
+    QString style;
+    if (t == QLatin1String("light"))                                        style = lightPanelStyle;
+    else if (auto it = kThemes.constFind(t); it != kThemes.constEnd())      style = buildPanelStyle(it.value());
+    else /* "dark", empty, unknown */                                       style = sidePanelStyle;
     // Restyle ONLY the panel docks' contents. Do NOT touch the dock manager (its default ads
     // stylesheet draws the tab close 'X' buttons -- our panel sheet's QToolButton rule bloats
     // them) or the ribbon toolbar (our sheet darkened its dividers). Viewports (GL) untouched.

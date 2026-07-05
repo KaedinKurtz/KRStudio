@@ -82,6 +82,11 @@ struct WorldState {
     // ---- task frames (authored / asserted) ----
     void setFrame(const std::string& name, const glm::vec3& p, const glm::quat& r = glm::quat(1, 0, 0, 0));
     const TaskFrame* frame(const std::string& name) const;
+    std::vector<std::string> frameNames() const {
+        std::vector<std::string> v; v.reserve(frames_.size());
+        for (const auto& [n, f] : frames_) v.push_back(n);
+        return v;
+    }
 
     // ---- gripper / attachment facts (skill effects write these; preconditions read them) ----
     void setGripperOpen(int robotId, bool open);

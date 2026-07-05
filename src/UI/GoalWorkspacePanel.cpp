@@ -1,5 +1,7 @@
-// GoalWorkspacePanel.cpp -- see GoalWorkspacePanel.hpp. The goal-definition dock: world browser +
-// goal stack (live truth) + plan & knowledge to-do + execute-on-the-live-runtime.
+// GoalWorkspacePanel.cpp -- see GoalWorkspacePanel.hpp. UX pass 2: a GUIDED numbered flow
+// (1 objects -> 2 target locations -> 3 goal checklist -> 4 plan & execute) with plain-English
+// explainers, contextual composer fields, empty-state hints, and FRAME AUTHORING (the missing
+// piece that made at()-goals impossible to author from the GUI).
 #include "GoalWorkspacePanel.hpp"
 #include "WorldState.hpp"
 #include "SkillRuntime.hpp"
@@ -17,10 +19,12 @@
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QLineEdit>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QSplitter>
+#include <QGroupBox>
+#include <QScrollArea>
 #include <QFileDialog>
 #include <QDir>
 
@@ -53,94 +57,196 @@ QColor provColor(krs::world::Prov p) {
         default:                          return QColor(0xdd, 0x66, 0x55);   // red: unknown/suspect
     }
 }
+// A dim, word-wrapped explainer line under each step header.
+QLabel* hint(const QString& text, QWidget* parent) {
+    auto* l = new QLabel(text, parent);
+    l->setWordWrap(true);
+    l->setStyleSheet(QStringLiteral("color:#9a9a9a; font-size:11px;"));
+    return l;
+}
 } // namespace
 
 GoalWorkspacePanel::GoalWorkspacePanel(Scene* scene, QWidget* parent)
     : QWidget(parent), m_scene(scene)
 {
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(4, 4, 4, 4);
-    root->setSpacing(4);
+    // The whole flow lives in a scrollable column: the dock stays usable at any height.
+    auto* outer = new QVBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto* page = new QWidget(scroll);
+    auto* root = new QVBoxLayout(page);
+    root->setContentsMargins(8, 8, 8, 8);
+    root->setSpacing(8);
 
-    auto* split = new QSplitter(Qt::Horizontal, this);
+    auto* title = new QLabel(QStringLiteral("Tell the robot WHAT you want -- it figures out HOW."), page);
+    title->setWordWrap(true);
+    title->setStyleSheet(QStringLiteral("font-weight:bold;"));
+    root->addWidget(title);
+    root->addWidget(hint(QStringLiteral(
+        "Work top to bottom: check what the robot knows (1), name a target location if the goal "
+        "needs one (2), build the goal checklist (3), then Plan and Execute (4)."), page));
 
-    // ---- LEFT: the world browser ----
-    auto* leftBox = new QWidget(split);
-    auto* lv = new QVBoxLayout(leftBox);
-    lv->setContentsMargins(0, 0, 0, 0); lv->setSpacing(3);
-    m_world = new QTreeWidget(leftBox);
+    // ================= (1) SCENE OBJECTS =================
+    auto* g1 = new QGroupBox(QStringLiteral("1 · Scene objects -- what the robot knows"), page);
+    auto* lv = new QVBoxLayout(g1);
+    lv->setSpacing(4);
+    lv->addWidget(hint(QStringLiteral(
+        "Each object lists what the robot has learned (value ± confidence). Green = measured, "
+        "yellow = guessed, red = unknown. R2S objects MUST be truly measured before execution; "
+        "SimOnly objects accept best guesses."), g1));
+    m_world = new QTreeWidget(g1);
     m_world->setColumnCount(2);
-    m_world->setHeaderLabels({ QStringLiteral("World"), QStringLiteral("Knowledge") });
+    m_world->setHeaderLabels({ QStringLiteral("Object"), QStringLiteral("Knowledge") });
     m_world->setColumnWidth(0, 150);
-    lv->addWidget(m_world, 1);
+    m_world->setMinimumHeight(140);
+    lv->addWidget(m_world);
     auto* lrow = new QHBoxLayout();
-    auto* refreshBtn = new QPushButton(QStringLiteral("Refresh"), leftBox);
-    auto* tagBtn = new QPushButton(QStringLiteral("SimOnly/R2S"), leftBox);
+    auto* refreshBtn = new QPushButton(QStringLiteral("↻ Refresh"), g1);
+    refreshBtn->setToolTip(QStringLiteral("Re-read the live scene into the world model."));
+    auto* tagBtn = new QPushButton(QStringLiteral("Toggle SimOnly ⇄ R2S"), g1);
+    tagBtn->setToolTip(QStringLiteral(
+        "R2S (real-to-sim) = parameters must be MEASURED (the planner inserts measuring steps).\n"
+        "SimOnly = best guesses are accepted."));
     lrow->addWidget(refreshBtn); lrow->addWidget(tagBtn);
     lv->addLayout(lrow);
     auto* trow = new QHBoxLayout();
-    m_traitPick = new QComboBox(leftBox);
+    m_traitPick = new QComboBox(g1);
     m_traitPick->addItems({ QStringLiteral("liquid-container"), QStringLiteral("fragile"), QStringLiteral("hot") });
-    auto* traitBtn = new QPushButton(QStringLiteral("Add trait"), leftBox);
+    m_traitPick->setToolTip(QStringLiteral(
+        "Traits constrain HOW the robot may move an object (e.g. a liquid-container caps tilt)."));
+    auto* traitBtn = new QPushButton(QStringLiteral("Add trait"), g1);
     trow->addWidget(m_traitPick, 1); trow->addWidget(traitBtn);
     lv->addLayout(trow);
-    split->addWidget(leftBox);
+    root->addWidget(g1);
 
-    // ---- CENTER: the goal stack ----
-    auto* midBox = new QWidget(split);
-    auto* mv = new QVBoxLayout(midBox);
-    mv->setContentsMargins(0, 0, 0, 0); mv->setSpacing(3);
-    mv->addWidget(new QLabel(QStringLiteral("Goal (AND of predicates, live truth):"), midBox));
-    m_goalList = new QListWidget(midBox);
-    mv->addWidget(m_goalList, 1);
+    // ================= (2) TARGET LOCATIONS =================
+    auto* g2 = new QGroupBox(QStringLiteral("2 · Target locations (named frames)"), page);
+    auto* fv = new QVBoxLayout(g2);
+    fv->setSpacing(4);
+    fv->addWidget(hint(QStringLiteral(
+        "Goals like “cup is at drop_pose” need a NAMED location. Create one here: pick a "
+        "name, then place it at the selected object's position or at typed coordinates."), g2));
+    m_frameList = new QListWidget(g2);
+    m_frameList->setMaximumHeight(70);
+    fv->addWidget(m_frameList);
+    auto* frow1 = new QHBoxLayout();
+    frow1->addWidget(new QLabel(QStringLiteral("Name:"), g2));
+    m_frameName = new QLineEdit(QStringLiteral("drop_pose"), g2);
+    frow1->addWidget(m_frameName, 1);
+    auto* atObjBtn = new QPushButton(QStringLiteral("Place at selected object"), g2);
+    atObjBtn->setToolTip(QStringLiteral("Uses the position of the object selected in step 1."));
+    frow1->addWidget(atObjBtn);
+    fv->addLayout(frow1);
+    auto* frow2 = new QHBoxLayout();
+    auto mkSpin = [g2](double v) {
+        auto* s = new QDoubleSpinBox(g2);
+        s->setRange(-100.0, 100.0); s->setDecimals(3); s->setSingleStep(0.05); s->setValue(v);
+        return s;
+    };
+    m_fx = mkSpin(0.5); m_fy = mkSpin(0.5); m_fz = mkSpin(0.0);
+    frow2->addWidget(new QLabel(QStringLiteral("X"), g2)); frow2->addWidget(m_fx, 1);
+    frow2->addWidget(new QLabel(QStringLiteral("Y"), g2)); frow2->addWidget(m_fy, 1);
+    frow2->addWidget(new QLabel(QStringLiteral("Z"), g2)); frow2->addWidget(m_fz, 1);
+    auto* atXyzBtn = new QPushButton(QStringLiteral("Place at X,Y,Z"), g2);
+    frow2->addWidget(atXyzBtn);
+    fv->addLayout(frow2);
+    root->addWidget(g2);
+
+    // ================= (3) THE GOAL =================
+    auto* g3 = new QGroupBox(QStringLiteral("3 · The goal -- a checklist the world must satisfy"), page);
+    auto* mv = new QVBoxLayout(g3);
+    mv->setSpacing(4);
+    mv->addWidget(hint(QStringLiteral(
+        "Add one condition at a time. ✓/✗ update LIVE against the current scene, so you can watch "
+        "the goal become true as the robot works (or as you drag objects around)."), g3));
+    m_goalEmpty = hint(QStringLiteral("No conditions yet -- compose one below and press “Add”."), g3);
+    mv->addWidget(m_goalEmpty);
+    m_goalList = new QListWidget(g3);
+    m_goalList->setMinimumHeight(70);
+    mv->addWidget(m_goalList);
+
+    m_kind = new QComboBox(g3);
+    m_kind->addItems({
+        QStringLiteral("Object is AT a location (exact spot)"),
+        QStringLiteral("Object is NEAR another object / location"),
+        QStringLiteral("Robot is HOLDING the object"),
+        QStringLiteral("Robot is NOT holding the object"),
+        QStringLiteral("Gripper is open"),
+    });
+    mv->addWidget(m_kind);
+    // contextual rows: only the fields the chosen condition uses are visible
+    m_rowA = new QWidget(g3);
+    { auto* h = new QHBoxLayout(m_rowA); h->setContentsMargins(0, 0, 0, 0);
+      h->addWidget(new QLabel(QStringLiteral("Object:"), m_rowA));
+      m_objA = new QComboBox(m_rowA); m_objA->setEditable(true);
+      h->addWidget(m_objA, 1); }
+    m_rowB = new QWidget(g3);
+    { auto* h = new QHBoxLayout(m_rowB); h->setContentsMargins(0, 0, 0, 0);
+      h->addWidget(new QLabel(QStringLiteral("Target:"), m_rowB));
+      m_objB = new QComboBox(m_rowB); m_objB->setEditable(true);
+      h->addWidget(m_objB, 1); }
+    m_rowTol = new QWidget(g3);
+    { auto* h = new QHBoxLayout(m_rowTol); h->setContentsMargins(0, 0, 0, 0);
+      h->addWidget(new QLabel(QStringLiteral("Within (m):"), m_rowTol));
+      m_tol = new QDoubleSpinBox(m_rowTol);
+      m_tol->setRange(0.001, 10.0); m_tol->setValue(0.1); m_tol->setDecimals(3); m_tol->setSingleStep(0.05);
+      m_tol->setToolTip(QStringLiteral("How close counts as “there”."));
+      h->addWidget(m_tol, 1); }
+    mv->addWidget(m_rowA); mv->addWidget(m_rowB); mv->addWidget(m_rowTol);
     auto* addRow = new QHBoxLayout();
-    m_kind = new QComboBox(midBox);
-    m_kind->addItems({ QStringLiteral("at"), QStringLiteral("near"), QStringLiteral("holding"),
-                       QStringLiteral("not holding"), QStringLiteral("gripper open") });
-    m_objA = new QComboBox(midBox); m_objA->setEditable(true);
-    m_objB = new QComboBox(midBox); m_objB->setEditable(true);
-    m_tol = new QDoubleSpinBox(midBox);
-    m_tol->setRange(0.001, 10.0); m_tol->setValue(0.1); m_tol->setDecimals(3); m_tol->setSingleStep(0.05);
-    auto* addBtn = new QPushButton(QStringLiteral("+"), midBox); addBtn->setMaximumWidth(28);
-    auto* delBtn = new QPushButton(QStringLiteral("-"), midBox); delBtn->setMaximumWidth(28);
-    addRow->addWidget(m_kind); addRow->addWidget(m_objA, 1); addRow->addWidget(m_objB, 1);
-    addRow->addWidget(m_tol); addRow->addWidget(addBtn); addRow->addWidget(delBtn);
+    auto* addBtn = new QPushButton(QStringLiteral("＋ Add condition"), g3);
+    auto* delBtn = new QPushButton(QStringLiteral("－ Remove selected"), g3);
+    addRow->addWidget(addBtn); addRow->addWidget(delBtn);
     mv->addLayout(addRow);
     auto* fileRow = new QHBoxLayout();
-    auto* saveBtn = new QPushButton(QStringLiteral("Save Goal..."), midBox);
-    auto* loadBtn = new QPushButton(QStringLiteral("Load Goal..."), midBox);
+    auto* saveBtn = new QPushButton(QStringLiteral("Save Goal..."), g3);
+    auto* loadBtn = new QPushButton(QStringLiteral("Load Goal..."), g3);
+    saveBtn->setToolTip(QStringLiteral("Write the checklist as a shareable .kgoal document."));
     fileRow->addWidget(saveBtn); fileRow->addWidget(loadBtn); fileRow->addStretch(1);
     mv->addLayout(fileRow);
-    split->addWidget(midBox);
+    root->addWidget(g3);
 
-    // ---- RIGHT: plan & knowledge ----
-    auto* rightBox = new QWidget(split);
-    auto* rv = new QVBoxLayout(rightBox);
-    rv->setContentsMargins(0, 0, 0, 0); rv->setSpacing(3);
-    rv->addWidget(new QLabel(QStringLiteral("Plan (envelopes stamped):"), rightBox));
-    m_planList = new QListWidget(rightBox);
-    rv->addWidget(m_planList, 2);
-    rv->addWidget(new QLabel(QStringLiteral("Knowledge to-do:"), rightBox));
-    m_todoList = new QListWidget(rightBox);
-    rv->addWidget(m_todoList, 1);
+    // ================= (4) PLAN & EXECUTE =================
+    auto* g4 = new QGroupBox(QStringLiteral("4 · Plan & execute"), page);
+    auto* rv = new QVBoxLayout(g4);
+    rv->setSpacing(4);
+    rv->addWidget(hint(QStringLiteral(
+        "Plan works BACKWARD from the goal, ordering skills and inserting measuring steps for "
+        "missing knowledge (the to-do below). Execute runs the plan on the live robot -- guards "
+        "watch the trait envelopes while it moves."), g4));
+    rv->addWidget(new QLabel(QStringLiteral("Steps (with safety envelopes):"), g4));
+    m_planList = new QListWidget(g4);
+    m_planList->setMinimumHeight(70);
+    rv->addWidget(m_planList);
+    rv->addWidget(new QLabel(QStringLiteral("Knowledge to-do (what must be measured first):"), g4));
+    m_todoList = new QListWidget(g4);
+    m_todoList->setMaximumHeight(70);
+    rv->addWidget(m_todoList);
     auto* runRow = new QHBoxLayout();
-    m_planBtn = new QPushButton(QStringLiteral("Plan"), rightBox);
-    m_execBtn = new QPushButton(QStringLiteral("Execute"), rightBox);
-    m_cancelBtn = new QPushButton(QStringLiteral("Cancel"), rightBox);
+    m_planBtn = new QPushButton(QStringLiteral("🗺  Plan"), g4);
+    m_execBtn = new QPushButton(QStringLiteral("▶  Execute"), g4);
+    m_cancelBtn = new QPushButton(QStringLiteral("■  Stop"), g4);
     m_execBtn->setEnabled(false); m_cancelBtn->setEnabled(false);
+    m_execBtn->setToolTip(QStringLiteral("Enabled after a successful Plan."));
     runRow->addWidget(m_planBtn); runRow->addWidget(m_execBtn); runRow->addWidget(m_cancelBtn);
     rv->addLayout(runRow);
-    m_status = new QLabel(rightBox);
+    m_status = new QLabel(g4);
+    m_status->setWordWrap(true);
     m_status->setStyleSheet(QStringLiteral("color:#bbbbbb;"));
     rv->addWidget(m_status);
-    split->addWidget(rightBox);
+    root->addWidget(g4);
 
-    split->setSizes({ 260, 320, 300 });
-    root->addWidget(split, 1);
+    root->addStretch(1);
+    scroll->setWidget(page);
+    outer->addWidget(scroll);
 
     connect(refreshBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onRefreshWorld);
     connect(tagBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onToggleTag);
     connect(traitBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onAddTrait);
+    connect(atObjBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onSetFrameAtObject);
+    connect(atXyzBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onSetFrameAtXyz);
     connect(addBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onAddPredicate);
     connect(delBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onRemovePredicate);
     connect(saveBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onSaveGoal);
@@ -148,12 +254,52 @@ GoalWorkspacePanel::GoalWorkspacePanel(Scene* scene, QWidget* parent)
     connect(m_planBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onPlan);
     connect(m_execBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onExecute);
     connect(m_cancelBtn, &QPushButton::clicked, this, &GoalWorkspacePanel::onCancel);
+    connect(m_kind, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &GoalWorkspacePanel::onKindChanged);
+    onKindChanged(0);
 
     m_goal.name = QStringLiteral("goal");
     m_liveTimer = new QTimer(this);
     m_liveTimer->setInterval(200);   // ~5 Hz live truth + status
     connect(m_liveTimer, &QTimer::timeout, this, &GoalWorkspacePanel::onLiveTick);
     m_liveTimer->start();
+    // Self-populate shortly after boot (the catalog needs an eval pass or two) -- an empty
+    // panel with a Refresh button is exactly the "makes no sense" first impression to avoid.
+    QTimer::singleShot(1500, this, &GoalWorkspacePanel::onRefreshWorld);
+}
+
+void GoalWorkspacePanel::onKindChanged(int idx)
+{
+    // At/Near use object+target+tolerance; Holding/NotHolding use object; GripperOpen uses none.
+    const bool needsA   = (idx <= 3);
+    const bool needsB   = (idx <= 1);
+    const bool needsTol = (idx <= 1);
+    m_rowA->setVisible(needsA);
+    m_rowB->setVisible(needsB);
+    m_rowTol->setVisible(needsTol);
+}
+
+void GoalWorkspacePanel::refreshFrames()
+{
+    if (!m_scene) return;
+    auto& ws = krs::world::worldState(m_scene->getRegistry());
+    m_frameList->clear();
+    const QString keepB = m_objB->currentText();
+    // targets = frames first (that is what at() wants), then objects (near() accepts both)
+    m_objB->clear();
+    for (const auto& fn : ws.frameNames()) {
+        glm::vec3 p(0.0f);
+        ws.positionOf(fn, &p);
+        m_frameList->addItem(QStringLiteral("%1   @ (%2, %3, %4)")
+            .arg(QString::fromStdString(fn))
+            .arg(p.x, 0, 'f', 2).arg(p.y, 0, 'f', 2).arg(p.z, 0, 'f', 2));
+        m_objB->addItem(QString::fromStdString(fn));
+    }
+    if (m_frameList->count() == 0)
+        m_frameList->addItem(QStringLiteral("(no frames yet -- name one below)"));
+    for (const auto& name : ws.objectNames())
+        m_objB->addItem(QString::fromStdString(name));
+    if (!keepB.isEmpty()) m_objB->setCurrentText(keepB);
 }
 
 void GoalWorkspacePanel::onRefreshWorld()
@@ -161,8 +307,8 @@ void GoalWorkspacePanel::onRefreshWorld()
     if (!m_scene) return;
     auto& ws = krs::world::worldState(m_scene->getRegistry());
     m_world->clear();
-    const QString keepA = m_objA->currentText(), keepB = m_objB->currentText();
-    m_objA->clear(); m_objB->clear();
+    const QString keepA = m_objA->currentText();
+    m_objA->clear();
     for (const auto& name : ws.objectNames()) {
         auto* item = new QTreeWidgetItem(m_world);
         item->setText(0, QString::fromStdString(name));
@@ -185,15 +331,13 @@ void GoalWorkspacePanel::onRefreshWorld()
         item->setExpanded(true);
         m_objA->addItem(QString::fromStdString(name));
     }
-    // frames feed the B combo (targets)
-    m_objB->addItem(QStringLiteral("drop_pose"));
     if (!keepA.isEmpty()) m_objA->setCurrentText(keepA);
-    if (!keepB.isEmpty()) m_objB->setCurrentText(keepB);
+    refreshFrames();
 }
 
 void GoalWorkspacePanel::onToggleTag()
 {
-    if (!m_scene || !m_world->currentItem()) return;
+    if (!m_scene || !m_world->currentItem()) { m_status->setText(QStringLiteral("Select an object in the list first.")); return; }
     QTreeWidgetItem* item = m_world->currentItem();
     while (item->parent()) item = item->parent();
     auto& k = krs::world::worldState(m_scene->getRegistry()).know(item->text(0).toStdString());
@@ -203,7 +347,7 @@ void GoalWorkspacePanel::onToggleTag()
 
 void GoalWorkspacePanel::onAddTrait()
 {
-    if (!m_scene || !m_world->currentItem()) return;
+    if (!m_scene || !m_world->currentItem()) { m_status->setText(QStringLiteral("Select an object in the list first.")); return; }
     QTreeWidgetItem* item = m_world->currentItem();
     while (item->parent()) item = item->parent();
     auto& k = krs::world::worldState(m_scene->getRegistry()).know(item->text(0).toStdString());
@@ -212,13 +356,50 @@ void GoalWorkspacePanel::onAddTrait()
     onRefreshWorld();
 }
 
+void GoalWorkspacePanel::onSetFrameAtObject()
+{
+    if (!m_scene) return;
+    const QString name = m_frameName->text().trimmed();
+    if (name.isEmpty()) { m_status->setText(QStringLiteral("Give the frame a name first.")); return; }
+    if (!m_world->currentItem()) { m_status->setText(QStringLiteral("Select an object in step 1 first.")); return; }
+    QTreeWidgetItem* item = m_world->currentItem();
+    while (item->parent()) item = item->parent();
+    auto& ws = krs::world::worldState(m_scene->getRegistry());
+    glm::vec3 p(0.0f);
+    if (!ws.positionOf(item->text(0).toStdString(), &p)) {
+        m_status->setText(QStringLiteral("That object has no known position yet (press Refresh)."));
+        return;
+    }
+    ws.setFrame(name.toStdString(), p);
+    m_status->setText(QStringLiteral("Frame “%1” placed at %2's position.").arg(name, item->text(0)));
+    refreshFrames();
+    m_objB->setCurrentText(name);
+}
+
+void GoalWorkspacePanel::onSetFrameAtXyz()
+{
+    if (!m_scene) return;
+    const QString name = m_frameName->text().trimmed();
+    if (name.isEmpty()) { m_status->setText(QStringLiteral("Give the frame a name first.")); return; }
+    auto& ws = krs::world::worldState(m_scene->getRegistry());
+    ws.setFrame(name.toStdString(),
+                glm::vec3(float(m_fx->value()), float(m_fy->value()), float(m_fz->value())));
+    m_status->setText(QStringLiteral("Frame “%1” placed at (%2, %3, %4).")
+        .arg(name).arg(m_fx->value(), 0, 'f', 2).arg(m_fy->value(), 0, 'f', 2).arg(m_fz->value(), 0, 'f', 2));
+    refreshFrames();
+    m_objB->setCurrentText(name);
+}
+
 void GoalWorkspacePanel::onAddPredicate()
 {
     const std::string a = m_objA->currentText().toStdString();
     const std::string b = m_objB->currentText().toStdString();
+    const int idx = m_kind->currentIndex();
+    if (idx <= 3 && a.empty()) { m_status->setText(QStringLiteral("Pick the object the condition is about.")); return; }
+    if (idx <= 1 && b.empty()) { m_status->setText(QStringLiteral("Pick a target (create a frame in step 2 if needed).")); return; }
     const double tol = m_tol->value();
     Predicate p;
-    switch (m_kind->currentIndex()) {
+    switch (idx) {
         case 0: p = { Predicate::Kind::At, false, 0, a, b, tol }; break;
         case 1: p = { Predicate::Kind::Near, false, 0, a, b, tol }; break;
         case 2: p = { Predicate::Kind::Holding, false, 0, a }; break;
@@ -227,6 +408,7 @@ void GoalWorkspacePanel::onAddPredicate()
     }
     m_goal.require.push_back(p);
     rebuildGoalList();
+    m_status->setText(QStringLiteral("Condition added. Add more, or continue to step 4."));
 }
 
 void GoalWorkspacePanel::onRemovePredicate()
@@ -243,6 +425,7 @@ void GoalWorkspacePanel::rebuildGoalList()
     m_goalList->clear();
     for (const auto& p : m_goal.require)
         m_goalList->addItem(QString::fromStdString(p.text()));
+    m_goalEmpty->setVisible(m_goal.require.empty());
     onLiveTick();
 }
 
@@ -350,12 +533,19 @@ std::vector<SkillStep> GoalWorkspacePanel::buildLibraryFor(const std::string& ob
 
 void GoalWorkspacePanel::onPlan()
 {
-    if (!m_scene || m_goal.require.empty()) { m_status->setText(QStringLiteral("Add a goal predicate first.")); return; }
+    if (!m_scene || m_goal.require.empty()) {
+        m_status->setText(QStringLiteral("The goal is empty -- add at least one condition in step 3 first."));
+        return;
+    }
     auto& ws = krs::world::worldState(m_scene->getRegistry());
     // v1: the bound object = the first predicate's subject.
     const std::string object = m_goal.require.front().a;
     const std::vector<SkillStep> lib = buildLibraryFor(object);
-    if (lib.empty()) { m_status->setText(QStringLiteral("No robot / primitive files -- cannot build the library.")); return; }
+    if (lib.empty()) {
+        m_status->setText(QStringLiteral("Cannot build the skill library: no robot is loaded (or the "
+                                         "assets/skills/*.knode primitives are missing)."));
+        return;
+    }
     m_plan = krs::skill::planBackward(lib, ws, m_goal.require, /*autoInsertExcitation*/ true);
 
     m_planList->clear();
@@ -363,12 +553,15 @@ void GoalWorkspacePanel::onPlan()
     if (!m_plan.ok) {
         m_planList->addItem(QStringLiteral("PLAN FAILED: %1").arg(QString::fromStdString(m_plan.why)));
         m_execBtn->setEnabled(false);
+        m_status->setText(QStringLiteral("Planning failed -- see the first line above for why."));
         return;
     }
+    int stepNo = 1;
     for (const auto& s : m_plan.steps) {
         QString env;
         for (const auto& [k, v] : s.envelope) env += QStringLiteral(" %1=%2").arg(QString::fromStdString(k)).arg(v);
-        m_planList->addItem(QStringLiteral("%1 [%2]%3")
+        m_planList->addItem(QStringLiteral("%1. %2 [%3]%4")
+                                .arg(stepNo++)
                                 .arg(QString::fromStdString(s.spec->name), QString::fromStdString(s.object), env));
     }
     for (const auto& gap : m_plan.gaps) {
@@ -376,12 +569,15 @@ void GoalWorkspacePanel::onPlan()
             .arg(QString::fromStdString(gap.object), QString::fromStdString(gap.param))
             .arg(gap.sigmaNow, 0, 'g', 3).arg(gap.sigmaNeeded, 0, 'g', 3)
             .arg(QString::fromStdString(gap.suggestedSkill.empty() ? "no excitation known" : gap.suggestedSkill),
-                 gap.resolvedByPlan ? QStringLiteral(" -- inserted") : QStringLiteral(" -- queued")));
+                 gap.resolvedByPlan ? QStringLiteral(" -- inserted into the plan") : QStringLiteral(" -- still queued")));
         it->setForeground(gap.resolvedByPlan ? QColor(0x66, 0xcc, 0x66) : QColor(0xcc, 0xaa, 0x44));
         m_todoList->addItem(it);
     }
+    if (m_plan.gaps.empty())
+        m_todoList->addItem(QStringLiteral("(nothing -- all required knowledge is already good enough)"));
     m_execBtn->setEnabled(true);
-    m_status->setText(QStringLiteral("Plan: %1 step(s), %2 gap(s).").arg(m_plan.steps.size()).arg(m_plan.gaps.size()));
+    m_status->setText(QStringLiteral("Plan ready: %1 step(s), %2 knowledge gap(s). Press Execute to run it live.")
+                          .arg(m_plan.steps.size()).arg(m_plan.gaps.size()));
 }
 
 void GoalWorkspacePanel::onExecute()
@@ -393,13 +589,14 @@ void GoalWorkspacePanel::onExecute()
                                                    krs::skill::composeSequence(m_plan.steps, m_scene, ws));
     m_execBtn->setEnabled(false);
     m_cancelBtn->setEnabled(true);
-    m_status->setText(QStringLiteral("Executing on the live runtime..."));
+    m_status->setText(QStringLiteral("Executing on the live runtime... watch the ✓s in step 3."));
 }
 
 void GoalWorkspacePanel::onCancel()
 {
     if (m_scene && m_taskId >= 0) krs::skill::skillRuntime(m_scene->getRegistry()).cancel(m_taskId);
     m_cancelBtn->setEnabled(false);
+    m_status->setText(QStringLiteral("Stopped -- the robot's joints release on the next pass."));
 }
 
 void GoalWorkspacePanel::onLiveTick()
@@ -417,7 +614,7 @@ void GoalWorkspacePanel::onLiveTick()
     // running-task status
     if (m_taskId >= 0) {
         const Status s = krs::skill::skillRuntime(m_scene->getRegistry()).status(m_taskId);
-        if (s == Status::Success)      { m_status->setText(QStringLiteral("Task SUCCEEDED.")); m_taskId = -1; m_cancelBtn->setEnabled(false); m_execBtn->setEnabled(true); onRefreshWorld(); }
-        else if (s == Status::Failure) { m_status->setText(QStringLiteral("Task FAILED (see gaps/guards).")); m_taskId = -1; m_cancelBtn->setEnabled(false); m_execBtn->setEnabled(true); }
+        if (s == Status::Success)      { m_status->setText(QStringLiteral("Task SUCCEEDED -- the goal checklist should be all ✓.")); m_taskId = -1; m_cancelBtn->setEnabled(false); m_execBtn->setEnabled(true); onRefreshWorld(); }
+        else if (s == Status::Failure) { m_status->setText(QStringLiteral("Task FAILED -- check the knowledge to-do and trait guards, then re-Plan.")); m_taskId = -1; m_cancelBtn->setEnabled(false); m_execBtn->setEnabled(true); }
     }
 }
