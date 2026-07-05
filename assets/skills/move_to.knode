@@ -1,0 +1,32 @@
+{
+    "format": "knode/1",
+    "id": "prim-move-to",
+    "name": "Move To Config",
+    "category": "Skills/Primitives",
+    "revision": 1,
+    "description": "Drive one robot's whole joint configuration to a target through the robot-keyed command bus (index i -> DOF i). The reactive/planned interior (OMPL, IK, field-following) composes here as it comes online.",
+    "version": "1.0.0",
+    "author": "KRStudio",
+    "tags": ["primitive", "motion"],
+    "nodes": [
+        {
+            "id": "d",
+            "typeId": "physics_config_drive",
+            "x": 0,
+            "y": 0,
+            "state": {
+                "typeId": "physics_config_drive",
+                "id": "physics_config_drive",
+                "params": [],
+                "literals": [ { "k": "Robot", "t": "i", "v": 0 } ],
+                "policy": 0,
+                "edge": 0
+            }
+        }
+    ],
+    "connections": [],
+    "ports": [
+        { "name": "target", "node": "d", "port": "Config", "dir": "in", "dataType": "joint_config", "role": "targetConfig" }
+    ],
+    "nested": []
+}

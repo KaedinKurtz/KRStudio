@@ -1,0 +1,32 @@
+{
+    "format": "knode/1",
+    "id": "prim-push",
+    "name": "Push",
+    "category": "Skills/Primitives",
+    "revision": 1,
+    "description": "Push the bound object along a direction with a bounded force. Doubles as the push_probe friction excitation when instrumented.",
+    "version": "1.0.0",
+    "author": "KRStudio",
+    "tags": ["primitive", "manipulation"],
+    "nodes": [
+        {
+            "id": "d",
+            "typeId": "physics_config_drive",
+            "x": 0,
+            "y": 0,
+            "state": {
+                "typeId": "physics_config_drive",
+                "id": "physics_config_drive",
+                "params": [],
+                "literals": [ { "k": "Robot", "t": "i", "v": 0 } ],
+                "policy": 0,
+                "edge": 0
+            }
+        }
+    ],
+    "connections": [],
+    "ports": [
+        { "name": "target", "node": "d", "port": "Config", "dir": "in", "dataType": "joint_config", "role": "targetConfig" }
+    ],
+    "nested": []
+}

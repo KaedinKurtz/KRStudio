@@ -62,6 +62,15 @@ RegressionResult planBackward(const std::vector<SkillStep>& library, const krs::
                               const std::vector<Predicate>& goal, bool autoInsertExcitation = false,
                               int maxIterations = 64);
 
+// Headless STORY gate (KRS_GOALLOOP_SELFTEST) -- the whole Goal Workspace loop end to end, with the
+// primitive bodies loaded FROM the shipped assets/skills/*.knode files: a .kgoal goal on an R2S
+// liquid glass with UNKNOWN mass -> regression plans [grasp, place] + auto-splices lift_weigh ->
+// execution under the SkillRuntime runs the honing excitation (population converges, mass becomes
+// Measured), then the guarded motion steps drive the live robot -> the goal is satisfied. The scene
+// SAVES and a fresh load re-plans with ZERO gaps (yesterday's glass stays known); a residual-spike
+// invalidation makes the gap honestly reappear. NEG-CTRL included via the invalidation re-check.
+bool runGoalLoopGate();
+
 // Headless gate (KRS_GOALPLAN_SELFTEST): regression reproduces [pick, place] backward from
 // at(cup, drop_pose); an R2S glass with unknown mass emits gap(mass) while the SAME plan on a
 // SimOnly object emits none (the tag gates extraction); autoInsertExcitation splices lift_weigh

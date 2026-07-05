@@ -1308,6 +1308,12 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::hone::runHoneGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Goal Workspace STORY: goal -> regression -> gap -> honing -> guarded execution -> persistence.
+    if (qEnvironmentVariableIntValue("KRS_GOALLOOP_SELFTEST") != 0) {
+        std::printf("\n================= KRS_GOALLOOP_SELFTEST =================\n");
+        const bool ok = krs::skill::runGoalLoopGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     // Subgraph sharing: bundle a subgraph + nested closure as a portable .knodepack + cross-user import.
     if (qEnvironmentVariableIntValue("KRS_KPACK_SELFTEST") != 0) {
         std::printf("\n================= KRS_KPACK_SELFTEST =================\n");
@@ -2240,6 +2246,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE KGOAL (.kgoal declarative goal: builder/JSON/panel one format; live satisfied/unmet; hash discipline; unknown-major + malformed-predicate refusals)", krs::goal::runKGoalGate() },
             { "GATE GOALPLAN (goal regression; R2S demands knowledge + SimOnly accepts guesses; excitation auto-splices; trait envelopes intersect + guard LIVE mid-run; relevance-chain + unestablishable neg-ctrls)", krs::skill::runGoalPlanGate() },
             { "GATE HONE (population honing: lift-weigh mass + tilt-settle CoM converge; blind excitation cannot fake confidence; sloshing water flagged Dynamic never mis-fit; deterministic)", krs::hone::runHoneGate() },
+            { "GATE GOALLOOP (the story: file-authored primitives; .kgoal goal; regression + auto-excitation; honing writes the ledger; guarded execution reaches the goal; knowledge persists across save/load; invalidation-reappears neg-ctrl)", krs::skill::runGoalLoopGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
