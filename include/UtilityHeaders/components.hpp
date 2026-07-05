@@ -773,6 +773,12 @@ struct EnvironmentSettings {
     // ctx values into the live RenderingSystem each eval pass (a node is driving the environment).
     // When false, the lighting panel / renderer own the settings and the ctx only mirrors on save.
     bool      nodeDriven     = false;
+    // RUNTIME (not serialized): the SKYBOX-DERIVED sun (Texture2D::analyzeHdrSun at HDR load),
+    // mirrored from the renderer so an Environment node's "Auto Sun" can RESTORE it after a spell
+    // of manual sun control. hasDerivedSun=false until an HDR analysis has run.
+    bool      hasDerivedSun  = false;
+    glm::vec3 sunDerivedDirection = glm::vec3(0.0f, -1.0f, 0.0f);
+    glm::vec3 sunDerivedColor     = glm::vec3(1.0f);
 };
 
 // OBJECT RECIPE: how a loose (non-robot) scene object was created, so a .kscene can reconstruct it.

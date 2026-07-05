@@ -32,7 +32,8 @@
 #include <QVBoxLayout>
 #include <QFileDialog>
 #include <QCoreApplication>
-#include "ProxyComboBox.hpp"   // combo that pops correctly inside a QtNodes proxy widget
+#include "ProxyComboBox.hpp"    // combo that pops correctly inside a QtNodes proxy widget
+#include "PropertyCatalog.hpp"  // catalog().now(): the shared wall-clock time axis for recordings
 
 #include <cstdio>
 #include <cmath>
@@ -187,9 +188,12 @@ public:
 
         if (enable) {
             if ((m_evalIndex % decimate) == 0) {
+                // Time axis: the catalog's WALL-CLOCK now() (shared with the Data Recorder panel)
+                // when it advances; a synthetic increment otherwise (headless gates, no publisher).
+                const double catNow = krs::twin::catalog().now();
+                if (catNow > m_time) m_time = catNow; else m_time += kDt;
                 m_table.addRow({ m_time, value });
             }
-            m_time += kDt;                                                          // advance the monotonic clock
             ++m_evalIndex;
         }
         // Enable FALLING EDGE -> auto-flush: stopping a recording writes the file without any extra

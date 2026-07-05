@@ -31,6 +31,7 @@ class QDoubleSpinBox;
 class QLabel;
 class QTimer;
 class QSplitter;
+class QScrollBar;
 
 // A single loggable scalar signal: object id + property name + which component of a
 // vec3 (or -1 for a plain scalar), plus a cached unit + display label. `comp` indexes
@@ -63,6 +64,12 @@ public:
     // any time; equivalent to pressing the Refresh button.
     void refreshChannels();
 
+    // FIREHOSE RECORDING: the main loop calls this once per eval pass (right after the catalog
+    // publisher), so sampling rides the eval rate -- crank the eval-rate spinbox and the recorder
+    // follows -- instead of a fixed 50 Hz UI timer. The first call retires the internal timer as a
+    // sampler (it remains a chart-repaint fallback only).
+    void externalRecordTick();
+
 private slots:
     void onRefresh();          // rescan catalog() and rebuild the channel tree
     void onItemChanged();      // a channel was (un)checked -> rebuild chart columns
@@ -81,6 +88,8 @@ private:
     void updateStatus();            // refresh the status label text
     double catalogValueOf(const RecorderChannel& ch, bool* found) const; // guarded lookup
     double sampleClock();           // catalog().now() if advancing, else a monotone counter
+    void recordCore();              // one sampling step (trigger eval + row append + chart sync)
+    void syncScrollBar();           // keep the back-scroll range in step with the buffer
 
     // ---- top control row ----
     QCheckBox*       m_arm = nullptr;
@@ -97,6 +106,15 @@ private:
     QSplitter*             m_splitter = nullptr;
     QTreeWidget*           m_tree = nullptr;
     DataRecorderChartView* m_chart = nullptr;
+
+    // ---- chart scale controls + back-scroll ----
+    QSpinBox*        m_windowSpin = nullptr;   // points across the X axis (FIFO window)
+    QComboBox*       m_yMode = nullptr;        // Auto / Manual
+    QDoubleSpinBox*  m_yMargin = nullptr;      // autoscale headroom, % of span (top+bottom)
+    QDoubleSpinBox*  m_yMinSpin = nullptr;     // manual Y min/max
+    QDoubleSpinBox*  m_yMaxSpin = nullptr;
+    QScrollBar*      m_scroll = nullptr;       // back-scroll through the FIFO history
+    bool             m_followLive = true;      // scrollbar pinned at the newest window
 
     // ---- bottom actions ----
     QPushButton* m_saveBtn = nullptr;
@@ -117,6 +135,7 @@ private:
     bool   m_havePrevTrigVal = false;
     double m_monoClock = 0.0;         // fallback clock when catalog().now() does not advance
     double m_lastNow = -1.0;          // last observed catalog().now()
+    bool   m_externallyTicked = false; // main loop drives sampling (internal timer repaints only)
 
     // remembered channel identity per recording column (index 1..N map to these);
     // parallel to m_table columns[1..] so a vanished channel still logs its last/0.

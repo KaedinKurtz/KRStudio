@@ -601,6 +601,11 @@ void RenderingSystem::initializeSharedResources()
                 if (Texture2D::analyzeHdrSun(hdrPath, sd, sc)) {
                     m_sunDirection = glm::vec3(sd[0], sd[1], sd[2]);
                     m_sunColor     = glm::vec3(sc[0], sc[1], sc[2]);
+                    // cache the DERIVED values separately: manual sun edits overwrite m_sunDirection/
+                    // m_sunColor, and an Environment node's "Auto Sun" restores from THIS cache.
+                    m_sunDirectionDerived = m_sunDirection;
+                    m_sunColorDerived     = m_sunColor;
+                    m_hasDerivedSun       = true;
                     qInfo() << "[IBL] sun from skybox -> dir" << sd[0] << sd[1] << sd[2]
                             << " colour" << sc[0] << sc[1] << sc[2];
                 }

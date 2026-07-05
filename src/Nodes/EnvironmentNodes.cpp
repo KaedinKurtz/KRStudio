@@ -40,14 +40,20 @@ public:
         m_ports.push_back({ "Fog",           { "bool",      "unitless" }, Port::Direction::Input, this });
         // Auto Sun: when true, the sun ports are IGNORED and the skybox-derived sun (the renderer's
         // Texture2D::analyzeHdrSun pipeline: brightest texel -> direction, surrounding region ->
-        // colour) stays authoritative -- "the sun follows the sky". Wire/toggle false to drive the
-        // sun manually through the three ports above.
+        // colour) is RESTORED + kept authoritative -- "the sun follows the sky". Toggle/wire false
+        // to drive the sun manually through the three ports above; re-enabling recovers the sky sun.
         m_ports.push_back({ "Auto Sun",      { "bool",      "unitless" }, Port::Direction::Input, this });
+        // BOOL literals seeded TRUE in the ctor: the delegate auto-mounts a checkbox per bool port
+        // and SEEDS the literal from it at mount -- an unset literal reads false, which is what used
+        // to kill the skybox on drop-in. (The change-detection below means even these seeds apply
+        // nothing until the USER toggles or wires the port.)
+        setPortLiteral<bool>("Skybox",   true);
+        setPortLiteral<bool>("Fog",      true);
         setPortLiteral<bool>("Auto Sun", true);
-        // NOTE: numeric literals are NOT seeded here -- they seed from the CURRENT environment on
-        // first compute (see below), so dropping this node into a graph changes NOTHING until the
-        // user actually edits a knob (no more viewport nuke from hardcoded defaults).
+        // Numeric literals are NOT seeded here -- they seed from the CURRENT environment on first
+        // compute, so dropping this node changes NOTHING until a knob is actually edited.
     }
+
     void compute() override {
         if (!m_scene) return;
         auto& reg = m_scene->getRegistry();
@@ -56,47 +62,55 @@ public:
         auto* props = reg.ctx().find<SceneProperties>();
         if (!props) props = &reg.ctx().emplace<SceneProperties>();
 
-        // FIRST compute: seed the in-node literals from the CURRENT settings (the app mirrors the
-        // live renderer into the ctx while no node drives it), so the node starts as a no-op that
-        // *shows* the current look instead of overwriting it.
+        // FIRST compute: seed numeric literals from the CURRENT settings (the app mirrors the live
+        // renderer into the ctx while no node drives it) + snapshot the bool literals, so the node
+        // starts as a pure no-op that SHOWS the current look instead of overwriting it.
         if (!m_seeded) {
             setPortLiteral<double>("Sun Intensity", double(env->sunIntensity));
             setPortLiteral<double>("IBL Intensity", double(env->iblIntensity));
             setPortLiteral<double>("Exposure EV",   double(env->exposureEV));
+            m_lastSkybox = getInput<bool>("Skybox").value_or(true);
+            m_lastFog    = getInput<bool>("Fog").value_or(true);
             m_seeded = true;
         }
 
         env->sunIntensity = float(getInputD("Sun Intensity", env->sunIntensity));
         env->iblIntensity = float(getInputD("IBL Intensity", env->iblIntensity));
         env->exposureEV   = float(getInputD("Exposure EV",   env->exposureEV));
+
         const bool autoSun = getInput<bool>("Auto Sun").value_or(true);
-        if (!autoSun) {           // manual sun: the ports drive colour/direction
+        if (autoSun) {
+            // RESTORE + hold the skybox-derived sun (recovers after a spell of manual control).
+            if (env->hasDerivedSun) {
+                env->sunDirection = env->sunDerivedDirection;
+                env->sunColor     = env->sunDerivedColor;
+            }
+        } else {                   // manual sun: the ports drive colour/direction
             if (auto c = getInput<glm::vec3>("Sun Color"))     env->sunColor = *c;
             if (auto d = getInput<glm::vec3>("Sun Direction")) env->sunDirection = *d;
-        }                          // auto: leave the skybox-derived values untouched
-        if (auto s = getInput<bool>("Skybox"))             env->drawSkybox = *s;
-        if (auto f = getInput<bool>("Fog"))                props->fogEnabled = *f;
+        }
+
+        // Skybox/Fog: CHANGE-DETECTION on the literal (an unwired checkbox applies only when the
+        // user actually toggles it -- the mount-seed value never stomps the scene) ; a WIRED port
+        // applies every pass (a wire is an explicit command).
+        const bool skybox = getInput<bool>("Skybox").value_or(m_lastSkybox);
+        if (portWired("Skybox") || skybox != m_lastSkybox) env->drawSkybox = skybox;
+        m_lastSkybox = skybox;
+        const bool fog = getInput<bool>("Fog").value_or(m_lastFog);
+        if (portWired("Fog") || fog != m_lastFog) props->fogEnabled = fog;
+        m_lastFog = fog;
 
         env->nodeDriven = true;   // tell the app to push these into the live renderer this pass
     }
-
-    // In-node checkboxes so the boolean gates read as booleans (a wire still overrides a checkbox).
-    QWidget* createCustomWidget() override {
-        auto* w = new QWidget; auto* v = new QVBoxLayout(w);
-        v->setContentsMargins(3, 3, 3, 3); v->setSpacing(2);
-        auto addCheck = [this, v](const char* label, const std::string& port, bool def) {
-            auto* cb = new QCheckBox(QString::fromUtf8(label));
-            cb->setChecked(getInput<bool>(port).value_or(def));
-            QObject::connect(cb, &QCheckBox::toggled, [this, port](bool on) { setPortLiteral<bool>(port, on); });
-            v->addWidget(cb);
-        };
-        addCheck("Skybox visible",           "Skybox",   true);
-        addCheck("Auto sun (from skybox)",   "Auto Sun", true);
-        addCheck("Fog",                      "Fog",      true);
-        return w;
-    }
 private:
+    bool portWired(const char* name) const {   // a live CONNECTION delivers a packet (literal = widget)
+        for (const auto& p : getPorts())
+            if (p.direction == Port::Direction::Input && p.name == name) return p.packet.has_value();
+        return false;
+    }
     bool m_seeded = false;        // literals seeded from the live environment on first compute
+    bool m_lastSkybox = true;     // change detection for the unwired checkbox literals
+    bool m_lastFog = true;
 };
 
 // ---------------------------------------------------------------------------
@@ -235,10 +249,38 @@ bool runEnvironmentNodesGate()
         const bool autoSunOk = env4 && glm::length(env4->sunColor - glm::vec3(0.9f, 0.8f, 0.7f)) < 1e-5
                             && glm::length(env4->sunDirection - glm::vec3(0.1f, -1.0f, 0.0f)) < 1e-5;
 
-        const bool ok = preAbsent && wrote && partial && seedOk && autoSunOk;
+        // AUTO SUN RECOVERY: manual control moved the sun; re-enabling Auto Sun RESTORES the
+        // skybox-derived values (the cache the renderer mirrors into the ctx).
+        Scene s5; auto& r5 = s5.getRegistry();
+        { auto& e5 = r5.ctx().emplace<EnvironmentSettings>();
+          e5.hasDerivedSun = true;
+          e5.sunDerivedDirection = glm::vec3(0.2f, -0.9f, 0.1f);
+          e5.sunDerivedColor     = glm::vec3(1.0f, 0.95f, 0.8f); }
+        EnvironmentNode en5; en5.setScene(&s5);
+        feedB(en5, "Auto Sun", false);                                     // manual spell...
+        feedV(en5, "Sun Direction", glm::vec3(1, 0, 0)); feedV(en5, "Sun Color", glm::vec3(0, 0, 1));
+        en5.process();
+        const auto* env5 = r5.ctx().find<EnvironmentSettings>();
+        const bool manualTook = env5 && glm::length(env5->sunDirection - glm::vec3(1, 0, 0)) < 1e-5;
+        feedB(en5, "Auto Sun", true);                                      // ...then recover
+        en5.process();
+        const bool recoverOk = manualTook
+            && glm::length(env5->sunDirection - glm::vec3(0.2f, -0.9f, 0.1f)) < 1e-5
+            && glm::length(env5->sunColor - glm::vec3(1.0f, 0.95f, 0.8f)) < 1e-5;
+
+        // SKYBOX drop-in survival: the ctor seeds the bool literal TRUE and change-detection means
+        // an untouched checkbox never applies -- a scene with the skybox OFF keeps it off.
+        Scene s6; auto& r6 = s6.getRegistry();
+        { auto& e6 = r6.ctx().emplace<EnvironmentSettings>(); e6.drawSkybox = false; }
+        EnvironmentNode en6; en6.setScene(&s6); en6.process();             // nothing wired/touched
+        const bool dropInOk = !r6.ctx().find<EnvironmentSettings>()->drawSkybox;   // stays OFF
+
+        const bool ok = preAbsent && wrote && partial && seedOk && autoSunOk && recoverOk && dropInOk;
         printf("[envnode]   ENVIRONMENT: ctx-absent-before=%d wrote(manual-sun/ibl/ev/skybox/fog/nodeDriven)=%d "
-               "unconnected-keeps-default=%d seed-from-current(no-op drop-in)=%d auto-sun-ignores-wires=%d  %s\n",
-               int(preAbsent), int(wrote), int(partial), int(seedOk), int(autoSunOk), ok ? "PASS" : "FAIL");
+               "unconnected-keeps-default=%d seed-from-current=%d auto-sun-ignores-wires=%d auto-sun-RECOVERS=%d "
+               "skybox-off-survives-drop-in=%d  %s\n",
+               int(preAbsent), int(wrote), int(partial), int(seedOk), int(autoSunOk), int(recoverOk),
+               int(dropInOk), ok ? "PASS" : "FAIL");
         allOk = allOk && ok;
     }
 

@@ -24,6 +24,7 @@
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <QTimer>
+#include <QScrollBar>
 #include <QPainter>
 #include <QPen>
 #include <QColor>
@@ -103,6 +104,12 @@ public:
     }
 
     void setWindowRows(int n) { m_windowRows = std::max(2, n); }
+    int  windowRows() const { return m_windowRows; }
+    // Back-scroll: how many rows BACK from the live end the window starts (0 = follow live).
+    void setScrollBack(int rowsFromEnd) { m_scrollBack = std::max(0, rowsFromEnd); }
+    // Y scaling: auto (min/max over the visible window + margin% headroom) or manual bounds.
+    void setYAuto(double marginPct) { m_autoY = true; m_marginPct = std::max(0.0, marginPct); }
+    void setYManual(double lo, double hi) { m_autoY = false; m_manMin = std::min(lo, hi); m_manMax = std::max(lo, hi); }
 
 protected:
     void paintEvent(QPaintEvent*) override {
@@ -133,13 +140,16 @@ protected:
 
         const int totalRows = int(m_table->rows.size());
         const int nCols = int(m_table->columns.size());
-        const int first = std::max(0, totalRows - m_windowRows);
-        const int visRows = totalRows - first;
+        // FIFO window with back-scroll: the window ends m_scrollBack rows before the live end.
+        const int windowEnd = std::max(1, totalRows - std::min(m_scrollBack, std::max(0, totalRows - 1)));
+        const int first = std::max(0, windowEnd - m_windowRows);
+        const int totalRowsW = windowEnd;                 // paint loops run [first, totalRowsW)
+        const int visRows = totalRowsW - first;
 
         // --- X range (time column 0), guard against a single row / zero span ---
         double tMin = std::numeric_limits<double>::infinity();
         double tMax = -std::numeric_limits<double>::infinity();
-        for (int r = first; r < totalRows; ++r) {
+        for (int r = first; r < totalRowsW; ++r) {
             const double t = m_table->rows[r].empty() ? 0.0 : m_table->rows[r][0];
             tMin = std::min(tMin, t);
             tMax = std::max(tMax, t);
@@ -148,20 +158,27 @@ protected:
         double tSpan = tMax - tMin;
         if (tSpan < 1e-12) { tSpan = 1.0; tMax = tMin + 1.0; } // one row / flat time
 
-        // --- Y range across all visible channels, guard against flat/degenerate ---
-        double yMin = std::numeric_limits<double>::infinity();
-        double yMax = -std::numeric_limits<double>::infinity();
-        for (int ci : m_cols) {
-            if (ci < 0 || ci >= nCols) continue;
-            for (int r = first; r < totalRows; ++r) {
-                if (ci >= int(m_table->rows[r].size())) continue;
-                const double y = m_table->rows[r][ci];
-                if (!std::isfinite(y)) continue;
-                yMin = std::min(yMin, y);
-                yMax = std::max(yMax, y);
+        // --- Y range: manual bounds, or auto over the VISIBLE window + margin% headroom ---
+        double yMin, yMax;
+        if (!m_autoY) {
+            yMin = m_manMin; yMax = m_manMax;
+        } else {
+            yMin = std::numeric_limits<double>::infinity();
+            yMax = -std::numeric_limits<double>::infinity();
+            for (int ci : m_cols) {
+                if (ci < 0 || ci >= nCols) continue;
+                for (int r = first; r < totalRowsW; ++r) {
+                    if (ci >= int(m_table->rows[r].size())) continue;
+                    const double y = m_table->rows[r][ci];
+                    if (!std::isfinite(y)) continue;
+                    yMin = std::min(yMin, y);
+                    yMax = std::max(yMax, y);
+                }
             }
+            if (!std::isfinite(yMin) || !std::isfinite(yMax)) { yMin = 0.0; yMax = 1.0; }
+            const double m = (yMax - yMin) * (m_marginPct / 100.0);   // headroom above + below
+            yMin -= m; yMax += m;
         }
-        if (!std::isfinite(yMin) || !std::isfinite(yMax)) { yMin = 0.0; yMax = 1.0; }
         double ySpan = yMax - yMin;
         if (ySpan < 1e-12) { const double pad = (std::abs(yMax) > 1e-9 ? std::abs(yMax) * 0.5 : 1.0); yMin -= pad; yMax += pad; ySpan = yMax - yMin; }
 
@@ -206,7 +223,7 @@ protected:
             const QColor col = (k < int(m_colors.size())) ? m_colors[k] : channelColor(k);
 
             pts.clear();
-            for (int r = first; r < totalRows; ++r) {
+            for (int r = first; r < totalRowsW; ++r) {
                 const auto& row = m_table->rows[r];
                 if (row.empty() || ci >= int(row.size())) continue;
                 const double t = row[0];
@@ -253,6 +270,10 @@ private:
     std::vector<QString> m_labels;
     std::vector<QColor>  m_colors;
     int m_windowRows = 600;
+    int m_scrollBack = 0;          // rows back from the live end (0 = follow live)
+    bool m_autoY = true;
+    double m_marginPct = 5.0;      // autoscale headroom (% of span, applied top + bottom)
+    double m_manMin = -1.0, m_manMax = 1.0;
 };
 
 // ===========================================================================
@@ -309,6 +330,39 @@ DataRecorderPanel::DataRecorderPanel(QWidget* parent)
     controlRow->addStretch(1);
     root->addLayout(controlRow);
 
+    // ---------------- chart scale row: FIFO window + Y scaling ----------------
+    auto* scaleRow = new QHBoxLayout();
+    scaleRow->setSpacing(6);
+    scaleRow->addWidget(new QLabel(QStringLiteral("Window (pts):"), this));
+    m_windowSpin = new QSpinBox(this);
+    m_windowSpin->setRange(10, 1000000);
+    m_windowSpin->setValue(600);
+    m_windowSpin->setSingleStep(100);
+    scaleRow->addWidget(m_windowSpin);
+    scaleRow->addWidget(new QLabel(QStringLiteral("Y:"), this));
+    m_yMode = new QComboBox(this);
+    m_yMode->addItem(QStringLiteral("Auto"));
+    m_yMode->addItem(QStringLiteral("Manual"));
+    scaleRow->addWidget(m_yMode);
+    scaleRow->addWidget(new QLabel(QStringLiteral("Margin %:"), this));
+    m_yMargin = new QDoubleSpinBox(this);
+    m_yMargin->setRange(0.0, 100.0);
+    m_yMargin->setValue(5.0);
+    m_yMargin->setSingleStep(1.0);
+    scaleRow->addWidget(m_yMargin);
+    scaleRow->addWidget(new QLabel(QStringLiteral("Min:"), this));
+    m_yMinSpin = new QDoubleSpinBox(this);
+    m_yMinSpin->setRange(-1e9, 1e9); m_yMinSpin->setDecimals(4); m_yMinSpin->setValue(-1.0);
+    m_yMinSpin->setEnabled(false);
+    scaleRow->addWidget(m_yMinSpin);
+    scaleRow->addWidget(new QLabel(QStringLiteral("Max:"), this));
+    m_yMaxSpin = new QDoubleSpinBox(this);
+    m_yMaxSpin->setRange(-1e9, 1e9); m_yMaxSpin->setDecimals(4); m_yMaxSpin->setValue(1.0);
+    m_yMaxSpin->setEnabled(false);
+    scaleRow->addWidget(m_yMaxSpin);
+    scaleRow->addStretch(1);
+    root->addLayout(scaleRow);
+
     // status line
     m_status = new QLabel(this);
     m_status->setStyleSheet(QStringLiteral("color:#bbbbbb; padding:2px 0;"));
@@ -333,6 +387,11 @@ DataRecorderPanel::DataRecorderPanel(QWidget* parent)
     m_splitter->setSizes({ 300, 520 });
     root->addWidget(m_splitter, 1);
 
+    // back-scroll through the FIFO history (pinned right = follow live).
+    m_scroll = new QScrollBar(Qt::Horizontal, this);
+    m_scroll->setRange(0, 0);
+    root->addWidget(m_scroll);
+
     // ---------------- bottom actions ----------------
     auto* bottomRow = new QHBoxLayout();
     bottomRow->setSpacing(6);
@@ -351,6 +410,29 @@ DataRecorderPanel::DataRecorderPanel(QWidget* parent)
     connect(m_clearBtn, &QPushButton::clicked, this, &DataRecorderPanel::onClear);
     connect(m_saveBtn, &QPushButton::clicked, this, &DataRecorderPanel::onSave);
     connect(m_bakeBtn, &QPushButton::clicked, this, &DataRecorderPanel::onBakeLut);
+
+    // chart scale wiring
+    auto applyYMode = [this]() {
+        const bool manual = m_yMode->currentIndex() == 1;
+        m_yMargin->setEnabled(!manual);
+        m_yMinSpin->setEnabled(manual);
+        m_yMaxSpin->setEnabled(manual);
+        if (manual) m_chart->setYManual(m_yMinSpin->value(), m_yMaxSpin->value());
+        else        m_chart->setYAuto(m_yMargin->value());
+        m_chart->update();
+    };
+    connect(m_windowSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) {
+        m_chart->setWindowRows(n); syncScrollBar(); m_chart->update();
+    });
+    connect(m_yMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this, applyYMode);
+    connect(m_yMargin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, applyYMode);
+    connect(m_yMinSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, applyYMode);
+    connect(m_yMaxSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, applyYMode);
+    connect(m_scroll, &QScrollBar::valueChanged, this, [this](int v) {
+        m_followLive = (v >= m_scroll->maximum());
+        m_chart->setScrollBack(m_scroll->maximum() - v);
+        m_chart->update();
+    });
 
     // ---------------- timers ----------------
     m_liveTimer = new QTimer(this);
@@ -583,11 +665,39 @@ double DataRecorderPanel::sampleClock()
     return m_monoClock;
 }
 
-// ~50 Hz: the recording heartbeat. Evaluates the trigger, then (when recording) every
-// Nth tick appends a row of the checked channels at the current clock.
+// The internal ~50 Hz timer: once the main loop drives sampling (externalRecordTick), this becomes
+// a repaint-only fallback -- otherwise every timer row would DOUBLE the externally-sampled ones.
 void DataRecorderPanel::onRecordTick()
 {
-    // Repaint the chart at the tick rate regardless (cheap; keeps latest readout live).
+    if (m_externallyTicked) { m_chart->update(); return; }
+    recordCore();
+}
+
+// FIREHOSE: called by the main loop once per eval pass, right after the catalog publisher -- the
+// recorder samples exactly as fast as fresh data arrives (crank the eval rate, the log follows).
+void DataRecorderPanel::externalRecordTick()
+{
+    m_externallyTicked = true;
+    recordCore();
+}
+
+// Keep the back-scroll range in step with the buffer; stay pinned to live unless the user scrolled.
+void DataRecorderPanel::syncScrollBar()
+{
+    if (!m_scroll || !m_chart) return;
+    const int total = int(m_table.rows.size());
+    const int maxBack = std::max(0, total - m_chart->windowRows());
+    QSignalBlocker block(m_scroll);
+    m_scroll->setRange(0, maxBack);
+    m_scroll->setPageStep(std::max(1, m_chart->windowRows()));
+    if (m_followLive) { m_scroll->setValue(maxBack); m_chart->setScrollBack(0); }
+}
+
+// One sampling step: evaluate the trigger, then (when recording) every Nth call append a row of the
+// checked channels at the current clock.
+void DataRecorderPanel::recordCore()
+{
+    // Repaint the chart regardless (cheap; keeps latest readout live).
     // Only actually record when the Record toggle is on.
     const bool recordEnabled = m_recording;
     if (!recordEnabled) { m_chart->update(); return; }
@@ -648,6 +758,7 @@ void DataRecorderPanel::onRecordTick()
     }
     m_table.addRow(row);
 
+    syncScrollBar();                      // FIFO grew: keep the back-scroll range honest
     m_chart->update();
     updateStatus();
 }
@@ -697,6 +808,8 @@ void DataRecorderPanel::onClear()
     m_havePrevTrigVal = false;
     m_tickCounter = 0;
     std::fill(m_lastGood.begin(), m_lastGood.end(), 0.0);
+    m_followLive = true;
+    syncScrollBar();
     m_chart->update();
     updateStatus();
 }

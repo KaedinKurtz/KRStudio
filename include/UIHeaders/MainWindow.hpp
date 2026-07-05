@@ -178,6 +178,7 @@ private:
     std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_nodeRegistry;  // the QtNodes type registry (append knode:<id> on import)
     NodeCatalogWidget* m_nodeCatalog = nullptr;                  // the drag palette (re-populate after import)
     QSet<QString> m_registeredKnodeTypes;                        // knode:<id> already appended to m_nodeRegistry (no dup)
+    class DataRecorderPanel* m_dataRecorder = nullptr;           // fed one externalRecordTick per eval pass
 
     // --- node-graph + subgraph-pack persistence (the .kgraph / .knodepack GUI) ---
     void saveNodeGraphTo(const QString& absPath);   // harvest the live model -> a .kgraph file

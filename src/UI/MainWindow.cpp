@@ -1386,7 +1386,8 @@ MainWindow::MainWindow(QWidget* parent)
     // -> trigger + record -> a .rec recording (CSV/JSON) -> bake a characterized .klut. Same formats the
     // data_log / data_import / data_characterize nodes read/write.
     auto* recorderDock = new ads::CDockWidget(QStringLiteral("Data Recorder"));
-    recorderDock->setWidget(new DataRecorderPanel(this));
+    m_dataRecorder = new DataRecorderPanel(this);
+    recorderDock->setWidget(m_dataRecorder);
     recorderDock->setStyleSheet(sidePanelStyle);
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, recorderDock, m_propertiesArea);
     registerPanelDock(QStringLiteral("Data Recorder"), recorderDock);
@@ -1478,15 +1479,22 @@ MainWindow::MainWindow(QWidget* parent)
         // channels -- previously only a twin NODE in the graph populated the catalog, so an empty
         // graph left the recorder blank.
         if (m_scene) {
+            // WALL-CLOCK timestamps: honest rates (reportedHz) + a truthful recorder time axis even
+            // when the eval tick runs slower/faster than its nominal rate.
             static krs::twin::AccelTracker s_accel;
-            static double s_pubTime = 0.0;
-            const double pubDt = 1.0 / 60.0;
+            static QElapsedTimer s_pubClock;
+            static double s_pubPrev = 0.0;
+            if (!s_pubClock.isValid()) s_pubClock.start();
+            const double tNow  = s_pubClock.nsecsElapsed() * 1e-9;
+            const double pubDt = (tNow - s_pubPrev) > 1e-6 ? (tNow - s_pubPrev) : 1.0 / 60.0;
+            s_pubPrev = tNow;
             auto& reg = m_scene->getRegistry();
-            krs::twin::publishSceneState(krs::twin::catalog(), reg, s_pubTime, pubDt, s_accel);
-            krs::twin::publishRobotState(krs::twin::catalog(), reg, s_pubTime);
-            s_pubTime += pubDt;
+            krs::twin::publishSceneState(krs::twin::catalog(), reg, tNow, pubDt, s_accel);
+            krs::twin::publishRobotState(krs::twin::catalog(), reg, tNow);
             // P2: refresh the task-level WorldState (poses-by-name + predicates) from the catalog.
             krs::world::worldState(reg).updateFromCatalog(krs::twin::catalog());
+            // FIREHOSE: the Data Recorder samples once per publish -- logging rides the eval rate.
+            if (m_dataRecorder) m_dataRecorder->externalRecordTick();
         }
         // Environment mirror: while NO node drives the environment, keep the ctx tracking the live
         // renderer -- so a freshly dropped Environment node seeds its knobs from the CURRENT look
@@ -3898,6 +3906,10 @@ void MainWindow::syncEnvironmentToCtx()
     env->exposureEV      = rs->getExposureEV();
     env->tonemapExposure = rs->getTonemapExposure();
     env->hdrEnabled      = rs->getHdrEnabled();
+    // the skybox-derived sun cache: what an Environment node's "Auto Sun" restores from.
+    env->hasDerivedSun       = rs->hasDerivedSun();
+    env->sunDerivedDirection = rs->getSunDirectionDerived();
+    env->sunDerivedColor     = rs->getSunColorDerived();
     // hdrPath: no renderer accessor yet -> leave whatever the ctx already holds (v1.2 will wire it).
 }
 

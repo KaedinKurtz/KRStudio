@@ -155,6 +155,11 @@ public:
     void  setSunColor(const glm::vec3& c) { m_sunColor = c; }
     glm::vec3 getSunDirection() const { return m_sunDirection; }
     void  setSunDirection(const glm::vec3& d) { m_sunDirection = d; }
+    // the SKYBOX-DERIVED sun (analyzeHdrSun at HDR load), preserved across manual sun edits so
+    // "Auto Sun" can restore it. hasDerivedSun() is false until an HDR analysis has succeeded.
+    bool      hasDerivedSun() const { return m_hasDerivedSun; }
+    glm::vec3 getSunDirectionDerived() const { return m_sunDirectionDerived; }
+    glm::vec3 getSunColorDerived() const { return m_sunColorDerived; }
     float getTonemapExposure() const { return m_tonemapExposure; }
     void  setTonemapExposure(float v) { m_tonemapExposure = v; }
     // Physically-based camera exposure as EV100. TonemapPass converts this to a linear
@@ -338,6 +343,9 @@ private:
     float m_sunIntensity = 2000.0f; // directional sun (key light) illuminance in LUX
     glm::vec3 m_sunColor = glm::vec3(1.0f, 0.967f, 0.9f);      // warm-white sun tint
     glm::vec3 m_sunDirection = glm::vec3(-0.4f, -1.0f, -0.3f); // direction sun light travels
+    bool      m_hasDerivedSun = false;                          // analyzeHdrSun succeeded at HDR load
+    glm::vec3 m_sunDirectionDerived = glm::vec3(-0.4f, -1.0f, -0.3f);  // the skybox-derived sun (cache)
+    glm::vec3 m_sunColorDerived     = glm::vec3(1.0f);
     float m_tonemapExposure = 1.0f;   // ACES exposure fine-trim (TonemapPass), multiplies the EV exposure
     float m_exposureEV       = 10.0f;  // physically-based camera exposure (EV100); calibrated for the default scene
 
