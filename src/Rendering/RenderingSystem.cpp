@@ -47,6 +47,7 @@
 #include "Skill.hpp"               // krs::skill parameterized-skill contract (Process & Skills P1) + gate
 #include "WorldState.hpp"          // krs::world light task-level world model (P2) + gate
 #include "SkillRuntime.hpp"        // krs::skill live closed-loop task executor (P3) + gate
+#include "Measure.hpp"             // krs::measure ribbon Measure-tool math + gate
 #include "TaskPlanner.hpp"         // krs::skill forward-search task planner (P5) + gate
 #include "GoalDoc.hpp"             // krs::goal .kgoal declarative goal document (G1) + gate
 #include "Hone.hpp"                // krs::hone population parameter honing (G4, sim-only) + gate
@@ -1278,6 +1279,13 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::skill::runSkillRuntimeGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Ribbon Measure tool math: world-space feature measurement (diameter/length/area/distance)
+    // over the B-Rep selection identity. Headless, pure CPU, synthetic entities + NEG-CTRLs.
+    if (qEnvironmentVariableIntValue("KRS_MEASURE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_MEASURE_SELFTEST =================\n");
+        const bool ok = krs::measure::runMeasureGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     // Process & Skills P4: composed pick+place with typed pre/effects, validated + executed closed-loop.
     if (qEnvironmentVariableIntValue("KRS_PICKPLACE_SELFTEST") != 0) {
         std::printf("\n================= KRS_PICKPLACE_SELFTEST =================\n");
@@ -2247,6 +2255,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE GOALPLAN (goal regression; R2S demands knowledge + SimOnly accepts guesses; excitation auto-splices; trait envelopes intersect + guard LIVE mid-run; relevance-chain + unestablishable neg-ctrls)", krs::skill::runGoalPlanGate() },
             { "GATE HONE (population honing: lift-weigh mass + tilt-settle CoM converge; blind excitation cannot fake confidence; sloshing water flagged Dynamic never mis-fit; deterministic)", krs::hone::runHoneGate() },
             { "GATE GOALLOOP (the story: file-authored primitives; .kgoal goal; regression + auto-excitation; honing writes the ledger; guarded execution reaches the goal; knowledge persists across save/load; invalidation-reappears neg-ctrl)", krs::skill::runGoalLoopGate() },
+            { "GATE MEASURE (ribbon Measure math: world-space quad area exact; cylinder D/L under scale; tessellated-disk <1% honest-under; sphere distance exact; text applicable-fields-only; bad-faceId/no-BRep/zero-tri neg-ctrls)", krs::measure::runMeasureGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");

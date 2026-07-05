@@ -10,6 +10,7 @@
 #include "PropertyCatalog.hpp"    // krs::twin catalog + the unconditional per-tick state publisher
 #include "WorldState.hpp"         // krs::world task-level world model (P2), refreshed per eval tick
 #include "SkillRuntime.hpp"       // krs::skill live closed-loop task executor (P3), pumped per eval tick
+#include "Measure.hpp"            // krs::measure -- the ribbon Measure tool's math (B-Rep features)
 #include <QStandardPaths>
 #include <QFile>
 #include <QSettings>
@@ -1626,6 +1627,16 @@ MainWindow::MainWindow(QWidget* parent)
         }
     });
 
+    // --- Ribbon ACTION BUS: every named QToolButton without a dedicated wire lands in one
+    // dispatcher (see dispatchToolbarAction). Dropdown menus/combos attach in buildRibbonMenus.
+    connect(m_fixedTopToolbar, &StaticToolbar::toolbarAction,
+            this, &MainWindow::dispatchToolbarAction);
+    // Simulation SPEED slider -> wall-time multiplier on the fixed-step accumulator.
+    connect(m_fixedTopToolbar, &StaticToolbar::simSpeedChanged, this, [this](double f) {
+        if (m_simulation) m_simulation->setTimeScale(f);
+    });
+    buildRibbonMenus();
+
     //========================= Start the SLAM Manager =========================
     m_slamManager = new SlamManager(this);
     m_realSenseManager = std::make_unique<RealSenseManager>();
@@ -2486,6 +2497,10 @@ MainWindow::MainWindow(QWidget* parent)
         registerPanelDock(QStringLiteral("Robot View"),    rvDock);
 
         physDock->setAsCurrentTab();
+
+        // Snapshot the FACTORY dock arrangement before any user restore -- the ribbon's
+        // "Reset Layout" button returns to exactly this state (not to an empty window).
+        m_defaultLayoutState = m_dockManager->saveState();
 
         // Restore the user's saved dock arrangement (.klayout) if present -- their panels come back
         // in whatever bays they dragged them to. Suppressed under any KRS_* env (gates/bench expect
@@ -4041,124 +4056,9 @@ void MainWindow::buildEngineeringToolbar()
     tb->setObjectName(QStringLiteral("EngineeringToolbar"));
     tb->setMovable(false);
 
-    connect(tb->addAction(QStringLiteral("Import CAD (STEP)")), &QAction::triggered,
-            this, &MainWindow::importStepFile);
-    // .kscene save/load (the ksave family): Save writes the scene document + nested .krobot/.kjoint
-    // definitions + the .kstate session sidecar; Load REPLACES the scene's robots from a document.
-    connect(tb->addAction(QStringLiteral("Save Scene")), &QAction::triggered, this, [this]() {
-        if (!m_scene) return;
-        auto& reg = m_scene->getRegistry();
-        std::string path;
-        if (const auto* info = reg.ctx().find<krs::ksave::OpenSceneInfo>()) path = info->kscenePath;
-        if (path.empty()) {
-            const QString p = QFileDialog::getSaveFileName(this, QStringLiteral("Save Scene"),
-                QStringLiteral("cell.kscene"), QStringLiteral("KRobot scene (*.kscene)"));
-            if (p.isEmpty()) return;
-            path = p.toStdString();
-        }
-        syncEnvironmentToCtx();                       // v1.1: mirror the live renderer knobs into the ctx so they persist
-        const krs::ksave::Report rep = krs::ksave::saveScene(*m_scene, path);
-        if (!rep.ok) {
-            QMessageBox::warning(this, QStringLiteral("Save Scene"), rep.error);
-            return;
-        }
-        // The live node graph rides with the scene: a sibling <scene>.kgraph next to the .kscene.
-        { const QFileInfo si(QString::fromStdString(path));
-          saveNodeGraphTo(si.absoluteDir().filePath(si.completeBaseName() + QStringLiteral(".kgraph"))); }
-        QString msg = QStringLiteral("Saved %1 robot(s), %2 joint(s), %3 light(s), %4 object(s) to %5")
-            .arg(rep.robots).arg(rep.joints).arg(rep.lights).arg(rep.objects).arg(QString::fromStdString(path));
-        if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
-        statusBar()->showMessage(QStringLiteral("Scene saved: %1").arg(QString::fromStdString(path)), 6000);
-        if (!rep.warnings.isEmpty()) QMessageBox::information(this, QStringLiteral("Save Scene"), msg);
-    });
-    connect(tb->addAction(QStringLiteral("Load Scene...")), &QAction::triggered, this, [this]() {
-        if (!m_scene) return;
-        const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Load Scene"),
-            QString(), QStringLiteral("KRobot scene (*.kscene)"));
-        if (p.isEmpty()) return;
-        const krs::ksave::Report rep = krs::ksave::loadScene(*m_scene, p.toStdString());
-        if (!rep.ok) {
-            QMessageBox::warning(this, QStringLiteral("Load Scene"), rep.error);
-            return;
-        }
-        krs::robot::rebuildJointNameRegistry(m_scene->getRegistry());
-        applyCtxToEnvironment();                       // v1.1: push the loaded environment/skybox knobs into the live renderer
-        // Restore the scene's node graph if it saved one (the sibling <scene>.kgraph).
-        { const QFileInfo si(p);
-          const QString gp = si.absoluteDir().filePath(si.completeBaseName() + QStringLiteral(".kgraph"));
-          if (QFile::exists(gp)) loadNodeGraphFrom(gp); }
-        if (m_robotBuilderPanel) m_robotBuilderPanel->refresh();
-        if (m_robotViewport)     m_robotViewport->refreshFromLive();
-        refreshGizmoAndProperties();
-        QString msg = QStringLiteral("Loaded %1 robot(s), %2 joint(s), %3 light(s), %4 object(s).")
-            .arg(rep.robots).arg(rep.joints).arg(rep.lights).arg(rep.objects);
-        if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
-        QMessageBox::information(this, QStringLiteral("Load Scene"), msg);
-    });
-    // Node-graph persistence: save/load the live dataflow graph as a standalone .kgraph (it also rides
-    // with the scene automatically -- see the Save/Load Scene handlers).
-    connect(tb->addAction(QStringLiteral("Save Graph...")), &QAction::triggered, this, [this]() {
-        const QString p = QFileDialog::getSaveFileName(this, QStringLiteral("Save Node Graph"),
-            QStringLiteral("graph.kgraph"), QStringLiteral("KRobot node graph (*.kgraph)"));
-        if (p.isEmpty()) return;
-        saveNodeGraphTo(p);
-        statusBar()->showMessage(QStringLiteral("Node graph saved: %1").arg(p), 6000);
-    });
-    connect(tb->addAction(QStringLiteral("Load Graph...")), &QAction::triggered, this, [this]() {
-        const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Load Node Graph"),
-            QString(), QStringLiteral("KRobot node graph (*.kgraph)"));
-        if (p.isEmpty()) return;
-        loadNodeGraphFrom(p);
-        statusBar()->showMessage(QStringLiteral("Node graph loaded: %1").arg(p), 6000);
-    });
-    // Subgraph sharing: bundle a .knode (+ its nested closure) as a portable .knodepack, and import a
-    // received .knodepack into your personal library so its subgraph appears as a draggable node.
-    connect(tb->addAction(QStringLiteral("Export Subgraph...")), &QAction::triggered, this, [this]() { exportSelectedSubgraphPack(); });
-    connect(tb->addAction(QStringLiteral("Import Subgraph...")), &QAction::triggered, this, [this]() { importSubgraphPack(); });
-    // The authoring workflow finally has an OUTPUT: export the active authoring graph as URDF,
-    // with a mandatory validation report (silent-success export is the classic pipeline trap --
-    // fusion2urdf-style broken files that users debug in the simulator instead of here).
-    connect(tb->addAction(QStringLiteral("Export URDF")), &QAction::triggered, this, [this]() {
-        if (!m_scene) return;
-        auto& reg = m_scene->getRegistry();
-        auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
-        if (!gp || gp->bodies.empty()) {
-            QMessageBox::information(this, QStringLiteral("Export URDF"),
-                QStringLiteral("No robot is being edited. Select a robot in the outliner (or Import CAD) first."));
-            return;
-        }
-        std::string rname = "exported";
-        if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>())
-            if (auto* lr = rr->get(gp->robotId)) rname = lr->name;
-        const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Export URDF"),
-            QString::fromStdString(rname) + QStringLiteral(".urdf"), QStringLiteral("URDF (*.urdf)"));
-        if (path.isEmpty()) return;
-        const std::string urdf = krs::rbuild::exportGraphToUrdf(*gp, gp->base, rname);
-        QFile f(path);
-        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-            QMessageBox::warning(this, QStringLiteral("Export URDF"),
-                QStringLiteral("Could not write %1.").arg(path));
-            return;
-        }
-        f.write(urdf.data(), qint64(urdf.size()));
-        f.close();
-        // VALIDATION REPORT (mandatory): what was exported, what was NOT, and what downstream
-        // consumers still need -- never a bare "done".
-        const std::set<int> comp = gp->membersFrom(gp->base);
-        const int dropped = int(gp->bodies.size()) - int(comp.size());
-        int ambiguous = 0;
-        for (const auto& j : gp->joints) if (j.ambiguous) ++ambiguous;
-        QString warn;
-        if (dropped > 0)   warn += QStringLiteral("\n- %1 body(ies) outside the base's component were NOT exported").arg(dropped);
-        if (ambiguous > 0) warn += QStringLiteral("\n- %1 ambiguous joint(s) skipped (define their axes first)").arg(ambiguous);
-        warn += QStringLiteral("\n- links carry no inertia/mass/geometry yet (kinematics only)");
-        QMessageBox::information(this, QStringLiteral("Export URDF"),
-            QStringLiteral("Exported \"%1\": %2 links, %3 joints (DOF %4) to\n%5\n\nNotes:%6")
-                .arg(QString::fromStdString(rname)).arg(int(comp.size()))
-                .arg(int(gp->joints.size()) - ambiguous).arg(gp->dof()).arg(path).arg(warn));
-        statusBar()->showMessage(QStringLiteral("URDF exported: %1").arg(path), 6000);
-    });
-    tb->addSeparator();
+    // FILE ACTIONS MOVED TO THE RIBBON (General tab: Save/Open Project dropdowns, Export/Import
+    // menus -- see buildRibbonMenus + dispatchToolbarAction). This QToolBar keeps only the
+    // selection/viz tools that have no ribbon home yet + the Settings gear.
 
     // Visualization-mode dropdown -> the Phase 3 hot-swaps.
     tb->addWidget(new QLabel(QStringLiteral(" Visualize: ")));
@@ -4188,13 +4088,568 @@ void MainWindow::buildEngineeringToolbar()
     auto* spacer = new QWidget(tb);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     tb->addWidget(spacer);
-    connect(tb->addAction(QStringLiteral("⚙  Settings")), &QAction::triggered, this, [this] {
-        static QPointer<SettingsDialog> dlg;
-        if (!dlg) dlg = new SettingsDialog(this);
-        dlg->show();
-        dlg->raise();
-        dlg->activateWindow();
-    });
+    connect(tb->addAction(QStringLiteral("⚙  Settings")), &QAction::triggered,
+            this, [this] { openSettingsDialog(); });
+}
+
+// ============================================================================
+// RIBBON ACTION BUS -- the extracted file actions + the one dispatcher every
+// named ribbon QToolButton lands in (StaticToolbar::toolbarAction). Buttons
+// with dedicated wires (panel toggles, sim transport, load robot, ...) never
+// reach here; buttons with dropdowns get their QMenu in buildRibbonMenus().
+// ============================================================================
+
+void MainWindow::saveSceneAction(bool forceAskPath)
+{
+    if (!m_scene) return;
+    auto& reg = m_scene->getRegistry();
+    std::string path;
+    if (!forceAskPath)
+        if (const auto* info = reg.ctx().find<krs::ksave::OpenSceneInfo>()) path = info->kscenePath;
+    if (path.empty()) {
+        const QString p = QFileDialog::getSaveFileName(this, QStringLiteral("Save Scene"),
+            QStringLiteral("cell.kscene"), QStringLiteral("KRobot scene (*.kscene)"));
+        if (p.isEmpty()) return;
+        path = p.toStdString();
+    }
+    syncEnvironmentToCtx();                       // v1.1: mirror the live renderer knobs into the ctx so they persist
+    const krs::ksave::Report rep = krs::ksave::saveScene(*m_scene, path);
+    if (!rep.ok) {
+        QMessageBox::warning(this, QStringLiteral("Save Scene"), rep.error);
+        return;
+    }
+    // The live node graph rides with the scene: a sibling <scene>.kgraph next to the .kscene.
+    { const QFileInfo si(QString::fromStdString(path));
+      saveNodeGraphTo(si.absoluteDir().filePath(si.completeBaseName() + QStringLiteral(".kgraph"))); }
+    QString msg = QStringLiteral("Saved %1 robot(s), %2 joint(s), %3 light(s), %4 object(s) to %5")
+        .arg(rep.robots).arg(rep.joints).arg(rep.lights).arg(rep.objects).arg(QString::fromStdString(path));
+    if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
+    statusBar()->showMessage(QStringLiteral("Scene saved: %1").arg(QString::fromStdString(path)), 6000);
+    if (!rep.warnings.isEmpty()) QMessageBox::information(this, QStringLiteral("Save Scene"), msg);
+}
+
+void MainWindow::loadSceneAction()
+{
+    if (!m_scene) return;
+    const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Load Scene"),
+        QString(), QStringLiteral("KRobot scene (*.kscene)"));
+    if (p.isEmpty()) return;
+    const krs::ksave::Report rep = krs::ksave::loadScene(*m_scene, p.toStdString());
+    if (!rep.ok) {
+        QMessageBox::warning(this, QStringLiteral("Load Scene"), rep.error);
+        return;
+    }
+    krs::robot::rebuildJointNameRegistry(m_scene->getRegistry());
+    applyCtxToEnvironment();                       // v1.1: push the loaded environment/skybox knobs into the live renderer
+    // Restore the scene's node graph if it saved one (the sibling <scene>.kgraph).
+    { const QFileInfo si(p);
+      const QString gp = si.absoluteDir().filePath(si.completeBaseName() + QStringLiteral(".kgraph"));
+      if (QFile::exists(gp)) loadNodeGraphFrom(gp); }
+    if (m_robotBuilderPanel) m_robotBuilderPanel->refresh();
+    if (m_robotViewport)     m_robotViewport->refreshFromLive();
+    refreshGizmoAndProperties();
+    QString msg = QStringLiteral("Loaded %1 robot(s), %2 joint(s), %3 light(s), %4 object(s).")
+        .arg(rep.robots).arg(rep.joints).arg(rep.lights).arg(rep.objects);
+    if (!rep.warnings.isEmpty()) msg += QStringLiteral("\n\nNotes:\n- ") + rep.warnings.join(QStringLiteral("\n- "));
+    QMessageBox::information(this, QStringLiteral("Load Scene"), msg);
+}
+
+void MainWindow::exportUrdfAction()
+{
+    if (!m_scene) return;
+    auto& reg = m_scene->getRegistry();
+    auto* gp = reg.ctx().find<krs::rbuild::RobotGraph>();
+    if (!gp || gp->bodies.empty()) {
+        QMessageBox::information(this, QStringLiteral("Export URDF"),
+            QStringLiteral("No robot is being edited. Select a robot in the outliner (or Import CAD) first."));
+        return;
+    }
+    std::string rname = "exported";
+    if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>())
+        if (auto* lr = rr->get(gp->robotId)) rname = lr->name;
+    const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Export URDF"),
+        QString::fromStdString(rname) + QStringLiteral(".urdf"), QStringLiteral("URDF (*.urdf)"));
+    if (path.isEmpty()) return;
+    const std::string urdf = krs::rbuild::exportGraphToUrdf(*gp, gp->base, rname);
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        QMessageBox::warning(this, QStringLiteral("Export URDF"),
+            QStringLiteral("Could not write %1.").arg(path));
+        return;
+    }
+    f.write(urdf.data(), qint64(urdf.size()));
+    f.close();
+    // VALIDATION REPORT (mandatory): what was exported, what was NOT, and what downstream
+    // consumers still need -- never a bare "done".
+    const std::set<int> comp = gp->membersFrom(gp->base);
+    const int dropped = int(gp->bodies.size()) - int(comp.size());
+    int ambiguous = 0;
+    for (const auto& j : gp->joints) if (j.ambiguous) ++ambiguous;
+    QString warn;
+    if (dropped > 0)   warn += QStringLiteral("\n- %1 body(ies) outside the base's component were NOT exported").arg(dropped);
+    if (ambiguous > 0) warn += QStringLiteral("\n- %1 ambiguous joint(s) skipped (define their axes first)").arg(ambiguous);
+    warn += QStringLiteral("\n- links carry no inertia/mass/geometry yet (kinematics only)");
+    QMessageBox::information(this, QStringLiteral("Export URDF"),
+        QStringLiteral("Exported \"%1\": %2 links, %3 joints (DOF %4) to\n%5\n\nNotes:%6")
+            .arg(QString::fromStdString(rname)).arg(int(comp.size()))
+            .arg(int(gp->joints.size()) - ambiguous).arg(gp->dof()).arg(path).arg(warn));
+    statusBar()->showMessage(QStringLiteral("URDF exported: %1").arg(path), 6000);
+}
+
+void MainWindow::newSceneAction()
+{
+    if (!m_scene) return;
+    const auto ans = QMessageBox::question(this, QStringLiteral("New Scene"),
+        QStringLiteral("Clear the scene?\n\nAll spawned objects and lights are deleted and the node graph "
+                       "is cleared. Robots, cameras and the grid are kept (manage robots in the Robot "
+                       "Builder).\n\nUnsaved changes are lost."));
+    if (ans != QMessageBox::Yes) return;
+    auto& reg = m_scene->getRegistry();
+    std::vector<entt::entity> doomed;
+    for (auto e : reg.view<TagComponent>()) {
+        // Same guards as Delete Selected, plus gizmo handles and environment infrastructure.
+        if (reg.any_of<CameraComponent, GridComponent, GizmoHandleComponent>(e)) continue;
+        if (reg.any_of<RobotSubcomponentComponent, RobotRootComponent>(e)) continue;
+        if (!reg.any_of<RenderableMeshComponent, LightComponent>(e)) continue; // spawned things render or light
+        const QString tag = QString::fromStdString(reg.get<TagComponent>(e).tag);
+        if (tag.contains(QLatin1String("sky"),   Qt::CaseInsensitive) ||
+            tag.contains(QLatin1String("floor"), Qt::CaseInsensitive) ||
+            tag.contains(QLatin1String("grid"),  Qt::CaseInsensitive) ||
+            tag.startsWith(QLatin1Char('_'))) continue;                        // engine-internal
+        doomed.push_back(e);
+    }
+    if (!doomed.empty()) reg.destroy(doomed.begin(), doomed.end());
+    // Clear the node graph (allNodeIds returns a copy, so deleting while walking is safe).
+    if (m_graphModel)
+        for (const auto nodeId : m_graphModel->allNodeIds())
+            m_graphModel->deleteNode(nodeId);
+    // Forget the open-scene path so the next Save asks where to write.
+    if (reg.ctx().contains<krs::ksave::OpenSceneInfo>()) reg.ctx().erase<krs::ksave::OpenSceneInfo>();
+    refreshGizmoAndProperties();
+    statusBar()->showMessage(QStringLiteral("New scene: %1 object(s) cleared.").arg(doomed.size()), 5000);
+}
+
+void MainWindow::importMeshAction()
+{
+    const QString path = QFileDialog::getOpenFileName(
+        this, QStringLiteral("Import Mesh"), QString(),
+        QStringLiteral("Meshes (*.stl *.obj *.fbx *.dae *.ply *.gltf *.glb *.3ds);;All files (*)"));
+    if (path.isEmpty()) return;
+    spawnMeshAssetAt(path, glm::vec3(0.0f, 0.5f, 0.0f));
+}
+
+void MainWindow::spawnPrimitiveFromMenu(int primitive)
+{
+    struct Opt { int prim; const char* name; glm::vec3 scale; };
+    static const Opt opts[] = {
+        { int(Primitive::Cube),      "Cube",     glm::vec3(1.0f) },
+        { int(Primitive::IcoSphere), "Sphere",   glm::vec3(0.5f) },
+        { int(Primitive::Cylinder),  "Cylinder", glm::vec3(0.5f, 1.0f, 0.5f) },
+        { int(Primitive::Cone),      "Cone",     glm::vec3(0.5f, 1.0f, 0.5f) },
+        { int(Primitive::Torus),     "Torus",    glm::vec3(0.6f) },
+        { int(Primitive::Quad),      "Plane",    glm::vec3(2.0f, 1.0f, 2.0f) },
+    };
+    for (const auto& o : opts)
+        if (o.prim == primitive) {
+            addObjectFromMenu(primitive, QString::fromLatin1(o.name), glm::vec3(0.0f, 0.5f, 0.0f), o.scale);
+            return;
+        }
+}
+
+void MainWindow::applyCameraPreset(const QString& preset)
+{
+    ViewportWidget* vp = primaryViewport();
+    if (!vp) return;
+    Camera& cam = vp->getCamera();
+    const glm::vec3 tgt = cam.getFocalPoint();
+    float dist = glm::length(cam.getPosition() - tgt);
+    if (!(dist > 0.01f) || !std::isfinite(dist)) dist = 6.0f;
+
+    if (preset == QLatin1String("saved")) {
+        const QStringList v = QSettings().value(QStringLiteral("view/savedCamera")).toStringList();
+        if (v.size() == 6) {
+            const glm::vec3 pos(v[0].toFloat(), v[1].toFloat(), v[2].toFloat());
+            const glm::vec3 t(v[3].toFloat(), v[4].toFloat(), v[5].toFloat());
+            cam.forceRecalculateView(pos, t, glm::length(pos - t));
+            if (m_renderingSystem) m_renderingSystem->renderAllViewports();
+        } else {
+            toast(QStringLiteral("No saved view yet -- use Save View first."));
+        }
+        return;
+    }
+
+    glm::vec3 dir(1.0f, 0.8f, 1.0f);                                  // iso default
+    if      (preset == QLatin1String("front"))  dir = glm::vec3(0.0f, 0.0f, 1.0f);
+    else if (preset == QLatin1String("back"))   dir = glm::vec3(0.0f, 0.0f, -1.0f);
+    else if (preset == QLatin1String("left"))   dir = glm::vec3(-1.0f, 0.0f, 0.0f);
+    else if (preset == QLatin1String("right"))  dir = glm::vec3(1.0f, 0.0f, 0.0f);
+    else if (preset == QLatin1String("top"))    dir = glm::vec3(0.001f, 1.0f, 0.001f);   // nudge off the up-vector singularity
+    else if (preset == QLatin1String("bottom")) dir = glm::vec3(0.001f, -1.0f, 0.001f);
+    dir = glm::normalize(dir);
+    cam.forceRecalculateView(tgt + dir * dist, tgt, dist);
+    if (m_renderingSystem) m_renderingSystem->renderAllViewports();
+}
+
+void MainWindow::emergencyStop()
+{
+    // Order matters: cancel the command SOURCES first (skills stop re-asserting), then wipe
+    // the latched bus, then halt physics -- nothing can re-drive a joint on the next pass.
+    if (m_scene) {
+        auto& reg = m_scene->getRegistry();
+        krs::skill::skillRuntime(reg).cancelAll();
+        if (auto* bus = reg.ctx().find<ArticulationCommandComponent>())
+            bus->clearForEvalPass();
+    }
+    if (m_simulation) m_simulation->stop();
+    statusBar()->showMessage(
+        QStringLiteral("EMERGENCY STOP -- simulation halted, skill tasks cancelled, command bus cleared."), 8000);
+}
+
+void MainWindow::openSettingsDialog()
+{
+    static QPointer<SettingsDialog> dlg;
+    if (!dlg) dlg = new SettingsDialog(this);
+    dlg->show();
+    dlg->raise();
+    dlg->activateWindow();
+}
+
+void MainWindow::toast(const QString& msg)
+{
+    statusBar()->showMessage(msg, 4000);
+}
+
+void MainWindow::dispatchToolbarAction(const QString& id)
+{
+    // Open a registered panel dock, restore-orphan-safe: a dock whose area the layout restore
+    // destroyed must be RE-DOCKED (a bare toggleView(true) pops a floating top-level window).
+    auto openPanel = [this](const QString& title) {
+        ads::CDockWidget* dock = m_panelDocks.value(title, nullptr);
+        if (!dock && m_dockManager) dock = m_dockManager->findDockWidget(title);
+        if (!dock) { toast(QStringLiteral("Panel \"%1\" is not available.").arg(title)); return; }
+        if (dock->isClosed()) {
+            if (!dock->dockAreaWidget()) m_dockManager->addDockWidgetTab(ads::RightDockWidgetArea, dock);
+            else dock->toggleView(true);
+        }
+        dock->setAsCurrentTab();
+        dock->raise();
+        m_fixedTopToolbar->setPanelButtonChecked(title, true);
+    };
+
+    // ---- ribbon id -> panel dock (buttons that just summon an existing panel) ----
+    static const QMap<QString, QString> kDockFor = {
+        { QStringLiteral("data_logger_button"),        QStringLiteral("Data Recorder") },
+        { QStringLiteral("record_data_button"),        QStringLiteral("Data Recorder") },
+        { QStringLiteral("record_sim_data_button"),    QStringLiteral("Data Recorder") },
+        { QStringLiteral("playback_data_button"),      QStringLiteral("Data Recorder") },
+        { QStringLiteral("scene_manager_button_2"),    QStringLiteral("Outliner") },
+        { QStringLiteral("joint_editor_button"),       QStringLiteral("Robot Builder") },
+        { QStringLiteral("link_editor_button"),        QStringLiteral("Robot Builder") },
+        { QStringLiteral("collision_box_editor_button"), QStringLiteral("Robot Builder") },
+        { QStringLiteral("virtual_jog_button"),        QStringLiteral("Robot Builder") },
+        { QStringLiteral("manual_jog_button"),         QStringLiteral("Robot Builder") },
+        { QStringLiteral("forward_kinematics_button"), QStringLiteral("Robot Builder") },
+        { QStringLiteral("inverse_kinematic_button"),  QStringLiteral("Robot Builder") },
+        { QStringLiteral("tcp_editor_button"),         QStringLiteral("Robot Builder") },
+        { QStringLiteral("reload_robot_button"),       QStringLiteral("Robot Builder") },
+        { QStringLiteral("set_ik_goal_button"),        QStringLiteral("Goal Workspace") },
+        { QStringLiteral("set_joint_goal_button"),     QStringLiteral("Goal Workspace") },
+        { QStringLiteral("select_named_pose_button"),  QStringLiteral("Goal Workspace") },
+        { QStringLiteral("waypoint_set_button"),       QStringLiteral("Goal Workspace") },
+        { QStringLiteral("sequence_editor_button"),    QStringLiteral("Node Editor") },
+        { QStringLiteral("sequencer_tool_button"),     QStringLiteral("Node Editor") },
+        { QStringLiteral("event_trigger_manager_button"), QStringLiteral("Node Editor") },
+        { QStringLiteral("analysis_hub_button"),       QStringLiteral("Diagnostics") },
+        { QStringLiteral("joint_state_viewer_button"), QStringLiteral("Diagnostics") },
+        { QStringLiteral("controller_status_button"),  QStringLiteral("Diagnostics") },
+        { QStringLiteral("cpu_monitor_button"),        QStringLiteral("Diagnostics") },
+        { QStringLiteral("ram_monitor_button"),        QStringLiteral("Diagnostics") },
+        { QStringLiteral("fault_log_viewer_button"),   QStringLiteral("Diagnostics") },
+        { QStringLiteral("topic_monitor_button"),      QStringLiteral("Diagnostics") },
+        { QStringLiteral("master_console_button"),     QStringLiteral("Diagnostics") },
+        { QStringLiteral("fused_data_viewer_button"),  QStringLiteral("Diagnostics") },
+        { QStringLiteral("sensor_manager_button"),     QStringLiteral("Diagnostics") },
+        { QStringLiteral("device_status_button"),      QStringLiteral("Diagnostics") },
+        { QStringLiteral("device_manager_button"),     QStringLiteral("Diagnostics") },
+        { QStringLiteral("material_editor_button"),    QStringLiteral("Material Editor") },
+    };
+    if (const auto it = kDockFor.constFind(id); it != kDockFor.constEnd()) {
+        openPanel(it.value());
+        return;
+    }
+
+    // ---- scene / project file actions ----
+    if (id == QLatin1String("save_scene_button") || id == QLatin1String("save_scene_button_2")
+        || id == QLatin1String("save_scenario_button")) {
+        saveSceneAction(false);
+    } else if (id == QLatin1String("load_scene_button") || id == QLatin1String("load_scene_button_2")
+        || id == QLatin1String("load_scenario_button")) {
+        loadSceneAction();
+    } else if (id == QLatin1String("new_project_button") || id == QLatin1String("new_scene_button")) {
+        newSceneAction();
+    } else if (id == QLatin1String("import_mesh_button") || id == QLatin1String("import_from_button")
+        || id == QLatin1String("import_from_button_2")) {
+        importMeshAction();
+
+    // ---- edit ----
+    } else if (id == QLatin1String("undo_button")) {
+        if (m_gizmoSystem) { m_gizmoSystem->undo(); refreshGizmoAndProperties(); }
+    } else if (id == QLatin1String("redo_button")) {
+        toast(QStringLiteral("Redo isn't available yet -- the undo history (gizmo edits) is single-direction."));
+
+    // ---- gizmo interaction modes ----
+    } else if (id == QLatin1String("select_object_button")) {
+        if (m_gizmoSystem) { m_gizmoSystem->setMode(GizmoMode::None); refreshGizmoAndProperties(); }
+        toast(QStringLiteral("Select mode: gizmo handles hidden (click objects to select)."));
+    } else if (id == QLatin1String("translate_object_button")) {
+        if (m_gizmoSystem) { m_gizmoSystem->setMode(GizmoMode::Translate); refreshGizmoAndProperties(); }
+    } else if (id == QLatin1String("rotate_object_button")) {
+        if (m_gizmoSystem) { m_gizmoSystem->setMode(GizmoMode::Rotate); refreshGizmoAndProperties(); }
+    } else if (id == QLatin1String("scale_object_button") || id == QLatin1String("scale_object_button_2")) {
+        if (m_gizmoSystem) { m_gizmoSystem->setMode(GizmoMode::Scale); refreshGizmoAndProperties(); }
+
+    // ---- view ----
+    } else if (id == QLatin1String("reset_view_button")) {
+        applyCameraPreset(QStringLiteral("iso"));
+    } else if (id == QLatin1String("save_view_button")) {
+        if (ViewportWidget* vp = primaryViewport()) {
+            const Camera& cam = vp->getCamera();
+            const glm::vec3 p = cam.getPosition(), t = cam.getFocalPoint();
+            QSettings().setValue(QStringLiteral("view/savedCamera"), QStringList()
+                << QString::number(p.x) << QString::number(p.y) << QString::number(p.z)
+                << QString::number(t.x) << QString::number(t.y) << QString::number(t.z));
+            toast(QStringLiteral("View saved -- restore it from View Presets > Saved View."));
+        }
+    } else if (id == QLatin1String("show_collision_shapes_button") || id == QLatin1String("show_collisions_button")) {
+        if (m_scene) {
+            const bool now = !m_scene->getRegistry().ctx().get<SceneProperties>().showCollisionShapes;
+            krs::SettingsManager::instance().set(QStringLiteral("scene/showCollisionShapes"), now);
+            toast(now ? QStringLiteral("Collision shapes ON (green static / orange dynamic / cyan kinematic).")
+                      : QStringLiteral("Collision shapes OFF."));
+        }
+    } else if (id == QLatin1String("orbit_button") || id == QLatin1String("pan_button")) {
+        toast(QStringLiteral("Viewport navigation: right-drag orbits, middle-drag pans, wheel zooms."));
+    } else if (id == QLatin1String("perpective_button") || id == QLatin1String("orthographic_button")) {
+        toast(QStringLiteral("Projection switching isn't wired into the render pipeline yet."));
+    } else if (id == QLatin1String("shaded_view_button") || id == QLatin1String("shaded_edges_view_button")
+        || id == QLatin1String("wireframe_view_button")) {
+        toast(QStringLiteral("Render-mode switching isn't wired into the deferred pipeline yet."));
+
+    // ---- measure (uses the committed B-Rep feature selection) ----
+    } else if (id == QLatin1String("measurement_tool")) {
+        if (!m_scene) return;
+        auto& reg = m_scene->getRegistry();
+        auto* st = reg.ctx().find<krs::sel::SelectionState>();
+        if (!st || st->selected.empty()) {
+            toast(QStringLiteral("Measure: click a CAD face first (View menu > Enable Feature Picking), then press Measure."));
+            return;
+        }
+        const krs::sel::Selection& cur = st->selected.back();
+        const krs::measure::Measurement m = krs::measure::measureFeature(reg, cur.entity, cur.faceId);
+        if (!m.ok) {
+            toast(QStringLiteral("Measure: the selected feature could not be resolved (was the object deleted?)."));
+            return;
+        }
+        // Convert SI meters into the ribbon's unit choice.
+        const QString u = m_fixedTopToolbar->lengthUnit();
+        const double f = (u == QLatin1String("cm")) ? 100.0
+                       : (u == QLatin1String("mm")) ? 1000.0
+                       : (u == QLatin1String("in")) ? 39.3700787402 : 1.0;
+        QString msg = QStringLiteral("Feature: %1").arg(QString::fromStdString(m.kind));
+        if (m.diameterM > 0.0) msg += QStringLiteral("\nDiameter: %1 %2").arg(m.diameterM * f, 0, 'g', 6).arg(u);
+        if (m.lengthM   > 0.0) msg += QStringLiteral("\nLength: %1 %2").arg(m.lengthM * f, 0, 'g', 6).arg(u);
+        if (m.areaM2    > 0.0) msg += QStringLiteral("\nArea: %1 %2%3").arg(m.areaM2 * f * f, 0, 'g', 6)
+                                          .arg(u).arg(QChar(0x00B2));
+        // Two committed features -> also report the distance between them (select A, select B, Measure).
+        if (st->selected.size() >= 2) {
+            const krs::sel::Selection& prev = st->selected[st->selected.size() - 2];
+            const krs::measure::Measurement d =
+                krs::measure::measureDistance(reg, prev.entity, prev.faceId, cur.entity, cur.faceId);
+            if (d.ok) msg += QStringLiteral("\n\nDistance to previous feature: %1 %2").arg(d.lengthM * f, 0, 'g', 6).arg(u);
+        }
+        QMessageBox::information(this, QStringLiteral("Measure"), msg);
+        QString flat = msg; flat.replace(QLatin1Char('\n'), QStringLiteral("    "));
+        statusBar()->showMessage(flat, 15000);
+
+    // ---- layout slots ----
+    } else if (id == QLatin1String("save_layout_button")) {
+        bool ok = false;
+        const QString name = QInputDialog::getText(this, QStringLiteral("Save Layout"),
+            QStringLiteral("Layout name:"), QLineEdit::Normal, QString(), &ok).trimmed();
+        if (!ok || name.isEmpty()) return;
+        QSettings s;
+        s.setValue(QStringLiteral("layout/slots/") + name, m_dockManager->saveState());
+        QStringList names = s.value(QStringLiteral("layout/slotNames")).toStringList();
+        if (!names.contains(name)) { names << name; s.setValue(QStringLiteral("layout/slotNames"), names); }
+        if (QComboBox* combo = m_fixedTopToolbar->comboById(QStringLiteral("load_layout_selector"))) {
+            QSignalBlocker block(combo);
+            combo->clear();
+            combo->addItem(QStringLiteral("Layouts..."));
+            combo->addItems(names);
+        }
+        toast(QStringLiteral("Layout \"%1\" saved.").arg(name));
+    } else if (id == QLatin1String("reset_layout_button")) {
+        if (m_dockManager && !m_defaultLayoutState.isEmpty()) {
+            m_dockManager->restoreState(m_defaultLayoutState);
+            for (auto it = m_panelDocks.constBegin(); it != m_panelDocks.constEnd(); ++it)
+                if (it.value()) m_fixedTopToolbar->setPanelButtonChecked(it.key(), !it.value()->isClosed());
+            toast(QStringLiteral("Layout reset to the factory arrangement."));
+        }
+
+    // ---- settings / help ----
+    } else if (id == QLatin1String("preferences_button")) {
+        openSettingsDialog();
+    } else if (id == QLatin1String("help_button")) {
+        QMessageBox::information(this, QStringLiteral("Quick Help"),
+            QStringLiteral("Viewport: right-drag orbit, middle-drag pan, wheel zoom.\n"
+                           "Selection: click objects; enable Feature Picking (View menu) to select CAD faces.\n"
+                           "Measure: select a face, press Measure. Select two faces for a distance.\n"
+                           "Simulation: transport buttons on the Simulation tab; the slider scales sim speed.\n"
+                           "Panels: every dock lives on the Panels ribbon tab; drag docks to rearrange,\n"
+                           "then Save Layout to keep the arrangement."));
+
+    // ---- robot / emergency ----
+    } else if (id == QLatin1String("estop_button") || id == QLatin1String("estop_button_2")
+        || id == QLatin1String("estop_button_3")) {
+        emergencyStop();
+    } else if (id == QLatin1String("initialize_robot_button") || id == QLatin1String("enable_servos_button")) {
+        toast(QStringLiteral("Homing isn't wired yet -- drive joints from the Robot Builder panel."));
+
+    // ---- everything else: an honest not-wired notice, never a dead click ----
+    } else {
+        QString pretty = id;
+        pretty.replace(QLatin1Char('_'), QLatin1Char(' '));
+        toast(QStringLiteral("\"%1\" isn't wired to a backend yet.").arg(pretty));
+    }
+}
+
+void MainWindow::buildRibbonMenus()
+{
+    if (!m_fixedTopToolbar) return;
+    auto attach = [this](const char* id, QMenu* m) {
+        if (QToolButton* b = m_fixedTopToolbar->buttonById(QLatin1String(id))) {
+            b->setMenu(m);
+            b->setPopupMode(QToolButton::InstantPopup);
+        } else {
+            m->deleteLater();   // button not in this .ui build -- drop the menu quietly
+        }
+    };
+
+    // General tab: Save dropdown (scene + node graph).
+    {
+        QMenu* m = new QMenu(this);
+        m->addAction(QStringLiteral("Save Scene"),       this, [this] { saveSceneAction(false); });
+        m->addAction(QStringLiteral("Save Scene As..."), this, [this] { saveSceneAction(true); });
+        m->addSeparator();
+        m->addAction(QStringLiteral("Save Node Graph As..."), this, [this] {
+            const QString p = QFileDialog::getSaveFileName(this, QStringLiteral("Save Node Graph"),
+                QStringLiteral("graph.kgraph"), QStringLiteral("KRobot node graph (*.kgraph)"));
+            if (p.isEmpty()) return;
+            saveNodeGraphTo(p);
+            statusBar()->showMessage(QStringLiteral("Node graph saved: %1").arg(p), 6000);
+        });
+        attach("save_project_button", m);
+    }
+    // General tab: Open dropdown.
+    {
+        QMenu* m = new QMenu(this);
+        m->addAction(QStringLiteral("Load Scene..."), this, [this] { loadSceneAction(); });
+        m->addAction(QStringLiteral("Load Node Graph..."), this, [this] {
+            const QString p = QFileDialog::getOpenFileName(this, QStringLiteral("Load Node Graph"),
+                QString(), QStringLiteral("KRobot node graph (*.kgraph)"));
+            if (p.isEmpty()) return;
+            loadNodeGraphFrom(p);
+            statusBar()->showMessage(QStringLiteral("Node graph loaded: %1").arg(p), 6000);
+        });
+        attach("open_project_button", m);
+    }
+    // General tab: Export / Import dropdowns.
+    {
+        QMenu* m = new QMenu(this);
+        m->addAction(QStringLiteral("Export URDF..."), this, [this] { exportUrdfAction(); });
+        m->addAction(QStringLiteral("Export Subgraph Pack..."), this, [this] { exportSelectedSubgraphPack(); });
+        attach("export_button", m);
+    }
+    {
+        QMenu* m = new QMenu(this);
+        m->addAction(QStringLiteral("Import CAD (STEP)..."), this, [this] { importStepFile(); });
+        m->addAction(QStringLiteral("Import Mesh..."),       this, [this] { importMeshAction(); });
+        m->addAction(QStringLiteral("Import Subgraph Pack..."), this, [this] { importSubgraphPack(); });
+        attach("import_button", m);
+    }
+    // Environment + Simulation tabs: Add Primitive dropdown (primitives + lights).
+    for (const char* id : { "add_primative_button", "add_primative_button_2" }) {
+        QMenu* m = new QMenu(this);
+        struct P { const char* label; Primitive prim; };
+        static const P prims[] = {
+            { "Cube",     Primitive::Cube },      { "Sphere", Primitive::IcoSphere },
+            { "Cylinder", Primitive::Cylinder },  { "Cone",   Primitive::Cone },
+            { "Torus",    Primitive::Torus },     { "Plane",  Primitive::Quad },
+        };
+        for (const auto& p : prims) {
+            const int prim = int(p.prim);
+            m->addAction(QString::fromLatin1(p.label), this, [this, prim] { spawnPrimitiveFromMenu(prim); });
+        }
+        m->addSeparator();
+        struct L { const char* label; LightComponent::Type type; float y; };
+        static const L lights[] = {
+            { "Point Light",       LightComponent::Type::Point,       1.5f },
+            { "Spot Light",        LightComponent::Type::Spot,        3.0f },
+            { "Area Light",        LightComponent::Type::RectArea,    4.0f },
+            { "Directional Light", LightComponent::Type::Directional, 4.0f },
+        };
+        for (const auto& l : lights) {
+            const int type = int(l.type); const float y = l.y;
+            m->addAction(QString::fromLatin1(l.label), this, [this, type, y] {
+                addLightFromMenu(type, glm::vec3(0.0f, y, 0.0f));
+            });
+        }
+        attach(id, m);
+    }
+    // View tab: camera presets.
+    {
+        QMenu* m = new QMenu(this);
+        static const struct { const char* label; const char* key; } presets[] = {
+            { "Isometric", "iso" },  { "Front", "front" }, { "Back", "back" }, { "Left", "left" },
+            { "Right", "right" },    { "Top", "top" },     { "Bottom", "bottom" },
+        };
+        for (const auto& p : presets) {
+            const QString key = QLatin1String(p.key);
+            m->addAction(QLatin1String(p.label), this, [this, key] { applyCameraPreset(key); });
+        }
+        m->addSeparator();
+        m->addAction(QStringLiteral("Saved View"), this, [this] { applyCameraPreset(QStringLiteral("saved")); });
+        attach("view_presets_button", m);
+    }
+    // General tab: layout selector combo (saved dock arrangements by name).
+    if (QComboBox* combo = m_fixedTopToolbar->comboById(QStringLiteral("load_layout_selector"))) {
+        {
+            QSignalBlocker block(combo);
+            combo->clear();
+            combo->addItem(QStringLiteral("Layouts..."));
+            combo->addItems(QSettings().value(QStringLiteral("layout/slotNames")).toStringList());
+        }
+        connect(combo, QOverload<int>::of(&QComboBox::activated), this, [this, combo](int i) {
+            if (i <= 0 || !m_dockManager) return;
+            const QString name = combo->currentText();
+            const QByteArray st = QSettings().value(QStringLiteral("layout/slots/") + name).toByteArray();
+            if (!st.isEmpty()) {
+                m_dockManager->restoreState(st);
+                for (auto it = m_panelDocks.constBegin(); it != m_panelDocks.constEnd(); ++it)
+                    if (it.value()) m_fixedTopToolbar->setPanelButtonChecked(it.key(), !it.value()->isClosed());
+                statusBar()->showMessage(QStringLiteral("Layout \"%1\" applied.").arg(name), 4000);
+            }
+            QSignalBlocker block(combo);
+            combo->setCurrentIndex(0);
+        });
+    }
+    // The three E-STOP buttons read as emergency controls.
+    for (const char* id : { "estop_button", "estop_button_2", "estop_button_3" })
+        if (QToolButton* b = m_fixedTopToolbar->buttonById(QLatin1String(id)))
+            b->setStyleSheet(QStringLiteral(
+                "QToolButton { background-color:#b91c1c; color:white; font-weight:bold; border-radius:4px; }"
+                "QToolButton:hover { background-color:#dc2626; }"
+                "QToolButton:pressed { background-color:#7f1d1d; }"));
 }
 
 void MainWindow::importStepFile()

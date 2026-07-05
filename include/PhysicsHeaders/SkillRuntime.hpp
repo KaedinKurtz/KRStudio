@@ -40,6 +40,8 @@ public:
     int  runningCount() const;
     // Cancel: drop a running task NOW. Its skills stop re-asserting -> DOFs release next pass.
     void cancel(int id);
+    // E-STOP path: cancel EVERY running task (the ribbon emergency stop). Same release contract.
+    void cancelAll();
 
 private:
     struct Task {

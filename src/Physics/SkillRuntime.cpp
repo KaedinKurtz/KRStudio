@@ -58,6 +58,10 @@ void SkillRuntime::cancel(int id) {
     for (auto& t : tasks_)
         if (t->id == id && t->active) { t->active = false; t->last = Status::Failure; }
 }
+void SkillRuntime::cancelAll() {
+    for (auto& t : tasks_)
+        if (t->active) { t->active = false; t->last = Status::Failure; }
+}
 
 // entt's ctx storage wants copyable payloads; the runtime owns unique_ptr tasks, so it rides in a
 // shared_ptr holder (the holder copies; the runtime instance is stable).

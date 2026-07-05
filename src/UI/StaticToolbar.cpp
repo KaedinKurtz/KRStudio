@@ -5,6 +5,9 @@
 #include <QHBoxLayout>
 #include <QFrame>
 #include <QEvent>
+#include <QComboBox>
+#include <QSlider>
+#include <QSet>
 #include <QDebug>
 
 StaticToolbar::StaticToolbar(QWidget* parent) :
@@ -85,20 +88,25 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
     }
 
     // --- Theme swatches: QFrame has no clicked() signal, so detect clicks via an event filter.
-    //     The audit identified swatch2 as the light palette and swatch7 as the dark palette;
-    //     wire them as the Light/Dark theme selector (emits themeSelected). ---
+    //     ALL swatches are now functional palettes (each emits themeSelected with its theme id;
+    //     MainWindow::applyTheme owns the actual stylesheets). ---
     {
         const QVector<QPair<QFrame*, QString>> themeSwatches = {
-            { ui->swatch2, QStringLiteral("light") },
-            { ui->swatch7, QStringLiteral("dark")  },
+            { ui->swatch1, QStringLiteral("slate")    },
+            { ui->swatch2, QStringLiteral("light")    },
+            { ui->swatch3, QStringLiteral("graphite") },
+            { ui->swatch4, QStringLiteral("ocean")    },
+            { ui->swatch5, QStringLiteral("forest")   },
+            { ui->swatch6, QStringLiteral("amber")    },
+            { ui->swatch7, QStringLiteral("dark")     },
+            { ui->swatch8, QStringLiteral("contrast") },
         };
         for (const auto& sw : themeSwatches) {
             if (!sw.first) continue;
             m_swatchThemes.insert(sw.first, sw.second);
             sw.first->installEventFilter(this);
             sw.first->setCursor(Qt::PointingHandCursor);
-            sw.first->setToolTip(sw.second == QLatin1String("light")
-                ? QStringLiteral("Light theme") : QStringLiteral("Dark theme"));
+            sw.first->setToolTip(QStringLiteral("Theme: %1").arg(sw.second));
         }
     }
 
@@ -128,7 +136,56 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
     layout->addWidget(m_viewportManagerPopup);
     m_viewportManagerPopup->adjustSize();
     ph->adjustSize();
+
+    // --- Units combos (General tab): populate + persist-friendly defaults. The Measure tool and
+    //     any metric display read these via lengthUnit()/angleUnit(). ---
+    ui->units_length_input->addItems({ QStringLiteral("mm"), QStringLiteral("cm"),
+                                       QStringLiteral("m"),  QStringLiteral("in") });
+    ui->units_length_input->setCurrentIndex(2);   // metres (the engine's native unit)
+    ui->units_angle_input->addItems({ QStringLiteral("deg"), QStringLiteral("rad") });
+    ui->units_angle_input->setCurrentIndex(0);
+
+    // --- Simulation speed slider: 0.10x .. 4.00x, label live, emits simSpeedChanged. ---
+    ui->horizontalSlider->setRange(10, 400);
+    ui->horizontalSlider->setValue(100);
+    connect(ui->horizontalSlider, &QSlider::valueChanged, this, [this](int v) {
+        const double f = v / 100.0;
+        ui->label_54->setText(QStringLiteral("Speed : %1x").arg(f, 0, 'f', 2));
+        emit simSpeedChanged(f);
+    });
+
+    // --- THE GENERIC ACTION BUS: every named ribbon QToolButton that has no dedicated signal
+    //     emits toolbarAction(objectName) on click. MainWindow owns one dispatcher; buttons that
+    //     later get a QMenu (InstantPopup) simply stop emitting clicked -- harmless double-wire.
+    {
+        const QSet<QString> claimed = {
+            QStringLiteral("load_robot_button"), QStringLiteral("flowVisualizerMenu"),
+            QStringLiteral("realsense_config_button"), QStringLiteral("databaseManagerButton"),
+            QStringLiteral("gridPropertiesButton"), QStringLiteral("show_object_properties"),
+            QStringLiteral("toolButton"), QStringLiteral("physics_settings_button"),
+            QStringLiteral("material_properties_button"), QStringLiteral("scene_manager_button"),
+            QStringLiteral("robot_visual_editor_button"), QStringLiteral("part_library_button"),
+            QStringLiteral("sensor_diagnostics_button"), QStringLiteral("play_pause_simulation_button"),
+            QStringLiteral("reset_simulation_button"), QStringLiteral("step_simulation_button"),
+        };
+        const QList<QToolButton*> panelBtns = m_panelButtons.values();
+        for (QToolButton* b : findChildren<QToolButton*>()) {
+            if (b->objectName().isEmpty() || claimed.contains(b->objectName())) continue;
+            if (panelBtns.contains(b)) continue;                       // programmatic Panels-tab buttons
+            const QString id = b->objectName();
+            connect(b, &QToolButton::clicked, this, [this, id] { emit toolbarAction(id); });
+        }
+    }
 }
+
+QToolButton* StaticToolbar::buttonById(const QString& objectName) const {
+    return findChild<QToolButton*>(objectName);
+}
+QComboBox* StaticToolbar::comboById(const QString& objectName) const {
+    return findChild<QComboBox*>(objectName);
+}
+QString StaticToolbar::lengthUnit() const { return ui->units_length_input->currentText(); }
+QString StaticToolbar::angleUnit() const  { return ui->units_angle_input->currentText(); }
 
 
 StaticToolbar::~StaticToolbar()

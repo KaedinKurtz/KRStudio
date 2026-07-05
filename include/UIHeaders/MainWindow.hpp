@@ -155,6 +155,21 @@ private:
     void syncEnvironmentToCtx();       // v1.1: live RenderingSystem knobs -> EnvironmentSettings ctx (pre-save)
     void applyCtxToEnvironment();      // v1.1: EnvironmentSettings ctx -> live RenderingSystem (post-load)
 
+    // ---- ribbon action bus (StaticToolbar::toolbarAction -> one dispatcher) ----
+    void dispatchToolbarAction(const QString& actionId);
+    void buildRibbonMenus();           // attach dropdown QMenus to specific ribbon buttons
+    void saveSceneAction(bool forceAskPath = false);   // .kscene (+ sibling .kgraph)
+    void loadSceneAction();
+    void exportUrdfAction();
+    void newSceneAction();             // confirm + clear robots/lights/objects/graph
+    void importMeshAction();           // mesh file -> ResourceManager -> spawn at view centre
+    void spawnPrimitiveFromMenu(int primitive);
+    void applyCameraPreset(const QString& preset);     // front/back/left/right/top/bottom/iso
+    void emergencyStop();              // sim stop + command bus clear + cancel skill tasks
+    void openSettingsDialog();
+    void toast(const QString& msg);    // status-bar notice for not-yet-implemented ribbon buttons
+    QByteArray m_defaultLayoutState;   // dock layout BEFORE the user-restore (Reset Layout target)
+
     entt::entity m_cameraEntity;
 
     QTimer* m_masterRenderTimer;

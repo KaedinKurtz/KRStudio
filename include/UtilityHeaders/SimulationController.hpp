@@ -51,6 +51,12 @@ public slots:
     void stop();
     void singleStep(); // one fixed step; implies pause if currently stopped
 
+    // Simulation SPEED (the ribbon slider): scales wall time entering the fixed-step accumulator,
+    // so 0.5 = half-speed slow-motion, 2.0 = double time. Physics stays fixed-dt (deterministic);
+    // only how much sim time elapses per wall second changes. Clamped to a sane band.
+    void setTimeScale(double s) { m_timeScale = (s < 0.05) ? 0.05 : (s > 10.0 ? 10.0 : s); }
+    double timeScale() const { return m_timeScale; }
+
 public:
     // G.0 — process-wide PhysX core (borrowed singleton). Introspection for the
     // lifecycle gate, and the gate itself (borrow/release across controllers).
@@ -149,6 +155,7 @@ private:
     SimulationState m_state = SimulationState::Stopped;
     QElapsedTimer m_clock;
     double m_accumulator = 0.0;
+    double m_timeScale = 1.0;               // ribbon speed slider (wall-time multiplier)
     std::vector<TransformSnapshot> m_snapshot;
 
     // PhysX lives behind a pimpl so PhysX headers stay out of the project's

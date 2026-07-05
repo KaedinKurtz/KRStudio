@@ -32,6 +32,13 @@ public:
     void setPanelButtonChecked(const QString& panelId, bool checked);
     /// Headless self-test: programmatically click a panel button (toggles + emits).
     void selfTestClickPanel(const QString& panelId);
+
+    /// ACTION-BUS accessors: MainWindow attaches dropdown QMenus to specific ribbon buttons
+    /// (setMenu + InstantPopup) and reads the shared combos. Returns nullptr/empty when absent.
+    QToolButton* buttonById(const QString& objectName) const;
+    class QComboBox* comboById(const QString& objectName) const;
+    QString lengthUnit() const;   // current selection of units_length_input ("m","cm","mm","in")
+    QString angleUnit() const;    // current selection of units_angle_input ("deg","rad")
     // StaticToolbar.hpp
 public slots:
     void checkButtonForMenu(MenuType type);
@@ -60,6 +67,13 @@ signals:
     void simulationPlayPauseToggled(bool play);
     void simulationResetClicked();
     void simulationStepClicked();
+    /// Simulation speed slider (0.1x .. 4.0x, label kept in sync internally).
+    void simSpeedChanged(double factor);
+
+    /// THE GENERIC ACTION BUS: every ribbon button without a dedicated signal emits its
+    /// objectName here; MainWindow dispatches. A new .ui button is wire-able the moment it
+    /// has a name -- no new signal needed.
+    void toolbarAction(const QString& actionId);
 
 private:
     Ui::toolbarContainer* ui; // Pointer to the generated UI class

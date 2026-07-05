@@ -693,7 +693,7 @@ void SimulationController::tick()
     // to ~12% slow vs wall clock (caught by the free-fall benchmark).
     const double frameSeconds = std::min(0.25, double(m_clock.nsecsElapsed()) * 1e-9);
     m_clock.restart();
-    m_accumulator += frameSeconds;
+    m_accumulator += frameSeconds * m_timeScale;   // ribbon speed slider: 0.1x .. 4x wall time
 
     syncUserEdits(); // gizmo/panel moves while playing land in the actors
 
