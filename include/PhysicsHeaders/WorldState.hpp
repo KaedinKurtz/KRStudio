@@ -44,6 +44,30 @@ struct WorldObject {
 // A named task frame (a world pose a skill/planner targets: "home", "bin_A", "drop_pose").
 struct TaskFrame { glm::vec3 pos = glm::vec3(0); glm::quat rot = glm::quat(1, 0, 0, 0); };
 
+// ---- KNOWLEDGE: what the robot has LEARNED about an object (persists with the scene) ----------
+// Parameter provenance ladder: Unknown -> Prior (e.g. CAD material density x volume) -> Estimated
+// -> Measured (excitation-honed) ; Dynamic marks a quantity that provably varies DURING interaction
+// (sloshing liquid) and must never carry a confident static value ; Suspect marks a previously
+// trusted value invalidated by a twin-vs-real residual spike (staleness IS sigma + provenance).
+enum class Prov { Unknown, Prior, Estimated, Measured, Dynamic, Suspect };
+struct ObjParam {
+    double value = 0.0;
+    double sigma = 1e9;            // 1-sigma uncertainty; huge = effectively unknown
+    Prov   prov  = Prov::Unknown;
+};
+// SimOnly: a synthetic object -- best-guess parameters are ACCEPTED as-is, no excitation demanded.
+// R2S (real-to-sim): a real-world object -- parameters must be honed before confident manipulation.
+enum class LearnTag { SimOnly, R2S };
+struct ObjectKnowledge {
+    LearnTag tag = LearnTag::SimOnly;
+    std::vector<std::string> traits;                 // "liquid-container", "fragile", ...
+    std::map<std::string, ObjParam> params;          // "mass", "com_r", "friction", ...
+    bool hasTrait(const std::string& t) const {
+        for (const auto& x : traits) if (x == t) return true;
+        return false;
+    }
+};
+
 struct WorldState {
     double now = 0.0;
 
@@ -74,7 +98,22 @@ struct WorldState {
     // staleness: seen within `maxAge` of now (an object the catalog stopped publishing goes stale).
     bool fresh(const std::string& objName, double maxAge) const;
 
+    // ---- knowledge (learned parameters + traits + learn-tags; PERSISTS with the scene) ----
+    ObjectKnowledge&       know(const std::string& objName);          // get-or-create
+    const ObjectKnowledge* knowledgeOf(const std::string& objName) const;
+    const std::map<std::string, ObjectKnowledge>& allKnowledge() const { return knowledge_; }
+    void setKnowledge(const std::string& objName, const ObjectKnowledge& k) { knowledge_[objName] = k; }
+    // a skill's needs[] check: SimOnly objects accept the best guess (no excitation demanded);
+    // R2S objects require the param present, sigma <= maxSigma, and prov not Unknown/Suspect.
+    bool needSatisfied(const std::string& objName, const std::string& param, double maxSigma) const;
+    // residual-triggered invalidation: inflate sigma (x factor) + drop provenance to Suspect on all
+    // (or one named) parameter(s) of an object -- the planner re-sees the gap naturally.
+    void invalidate(const std::string& objName, const std::string& param = std::string(), double sigmaFactor = 10.0);
+    // seed a mass PRIOR from CAD material data (density x volume -> massKg) if none is known yet.
+    void seedMassPrior(const std::string& objName, double massKg, double relSigma = 0.3);
+
 private:
+    std::map<std::string, ObjectKnowledge> knowledge_;
     std::vector<WorldObject> objects_;
     std::map<std::string, TaskFrame> frames_;
     std::map<int, bool> gripperOpen_;

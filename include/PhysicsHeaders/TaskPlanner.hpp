@@ -36,6 +36,41 @@ struct PlanResult {
 PlanResult planTask(const std::vector<SkillStep>& library, const krs::world::WorldState& start,
                     const std::vector<Predicate>& goal, int maxDepth = 8, int maxNodes = 20000);
 
+// ---- Goal Workspace G2/G3: goal REGRESSION with epistemic knowledge gaps -----------------------
+// A parameter the plan needs but the knowledge ledger cannot yet supply at the demanded confidence.
+struct KnowledgeGap {
+    std::string object, param;
+    double sigmaNow = 1e9, sigmaNeeded = 0.0;
+    std::string suggestedSkill;      // an excitation routine that hones this parameter ("" = none known)
+    bool resolvedByPlan = false;     // true when an excitation step was auto-inserted for it
+};
+struct RegressionResult {
+    bool ok = false;
+    std::vector<SkillStep> steps;    // ordered, envelopes STAMPED per step (auditable bounds)
+    std::vector<KnowledgeGap> gaps;  // the knowledge to-do (empty = fully executable now)
+    std::string why;
+    int iterations = 0;
+};
+// BACKWARD-chain from the goal: pick an unmet predicate, find the skill whose EFFECTS establish it,
+// prepend it, adopt its PRECONDITIONS as new subgoals; repeat until everything grounds in `start`.
+// Regression yields the RELEVANCE chain: only objects the plan actually touches get knowledge
+// demands. For each chosen step, unsatisfied SkillSpec::needs[] (per the object's R2S/SimOnly tag)
+// emit KnowledgeGaps; when `autoInsertExcitation` an epistemic skill honing that parameter is
+// inserted before the needing step (gap marked resolvedByPlan) -- otherwise gaps go to the to-do.
+// Envelopes are composed (traits x intrinsic, intersection) and stamped on every step.
+RegressionResult planBackward(const std::vector<SkillStep>& library, const krs::world::WorldState& start,
+                              const std::vector<Predicate>& goal, bool autoInsertExcitation = false,
+                              int maxIterations = 64);
+
+// Headless gate (KRS_GOALPLAN_SELFTEST): regression reproduces [pick, place] backward from
+// at(cup, drop_pose); an R2S glass with unknown mass emits gap(mass) while the SAME plan on a
+// SimOnly object emits none (the tag gates extraction); autoInsertExcitation splices lift_weigh
+// before the needing step; the liquid-container trait stamps maxTiltDeg=15 onto the carry step's
+// envelope (intersection beats the primitive's looser bound) and the runtime guard FAILS the step
+// when the glass tilts past it mid-run; NEG-CTRLs: an unestablishable goal fails bounded with a
+// reason; an irrelevant object's parameters are NEVER demanded (relevance chain).
+bool runGoalPlanGate();
+
 // Headless gate (KRS_TASKPLAN_SELFTEST): from goal at(cup, drop_pose) the planner emits
 // [pick, place] IN ORDER by matching effects to preconditions, and the plan executes to Success
 // under the SkillRuntime against a live demo robot; with the gripper JAMMED SHUT at start the

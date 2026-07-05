@@ -86,6 +86,37 @@ bool WorldState::fresh(const std::string& objName, double maxAge) const {
     return o && (now - o->lastSeen) <= maxAge;
 }
 
+// ---- knowledge -------------------------------------------------------------------------------
+ObjectKnowledge& WorldState::know(const std::string& objName) { return knowledge_[objName]; }
+const ObjectKnowledge* WorldState::knowledgeOf(const std::string& objName) const {
+    auto it = knowledge_.find(objName);
+    return it == knowledge_.end() ? nullptr : &it->second;
+}
+bool WorldState::needSatisfied(const std::string& objName, const std::string& param, double maxSigma) const {
+    const ObjectKnowledge* k = knowledgeOf(objName);
+    if (!k || k->tag == LearnTag::SimOnly) return true;   // sim-only: the best guess is good enough
+    auto it = k->params.find(param);
+    if (it == k->params.end()) return false;
+    const ObjParam& p = it->second;
+    if (p.prov == Prov::Unknown || p.prov == Prov::Suspect) return false;
+    return p.sigma <= maxSigma;
+}
+void WorldState::invalidate(const std::string& objName, const std::string& param, double sigmaFactor) {
+    auto it = knowledge_.find(objName);
+    if (it == knowledge_.end()) return;
+    for (auto& [name, p] : it->second.params) {
+        if (!param.empty() && name != param) continue;
+        p.sigma *= std::max(1.0, sigmaFactor);
+        p.prov = Prov::Suspect;                            // staleness IS sigma + provenance
+    }
+}
+void WorldState::seedMassPrior(const std::string& objName, double massKg, double relSigma) {
+    if (massKg <= 0.0) return;
+    ObjectKnowledge& k = knowledge_[objName];
+    if (k.params.count("mass")) return;                    // never clobber learned knowledge
+    k.params["mass"] = { massKg, std::abs(massKg) * relSigma, Prov::Prior };
+}
+
 WorldState& worldState(entt::registry& reg) {
     auto* ws = reg.ctx().find<WorldState>();
     return ws ? *ws : reg.ctx().emplace<WorldState>();
@@ -163,7 +194,39 @@ bool runWorldStateGate() {
         allOk = allOk && negOk;
     }
 
-    printf("[world] %s\n", allOk ? "ALL PASS (poses reassemble by name + track; frames/facts/predicates work; staleness honest; unknowns never fabricated)"
+    // ---- KNOWLEDGE: tags gate the needs check; invalidation is honest; priors never clobber ----
+    {
+        WorldState kws;
+        // R2S object with an unknown mass -> need NOT satisfied; hone it -> satisfied.
+        kws.know("glass").tag = LearnTag::R2S;
+        kws.know("glass").traits = { "liquid-container" };
+        const bool unknownBlocks = !kws.needSatisfied("glass", "mass", 0.05);
+        kws.know("glass").params["mass"] = { 0.372, 0.02, Prov::Measured };
+        const bool measuredOk = kws.needSatisfied("glass", "mass", 0.05);
+        // SIM-ONLY object: the best guess is good enough -- no excitation demanded even when unknown.
+        kws.know("block").tag = LearnTag::SimOnly;
+        const bool simOnlyOk = kws.needSatisfied("block", "mass", 0.05);
+        // residual-triggered invalidation: sigma inflates + prov drops to Suspect -> gap reappears.
+        kws.invalidate("glass", "mass");
+        const bool invalidated = !kws.needSatisfied("glass", "mass", 0.05)
+            && kws.knowledgeOf("glass")->params.at("mass").prov == Prov::Suspect;
+        // a CAD prior seeds once and never clobbers learned/toughened values.
+        kws.seedMassPrior("glass", 0.5);                                 // must NOT overwrite the Suspect entry
+        const bool noClobber = kws.knowledgeOf("glass")->params.at("mass").prov == Prov::Suspect;
+        kws.seedMassPrior("cup2", 0.25);
+        const bool seeded = kws.knowledgeOf("cup2") && kws.knowledgeOf("cup2")->params.at("mass").prov == Prov::Prior
+            && std::abs(kws.knowledgeOf("cup2")->params.at("mass").value - 0.25) < 1e-12;
+        const bool traitOk = kws.knowledgeOf("glass")->hasTrait("liquid-container")
+            && !kws.knowledgeOf("glass")->hasTrait("fragile");
+        const bool ok = unknownBlocks && measuredOk && simOnlyOk && invalidated && noClobber && seeded && traitOk;
+        printf("[world]   KNOWLEDGE: r2s-unknown-blocks=%d measured-satisfies=%d simonly-accepts-guess=%d "
+               "invalidate->Suspect-reblocks=%d prior-never-clobbers=%d seeds=%d traits=%d  %s\n",
+               int(unknownBlocks), int(measuredOk), int(simOnlyOk), int(invalidated), int(noClobber),
+               int(seeded), int(traitOk), ok ? "PASS" : "FAIL");
+        allOk = allOk && ok;
+    }
+
+    printf("[world] %s\n", allOk ? "ALL PASS (poses reassemble by name + track; frames/facts/predicates work; staleness honest; unknowns never fabricated; knowledge tags/invalidation/priors honest)"
                                  : "FAILURES PRESENT");
     std::fflush(stdout);
     return allOk;

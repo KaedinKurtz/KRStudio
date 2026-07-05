@@ -100,6 +100,101 @@ PlanResult planTask(const std::vector<SkillStep>& library, const krs::world::Wor
 }
 
 // ================================================================================================
+// Goal Workspace G2/G3: goal regression + knowledge gaps + excitation insertion
+// ================================================================================================
+RegressionResult planBackward(const std::vector<SkillStep>& library, const krs::world::WorldState& start,
+                              const std::vector<Predicate>& goal, bool autoInsertExcitation,
+                              int maxIterations) {
+    RegressionResult out;
+    if (goal.empty()) { out.why = "empty goal"; return out; }
+
+    // ---- regression over the symbolic overlay (same fact machinery as the forward search) ----
+    std::vector<Predicate> goals = goal;         // open subgoals (regressed backward)
+    std::vector<int> chosen;                     // library indices, in REVERSE execution order
+    std::set<std::string> seenGoalSigs;
+    auto goalsSig = [&goals]() {
+        std::string s;
+        for (const auto& g : goals) { s += g.text(); s += ';'; }
+        return s;
+    };
+    auto establishes = [](const SkillSpec* sp, const Predicate& g) {
+        for (const auto& e : sp->eff)
+            if (factKey(e) == factKey(g) && e.negated == g.negated) return true;
+        return false;
+    };
+    for (out.iterations = 0; out.iterations < maxIterations; ++out.iterations) {
+        // find an open subgoal not already true in the start world
+        int unmetIdx = -1;
+        for (int i = 0; i < int(goals.size()); ++i)
+            if (!goals[i].eval(start)) { unmetIdx = i; break; }
+        if (unmetIdx < 0) break;                                  // everything grounds in the start state
+        const Predicate g = goals[unmetIdx];
+        int pick = -1;
+        for (int i = 0; i < int(library.size()); ++i)
+            if (library[i].spec && library[i].spec->honesParam.empty() && establishes(library[i].spec, g)) { pick = i; break; }
+        if (pick < 0) { out.why = "no skill establishes " + g.text(); return out; }
+        chosen.push_back(pick);
+        // regress: remove every subgoal this skill's effects establish, adopt its preconditions.
+        std::vector<Predicate> next;
+        for (const auto& og : goals) if (!establishes(library[pick].spec, og)) next.push_back(og);
+        for (const auto& p : library[pick].spec->pre) next.push_back(p);
+        goals = std::move(next);
+        const std::string sig = goalsSig();
+        if (!seenGoalSigs.insert(sig).second) { out.why = "regression cycle on " + g.text(); return out; }
+    }
+    if (out.iterations >= maxIterations) { out.why = "iteration cap reached"; return out; }
+
+    // chosen is reverse execution order -> flip, stamp envelopes, collect knowledge gaps.
+    for (auto it = chosen.rbegin(); it != chosen.rend(); ++it) {
+        SkillStep step = library[*it];
+        step.envelope = composeEnvelope(*step.spec, start, step.object);
+        out.steps.push_back(std::move(step));
+    }
+    for (const auto& step : out.steps) {
+        for (const auto& need : step.spec->needs) {
+            if (start.needSatisfied(step.object, need.param, need.maxSigma)) continue;
+            KnowledgeGap gap;
+            gap.object = step.object; gap.param = need.param; gap.sigmaNeeded = need.maxSigma;
+            if (const auto* k = start.knowledgeOf(step.object))
+                if (auto pit = k->params.find(need.param); pit != k->params.end()) gap.sigmaNow = pit->second.sigma;
+            for (const auto& ex : library)                        // suggest a matching excitation
+                if (ex.spec && ex.spec->honesParam == need.param && ex.spec->honedSigma <= need.maxSigma)
+                    { gap.suggestedSkill = ex.spec->name; break; }
+            // dedupe (same object+param demanded by several steps)
+            bool dup = false;
+            for (const auto& gPrev : out.gaps)
+                if (gPrev.object == gap.object && gPrev.param == gap.param) dup = true;
+            if (!dup) out.gaps.push_back(std::move(gap));
+        }
+    }
+    // G3: auto-insert the excitation BEFORE the first step that needs the parameter.
+    if (autoInsertExcitation) {
+        for (auto& gap : out.gaps) {
+            if (gap.suggestedSkill.empty()) continue;
+            const SkillStep* exStep = nullptr;
+            for (const auto& ex : library)
+                if (ex.spec && ex.spec->name == gap.suggestedSkill) { exStep = &ex; break; }
+            if (!exStep) continue;
+            for (auto sit = out.steps.begin(); sit != out.steps.end(); ++sit) {
+                bool needsIt = false;
+                for (const auto& n : sit->spec->needs)
+                    if (n.param == gap.param && sit->object == gap.object) needsIt = true;
+                if (needsIt) {
+                    SkillStep ins = *exStep;
+                    ins.object = gap.object;
+                    ins.envelope = composeEnvelope(*ins.spec, start, ins.object);
+                    out.steps.insert(sit, std::move(ins));
+                    gap.resolvedByPlan = true;
+                    break;
+                }
+            }
+        }
+    }
+    out.ok = true;
+    return out;
+}
+
+// ================================================================================================
 // GATE TASKPLAN (Process & Skills P5) -- goal in, ordered executable plan out; replans around faults.
 // ================================================================================================
 bool runTaskPlanGate() {
@@ -245,6 +340,169 @@ bool runTaskPlanGate() {
     }
 
     printf("[taskplan] %s\n", allOk ? "ALL PASS (goal -> ordered executable plan by effect/precondition matching; replans around a jammed gripper and EXECUTES the recovery; empty-plan/unreachable/empty-library honest)"
+                                    : "FAILURES PRESENT");
+    std::fflush(stdout);
+    return allOk;
+}
+
+// ================================================================================================
+// GATE GOALPLAN (Goal Workspace G2/G3) -- regression, knowledge gaps, envelopes, live guards.
+// ================================================================================================
+bool runGoalPlanGate() {
+    using std::printf;
+    using namespace krs::policy;
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    printf("[goalplan] GATE GOALPLAN -- regression planning + R2S knowledge gaps + trait envelopes + runtime guards\n");
+    bool allOk = true;
+
+    // ---- world: an R2S liquid glass (mass unknown), a SimOnly block, an irrelevant R2S decoy ----
+    Scene scene; auto& reg = scene.getRegistry();
+    krs::world::WorldState& ws = krs::world::worldState(reg);
+    krs::twin::PropertyCatalog cat;
+    auto pubPose = [&cat](std::uint32_t id, const char* n, double x, double w, double z, double t) {
+        double p[3] = { x, 0.5, 0.0 };  cat.publish(id, n, "position", krs::twin::PropType::Vec3, p, t);
+        double q[4] = { w, 0.0, 0.0, z }; cat.publish(id, n, "orientation", krs::twin::PropType::Quat, q, t);
+    };
+    pubPose(60, "glass", 0.6, 1.0, 0.0, 0.1);   // upright
+    pubPose(61, "block", 0.8, 1.0, 0.0, 0.1);
+    pubPose(62, "decoy", 2.0, 1.0, 0.0, 0.1);
+    ws.updateFromCatalog(cat);
+    ws.setFrame("drop_pose", glm::vec3(1.2f, 0.4f, 0.3f));
+    ws.setGripperOpen(0, true);
+    ws.know("glass").tag = krs::world::LearnTag::R2S;
+    ws.know("glass").traits = { "liquid-container" };
+    ws.know("block").tag = krs::world::LearnTag::SimOnly;
+    ws.know("decoy").tag = krs::world::LearnTag::R2S;            // unknown mass, but NOT in the plan
+
+    // ---- the grounded library: grasp(obj) + place(obj) per object, and the lift_weigh excitation ----
+    auto mkGrasp = [](const std::string& obj) {
+        SkillSpec s;
+        s.name = "grasp[" + obj + "]";
+        s.pre = { { Predicate::Kind::GripperOpen, false, 0 }, { Predicate::Kind::Fresh, false, 0, obj, "", 10.0 } };
+        s.eff = { { Predicate::Kind::Holding, false, 0, obj }, { Predicate::Kind::GripperOpen, true, 0 } };
+        s.needs = { { "mass", 0.05 } };
+        s.intrinsicEnvelope = { { "maxTiltDeg", 60.0 } };        // the primitive's own loose bound
+        s.timeoutSec = 0.5;
+        return s;
+    };
+    auto mkPlace = [](const std::string& obj) {
+        SkillSpec s;
+        s.name = "place[" + obj + "]";
+        s.pre = { { Predicate::Kind::Holding, false, 0, obj } };
+        s.eff = { { Predicate::Kind::Holding, true, 0, obj }, { Predicate::Kind::GripperOpen, false, 0 },
+                  { Predicate::Kind::At, false, 0, obj, "drop_pose", 0.1 } };
+        s.needs = { { "mass", 0.05 } };
+        s.intrinsicEnvelope = { { "maxTiltDeg", 60.0 } };
+        s.timeoutSec = 0.5;
+        return s;
+    };
+    auto idle = [](Scene*, const ParamMap&) {                    // planning-only bodies (never run here)
+        return [](double, Blackboard&) { return Status::Success; };
+    };
+    SkillSpec graspGlass = mkGrasp("glass"); graspGlass.realize = idle;
+    SkillSpec placeGlass = mkPlace("glass"); placeGlass.realize = idle;
+    SkillSpec graspBlock = mkGrasp("block"); graspBlock.realize = idle;
+    SkillSpec placeBlock = mkPlace("block"); placeBlock.realize = idle;
+    SkillSpec liftWeigh;
+    liftWeigh.name = "lift_weigh";
+    liftWeigh.honesParam = "mass"; liftWeigh.honedSigma = 0.02;
+    liftWeigh.realize = idle; liftWeigh.timeoutSec = 0.5;
+
+    std::vector<SkillStep> lib = {
+        { &graspGlass, {}, "glass" }, { &placeGlass, {}, "glass" },
+        { &graspBlock, {}, "block" }, { &placeBlock, {}, "block" },
+        { &liftWeigh,  {}, ""      },
+    };
+
+    // ---- (1) regression order + gap for the R2S glass; relevance excludes the decoy ----
+    {
+        const std::vector<Predicate> goal = { { Predicate::Kind::At, false, 0, "glass", "drop_pose", 0.1 } };
+        const RegressionResult rr = planBackward(lib, ws, goal, /*autoInsert*/false);
+        const bool orderOk = rr.ok && rr.steps.size() == 2
+            && rr.steps[0].spec->name == "grasp[glass]" && rr.steps[1].spec->name == "place[glass]";
+        bool gapOk = rr.gaps.size() == 1 && rr.gaps[0].object == "glass" && rr.gaps[0].param == "mass"
+            && rr.gaps[0].suggestedSkill == "lift_weigh" && !rr.gaps[0].resolvedByPlan;
+        bool decoyClean = true;
+        for (const auto& g : rr.gaps) if (g.object == "decoy") decoyClean = false;
+        printf("[goalplan]   (1) regression [grasp,place]=%d ; gap(glass.mass -> lift_weigh)=%d ; decoy never demanded=%d  %s\n",
+               int(orderOk), int(gapOk), int(decoyClean), (orderOk && gapOk && decoyClean) ? "PASS" : "FAIL");
+        allOk = allOk && orderOk && gapOk && decoyClean;
+    }
+
+    // ---- (2) the SimOnly tag gates extraction: same plan on the block -> NO gaps ----
+    {
+        const std::vector<Predicate> goal = { { Predicate::Kind::At, false, 0, "block", "drop_pose", 0.1 } };
+        const RegressionResult rr = planBackward(lib, ws, goal, false);
+        const bool ok = rr.ok && rr.gaps.empty() && rr.steps.size() == 2;
+        printf("[goalplan]   (2) SimOnly block: plan ok, ZERO gaps (best guess accepted)=%d  %s\n",
+               int(ok), ok ? "PASS" : "FAIL");
+        allOk = allOk && ok;
+    }
+
+    // ---- (3) auto-insert: lift_weigh splices in BEFORE the needing step; envelope intersection ----
+    {
+        const std::vector<Predicate> goal = { { Predicate::Kind::At, false, 0, "glass", "drop_pose", 0.1 } };
+        const RegressionResult rr = planBackward(lib, ws, goal, /*autoInsert*/true);
+        const bool insOk = rr.ok && rr.steps.size() == 3
+            && rr.steps[0].spec->name == "lift_weigh"
+            && rr.steps[1].spec->name == "grasp[glass]" && rr.steps[2].spec->name == "place[glass]"
+            && rr.gaps.size() == 1 && rr.gaps[0].resolvedByPlan;
+        // envelope: liquid-container's 15 deg BEATS the primitive's 60 deg (intersection).
+        const bool envOk = insOk
+            && rr.steps[1].envelope.count("maxTiltDeg") && std::abs(rr.steps[1].envelope.at("maxTiltDeg") - 15.0) < 1e-9
+            && rr.steps[1].envelope.count("maxAccel");
+        // the block's plan keeps the loose 60 (no liquid trait).
+        const RegressionResult rb = planBackward(lib, ws, { { Predicate::Kind::At, false, 0, "block", "drop_pose", 0.1 } }, false);
+        const bool blockEnvOk = rb.ok && std::abs(rb.steps[0].envelope.at("maxTiltDeg") - 60.0) < 1e-9;
+        printf("[goalplan]   (3) auto-insert [lift_weigh,grasp,place]=%d ; glass envelope maxTilt=15 (traits beat 60)=%d ; block keeps 60=%d  %s\n",
+               int(insOk), int(envOk), int(blockEnvOk), (insOk && envOk && blockEnvOk) ? "PASS" : "FAIL");
+        allOk = allOk && insOk && envOk && blockEnvOk;
+    }
+
+    // ---- (4) the stamped envelope is a LIVE guard: a mid-run tilt past 15 deg FAILS the step ----
+    {
+        auto runOnce = [&](bool tiltIt) {
+            // a grasp whose body needs ~15 ticks to finish; the guard watches the glass's live pose.
+            SkillSpec slowGrasp = mkGrasp("glass");
+            auto tick = std::make_shared<int>(0);
+            slowGrasp.realize = [tick](Scene*, const ParamMap&) {
+                return [tick](double, Blackboard&) { return (++(*tick) >= 15) ? Status::Success : Status::Running; };
+            };
+            std::vector<SkillStep> steps = { { &slowGrasp, {}, "glass" } };
+            steps[0].envelope = composeEnvelope(slowGrasp, ws, "glass");
+            SkillRuntime rt;
+            const int id = rt.start("guarded", composeSequence(steps, &scene, ws));
+            Status s = Status::Running;
+            for (int k = 0; k < 60 && rt.anyRunning(); ++k) {
+                if (tiltIt && k == 5) {                          // the glass tips 40 deg mid-run
+                    pubPose(60, "glass", 0.6, std::cos(0.349), std::sin(0.349), 1.0 + k * 0.01);
+                    ws.updateFromCatalog(cat);
+                }
+                rt.tick(1.0 / 60.0);
+                s = rt.status(id);
+            }
+            return s;
+        };
+        const Status clean  = runOnce(false);
+        const Status tilted = runOnce(true);
+        // restore the upright glass for any later checks
+        pubPose(60, "glass", 0.6, 1.0, 0.0, 2.0); ws.updateFromCatalog(cat);
+        const bool ok = clean == Status::Success && tilted == Status::Failure;
+        printf("[goalplan]   (4) live guard: upright run Success=%d ; 40-deg tilt mid-run -> Failure=%d  %s\n",
+               int(clean == Status::Success), int(tilted == Status::Failure), ok ? "PASS" : "FAIL");
+        allOk = allOk && ok;
+    }
+
+    // ---- NEG-CTRL: an unestablishable goal fails bounded with a reason ----
+    {
+        const RegressionResult rr = planBackward(lib, ws, { { Predicate::Kind::Holding, false, 1, "unobtainium" } }, false);
+        const bool negOk = !rr.ok && rr.why.find("no skill establishes") != std::string::npos;
+        printf("[goalplan]   NEG-CTRL unestablishable goal -> bounded fail (\"%s\")=%d  %s\n",
+               rr.why.c_str(), int(negOk), negOk ? "REJECTS(non-vacuous)" : "VACUOUS!");
+        allOk = allOk && negOk;
+    }
+
+    printf("[goalplan] %s\n", allOk ? "ALL PASS (regression orders backward; R2S demands knowledge, SimOnly accepts guesses; excitation auto-splices; trait envelopes intersect + guard LIVE; relevance chain honest)"
                                     : "FAILURES PRESENT");
     std::fflush(stdout);
     return allOk;

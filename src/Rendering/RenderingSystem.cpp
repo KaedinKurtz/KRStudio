@@ -48,6 +48,8 @@
 #include "WorldState.hpp"          // krs::world light task-level world model (P2) + gate
 #include "SkillRuntime.hpp"        // krs::skill live closed-loop task executor (P3) + gate
 #include "TaskPlanner.hpp"         // krs::skill forward-search task planner (P5) + gate
+#include "GoalDoc.hpp"             // krs::goal .kgoal declarative goal document (G1) + gate
+#include "Hone.hpp"                // krs::hone population parameter honing (G4, sim-only) + gate
 #include "KPack.hpp"               // krs::kpack .knodepack cross-user subgraph sharing + gate
 #include "KLut.hpp"                // krs::klut .klut LUT / characterized-data standard object + gate
 #include "Rec.hpp"                 // krs::rec DataTable + CSV/JSON recording format + gate
@@ -1288,6 +1290,24 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::skill::runTaskPlanGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Goal Workspace G1: the .kgoal declarative goal document + builder API.
+    if (qEnvironmentVariableIntValue("KRS_KGOAL_SELFTEST") != 0) {
+        std::printf("\n================= KRS_KGOAL_SELFTEST =================\n");
+        const bool ok = krs::goal::runKGoalGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    // Goal Workspace G2/G3: goal regression + R2S knowledge gaps + trait envelopes + live guards.
+    if (qEnvironmentVariableIntValue("KRS_GOALPLAN_SELFTEST") != 0) {
+        std::printf("\n================= KRS_GOALPLAN_SELFTEST =================\n");
+        const bool ok = krs::skill::runGoalPlanGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    // Goal Workspace G4: population parameter honing (observability-weighted, dynamic-detection).
+    if (qEnvironmentVariableIntValue("KRS_HONE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_HONE_SELFTEST =================\n");
+        const bool ok = krs::hone::runHoneGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     // Subgraph sharing: bundle a subgraph + nested closure as a portable .knodepack + cross-user import.
     if (qEnvironmentVariableIntValue("KRS_KPACK_SELFTEST") != 0) {
         std::printf("\n================= KRS_KPACK_SELFTEST =================\n");
@@ -2217,6 +2237,9 @@ void RenderingSystem::initializeSharedResources()
             { "GATE SKILLRUNTIME (runtime pumps tasks per pass; WorldState-gated monitor times out honestly; retry converges when the world allows; cancel releases DOFs; capped-retry-fails neg-ctrl)", krs::skill::runSkillRuntimeGate() },
             { "GATE PICK-PLACE (typed pre/eff validate composition statically + guard it live; composed pick+place executes closed-loop to Success with correct facts; mis-order rejected; jammed-gripper neg-ctrl)", krs::skill::runPickPlaceGate() },
             { "GATE TASKPLAN (forward search: goal -> ordered executable plan by effect/precondition matching; REPLANS around a jammed gripper + executes the recovery; empty-plan/unreachable/empty-library neg-ctrls)", krs::skill::runTaskPlanGate() },
+            { "GATE KGOAL (.kgoal declarative goal: builder/JSON/panel one format; live satisfied/unmet; hash discipline; unknown-major + malformed-predicate refusals)", krs::goal::runKGoalGate() },
+            { "GATE GOALPLAN (goal regression; R2S demands knowledge + SimOnly accepts guesses; excitation auto-splices; trait envelopes intersect + guard LIVE mid-run; relevance-chain + unestablishable neg-ctrls)", krs::skill::runGoalPlanGate() },
+            { "GATE HONE (population honing: lift-weigh mass + tilt-settle CoM converge; blind excitation cannot fake confidence; sloshing water flagged Dynamic never mis-fit; deterministic)", krs::hone::runHoneGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");

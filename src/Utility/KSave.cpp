@@ -7,6 +7,7 @@
 #include "RobotModel.hpp"          // RobotRegistry / LiveRobot / instantiateFromGraph / transformRobot
 #include "CadImporter.hpp"         // importStepAssembly (STEP-sourced robots)
 #include "SceneBuilder.hpp"        // spawnPrimitive / spawnLightEmitter (loose-object + light rebuild)
+#include "WorldState.hpp"          // krs::world knowledge (learned params/traits/tags persist per object)
 #include "Scene.hpp"
 #include "components.hpp"
 
@@ -436,6 +437,27 @@ Report saveScene(Scene& scene, const std::string& kscenePath)
     if (auto* env = reg.ctx().find<EnvironmentSettings>()) sc["environment"] = environmentToJson(*env);
     if (auto* props = reg.ctx().find<SceneProperties>())  sc["sceneProps"]  = scenePropsToJson(*props);
 
+    // ---- v1.2: KNOWLEDGE -- what the robot has LEARNED about each object (params + traits + tag).
+    //      Keyed by object NAME; reloading the same scene means the glass honed yesterday needs no
+    //      re-derivation (the whole point of the R2S ledger). ----
+    if (auto* wsp = reg.ctx().find<krs::world::WorldState>()) {
+        QJsonObject knowledge;
+        for (const auto& [objName, k] : wsp->allKnowledge()) {
+            QJsonObject ko;
+            ko["tag"] = (k.tag == krs::world::LearnTag::R2S) ? QStringLiteral("r2s") : QStringLiteral("simonly");
+            QJsonArray traits; for (const auto& t : k.traits) traits.push_back(QString::fromStdString(t));
+            ko["traits"] = traits;
+            QJsonObject params;
+            for (const auto& [pn, p] : k.params) {
+                QJsonObject po; po["v"] = p.value; po["sigma"] = p.sigma; po["prov"] = int(p.prov);
+                params[QString::fromStdString(pn)] = po;
+            }
+            ko["params"] = params;
+            knowledge[QString::fromStdString(objName)] = ko;
+        }
+        if (!knowledge.isEmpty()) sc["knowledge"] = knowledge;
+    }
+
     // ---- v1.1: lights (each: transform + full LightComponent + emissive material) ----
     QJsonArray lights;
     for (auto e : reg.view<LightComponent>()) {
@@ -732,6 +754,28 @@ Report loadScene(Scene& scene, const std::string& kscenePath)
             store->byRobot[robotId] = std::move(g);
         }
         ++rep.robots;
+    }
+
+    // ---- v1.2: knowledge ledger (learned params/traits/tags per object name) ----
+    if (sc.contains("knowledge")) {
+        auto& wsr = krs::world::worldState(reg);
+        const QJsonObject knowledge = sc["knowledge"].toObject();
+        for (auto it = knowledge.begin(); it != knowledge.end(); ++it) {
+            const QJsonObject ko = it.value().toObject();
+            krs::world::ObjectKnowledge k;
+            k.tag = (ko["tag"].toString() == QLatin1String("r2s")) ? krs::world::LearnTag::R2S
+                                                                   : krs::world::LearnTag::SimOnly;
+            for (const QJsonValue& tv : ko["traits"].toArray()) k.traits.push_back(tv.toString().toStdString());
+            const QJsonObject params = ko["params"].toObject();
+            for (auto pit = params.begin(); pit != params.end(); ++pit) {
+                const QJsonObject po = pit.value().toObject();
+                krs::world::ObjParam p;
+                p.value = po["v"].toDouble(); p.sigma = po["sigma"].toDouble(1e9);
+                p.prov = krs::world::Prov(po["prov"].toInt(0));
+                k.params[pit.key().toStdString()] = p;
+            }
+            wsr.setKnowledge(it.key().toStdString(), k);
+        }
     }
 
     // ---- v1.1: environment + fog/background (ctx singletons) ----
@@ -1100,6 +1144,16 @@ bool runSceneObjectsGate()
     entt::entity ob = SceneBuilder::spawnPrimitive(s1, int(Primitive::IcoSphere), { 2, 1, 0.5f }, { 0.5f, 0.5f, 0.5f }, "Marble");
     { auto& m = r1.get_or_emplace<MaterialComponent>(ob); m.transmission = 0.85f; m.ior = 1.52f; m.roughness = 0.05f; m.clearcoat = 1.0f; }
 
+    // the KNOWLEDGE ledger: an R2S glass the robot honed (mass Measured) + traits -- must persist.
+    {
+        auto& wsr = krs::world::worldState(r1);
+        auto& k = wsr.know("Marble");
+        k.tag = krs::world::LearnTag::R2S;
+        k.traits = { "liquid-container", "fragile" };
+        k.params["mass"] = { 0.372, 0.02, krs::world::Prov::Measured };
+        k.params["com_r"] = { 0.043, 0.003, krs::world::Prov::Measured };
+    }
+
     // capture inputs for comparison
     const TransformComponent oaXfIn = r1.get<TransformComponent>(oa);
     const MaterialComponent  oaMatIn = r1.get<MaterialComponent>(oa);
@@ -1170,9 +1224,24 @@ bool runSceneObjectsGate()
         }
         objectsOk = found == 2 && cubeOk && sphereOk;
 
-        printf("[scenesave]   load: ok=%s env=%s sceneProps=%s lights(spot+rect params)=%s objects(xf+mat)=%s\n",
+        // KNOWLEDGE round-trip: the honed R2S glass reloads with its measured params + traits +
+        // tag intact -- the robot must NOT need to re-derive yesterday's glass.
+        bool knowOk = false;
+        {
+            const auto* k = krs::world::worldState(r2).knowledgeOf("Marble");
+            knowOk = k && k->tag == krs::world::LearnTag::R2S
+                && k->hasTrait("liquid-container") && k->hasTrait("fragile")
+                && k->params.count("mass") && k->params.count("com_r")
+                && std::abs(k->params.at("mass").value - 0.372) < 1e-12
+                && std::abs(k->params.at("mass").sigma - 0.02) < 1e-12
+                && k->params.at("mass").prov == krs::world::Prov::Measured
+                && krs::world::worldState(r2).needSatisfied("Marble", "mass", 0.05);
+        }
+        objectsOk = objectsOk && knowOk;
+
+        printf("[scenesave]   load: ok=%s env=%s sceneProps=%s lights(spot+rect params)=%s objects(xf+mat)=%s knowledge(r2s+traits+measured-params)=%s\n",
                lrp.ok ? "yes" : "NO", envOk ? "yes" : "NO", propsOk ? "yes" : "NO",
-               lightsOk ? "yes" : "NO", objectsOk ? "yes" : "NO");
+               lightsOk ? "yes" : "NO", objectsOk ? "yes" : "NO", knowOk ? "yes" : "NO");
         (void)laLcIn; (void)oaMatIn;
     }
 

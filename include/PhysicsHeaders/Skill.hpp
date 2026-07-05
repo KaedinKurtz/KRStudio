@@ -70,16 +70,41 @@ struct Predicate {
     std::string text() const;                        // human-readable ("holding(cup)")
 };
 
+// A parameter a skill's execution model REQUIRES (authored ONCE on the primitive type, never per
+// goal): the named object parameter must be known to at most maxSigma before confident execution.
+// SimOnly-tagged objects auto-satisfy (the best guess is accepted); R2S objects demand honing.
+struct ParamNeed { std::string param; double maxSigma = 0.05; };
+
 // A composable SKILL SPEC: the outer contract a task layer sequences. `realize` builds the BT leaf
 // for one invocation (hybrid: a SubgraphNode body, or a wrapper over the C++ motion tower).
 struct SkillSpec {
     std::string name;
     std::vector<Predicate> pre;   // must hold before the body runs
     std::vector<Predicate> eff;   // asserted onto the WorldState after the body succeeds
+    std::vector<ParamNeed> needs; // knowledge REQUIREMENTS (intrinsic to the primitive type)
+    std::map<std::string, double> intrinsicEnvelope;   // the primitive's own bounds ("maxAccel", ...)
+    // EPISTEMIC skill (an excitation routine): honing `honesParam` down to `honedSigma` is this
+    // skill's real effect. Empty honesParam = a normal physical skill.
+    std::string honesParam;
+    double      honedSigma = 0.0;
     std::function<krs::policy::Action::Fn(Scene*, const ParamMap&)> realize;
     double timeoutSec = 5.0;
 };
-struct SkillStep { const SkillSpec* spec = nullptr; ParamMap params; };
+struct SkillStep {
+    const SkillSpec* spec = nullptr;
+    ParamMap params;
+    std::string object;                        // the bound object (needs/traits resolve against it)
+    std::map<std::string, double> envelope;    // COMPOSED constraint envelope, stamped at plan time
+};
+
+// The trait ontology's constraint templates (best-guess seeds; user-extensible later): binding a
+// skill to an object INJECTS the object's traits' constraints into the step's envelope.
+//   liquid-container -> { maxTiltDeg 15, maxAccel 2 } ; fragile -> { maxForceN 10 }
+std::map<std::string, double> traitConstraints(const std::string& trait);
+// Envelope composition = INTERSECTION (per-key minimum) of the primitive's intrinsic envelope and
+// every constraint template of the bound object's traits. Most restrictive wins.
+std::map<std::string, double> composeEnvelope(const SkillSpec& spec, const krs::world::WorldState& ws,
+                                              const std::string& objectName);
 
 // STATIC validation: walk the steps, simulating pre/effects over a COPY of the world -- a step whose
 // precondition is not established (by the start state or a prior step's effects) fails loud with WHY.

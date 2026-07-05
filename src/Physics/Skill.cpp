@@ -22,6 +22,7 @@
 
 #include <cstdio>
 #include <cmath>
+#include <algorithm>
 #include <memory>
 
 namespace krs::skill {
@@ -98,6 +99,28 @@ std::string Predicate::text() const {
     return s + "?";
 }
 
+std::map<std::string, double> traitConstraints(const std::string& trait) {
+    if (trait == "liquid-container") return { { "maxTiltDeg", 15.0 }, { "maxAccel", 2.0 } };
+    if (trait == "fragile")          return { { "maxForceN", 10.0 } };
+    if (trait == "hot")              return { { "maxHoldSec", 5.0 } };
+    return {};
+}
+
+std::map<std::string, double> composeEnvelope(const SkillSpec& spec, const krs::world::WorldState& ws,
+                                              const std::string& objectName) {
+    std::map<std::string, double> env = spec.intrinsicEnvelope;
+    auto meld = [&env](const std::map<std::string, double>& add) {
+        for (const auto& [k, v] : add) {
+            auto it = env.find(k);
+            if (it == env.end()) env[k] = v;
+            else it->second = std::min(it->second, v);      // INTERSECTION: most restrictive wins
+        }
+    };
+    if (const auto* k = ws.knowledgeOf(objectName))
+        for (const auto& t : k->traits) meld(traitConstraints(t));
+    return env;
+}
+
 ComposeReport validateSequence(const std::vector<SkillStep>& steps, const krs::world::WorldState& start) {
     krs::world::WorldState sim = start;             // simulate effects over a copy
     for (size_t i = 0; i < steps.size(); ++i) {
@@ -125,9 +148,26 @@ krs::policy::NodePtr composeSequence(const std::vector<SkillStep>& steps, Scene*
             for (const auto& p : pre) if (!p.eval(ws)) return false;
             return true;
         }));
-        // 2. the skill body under its timeout.
-        seq->add(std::make_unique<Timeout>(
-            std::make_unique<Action>(sp->realize(scene, step.params)), sp->timeoutSec));
+        // 2. the skill body under its timeout, WRAPPED by the step's envelope guard: a stamped
+        //    constraint is a LIVE bound, not documentation. (v1 guard: maxTiltDeg -- the bound
+        //    object's up-axis tilt vs world up, from its live WorldState pose. More kinds ride the
+        //    same wrapper as their live observables come online.)
+        krs::policy::Action::Fn body = sp->realize(scene, step.params);
+        if (step.envelope.count("maxTiltDeg") && !step.object.empty()) {
+            const double maxTilt = step.envelope.at("maxTiltDeg");
+            const std::string obj = step.object;
+            krs::policy::Action::Fn inner = std::move(body);
+            body = [inner, &ws, obj, maxTilt](double dt, Blackboard& bb) -> Status {
+                if (const auto* o = ws.object(obj); o && o->hasPose) {
+                    const glm::vec3 up = o->rot * glm::vec3(0, 1, 0);
+                    const double c = std::clamp(double(up.y), -1.0, 1.0);
+                    const double tiltDeg = std::acos(c) * 180.0 / 3.14159265358979323846;
+                    if (tiltDeg > maxTilt) return Status::Failure;   // envelope violated -> honest abort
+                }
+                return inner(dt, bb);
+            };
+        }
+        seq->add(std::make_unique<Timeout>(std::make_unique<Action>(std::move(body)), sp->timeoutSec));
         // 3. effects onto the LIVE world on this step's success.
         auto eff = sp->eff;
         seq->add(std::make_unique<Action>([eff, &ws](double, Blackboard&) {
