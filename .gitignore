@@ -84,3 +84,6 @@ assets/**/coacd.bin
 *.db-wal
 
 render_gate_gradient.png
+
+crashrepro/
+crashdumps/
