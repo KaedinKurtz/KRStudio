@@ -50,6 +50,8 @@
 #include "Measure.hpp"             // krs::measure ribbon Measure-tool math + gate
 #include "GroupOps.hpp"            // krs::group macro objects + gate
 #include "EdgeSelect.hpp"          // krs::sel true B-Rep edge picking + gate
+#include "BRepVertex.hpp"          // BRepVertexComponent -- pick-buffer vertex instances
+#include "Snap.hpp"                // krs::snap -- Onshape candidate/frame inference + gate
 #include "Constraint.hpp"          // krs::constraint assembly-constraint suite + gate
 #include "TaskPlanner.hpp"         // krs::skill forward-search task planner (P5) + gate
 #include "GoalDoc.hpp"             // krs::goal .kgoal declarative goal document (G1) + gate
@@ -496,6 +498,12 @@ void RenderingSystem::initializeSharedResources()
         loadAndStoreShader("glass", (shaderDir + "glass_vert.glsl").toStdString(), (shaderDir + "glass_frag.glsl").toStdString());
         loadAndStoreShader("outline_edge", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "outline_edge_frag.glsl").toStdString());
         loadAndStoreShader("composite_simple", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "composite_simple_frag.glsl").toStdString());
+        // GPU ID picking (mate-selector P1): face ids via gl_PrimitiveID + triFace TBO;
+        // B-Rep edge/vertex ids as screen-space-expanded instanced quads.
+        loadAndStoreShader("pick_id_face", (shaderDir + "pick_id_face_vert.glsl").toStdString(), (shaderDir + "pick_id_face_frag.glsl").toStdString());
+        loadAndStoreShader("pick_id_prim", (shaderDir + "pick_id_prim_vert.glsl").toStdString(), (shaderDir + "pick_id_prim_frag.glsl").toStdString());
+        // Highlight composite (mate-selector P2): pixel-exact fill + ID-discontinuity contour.
+        loadAndStoreShader("highlight_id", (shaderDir + "post_process_vert.glsl").toStdString(), (shaderDir + "highlight_id_frag.glsl").toStdString());
     }
     catch (const std::runtime_error& e) {
         qFatal("[RenderingSystem] Shader init failed: %s", e.what());
@@ -1306,6 +1314,13 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_CONSTRAINT_SELFTEST") != 0) {
         std::printf("\n================= KRS_CONSTRAINT_SELFTEST =================\n");
         const bool ok = krs::constraint::runConstraintGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    // SnapEngine (mate-selector P3): the Onshape candidate/frame inference -- face/edge/vertex
+    // candidate sets exact, +Z out of material, deterministic X, flip/rotate corrections.
+    if (qEnvironmentVariableIntValue("KRS_SNAP_SELFTEST") != 0) {
+        std::printf("\n================= KRS_SNAP_SELFTEST =================\n");
+        const bool ok = krs::snap::runSnapGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
     // Process & Skills P4: composed pick+place with typed pre/effects, validated + executed closed-loop.
@@ -2281,6 +2296,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE GROUP (macro objects: centroid root; translate/rotate fan-out exact; nesting reaches leaves; ungroup promotes without motion; cycle-guarded)", krs::group::runGroupGate() },
             { "GATE EDGE (true B-Rep edge selection: circle centre/radius/axis exact under transform; proximity pick hit/miss; nearer edge wins; edgeKey stable/position-separated; neg-ctrls)", krs::sel::runEdgeSelectGate() },
             { "GATE CONSTRAINT (Fusion-style suite: every CType snapped + verified analytically; suppressed/robot/stale-key refusals with zero motion; key re-anchoring over scrambles; JSON round-trip; DOF table; chained revolute linkage)", krs::constraint::runConstraintGate() },
+            { "GATE SNAP (Onshape mate-connector inference: face centroid/vertices/midpoints/arc-centres + cylinder axis triplet exact; +Z out of material; deterministic X + flip/rotate-90 corrections; world-transform exactness; neg-ctrls)", krs::snap::runSnapGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
@@ -2501,6 +2517,22 @@ void RenderingSystem::renderAllViewports()
     for (auto* viewport : m_targets.keys())
         if (validTarget(viewport)) overlayPass(viewport);
     m_gl->glEndQuery(GL_TIME_ELAPSED);
+
+    // GPU ID PICKING (mate-selector P1/P2): resolve last frame's readback first (frees a PBO
+    // slot). The pick target renders for the QUERY viewport (with readback) and, while a
+    // hover/selection highlight is live, for every viewport (the highlight composite samples
+    // the id texture -- P2). One extra geometry-only pass; noise-level at CAD scene sizes.
+    resolvePendingPick();
+    {
+        auto* selSt = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>();
+        const bool wantHighlight = selSt && (selSt->hover.valid || !selSt->selected.empty());
+        for (auto pit = m_targets.begin(); pit != m_targets.end(); ++pit) {
+            const bool isQuery = m_pickQuery.pending && pit.key() == m_pickQuery.vp;
+            if ((isQuery || wantHighlight) && pit.value().w > 0)
+                renderPickBuffer(pit.key(), pit.value(), isQuery);
+        }
+        m_pickQuery.pending = false;
+    }
 
     // HIL: hand the finished frame to the virtual-camera ring (engine context
     // is current here — GL readback must happen on this thread, not the async
@@ -3354,6 +3386,278 @@ void RenderingSystem::updatePointCloud(const rs2::points& points, const rs2::vid
             pcPass->update(points, colorFrame, pose);
             return;
         }
+    }
+}
+
+// ============================================================================
+// GPU ID PICKING (mate-selector P1) -- see RenderingSystem.hpp for the design.
+// Runs on the ENGINE context inside renderAllViewports: render the hovered
+// viewport's pick target on demand, kick an async 32x32 PBO readback, resolve
+// last frame's rect CPU-side with vertex > edge > face distance bias.
+// ============================================================================
+namespace {
+constexpr int   kPickRect = 32;              // readback neighborhood (device px)
+constexpr float kPickBiasPx[3] = { 0.0f, 4.0f, 8.0f };   // face, edge, vertex advantage
+constexpr float kPickMaxDistPx = 14.0f;      // beyond this, a hit doesn't count
+}
+
+void RenderingSystem::setPickQuery(ViewportWidget* vp, int px, int py)
+{
+    m_pickQuery.vp = vp;
+    m_pickQuery.px = px;
+    m_pickQuery.py = py;
+    m_pickQuery.pending = true;              // coalesces: only the newest query renders
+}
+
+RenderingSystem::PickIdHit RenderingSystem::latestPick(ViewportWidget* vp) const
+{
+    return m_lastPick.value(vp, PickIdHit{});
+}
+
+void RenderingSystem::ensurePickTargets(TargetFBOs& t)
+{
+    if (t.pickFBO != 0 && t.pickW == t.w && t.pickH == t.h) return;
+    if (t.pickFBO == 0) {
+        m_gl->glGenFramebuffers(1, &t.pickFBO);
+        m_gl->glGenTextures(1, &t.pickIdTexture);
+        m_gl->glGenTextures(1, &t.pickDepthTexture);
+    }
+    t.pickW = t.w; t.pickH = t.h;
+    m_gl->glBindTexture(GL_TEXTURE_2D, t.pickIdTexture);
+    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32UI, t.pickW, t.pickH, 0,
+                       GL_RG_INTEGER, GL_UNSIGNED_INT, nullptr);
+    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);   // integer: NEAREST only
+    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    m_gl->glBindTexture(GL_TEXTURE_2D, t.pickDepthTexture);
+    m_gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, t.pickW, t.pickH, 0,
+                       GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    m_gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, t.pickFBO);
+    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t.pickIdTexture, 0);
+    m_gl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, t.pickDepthTexture, 0);
+    if (m_gl->glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        qWarning() << "[Pick] pick FBO incomplete!";
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+const RenderingSystem::PickTriFaceTbo&
+RenderingSystem::getOrCreateTriFaceTbo(entt::entity e, const RenderableMeshComponent& mesh)
+{
+    const std::uint32_t key = std::uint32_t(e);
+    auto it = m_pickTboCache.find(key);
+    const int tris = int(mesh.indices.size() / 3);
+    if (it != m_pickTboCache.end() && it->second.tris == tris) return it->second;
+
+    PickTriFaceTbo tbo;
+    if (it != m_pickTboCache.end()) tbo = it->second;                 // resize in place
+    if (tbo.buffer == 0) { m_gl->glGenBuffers(1, &tbo.buffer); m_gl->glGenTextures(1, &tbo.tex); }
+    // triangle index -> faceId + 1 (0 = no B-Rep face map; the body still picks).
+    std::vector<std::uint32_t> data(std::size_t(std::max(tris, 1)), 0u);
+    const std::size_t nMap = std::min(mesh.triFace.size(), std::size_t(tris));
+    for (std::size_t tIdx = 0; tIdx < nMap; ++tIdx)
+        data[tIdx] = (mesh.triFace[tIdx] >= 0) ? std::uint32_t(mesh.triFace[tIdx]) + 1u : 0u;
+    m_gl->glBindBuffer(GL_TEXTURE_BUFFER, tbo.buffer);
+    m_gl->glBufferData(GL_TEXTURE_BUFFER, GLsizeiptr(data.size() * sizeof(std::uint32_t)),
+                       data.data(), GL_STATIC_DRAW);
+    m_gl->glBindTexture(GL_TEXTURE_BUFFER, tbo.tex);
+    m_gl->glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, tbo.buffer);
+    m_gl->glBindBuffer(GL_TEXTURE_BUFFER, 0);
+    tbo.tris = tris;
+    m_pickTboCache[key] = tbo;
+    return m_pickTboCache[key];
+}
+
+const RenderingSystem::PickPrimBuffers& RenderingSystem::getOrCreatePickPrims(entt::entity e)
+{
+    const std::uint32_t key = std::uint32_t(e);
+    auto it = m_pickPrimCache.find(key);
+    if (it != m_pickPrimCache.end()) return it->second;
+
+    // instance layout: vec3 p0, vec3 p1, uint id  (body-LOCAL points; PVM applied in the shader)
+    struct Inst { glm::vec3 p0, p1; std::uint32_t id; };
+    std::vector<Inst> inst;
+    auto& reg = m_scene->getRegistry();
+    if (const auto* ec = reg.try_get<BRepEdgeComponent>(e))
+        for (std::size_t ei = 0; ei < ec->edges.size(); ++ei) {
+            const auto& poly = ec->edges[ei].polyline;
+            for (std::size_t s = 0; s + 1 < poly.size(); ++s)
+                inst.push_back({ poly[s], poly[s + 1], std::uint32_t(ei) });
+        }
+    const int edgeInstances = int(inst.size());
+    if (const auto* vc = reg.try_get<BRepVertexComponent>(e))
+        for (std::size_t vi = 0; vi < vc->verts.size(); ++vi)
+            inst.push_back({ vc->verts[vi].pos, vc->verts[vi].pos, std::uint32_t(vi) });
+
+    PickPrimBuffers b;
+    b.edgeInstances = edgeInstances;
+    b.vertInstances = int(inst.size()) - edgeInstances;
+    if (!inst.empty()) {
+        m_gl->glGenVertexArrays(1, &b.vao);
+        m_gl->glGenBuffers(1, &b.vbo);
+        m_gl->glBindVertexArray(b.vao);
+        m_gl->glBindBuffer(GL_ARRAY_BUFFER, b.vbo);
+        m_gl->glBufferData(GL_ARRAY_BUFFER, GLsizeiptr(inst.size() * sizeof(Inst)), inst.data(), GL_STATIC_DRAW);
+        m_gl->glEnableVertexAttribArray(0);
+        m_gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Inst), (void*)offsetof(Inst, p0));
+        m_gl->glVertexAttribDivisor(0, 1);
+        m_gl->glEnableVertexAttribArray(1);
+        m_gl->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Inst), (void*)offsetof(Inst, p1));
+        m_gl->glVertexAttribDivisor(1, 1);
+        m_gl->glEnableVertexAttribArray(2);
+        m_gl->glVertexAttribIPointer(2, 1, GL_UNSIGNED_INT, sizeof(Inst), (void*)offsetof(Inst, id));
+        m_gl->glVertexAttribDivisor(2, 1);
+        m_gl->glBindVertexArray(0);
+    }
+    m_pickPrimCache[key] = b;
+    return m_pickPrimCache[key];
+}
+
+void RenderingSystem::renderPickBuffer(ViewportWidget* vp, TargetFBOs& t, bool kickReadback)
+{
+    Shader* faceShader = getShader("pick_id_face");
+    Shader* primShader = getShader("pick_id_prim");
+    if (!faceShader || !primShader || t.w <= 0 || t.h <= 0) return;
+    ensurePickTargets(t);
+
+    auto& reg = m_scene->getRegistry();
+    const entt::entity camE = vp->getCameraEntity();
+    if (!reg.valid(camE) || !reg.all_of<CameraComponent>(camE)) return;
+    Camera& cam = reg.get<CameraComponent>(camE).camera;
+    const float aspect = float(t.w) / float(std::max(1, t.h));
+    const glm::mat4 view = cam.getViewMatrix();
+    const glm::mat4 proj = cam.getProjectionMatrix(aspect);
+
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, t.pickFBO);
+    m_gl->glViewport(0, 0, t.pickW, t.pickH);
+    m_gl->glDisable(GL_BLEND);
+    m_gl->glEnable(GL_DEPTH_TEST);
+    m_gl->glDepthFunc(GL_LEQUAL);
+    m_gl->glDepthMask(GL_TRUE);
+    const GLuint zero[2] = { 0u, 0u };
+    m_gl->glClearBufferuiv(GL_COLOR, 0, zero);
+    const GLfloat one = 1.0f;
+    m_gl->glClearBufferfv(GL_DEPTH, 0, &one);
+
+    // ---- faces: every pickable renderable (mirror the opaque exclusions + glass ghosts) ----
+    faceShader->use(m_gl);
+    faceShader->setMat4(m_gl, "view", view);
+    faceShader->setMat4(m_gl, "projection", proj);
+    faceShader->setInt(m_gl, "uTriFace", 0);
+    for (auto e : reg.view<TransformComponent, RenderableMeshComponent>(
+             entt::exclude<GizmoHandleComponent, JointAxisComponent, HiddenComponent, GlassComponent>)) {
+        const auto& mesh = reg.get<RenderableMeshComponent>(e);
+        if (mesh.indices.size() < 3 || mesh.vertices.empty()) continue;
+        faceShader->setMat4(m_gl, "model", reg.get<TransformComponent>(e).getTransform());
+        faceShader->setUInt(m_gl, "uEntityId", std::uint32_t(e) + 1u);   // +1: 0 = empty pixel
+        const auto& tbo = getOrCreateTriFaceTbo(e, mesh);
+        faceShader->setInt(m_gl, "uTriCount", tbo.tris);
+        m_gl->glActiveTexture(GL_TEXTURE0);
+        m_gl->glBindTexture(GL_TEXTURE_BUFFER, tbo.tex);
+        const auto& buf = getOrCreateMeshBuffers(m_gl, QOpenGLContext::currentContext(), e);
+        m_gl->glBindVertexArray(buf.VAO);
+        m_gl->glDrawElements(GL_TRIANGLES, GLsizei(mesh.indices.size()), GL_UNSIGNED_INT, nullptr);
+    }
+
+    // ---- B-Rep edges + vertices: fat instanced quads, depth-biased over their faces ----
+    primShader->use(m_gl);
+    primShader->setVec2(m_gl, "uViewportPx", glm::vec2(float(t.pickW), float(t.pickH)));
+    primShader->setFloat(m_gl, "uDepthBiasNdc", 0.0015f);
+    m_gl->glDepthMask(GL_FALSE);                       // test against faces, don't fight each other
+    for (auto e : reg.view<TransformComponent, RenderableMeshComponent>(
+             entt::exclude<GizmoHandleComponent, JointAxisComponent, HiddenComponent, GlassComponent>)) {
+        if (!reg.any_of<BRepEdgeComponent, BRepVertexComponent>(e)) continue;
+        const auto& prims = getOrCreatePickPrims(e);
+        if (prims.vao == 0) continue;
+        const glm::mat4 pvm = proj * view * reg.get<TransformComponent>(e).getTransform();
+        primShader->setMat4(m_gl, "uViewProj", pvm);
+        primShader->setUInt(m_gl, "uEntityId", std::uint32_t(e) + 1u);
+        m_gl->glBindVertexArray(prims.vao);
+        if (prims.edgeInstances > 0) {
+            primShader->setUInt(m_gl, "uTypeBits", 1u);
+            primShader->setFloat(m_gl, "uHalfWidthPx", 3.5f);
+            m_gl->glDrawArraysInstancedBaseInstance(GL_TRIANGLE_STRIP, 0, 4, prims.edgeInstances, 0);
+        }
+        if (prims.vertInstances > 0) {
+            primShader->setUInt(m_gl, "uTypeBits", 2u);
+            primShader->setFloat(m_gl, "uHalfWidthPx", 4.5f);
+            m_gl->glDrawArraysInstancedBaseInstance(GL_TRIANGLE_STRIP, 0, 4,
+                                                    prims.vertInstances, GLuint(prims.edgeInstances));
+        }
+    }
+    m_gl->glDepthMask(GL_TRUE);
+    m_gl->glBindVertexArray(0);
+
+    // ---- kick the async readback of the cursor neighborhood (query renders only) ----
+    if (!kickReadback) { m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0); return; }
+    PickReadback& rb = m_pickRb[m_pickRbWrite];
+    if (rb.inFlight) {                                  // slot still pending: force-complete it first
+        if (rb.fence) { m_gl->glClientWaitSync(rb.fence, GL_SYNC_FLUSH_COMMANDS_BIT, 5'000'000); }
+        resolvePendingPick();
+    }
+    if (m_pickPBO[m_pickRbWrite] == 0) m_gl->glGenBuffers(1, &m_pickPBO[m_pickRbWrite]);
+    // logical widget coords -> pick-texture coords (dpr + render scale), then GL bottom-left
+    const float toTex = float(vp->devicePixelRatioF()) * m_renderScale;
+    const int cx = int(m_pickQuery.px * toTex);
+    const int cy = t.pickH - 1 - int(m_pickQuery.py * toTex);
+    const int x0 = std::clamp(cx - kPickRect / 2, 0, std::max(0, t.pickW - 1));
+    const int y0 = std::clamp(cy - kPickRect / 2, 0, std::max(0, t.pickH - 1));
+    const int w = std::min(kPickRect, t.pickW - x0);
+    const int h = std::min(kPickRect, t.pickH - y0);
+    if (w <= 0 || h <= 0) { m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0); return; }
+    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pickPBO[m_pickRbWrite]);
+    m_gl->glBufferData(GL_PIXEL_PACK_BUFFER, GLsizeiptr(w) * h * 8, nullptr, GL_STREAM_READ);
+    m_gl->glReadBuffer(GL_COLOR_ATTACHMENT0);
+    m_gl->glReadPixels(x0, y0, w, h, GL_RG_INTEGER, GL_UNSIGNED_INT, nullptr);
+    rb = PickReadback{ vp, cx, cy, x0, y0, w, h,
+                       m_gl->glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0), true };
+    m_pickRbWrite = 1 - m_pickRbWrite;
+    m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    m_gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void RenderingSystem::resolvePendingPick()
+{
+    for (int i = 0; i < 2; ++i) {
+        PickReadback& rb = m_pickRb[i];
+        if (!rb.inFlight || !rb.fence) continue;
+        const GLenum st = m_gl->glClientWaitSync(rb.fence, 0, 0);
+        if (st != GL_ALREADY_SIGNALED && st != GL_CONDITION_SATISFIED) continue;   // next frame
+
+        m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pickPBO[i]);
+        const auto* px = static_cast<const std::uint32_t*>(
+            m_gl->glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, GLsizeiptr(rb.w) * rb.h * 8, GL_MAP_READ_BIT));
+        PickIdHit best;
+        float bestEff = 1e9f;
+        if (px) {
+            for (int yy = 0; yy < rb.h; ++yy)
+                for (int xx = 0; xx < rb.w; ++xx) {
+                    const std::uint32_t idR = px[(std::size_t(yy) * rb.w + xx) * 2 + 0];
+                    const std::uint32_t idG = px[(std::size_t(yy) * rb.w + xx) * 2 + 1];
+                    if (idR == 0u) continue;                                   // empty pixel
+                    const int kind = int(idG >> 30);                           // 0 face, 1 edge, 2 vertex
+                    const float dx = float(rb.x0 + xx - rb.cx);
+                    const float dy = float(rb.y0 + yy - rb.cy);
+                    const float dist = std::sqrt(dx * dx + dy * dy);
+                    if (dist > kPickMaxDistPx && kind != 0) continue;          // fat prims: bounded reach
+                    const float eff = dist - kPickBiasPx[std::min(kind, 2)];   // vertex > edge > face
+                    if (eff < bestEff || (std::abs(eff - bestEff) < 1e-3f && kind > best.kind)) {
+                        bestEff = eff;
+                        best.valid = true;
+                        best.entity = entt::entity(idR - 1u);
+                        best.kind = kind;
+                        best.id = int(idG & 0x3FFFFFFFu) - 1;   // faceId/edgeId/vertexId (-1 face = body only)
+                        best.screenDist = dist;
+                    }
+                }
+            m_gl->glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+        }
+        m_gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        m_gl->glDeleteSync(rb.fence);
+        rb.fence = nullptr;
+        rb.inFlight = false;
+        best.fromGpu = true;                             // a MISS is also an answer
+        if (rb.vp) m_lastPick[rb.vp] = best;
     }
 }
 

@@ -49,13 +49,88 @@ void SelectionHighlightPass::initialize(RenderingSystem&, QOpenGLFunctions_4_3_C
     gl->glEnableVertexAttribArray(0);
     gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), nullptr);
     gl->glBindVertexArray(0);
+
+    // P2 composite quad (pos3 + uv2, the post_process_vert layout)
+    const float quad[] = {
+        -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+         1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+         1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+    };
+    gl->glGenVertexArrays(1, &m_quadVao);
+    gl->glGenBuffers(1, &m_quadVbo);
+    gl->glBindVertexArray(m_quadVao);
+    gl->glBindBuffer(GL_ARRAY_BUFFER, m_quadVbo);
+    gl->glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+    gl->glEnableVertexAttribArray(0);
+    gl->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)nullptr);
+    gl->glEnableVertexAttribArray(1);
+    gl->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    gl->glBindVertexArray(0);
 }
 
 void SelectionHighlightPass::onContextDestroyed(QOpenGLContext*, QOpenGLFunctions_4_3_Core* gl)
 {
     if (m_vbo) { gl->glDeleteBuffers(1, &m_vbo); m_vbo = 0; }
     if (m_vao) { gl->glDeleteVertexArrays(1, &m_vao); m_vao = 0; }
+    if (m_quadVbo) { gl->glDeleteBuffers(1, &m_quadVbo); m_quadVbo = 0; }
+    if (m_quadVao) { gl->glDeleteVertexArrays(1, &m_quadVao); m_quadVao = 0; }
     m_vboCapacity = 0;
+}
+
+void SelectionHighlightPass::drawIdHighlightComposite(const RenderFrameContext& ctx)
+{
+    // Requires the pick-ID target (renderAllViewports keeps it fresh whenever a hover or
+    // selection is live) and the composite shader; silently skips otherwise.
+    if (ctx.targetFBOs.pickIdTexture == 0 || m_quadVao == 0) return;
+    auto* st = ctx.registry.ctx().find<krs::sel::SelectionState>();
+    if (!st) return;
+    Shader* hs = ctx.renderer.getShader("highlight_id");
+    if (!hs) return;
+    auto* gl = ctx.gl;
+
+    // (entityId+1, typeBits|featureId+1) -- the EXACT encoding the pick pass writes.
+    auto pair = [](const krs::sel::Selection& s) -> glm::uvec2 {
+        if (!s.valid) return { 0u, 0u };
+        std::uint32_t type = 0u, feat = 0u;
+        if (s.type == krs::sel::FeatureType::EdgeCircle || s.type == krs::sel::FeatureType::EdgeLine) {
+            if (s.edgeId < 0) return { 0u, 0u };
+            type = 1u; feat = std::uint32_t(s.edgeId) + 1u;
+        } else if (s.type == krs::sel::FeatureType::Vertex) {
+            if (s.vertexId < 0) return { 0u, 0u };            // tessellation-vertex fallback: rings only
+            type = 2u; feat = std::uint32_t(s.vertexId) + 1u;
+        } else {
+            if (s.faceId < 0) return { 0u, 0u };
+            feat = std::uint32_t(s.faceId) + 1u;
+        }
+        return { std::uint32_t(s.entity) + 1u, (type << 30) | feat };
+    };
+
+    hs->use(gl);
+    gl->glActiveTexture(GL_TEXTURE0);
+    gl->glBindTexture(GL_TEXTURE_2D, ctx.targetFBOs.pickIdTexture);
+    hs->setInt(gl, "uIdTex", 0);
+    hs->setUVec2(gl, "uHover", pair(st->hover));
+    int n = 0;
+    for (const auto& s : st->selected) {
+        if (n >= 8) break;
+        const glm::uvec2 p = pair(s);
+        if (p.x == 0u) continue;
+        hs->setUVec2(gl, "uSel[" + std::to_string(n) + "]", p);
+        ++n;
+    }
+    hs->setInt(gl, "uSelCount", n);
+    hs->setVec4(gl, "uHoverColor", glm::vec4(kHoverColor, 0.22f));
+    hs->setVec4(gl, "uSelColor",  glm::vec4(kSelectColor, 0.26f));
+    hs->setVec2(gl, "uTexSize", glm::vec2(float(ctx.targetFBOs.pickW), float(ctx.targetFBOs.pickH)));
+    hs->setFloat(gl, "uInvExposure", 1.0f / ctx.renderer.exposureMultiplier());
+
+    gl->glEnable(GL_BLEND);
+    gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl->glBindVertexArray(m_quadVao);
+    gl->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    gl->glBindVertexArray(0);
+    gl->glDisable(GL_BLEND);
 }
 
 void SelectionHighlightPass::drawLines(const RenderFrameContext& ctx,
@@ -118,6 +193,11 @@ void SelectionHighlightPass::execute(const RenderFrameContext& context)
     // off so the overlay never occludes later passes.
     gl->glDisable(GL_DEPTH_TEST);
     gl->glDepthMask(GL_FALSE);
+
+    // P2: the CAD-grade highlight -- pixel-exact face FILL + ID-discontinuity CONTOUR from the
+    // pick buffer (edges/vertices glow through their fat pick footprints). The analytic rings
+    // below stay for the axis arrows and the ordered pick colors.
+    drawIdHighlightComposite(context);
 
     // SELECTED features (committed): PER-FEATURE color so the operator sees the mate pair --
     // first pick GREEN (parent/anchor), second pick BLUE (child that snaps), 3rd+ orange. Each is a

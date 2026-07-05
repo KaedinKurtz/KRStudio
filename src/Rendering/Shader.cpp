@@ -103,6 +103,16 @@ void Shader::setInt(QOpenGLFunctions_4_3_Core* gl, const std::string& name, int 
     if (gl) gl->glUniform1i(gl->glGetUniformLocation(ID, name.c_str()), value);
 }
 
+void Shader::setUInt(QOpenGLFunctions_4_3_Core* gl, const std::string& name, unsigned int value) const
+{
+    if (gl) gl->glUniform1ui(gl->glGetUniformLocation(ID, name.c_str()), value);
+}
+
+void Shader::setUVec2(QOpenGLFunctions_4_3_Core* gl, const std::string& name, const glm::uvec2& value) const
+{
+    if (gl) gl->glUniform2ui(gl->glGetUniformLocation(ID, name.c_str()), value.x, value.y);
+}
+
 void Shader::setFloat(QOpenGLFunctions_4_3_Core* gl, const std::string& name, float value) const
 {
     if (gl) gl->glUniform1f(gl->glGetUniformLocation(ID, name.c_str()), value);

@@ -56,6 +56,8 @@
 #include <gp_Circ.hxx>
 #include <TopTools_ListIteratorOfListOfShape.hxx>
 #include "BRepEdge.hpp"      // GATE EDGE: BRepEdge / BRepEdgeComponent / computeEdgeKey
+#include "BRepVertex.hpp"    // GATE SNAP-V: BRepVertex / BRepVertexComponent / computeVertexKey
+#include <TopoDS_Vertex.hxx> // GATE SNAP-V: true corner extraction
 #include "RayPick.hpp"       // GATE F: ray-triangle pick (krs::pick) for the selector test
 #include "SelectionService.hpp"  // GATE SUBFEAT: sub-feature selection backend (krs::sel)
 #include "JointTooling.hpp"  // GATE J: derive a revolute frame from two bore features (krs::joint)
@@ -253,7 +255,26 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
                 case GeomAbs_Plane: { bf.type = 0; const gp_Pln pl = ad.Plane();
                     const gp_Dir n = pl.Axis().Direction(); const gp_Pnt o = pl.Location();
                     bf.normal = { float(n.X()), float(n.Y()), float(n.Z()) };
-                    bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) }; break; }
+                    bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
+                    // OUTWARD-NORMAL GUARANTEE (mate-selector P3): gp_Pln::Axis() is the GEOMETRIC
+                    // surface normal of the parametrization, NOT the material side -- OCCT marks an
+                    // inward-material face TopAbs_REVERSED instead of flipping its surface. As stored
+                    // before this fix, every REVERSED planar face carried an INWARD normal. Flip by
+                    // orientation (XOR'd with the indirect-axis case, where the parametric normal
+                    // dP/du x dP/dv = -Axis().Direction()) so BRepFace.normal ALWAYS points OUT of the
+                    // solid -- the SnapEngine's +Z-out-of-material frame rule depends on this.
+                    // faceKey is UNAFFECTED: computeFaceKey hemisphere-folds the normal and hashes the
+                    // plane's signed distance against the FOLDED direction (components.hpp), so a sign
+                    // flip cannot change the key. Cylinder/cone axisDir is an AXIS, not a surface
+                    // normal (the outward direction there is RADIAL); its sign carries no material
+                    // meaning and is left as OCCT gives it -- bore-vs-boss is what AttachmentFrame
+                    // .isHole (Orientation()==REVERSED, below) already encodes.
+                    {
+                        bool inward = (face.Orientation() == TopAbs_REVERSED);
+                        if (!pl.Direct()) inward = !inward;
+                        if (inward) bf.normal = -bf.normal;
+                    }
+                    break; }
                 case GeomAbs_Cylinder: { bf.type = 1; const gp_Cylinder cy = ad.Cylinder();
                     const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
                     bf.axisPos = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
@@ -340,11 +361,16 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
     // localFromWorld so a rotated placement can't fork the key space. faceA/faceB index the SAME
     // BRepFace array built above (tessellated faces, in explorer order -- faceSpans is that order).
     std::vector<BRepEdge> brepEdges;
+    std::vector<BRepVertex> brepVerts;                      // GATE SNAP-V: true B-Rep corner points
     {
         TopTools_IndexedMapOfShape faceIdx;                 // BRepFaceComponent's index space
         for (const auto& fs : faceSpans) faceIdx.Add(fs.face);
         TopTools_IndexedDataMapOfShapeListOfShape e2f;      // unique edges -> their bounding faces
         TopExp::MapShapesAndAncestors(solid, TopAbs_EDGE, TopAbs_FACE, e2f);
+        // GATE SNAP-V: OCCT edge-map index (1-based ei) -> BRepEdgeComponent index, recorded as the
+        // loop below accepts edges, so vertex adjacency can point into the SAME index space even
+        // when degenerate/malformed edges were skipped (-1 = edge not stored).
+        std::vector<int> edgeIdxOfOcct(std::size_t(e2f.Extent()) + 1, -1);
         for (int ei = 1; ei <= e2f.Extent(); ++ei) {
             const TopoDS_Edge edge = TopoDS::Edge(e2f.FindKey(ei));
             if (BRep_Tool::Degenerated(edge)) continue;     // parametric artifact (sphere pole): no 3D curve
@@ -418,8 +444,62 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
                 } else {
                     be.edgeKey = computeEdgeKey(be);        // identity placement: local == world
                 }
+                edgeIdxOfOcct[std::size_t(ei)] = int(brepEdges.size());   // GATE SNAP-V adjacency map
                 brepEdges.push_back(std::move(be));
             } catch (...) { /* malformed edge (null/degenerate curve): skip, never crash the import */ }
+        }
+
+        // --- GATE SNAP-V: TRUE B-Rep VERTICES (corner points + adjacency, BRepVertex.hpp) ---
+        // SAME frame conventions as the faces/edges above: positions live in THIS solid's frame
+        // (world-baked for assembly parts), scaled to metres by s; vertexKey -- like faceKey/edgeKey
+        // (see the KEY SPACE comment above) -- is minted from the PART-LOCAL position via
+        // localFromWorld so a rotated placement can't fork the key space. Dedupe comes free from
+        // MapShapesAndAncestors (each corner appears ONCE, with its ancestor edges/faces), and the
+        // adjacency indices land in the SAME index spaces BRepEdgeComponent (via edgeIdxOfOcct) and
+        // BRepFaceComponent (via faceIdx / faceSpans order) use. The SnapEngine derives a hovered
+        // corner's frame from these adjacent faces (Onshape vertex-through-face rule).
+        {
+            TopTools_IndexedDataMapOfShapeListOfShape v2e, v2f;
+            TopExp::MapShapesAndAncestors(solid, TopAbs_VERTEX, TopAbs_EDGE, v2e);
+            TopExp::MapShapesAndAncestors(solid, TopAbs_VERTEX, TopAbs_FACE, v2f);
+            brepVerts.reserve(std::size_t(v2e.Extent()));
+            for (int vi = 1; vi <= v2e.Extent(); ++vi) {
+                try {
+                    const TopoDS_Vertex vtx = TopoDS::Vertex(v2e.FindKey(vi));
+                    const gp_Pnt p = BRep_Tool::Pnt(vtx);
+                    BRepVertex bv;
+                    bv.pos = { float(p.X() * s), float(p.Y() * s), float(p.Z() * s) };
+                    // ancestor EDGES -> BRepEdgeComponent indices (skipped edges resolve to -1 and
+                    // are dropped; a seam lists the same edge twice, so dedupe)
+                    for (TopTools_ListIteratorOfListOfShape it(v2e.FindFromIndex(vi)); it.More(); it.Next()) {
+                        const int ei = e2f.FindIndex(it.Value());
+                        const int bi = (ei > 0 && ei < int(edgeIdxOfOcct.size())) ? edgeIdxOfOcct[std::size_t(ei)] : -1;
+                        if (bi >= 0 && std::find(bv.edges.begin(), bv.edges.end(), bi) == bv.edges.end())
+                            bv.edges.push_back(bi);
+                    }
+                    // ancestor FACES -> BRepFaceComponent indices (tessellated faces only -- a face
+                    // skipped at tessellation has no index, honestly absent from the adjacency)
+                    const int vfi = v2f.FindIndex(vtx);
+                    if (vfi > 0) {
+                        for (TopTools_ListIteratorOfListOfShape it(v2f.FindFromIndex(vfi)); it.More(); it.Next()) {
+                            const int fi = faceIdx.FindIndex(it.Value());
+                            if (fi > 0 && std::find(bv.faces.begin(), bv.faces.end(), fi - 1) == bv.faces.end())
+                                bv.faces.push_back(fi - 1);
+                        }
+                    }
+                    // vertexKey: PART-LOCAL position, exactly the faceKey/edgeKey key-space rule.
+                    if (localFromWorld) {
+                        const Eigen::Matrix4d& Mw = *localFromWorld;
+                        const Eigen::Vector4d r = Mw * Eigen::Vector4d(bv.pos.x, bv.pos.y, bv.pos.z, 1.0);
+                        BRepVertex lv = bv;
+                        lv.pos = { float(r.x()), float(r.y()), float(r.z()) };
+                        bv.vertexKey = computeVertexKey(lv);
+                    } else {
+                        bv.vertexKey = computeVertexKey(bv);   // identity placement: local == world
+                    }
+                    brepVerts.push_back(std::move(bv));
+                } catch (...) { /* malformed vertex: skip, never crash the import */ }
+            }
         }
     }
 
@@ -447,6 +527,7 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
     mesh.sourcePath = "occt_step";
     if (!brepFaces.empty()) reg.emplace<BRepFaceComponent>(e, std::move(brepFaces)); // GATE F
     if (!brepEdges.empty()) reg.emplace<BRepEdgeComponent>(e, std::move(brepEdges)); // GATE EDGE
+    if (!brepVerts.empty()) reg.emplace<BRepVertexComponent>(e, std::move(brepVerts)); // GATE SNAP-V
     reg.emplace<TransformComponent>(e, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
     reg.emplace<TagComponent>(e, tag);
     // Collide with the REAL shape, like every other spawned mesh (SceneBuilder pattern): CAD bodies
@@ -554,7 +635,17 @@ std::vector<BRepFace> analyticFacesScaled(const TopoDS_Shape& shape, double s) {
             case GeomAbs_Plane: { bf.type = 0; const gp_Pln pl = ad.Plane();
                 const gp_Dir n = pl.Axis().Direction(); const gp_Pnt o = pl.Location();
                 bf.normal = { float(n.X()), float(n.Y()), float(n.Z()) };
-                bf.axisPos = { float(o.X()*s), float(o.Y()*s), float(o.Z()*s) }; break; }
+                bf.axisPos = { float(o.X()*s), float(o.Y()*s), float(o.Z()*s) };
+                // OUTWARD-NORMAL GUARANTEE: same orientation fix as meshShapeIntoEntity (see the
+                // comment there) -- REVERSED planar faces stored an INWARD geometric normal. Both
+                // extraction paths flip identically so the ParsedPart twin agrees with the picked
+                // face. faceKey unaffected (hemisphere fold).
+                {
+                    bool inward = (face.Orientation() == TopAbs_REVERSED);
+                    if (!pl.Direct()) inward = !inward;
+                    if (inward) bf.normal = -bf.normal;
+                }
+                break; }
             case GeomAbs_Cylinder: { bf.type = 1; const gp_Cylinder cy = ad.Cylinder();
                 const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
                 bf.axisPos = { float(o.X()*s), float(o.Y()*s), float(o.Z()*s) };

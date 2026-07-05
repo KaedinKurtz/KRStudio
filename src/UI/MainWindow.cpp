@@ -14,6 +14,8 @@
 #include "MeasureHud.hpp"         // measure-mode viewport readout (theme colors set in applyTheme)
 #include "GroupOps.hpp"           // krs::group -- macro objects (nesting, delta fan-out, leaf applies)
 #include "ConstraintsPanel.hpp"   // the Fusion-style constraint authoring dock
+#include "BRepEdge.hpp"           // synthetic edge rig for the KRS_PICK_SELFTEST gate
+#include "BRepVertex.hpp"         // synthetic vertex rig for the KRS_PICK_SELFTEST gate
 #include <QStandardPaths>
 #include <QCloseEvent>
 #include <QFile>
@@ -2030,6 +2032,128 @@ MainWindow::MainWindow(QWidget* parent)
             qInfo() << "[VPREVIVE]" << (ok ? "RENDERS" : "BLANK") << "nonWhite" << nonWhite << "distinct" << distinct;
             std::fflush(stdout);
             std::_Exit(ok ? 0 : 1);
+        });
+    }
+
+    // Test hook: KRS_PICK_SELFTEST=<outDir> -- the GPU ID-picking gate (mate-selector P1),
+    // end-to-end through the REAL pick pass: spawn a box + a synthetic B-Rep edge/vertex rig at
+    // known world poses, pin the camera, issue pick queries at PROJECTED screen positions, and
+    // assert the resolved (entity, kind, id) including the vertex > edge priority bias and an
+    // empty-sky miss. Exit code = fail count.
+    if (qEnvironmentVariableIsSet("KRS_PICK_SELFTEST")) {
+        const QString outDir = qEnvironmentVariable("KRS_PICK_SELFTEST");
+        struct PickRig {
+            entt::entity box = entt::null, helper = entt::null;
+            QStringList lines; int fails = 0;
+            // 3 m clear of the boot FANUC: the arm's own B-Rep vertices are pickable now and a
+            // rig spawned inside the robot loses the priority race to them (found the hard way).
+            glm::vec3 edgeMid{ 3.8f, 1.3f, 0.0f };
+        };
+        auto rig = std::make_shared<PickRig>();
+        QTimer::singleShot(4000, this, [this, rig]() {
+            auto& reg = m_scene->getRegistry();
+            // the pick target: a box with a trivial one-face B-Rep map (every triangle -> face 0)
+            rig->box = SceneBuilder::spawnPrimitive(*m_scene, int(Primitive::Cube),
+                                                    glm::vec3(3.0f, 1.0f, 0.0f), glm::vec3(0.5f), "PickBox");
+            auto& mesh = reg.get<RenderableMeshComponent>(rig->box);
+            mesh.triFace.assign(mesh.indices.size() / 3, 0);
+            BRepFace f; f.type = 0; f.normal = { 0, 0, 1 };
+            reg.emplace<BRepFaceComponent>(rig->box).faces.push_back(f);
+            // the sub-pixel rig: a floating line edge + a TRUE vertex ON its midpoint (priority test)
+            rig->helper = reg.create();
+            reg.emplace<TransformComponent>(rig->helper, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
+            auto& hm = reg.emplace<RenderableMeshComponent>(rig->helper);   // far-away stub triangle
+            Vertex v0, v1, v2;
+            v0.position = { 500, 500, 500 }; v1.position = { 501, 500, 500 }; v2.position = { 500, 501, 500 };
+            hm.vertices = { v0, v1, v2 }; hm.indices = { 0, 1, 2 };
+            BRepEdge e; e.kind = BRepEdge::Line;
+            e.p0 = { 3.8f, 1.0f, 0.0f }; e.p1 = { 3.8f, 1.6f, 0.0f };
+            e.axisDir = { 0, 1, 0 };
+            e.polyline = { e.p0, e.p1 };
+            reg.emplace<BRepEdgeComponent>(rig->helper).edges.push_back(e);
+            BRepVertex bv; bv.pos = rig->edgeMid;
+            reg.emplace<BRepVertexComponent>(rig->helper).verts.push_back(bv);
+            // feature picking must be ARMED (it is a triggered mode now) + camera pinned
+            auto* st = reg.ctx().find<krs::sel::SelectionState>();
+            if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
+            st->enabled = true;
+            if (ViewportWidget* vp = primaryViewport()) {
+                Camera& cam = vp->getCamera();
+                cam.forceRecalculateView(glm::vec3(3.4f, 1.2f, 3.0f), glm::vec3(3.4f, 1.2f, 0.0f), 3.0f);
+            }
+        });
+        // one projection helper shared by the query steps
+        auto project = [this](const glm::vec3& w, QPoint& out) -> bool {
+            ViewportWidget* vp = primaryViewport();
+            if (!vp) return false;
+            Camera& cam = vp->getCamera();
+            const float aspect = float(vp->width()) / float(std::max(1, vp->height()));
+            const glm::vec4 clip = cam.getProjectionMatrix(aspect) * cam.getViewMatrix() * glm::vec4(w, 1.0f);
+            if (clip.w <= 1e-6f) return false;
+            const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+            out = QPoint(int((ndc.x * 0.5f + 0.5f) * vp->width()),
+                         int((1.0f - (ndc.y * 0.5f + 0.5f)) * vp->height()));
+            return true;
+        };
+        auto query = [this](QPoint p) {
+            if (ViewportWidget* vp = primaryViewport())
+                if (m_renderingSystem) m_renderingSystem->setPickQuery(vp, p.x(), p.y());
+        };
+        auto check = [this, rig](const char* name, std::function<bool(const RenderingSystem::PickIdHit&)> ok) {
+            const RenderingSystem::PickIdHit h = (m_renderingSystem && primaryViewport())
+                ? m_renderingSystem->latestPick(primaryViewport()) : RenderingSystem::PickIdHit{};
+            const bool pass = h.fromGpu && ok(h);
+            rig->lines << QStringLiteral("%1  %2  (fromGpu=%3 valid=%4 kind=%5 id=%6 e=%7 d=%8)")
+                              .arg(pass ? "PASS" : "FAIL").arg(QLatin1String(name))
+                              .arg(h.fromGpu).arg(h.valid).arg(h.kind).arg(h.id)
+                              .arg(std::uint32_t(h.entity)).arg(h.screenDist, 0, 'f', 1);
+            if (!pass) ++rig->fails;
+        };
+        // 1) face pick at the box centre pixel
+        QTimer::singleShot(6000, this, [this, rig, project, query]() {
+            QPoint p; if (project(glm::vec3(3.0f, 1.0f, 0.0f), p)) query(p);
+        });
+        QTimer::singleShot(6600, this, [this, rig, check]() {
+            check("FACE  box centre -> kind 0, faceId 0, box entity", [rig](const auto& h) {
+                return h.valid && h.kind == 0 && h.id == 0 && h.entity == rig->box;
+            });
+        });
+        // 2) edge pick 2 logical px beside the edge line (quarter height, away from the vertex)
+        QTimer::singleShot(6800, this, [this, rig, project, query]() {
+            QPoint p; if (project(glm::vec3(3.8f, 1.12f, 0.0f), p)) query(QPoint(p.x() + 2, p.y()));
+        });
+        QTimer::singleShot(7400, this, [this, rig, check]() {
+            check("EDGE  near the segment -> kind 1, edgeId 0, helper entity", [rig](const auto& h) {
+                return h.valid && h.kind == 1 && h.id == 0 && h.entity == rig->helper;
+            });
+        });
+        // 3) PRIORITY: the true vertex sits exactly ON the edge midpoint -- vertex must win
+        QTimer::singleShot(7600, this, [this, rig, project, query]() {
+            QPoint p; if (project(rig->edgeMid, p)) query(p);
+        });
+        QTimer::singleShot(8200, this, [this, rig, check]() {
+            check("VERT  on the edge midpoint -> vertex beats edge (kind 2, vertexId 0)", [rig](const auto& h) {
+                return h.valid && h.kind == 2 && h.id == 0 && h.entity == rig->helper;
+            });
+        });
+        // 4) empty sky -> a resolved MISS, not a stale hit. Top-RIGHT corner: with this camera
+        // the boot FANUC fills the left edge of frame (its vertices are pickable now).
+        QTimer::singleShot(8400, this, [this, rig, query]() {
+            ViewportWidget* vp = primaryViewport();
+            query(QPoint(vp ? vp->width() - 8 : 8, 8));
+        });
+        QTimer::singleShot(9000, this, [this, rig, check, outDir]() {
+            check("MISS  sky pixel -> resolved miss", [](const auto& h) { return !h.valid; });
+            QFile f(outDir + QStringLiteral("/pick_result.txt"));
+            if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream ts(&f);
+                for (const QString& l : rig->lines) ts << l << "\n";
+                ts << rig->fails << " fails\n";
+            }
+            for (const QString& l : rig->lines) qInfo().noquote() << "[pick]" << l;
+            qInfo() << "[pick] selftest done, fails =" << rig->fails;
+            std::fflush(stdout);
+            std::_Exit(rig->fails == 0 ? 0 : 1);
         });
     }
 

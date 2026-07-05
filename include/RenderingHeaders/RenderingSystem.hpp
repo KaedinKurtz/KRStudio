@@ -71,6 +71,12 @@ struct TargetFBOs {
     GLuint finalFBO = 0;
     GLuint finalColorTexture = 0;
     GLuint finalDepthTexture = 0; // This will now be depth-only
+    // GPU ID-PICKING target (mate-selector P1): RG32UI ids (entity, type|feature) + own depth.
+    // Sized lazily to (w, h) on the first pick query for this viewport.
+    GLuint pickFBO = 0;
+    GLuint pickIdTexture = 0;
+    GLuint pickDepthTexture = 0;
+    int pickW = 0, pickH = 0;
 };
 
 // Per-stage GPU times for one frame, in milliseconds (measured with
@@ -117,6 +123,29 @@ public:
     // --- Viewport Management ---
     void onViewportAdded(ViewportWidget* viewport);
     void onViewportWillBeDestroyed(ViewportWidget* viewport);
+
+    // --- GPU ID PICKING (mate-selector P1) ----------------------------------
+    // Pixel-exact feature picking: a per-viewport RG32UI pick target rendered on
+    // demand (faces via gl_PrimitiveID + a per-entity triFace TBO; B-Rep edges +
+    // vertices as screen-space-expanded instanced quads with a depth bias), an
+    // async 32x32 cursor-rect readback (double PBO + fences, one frame latent),
+    // and CPU resolution via spiral search with vertex > edge > face distance
+    // bias (Blender's recipe, OCCT-style tolerances). Picks exactly what the
+    // renderer drew this frame -- moving robots need no sync machinery.
+    struct PickIdHit {
+        bool valid = false;           // something under the cursor
+        bool fromGpu = false;         // a resolve HAS landed (distinguishes miss from not-yet)
+        entt::entity entity = entt::null;
+        int kind = 0;                 // 0 = face, 1 = edge, 2 = vertex
+        int id = -1;                  // faceId / edgeId / vertexId per kind (-1 face = body only)
+        float screenDist = 0.0f;      // unbiased px distance from the query point
+    };
+    // Ask for a pick at LOGICAL widget coords (converted internally by dpr and the
+    // render scale). Call on every mouse move; queries coalesce -- only the newest
+    // renders. Results lag ~1 frame.
+    void setPickQuery(ViewportWidget* vp, int px, int py);
+    // The newest resolved pick for this viewport (valid=false until one lands).
+    PickIdHit latestPick(ViewportWidget* vp) const;
     /// Loads MaterialComponents for entities tagged MaterialReloadRequest
     /// (engine GL context required — called from renderAllViewports).
     void processMaterialReloads();
@@ -392,6 +421,30 @@ private:
     GBufferFBO m_gBuffer;
     PostProcessingFBO m_ppFBOs[2];
     QMap<ViewportWidget*, TargetFBOs> m_targets;
+
+    // --- GPU ID picking internals (engine context only) ---
+    struct PickTriFaceTbo { GLuint buffer = 0, tex = 0; int tris = 0; };
+    struct PickPrimBuffers { GLuint vao = 0, vbo = 0; int edgeInstances = 0, vertInstances = 0; };
+    struct PickQuery { ViewportWidget* vp = nullptr; int px = 0, py = 0; bool pending = false; };
+    struct PickReadback {
+        ViewportWidget* vp = nullptr;
+        int cx = 0, cy = 0;            // query point in pick-texture coords
+        int x0 = 0, y0 = 0, w = 0, h = 0;   // clamped rect actually read
+        GLsync fence = nullptr;
+        bool inFlight = false;
+    };
+    void ensurePickTargets(TargetFBOs& t);
+    void renderPickBuffer(ViewportWidget* vp, TargetFBOs& t, bool kickReadback);
+    void resolvePendingPick();                                     // maps the older PBO, spiral-resolves
+    const PickTriFaceTbo& getOrCreateTriFaceTbo(entt::entity e, const RenderableMeshComponent& mesh);
+    const PickPrimBuffers& getOrCreatePickPrims(entt::entity e);
+    PickQuery m_pickQuery;
+    GLuint m_pickPBO[2] = { 0, 0 };
+    PickReadback m_pickRb[2];
+    int m_pickRbWrite = 0;
+    QMap<ViewportWidget*, PickIdHit> m_lastPick;
+    std::unordered_map<std::uint32_t, PickTriFaceTbo> m_pickTboCache;    // key = entt id
+    std::unordered_map<std::uint32_t, PickPrimBuffers> m_pickPrimCache;
 
     // --- Resource Management (THE FIX) ---
     // The unique_ptrs now live in a simple list for automatic memory management.

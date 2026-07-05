@@ -30,8 +30,13 @@ private:
     // One dynamic line buffer, re-uploaded each frame (selection changes interactively).
     void drawLines(const RenderFrameContext& ctx, const std::vector<glm::vec3>& lines,
                    const glm::vec3& color);
+    // P2: the pixel-exact fill + ID-discontinuity contour composite from the pick-ID buffer
+    // (re-fetches the ctx SelectionState internally; no-op when no pick target exists yet).
+    void drawIdHighlightComposite(const RenderFrameContext& ctx);
 
     unsigned int m_vao = 0;
     unsigned int m_vbo = 0;
     std::size_t  m_vboCapacity = 0;   // in vertices
+    unsigned int m_quadVao = 0;       // fullscreen composite quad (pos3 + uv2)
+    unsigned int m_quadVbo = 0;
 };

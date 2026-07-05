@@ -32,6 +32,7 @@
 #include "GroupOps.hpp"           // krs::group -- macro-object click model (topGroupOf)
 #include "EdgeSelect.hpp"         // krs::sel::pickEdge -- TRUE B-Rep edge picking (circles/lines)
 #include "ConstraintIconOverlay.hpp"   // hovering constraint glyphs (screen-space, clickable)
+#include "BRepVertex.hpp"              // BRepVertexComponent -- GPU vertex picks resolve here
 #include "Shader.hpp"
 #include "components.hpp"
 #include "IntersectionSystem.hpp"
@@ -687,8 +688,42 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* ev)
     }
 
     // ----- SUB-FEATURE HOVER HIGHLIGHT (free mouse-move only) -----
-    if (m_scene && ev->buttons() == Qt::NoButton)
-        featureHover(*m_scene, cam, ev->pos().x(), ev->pos().y(), width(), height());
+    // GPU ID PICKING (mate-selector P1): every free move queues a pixel-exact pick query; the
+    // resolved hit (1 frame latent, imperceptible) drives hover. The CPU ray is only the
+    // bridge until the first GPU resolve of the session lands.
+    if (m_scene && ev->buttons() == Qt::NoButton) {
+        auto& reg = m_scene->getRegistry();
+        auto* st = reg.ctx().find<krs::sel::SelectionState>();
+        if (st && st->enabled) {
+            if (m_renderingSystem) m_renderingSystem->setPickQuery(this, ev->pos().x(), ev->pos().y());
+            const RenderingSystem::PickIdHit hit =
+                m_renderingSystem ? m_renderingSystem->latestPick(this) : RenderingSystem::PickIdHit{};
+            if (hit.fromGpu) {
+                krs::sel::Selection s;
+                if (hit.valid) {
+                    if (hit.kind == 0 && hit.id >= 0) {
+                        s = krs::sel::resolveFace(reg, hit.entity, hit.id);
+                    } else if (hit.kind == 1 && hit.id >= 0) {
+                        s = krs::sel::resolveEdge(reg, hit.entity, hit.id);
+                    } else if (hit.kind == 2 && hit.id >= 0) {
+                        if (const auto* vc = reg.try_get<BRepVertexComponent>(hit.entity);
+                            vc && hit.id < int(vc->verts.size())) {
+                            glm::mat4 M(1.0f);
+                            if (const auto* xf = reg.try_get<TransformComponent>(hit.entity)) M = xf->getTransform();
+                            s.valid = true;
+                            s.entity = hit.entity;
+                            s.vertexId = hit.id;
+                            s.type = krs::sel::FeatureType::Vertex;
+                            s.hitPoint = glm::vec3(M * glm::vec4(vc->verts[std::size_t(hit.id)].pos, 1.0f));
+                        }
+                    }
+                }
+                st->hover = s;                     // a resolved MISS clears the hover (honest)
+            } else {
+                featureHover(*m_scene, cam, ev->pos().x(), ev->pos().y(), width(), height());
+            }
+        }
+    }
 
     // ----- CAMERA NAV -----
     if (cam.navMode() == Camera::NavMode::FLY)            cam.freeLook(dx, dy);

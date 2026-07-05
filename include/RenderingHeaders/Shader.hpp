@@ -32,8 +32,10 @@ public:
     void use(QOpenGLFunctions_4_3_Core* gl);
     void setBool(QOpenGLFunctions_4_3_Core* gl, const std::string& name, bool value) const;
     void setInt(QOpenGLFunctions_4_3_Core* gl, const std::string& name, int value) const;
+    void setUInt(QOpenGLFunctions_4_3_Core* gl, const std::string& name, unsigned int value) const;
     void setFloat(QOpenGLFunctions_4_3_Core* gl, const std::string& name, float value) const;
     void setVec2(QOpenGLFunctions_4_3_Core* gl, const std::string& name, const glm::vec2& value) const;
+    void setUVec2(QOpenGLFunctions_4_3_Core* gl, const std::string& name, const glm::uvec2& value) const;
     void setVec3(QOpenGLFunctions_4_3_Core* gl, const std::string& name, const glm::vec3& value) const;
     void setVec4(QOpenGLFunctions_4_3_Core* gl, const std::string& name, const glm::vec4& value) const;
     void setMat4(QOpenGLFunctions_4_3_Core* gl, const std::string& name, const glm::mat4& mat) const;

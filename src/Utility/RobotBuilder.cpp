@@ -136,7 +136,17 @@ std::vector<BRepFace> extractAnalyticFaces(const TopoDS_Shape& shape)
             case GeomAbs_Plane: { bf.type = 0; const gp_Pln pl = ad.Plane();
                 const gp_Dir n = pl.Axis().Direction(); const gp_Pnt o = pl.Location();
                 bf.normal = { float(n.X()), float(n.Y()), float(n.Z()) };
-                bf.axisPos = { float(o.X()), float(o.Y()), float(o.Z()) }; break; }
+                bf.axisPos = { float(o.X()), float(o.Y()), float(o.Z()) };
+                // OUTWARD-NORMAL GUARANTEE (mate-selector P3, mirrors CadImporter): a REVERSED
+                // face's geometric normal points INTO the material -- flip by orientation (XOR
+                // the indirect-axis case) so BRepFace.normal is always out of the solid.
+                // faceKey unaffected (hemisphere-folded hash).
+                {
+                    bool inward = (face.Orientation() == TopAbs_REVERSED);
+                    if (!pl.Direct()) inward = !inward;
+                    if (inward) bf.normal = -bf.normal;
+                }
+                break; }
             case GeomAbs_Cylinder: { bf.type = 1; const gp_Cylinder cy = ad.Cylinder();
                 const gp_Pnt o = cy.Axis().Location(); const gp_Dir d = cy.Axis().Direction();
                 bf.axisPos = { float(o.X()), float(o.Y()), float(o.Z()) };

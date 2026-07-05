@@ -36,6 +36,9 @@ struct Selection {
     entt::entity entity = entt::null;
     int faceId = -1;
     int edgeId = -1;                       // BRepEdgeComponent.edges index for EdgeCircle/EdgeLine picks
+    int vertexId = -1;                     // BRepVertexComponent.verts index for TRUE corner picks
+                                           //   (FeatureType::Vertex with vertexId=-1 = tessellation-vertex
+                                           //   fallback from the measure tool's Ctrl pick)
     int groupId = 0;                       // measure-mode ITEM id: shift-extended faces share one group
     FeatureType type = FeatureType::None;
     glm::vec3 hitPoint{ 0.0f };            // ray-surface intersection (world)
@@ -267,7 +270,8 @@ inline IndicatorGeometry indicator(const Selection& sel, int segments = 32, floa
 // ===========================================================================
 inline bool sameFeature(const Selection& a, const Selection& b) {
     return a.valid && b.valid && a.entity == b.entity
-        && a.faceId == b.faceId && a.edgeId == b.edgeId;   // edges identify by (entity, edgeId)
+        && a.faceId == b.faceId && a.edgeId == b.edgeId    // edges identify by (entity, edgeId)
+        && a.vertexId == b.vertexId;                       // true corners by (entity, vertexId)
 }
 
 // Per-scene selection state held in registry.ctx() (the SceneProperties pattern).
