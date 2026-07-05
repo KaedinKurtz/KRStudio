@@ -2495,7 +2495,25 @@ MainWindow::MainWindow(QWidget* parent)
             if (k.startsWith(QStringLiteral("KRS_"))) { krsEnvLayout = true; break; }
         if (!krsEnvLayout) {
             const QByteArray st = QSettings().value(QStringLiteral("layout/dockState")).toByteArray();
-            if (!st.isEmpty()) m_dockManager->restoreState(st);
+            if (!st.isEmpty()) {
+                m_dockManager->restoreState(st);
+                // NEW-PANEL RESCUE: restoring a layout saved BEFORE a dock existed CLOSES that dock
+                // (ADS hides anything absent from the saved state) -- which made freshly shipped
+                // panels invisible with no hint they existed. We track which panels this install
+                // has SEEN (layout/knownPanels); a registered panel not on that list is brand new
+                // -> open it once so the feature surfaces. Known panels keep the user's layout.
+                QStringList known = QSettings().value(QStringLiteral("layout/knownPanels")).toStringList();
+                bool grew = false;
+                for (auto it = m_panelDocks.constBegin(); it != m_panelDocks.constEnd(); ++it) {
+                    if (!it.value()) continue;
+                    if (!known.contains(it.key())) {
+                        if (it.value()->isClosed()) it.value()->toggleView(true);
+                        known << it.key();
+                        grew = true;
+                    }
+                }
+                if (grew) QSettings().setValue(QStringLiteral("layout/knownPanels"), known);
+            }
         }
     }
 

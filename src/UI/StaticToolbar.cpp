@@ -67,6 +67,7 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
         const ExtraPanel extra[] = {
             { "Fluid", "Fluid" }, { "Gas", "Gas" },
             { "Robot View", "Robot\nView" }, { "Node Editor", "Node\nEditor" },
+            { "Data Recorder", "Data\nRecorder" }, { "Goal Workspace", "Goal\nWorkspace" },
         };
         for (const auto& e : extra) {
             const QString title = QString::fromLatin1(e.title);
