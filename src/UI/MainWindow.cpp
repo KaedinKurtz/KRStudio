@@ -12,6 +12,8 @@
 #include "SkillRuntime.hpp"       // krs::skill live closed-loop task executor (P3), pumped per eval tick
 #include "Measure.hpp"            // krs::measure -- the ribbon Measure tool's math (B-Rep features)
 #include "MeasureHud.hpp"         // measure-mode viewport readout (theme colors set in applyTheme)
+#include "GroupOps.hpp"           // krs::group -- macro objects (nesting, delta fan-out, leaf applies)
+#include "ConstraintsPanel.hpp"   // the Fusion-style constraint authoring dock
 #include <QStandardPaths>
 #include <QCloseEvent>
 #include <QFile>
@@ -1442,6 +1444,14 @@ MainWindow::MainWindow(QWidget* parent)
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, goalDock, m_propertiesArea);
     registerPanelDock(QStringLiteral("Goal Workspace"), goalDock);
 
+    // Constraints: the Fusion-style assembly-constraint authoring dock (pick A -> pick B -> type
+    // -> Apply; kinematic types become PhysX joints on Play so passive linkages articulate).
+    auto* constraintsDock = new ads::CDockWidget(QStringLiteral("Constraints"));
+    constraintsDock->setWidget(new ConstraintsPanel(m_scene.get(), this));
+    constraintsDock->setStyleSheet(sidePanelStyle);
+    m_dockManager->addDockWidget(ads::RightDockWidgetArea, constraintsDock, m_propertiesArea);
+    registerPanelDock(QStringLiteral("Constraints"), constraintsDock);
+
     connect(graphModel.get(), &QtNodes::AbstractGraphModel::nodeCreated,
         this, [this, graphModel](QtNodes::NodeId nodeId) {
             auto* delegate = graphModel->delegateModel<NodeDelegate>(nodeId);
@@ -2743,6 +2753,15 @@ MainWindow::MainWindow(QWidget* parent)
                 }
             }
         }
+        // GROUP root edit -> fan the transform DELTA out to every member (nested groups follow
+        // recursively); physics re-syncs each moved leaf.
+        if (reg.all_of<GroupComponent>(e)) {
+            krs::group::applyRootDelta(reg, e);
+            if (m_simulation)
+                for (entt::entity m : krs::group::leafTargets(reg, e))
+                    m_simulation->notifyEntityChanged(m);
+            return;
+        }
         if (const auto* sub = reg.try_get<RobotSubcomponentComponent>(e)) {
             if (auto* rr = reg.ctx().find<krs::robot::RobotRegistry>()) {
                 if (auto* lr = rr->get(sub->robotId)) {
@@ -3958,12 +3977,22 @@ void MainWindow::buildMenuBar()
         auto& reg = m_scene->getRegistry();
         std::vector<entt::entity> doomed;
         for (auto e : reg.view<SelectedComponent>()) {
-            // Never delete cameras or grids through this path.
-            if (reg.any_of<CameraComponent, GridComponent>(e)) continue;
-            // Robot-member guard: generic delete dismembers a robot silently (joints stay
-            // listed/drivable while the geometry vanishes). Route through the Robot Builder.
-            if (reg.any_of<RobotSubcomponentComponent, RobotRootComponent>(e)) continue;
-            doomed.push_back(e);
+            // A selected GROUP root deletes its whole subtree (leaves + nested roots), with the
+            // same per-entity guards applied to every leaf.
+            std::vector<entt::entity> cand = krs::group::leafTargets(reg, e);
+            if (reg.all_of<GroupComponent>(e)) {
+                cand.push_back(e);
+                for (entt::entity m : krs::group::groupMembers(reg, e))
+                    if (reg.all_of<GroupComponent>(m)) cand.push_back(m);   // nested roots die too
+            }
+            for (entt::entity d : cand) {
+                // Never delete cameras or grids through this path.
+                if (reg.any_of<CameraComponent, GridComponent>(d)) continue;
+                // Robot-member guard: generic delete dismembers a robot silently (joints stay
+                // listed/drivable while the geometry vanishes). Route through the Robot Builder.
+                if (reg.any_of<RobotSubcomponentComponent, RobotRootComponent>(d)) continue;
+                doomed.push_back(d);
+            }
         }
         if (doomed.empty()) {
             statusBar()->showMessage(QStringLiteral(
@@ -3973,6 +4002,49 @@ void MainWindow::buildMenuBar()
         reg.destroy(doomed.begin(), doomed.end());
         refreshGizmoAndProperties();
         statusBar()->showMessage(QStringLiteral("Deleted %1 object(s)").arg(doomed.size()), 3000);
+    });
+
+    // --- Grouping (macro objects): Ctrl+G groups the selection, Ctrl+Shift+G dissolves. ---
+    QAction* groupAct = editMenu->addAction(QStringLiteral("Group Selected"));
+    groupAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
+    connect(groupAct, &QAction::triggered, this, [this]() {
+        auto& reg = m_scene->getRegistry();
+        std::vector<entt::entity> members;
+        for (auto e : reg.view<SelectedComponent>()) {
+            if (reg.any_of<CameraComponent, GridComponent>(e)) continue;
+            // robot links stay kinematically owned -- a WHOLE robot (its root) may join a group
+            if (reg.all_of<RobotSubcomponentComponent>(e)) continue;
+            members.push_back(e);
+        }
+        if (members.size() < 2) {
+            statusBar()->showMessage(QStringLiteral(
+                "Select at least two groupable objects (Shift+click adds; robot links can't be grouped -- group the robot root)."), 6000);
+            return;
+        }
+        int n = 1;
+        for (auto e : reg.view<GroupComponent>()) { (void)e; ++n; }
+        const std::string name = QStringLiteral("Group.%1").arg(n, 3, 10, QLatin1Char('0')).toStdString();
+        const entt::entity root = krs::group::makeGroup(reg, name, members);
+        for (auto eSel : reg.view<SelectedComponent>()) reg.remove<SelectedComponent>(eSel);
+        reg.emplace<SelectedComponent>(root);
+        refreshGizmoAndProperties();
+        statusBar()->showMessage(QStringLiteral("Grouped %1 object(s) into %2 (click selects the group; Alt+click a member).")
+                                     .arg(members.size()).arg(QString::fromStdString(name)), 6000);
+    });
+    QAction* ungroupAct = editMenu->addAction(QStringLiteral("Ungroup"));
+    ungroupAct->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
+    connect(ungroupAct, &QAction::triggered, this, [this]() {
+        auto& reg = m_scene->getRegistry();
+        std::vector<entt::entity> roots;
+        for (auto e : reg.view<SelectedComponent>())
+            if (reg.all_of<GroupComponent>(e)) roots.push_back(e);
+        if (roots.empty()) {
+            statusBar()->showMessage(QStringLiteral("Select a group to ungroup (click any member)."), 4000);
+            return;
+        }
+        for (entt::entity r : roots) krs::group::ungroup(reg, r);
+        refreshGizmoAndProperties();
+        statusBar()->showMessage(QStringLiteral("Ungrouped %1 group(s); members kept their placement.").arg(roots.size()), 5000);
     });
 
     // --- Add (Blender's Shift+A spirit) ---

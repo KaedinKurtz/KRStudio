@@ -27,12 +27,15 @@
 namespace krs::sel {
 
 enum class FeatureType { None = -1, Plane = 0, Cylinder = 1, Cone = 2, Sphere = 3, Other = 4,
-                         Vertex = 5 };   // Vertex: a measure-mode point pick (nearest tessellation vertex)
+                         Vertex = 5,     // a measure-mode point pick (nearest tessellation vertex)
+                         EdgeCircle = 6, // a TRUE B-Rep circle/arc edge (BRepEdgeComponent)
+                         EdgeLine = 7 }; // a TRUE B-Rep line edge
 
 struct Selection {
     bool valid = false;                    // a B-Rep face was resolved
     entt::entity entity = entt::null;
     int faceId = -1;
+    int edgeId = -1;                       // BRepEdgeComponent.edges index for EdgeCircle/EdgeLine picks
     int groupId = 0;                       // measure-mode ITEM id: shift-extended faces share one group
     FeatureType type = FeatureType::None;
     glm::vec3 hitPoint{ 0.0f };            // ray-surface intersection (world)
@@ -42,8 +45,13 @@ struct Selection {
     glm::vec3 normal{ 0.0f, 0.0f, 1.0f };  // surface normal (plane)
     float radius = 0.0f;                   // metres
     std::uint64_t faceKey = 0;             // stable topological id (BRepFace.faceKey) for mate-connector anchor
+                                           //   EDGE picks carry BRepEdge.edgeKey here (same anchor contract)
     glm::vec3 axisEnd0{ 0.0f };            // cylinder rim centres (world); both zero => no trimmed B-Rep
     glm::vec3 axisEnd1{ 0.0f };
+    // EDGE pick conventions (type EdgeCircle/EdgeLine, resolved by krs::sel::resolveEdge in
+    // EdgeSelect.hpp): EdgeCircle -> axisPos=world centre, axisDir=plane normal, radius=world r,
+    // axisEnd0/1=arc endpoints (equal when closed). EdgeLine -> axisEnd0/1=endpoints,
+    // axisDir=direction, axisPos=midpoint. hitPoint = nearest point on the edge to the pick ray.
 };
 
 // Resolve a world-space ray to the specific B-Rep face it hits + its exact
@@ -189,6 +197,27 @@ inline IndicatorGeometry indicator(const Selection& sel, int segments = 32, floa
     IndicatorGeometry g;
     if (!sel.valid) return g;
     g.type = sel.type;
+    if (sel.type == FeatureType::EdgeLine) {               // TRUE line edge: highlight the segment itself
+        g.center = sel.axisPos;
+        g.normal = sel.axisDir;
+        g.points.push_back(sel.axisEnd0);
+        g.points.push_back(sel.axisEnd1);
+        return g;
+    }
+    if (sel.type == FeatureType::EdgeCircle) {             // TRUE circle edge: ring at the circle itself
+        g.center = sel.axisPos;
+        g.normal = sel.axisDir;
+        g.radius = sel.radius;
+        glm::vec3 u = glm::cross(sel.axisDir, glm::vec3(0, 0, 1));
+        if (glm::dot(u, u) < 1e-8f) u = glm::cross(sel.axisDir, glm::vec3(0, 1, 0));
+        u = glm::normalize(u);
+        const glm::vec3 v = glm::normalize(glm::cross(sel.axisDir, u));
+        for (int i = 0; i < segments; ++i) {
+            const float a = 6.2831853f * float(i) / float(segments);
+            g.points.push_back(g.center + sel.radius * (std::cos(a) * u + std::sin(a) * v));
+        }
+        return g;
+    }
     if (sel.type == FeatureType::Cylinder || sel.type == FeatureType::Cone) {
         const glm::vec3 d = sel.axisDir;
         // RIM SNAP: if the trimmed B-Rep gave the two end-cap centres, ring the bore EDGE NEAREST the
@@ -237,7 +266,8 @@ inline IndicatorGeometry indicator(const Selection& sel, int segments = 32, floa
 // face -- so identity equality IS the gateable contract (HIGHLIGHT-MATCHES).
 // ===========================================================================
 inline bool sameFeature(const Selection& a, const Selection& b) {
-    return a.valid && b.valid && a.entity == b.entity && a.faceId == b.faceId;
+    return a.valid && b.valid && a.entity == b.entity
+        && a.faceId == b.faceId && a.edgeId == b.edgeId;   // edges identify by (entity, edgeId)
 }
 
 // Per-scene selection state held in registry.ctx() (the SceneProperties pattern).
@@ -388,13 +418,12 @@ inline Selection pickVertex(entt::registry& reg, const krs::pick::Ray& ray) {
     return s;
 }
 
-// Measure commit: extend=true (shift) joins the current item; vertexPick=true (ctrl) snaps to the
-// nearest tessellation vertex instead of resolving a face. Returns the resolved Selection.
-inline Selection commitMeasure(SelectionState& st, entt::registry& reg,
-                               const krs::pick::Ray& ray, bool extend, bool vertexPick = false) {
-    Selection s = vertexPick ? pickVertex(reg, ray) : pickPreferCylinder(reg, ray);
+// Measure commit over a PRE-RESOLVED Selection (the viewport resolves edge-vs-face preference
+// before calling): extend=true (shift) joins the current item. Toggle-off applies to identifiable
+// features (faces and edges); vertices never toggle.
+inline Selection commitMeasureResolved(SelectionState& st, Selection s, bool extend) {
     if (!s.valid) return s;                              // miss -> buffer untouched
-    if (s.faceId >= 0) {                                 // vertices never toggle (faceId -1 is not an identity)
+    if (s.faceId >= 0 || s.edgeId >= 0) {
         for (std::size_t i = 0; i < st.selected.size(); ++i)
             if (sameFeature(st.selected[i], s)) {
                 st.selected.erase(st.selected.begin() + std::ptrdiff_t(i));
@@ -419,6 +448,36 @@ inline Selection commitMeasure(SelectionState& st, entt::registry& reg,
                           st.selected.end());
         ids = distinctGroups();
     }
+    return s;
+}
+
+// Measure commit from a ray (face/vertex paths; the viewport calls commitMeasureResolved directly
+// when a TRUE EDGE pick wins the tolerance race -- see EdgeSelect.hpp).
+inline Selection commitMeasure(SelectionState& st, entt::registry& reg,
+                               const krs::pick::Ray& ray, bool extend, bool vertexPick = false) {
+    return commitMeasureResolved(st, vertexPick ? pickVertex(reg, ray) : pickPreferCylinder(reg, ray),
+                                 extend);
+}
+
+// Commit a PRE-RESOLVED Selection into the plain accumulating set (same toggle/FIFO semantics as
+// commitSelection) -- the edge-pick path lands here.
+inline Selection commitResolved(SelectionState& st, Selection s, bool additive = true) {
+    if (st.fifoTwoBores && (!s.valid || s.type != FeatureType::Cylinder)) {
+        st.selected.clear();
+        return s;
+    }
+    if (!s.valid) return s;
+    for (std::size_t i = 0; i < st.selected.size(); ++i) {
+        if (sameFeature(st.selected[i], s)) {
+            st.selected.erase(st.selected.begin() + std::ptrdiff_t(i));
+            return s;
+        }
+    }
+    if (!additive) st.selected.clear();
+    st.selected.push_back(s);
+    enforceFifoTwoBores(st);
+    enforceSelectionCap(st);
+    autoDisarmOnQuota(st);
     return s;
 }
 
@@ -470,8 +529,13 @@ inline IndicatorLines buildIndicatorLines(const IndicatorGeometry& g, float arro
     out.diskRadius = g.radius;
 
     const std::size_t n = g.points.size();
+    if (g.type == FeatureType::EdgeLine && n >= 2) {       // open segment, no loop close / no arrow
+        out.ring.push_back(g.points[0]);
+        out.ring.push_back(g.points[1]);
+        return out;
+    }
     if ((g.type == FeatureType::Cylinder || g.type == FeatureType::Cone
-         || g.type == FeatureType::Plane) && n >= 2) {
+         || g.type == FeatureType::Plane || g.type == FeatureType::EdgeCircle) && n >= 2) {
         for (std::size_t i = 0; i < n; ++i) {            // close the loop: rim / outline
             out.ring.push_back(g.points[i]);
             out.ring.push_back(g.points[(i + 1) % n]);

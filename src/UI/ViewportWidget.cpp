@@ -29,6 +29,9 @@
 #include "RayPick.hpp"   // GATE 3.1: hardened ray-triangle pick (krs::pick)
 #include "SelectionService.hpp"   // SELECTION-HIGHLIGHTS: face-level hover/commit (krs::sel)
 #include "MeasureHud.hpp"         // measure-mode corner readout overlay
+#include "GroupOps.hpp"           // krs::group -- macro-object click model (topGroupOf)
+#include "EdgeSelect.hpp"         // krs::sel::pickEdge -- TRUE B-Rep edge picking (circles/lines)
+#include "ConstraintIconOverlay.hpp"   // hovering constraint glyphs (screen-space, clickable)
 #include "Shader.hpp"
 #include "components.hpp"
 #include "IntersectionSystem.hpp"
@@ -184,13 +187,28 @@ static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int v
     const glm::mat4 V = cam.getViewMatrix();
     const krs::pick::Ray ray = krs::pick::makeRayFromScreen(P, V, px, py, vpW, vpH);
     if (!std::isfinite(ray.dir.x)) return;
+    // TRUE-EDGE preference (except in bore-collect mode, which is cylinder-faces-only): an edge
+    // within a distance-scaled tolerance of the ray wins over the face behind it -- circles and
+    // lines are otherwise unpickable (infinitely thin). Tolerance ~6 px at the hit depth.
+    krs::sel::Selection edgePick;
+    if (!st->fifoTwoBores) {
+        float depth = 5.0f;
+        if (const auto hit = krs::pick::pickMesh(reg, ray)) depth = hit->t;
+        const float tol = std::max(0.003f, 0.006f * depth);
+        edgePick = krs::sel::pickEdge(reg, ray, tol);
+    }
     if (st->measureMode) {
         // Onshape-style measure buffer: plain click = new item, Shift = extend the current item
         // (multi-face plane), Ctrl = vertex pick. FIFO-2 items.
-        krs::sel::commitMeasure(*st, reg, ray,
-                                mods.testFlag(Qt::ShiftModifier), mods.testFlag(Qt::ControlModifier));
+        if (mods.testFlag(Qt::ControlModifier))
+            krs::sel::commitMeasure(*st, reg, ray, mods.testFlag(Qt::ShiftModifier), /*vertex*/ true);
+        else if (edgePick.valid)
+            krs::sel::commitMeasureResolved(*st, edgePick, mods.testFlag(Qt::ShiftModifier));
+        else
+            krs::sel::commitMeasure(*st, reg, ray, mods.testFlag(Qt::ShiftModifier), /*vertex*/ false);
         return;
     }
+    if (edgePick.valid) { krs::sel::commitResolved(*st, edgePick, additive); return; }
     krs::sel::commitSelection(*st, reg, ray, additive);
 }
 
@@ -269,6 +287,20 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
 
     // Measure-mode corner readout (self-hiding: only visible while measure mode is armed).
     m_measureHud = new MeasureHud(m_scene, this);
+
+    // Constraint icons: screen-space glyphs pinned to each constraint's anchor midpoint,
+    // clickable through to the Constraints panel. Toggled by the panel's Show-icons box.
+    m_constraintIcons = new ConstraintIconOverlay(m_scene, this,
+        [this](const glm::vec3& w, QPoint& out) {
+            Camera& cam = getCamera();
+            const float aspect = float(width()) / float(std::max(1, height()));
+            const glm::vec4 clip = cam.getProjectionMatrix(aspect) * cam.getViewMatrix() * glm::vec4(w, 1.0f);
+            if (clip.w <= 1e-6f) return false;
+            const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+            out = QPoint(int((ndc.x * 0.5f + 0.5f) * float(width())),
+                         int((1.0f - (ndc.y * 0.5f + 0.5f)) * float(height())));
+            return true;
+        });
 }
 
 void ViewportWidget::setRenderingSystem(RenderingSystem* system)
@@ -583,6 +615,10 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
             }
             if (hit) {
                 entt::entity e = hit->entity;
+                // GROUP CLICK MODEL: clicking any member selects the MACRO group (the topmost
+                // nested root); Alt+click drills into the member itself.
+                if (!(ev->modifiers() & Qt::AltModifier))
+                    e = krs::group::topGroupOf(reg, e);
                 if (reg.all_of<SelectedComponent>(e)) {
                     if (isShiftPressed) reg.remove<SelectedComponent>(e);
                 }

@@ -15,7 +15,8 @@ public:
 
     using DeferredExclusionTags = entt::exclude_t<
         GizmoHandleComponent,         // add more tags here later
-        JointAxisComponent            // joint-axis bars draw on-top via JointAxisPass
+        JointAxisComponent,           // joint-axis bars draw on-top via JointAxisPass
+        HiddenComponent               // outliner eye toggle: hidden entities skip the main pass
         // , NoDeferredDrawTag
     >;
 

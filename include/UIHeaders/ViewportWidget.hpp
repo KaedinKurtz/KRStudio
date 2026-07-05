@@ -95,6 +95,7 @@ private:
 
     QLabel* m_statsOverlay;
     class MeasureHud* m_measureHud = nullptr;    // measure-mode corner readout (self-hiding)
+    class ConstraintIconOverlay* m_constraintIcons = nullptr;   // hovering constraint glyphs
 
     QPoint m_pressPos;
     bool   m_maybeClick = false;

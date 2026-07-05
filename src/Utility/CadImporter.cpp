@@ -51,6 +51,11 @@
 #include <gp_Cone.hxx>
 #include <gp_Sphere.hxx>
 #include <gp_Pln.hxx>
+#include <BRepAdaptor_Curve.hxx>   // GATE EDGE: analytic edge-curve parameters
+#include <GeomAbs_CurveType.hxx>
+#include <gp_Circ.hxx>
+#include <TopTools_ListIteratorOfListOfShape.hxx>
+#include "BRepEdge.hpp"      // GATE EDGE: BRepEdge / BRepEdgeComponent / computeEdgeKey
 #include "RayPick.hpp"       // GATE F: ray-triangle pick (krs::pick) for the selector test
 #include "SelectionService.hpp"  // GATE SUBFEAT: sub-feature selection backend (krs::sel)
 #include "JointTooling.hpp"  // GATE J: derive a revolute frame from two bore features (krs::joint)
@@ -328,6 +333,96 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
         verts[i].normal = (glm::length(n) > 1e-12) ? glm::vec3(glm::normalize(n)) : glm::vec3(0, 1, 0);
     }
 
+    // --- GATE EDGE: TRUE B-Rep EDGES (analytic identity + pick polyline, BRepEdge.hpp) ---
+    // SAME frame conventions as the faces above: params live in THIS solid's frame (world-baked for
+    // assembly parts, which carry an identity TransformComponent), scaled to metres by s; the edgeKey
+    // -- like faceKey (see the KEY SPACE comment above) -- is minted from PART-LOCAL params via
+    // localFromWorld so a rotated placement can't fork the key space. faceA/faceB index the SAME
+    // BRepFace array built above (tessellated faces, in explorer order -- faceSpans is that order).
+    std::vector<BRepEdge> brepEdges;
+    {
+        TopTools_IndexedMapOfShape faceIdx;                 // BRepFaceComponent's index space
+        for (const auto& fs : faceSpans) faceIdx.Add(fs.face);
+        TopTools_IndexedDataMapOfShapeListOfShape e2f;      // unique edges -> their bounding faces
+        TopExp::MapShapesAndAncestors(solid, TopAbs_EDGE, TopAbs_FACE, e2f);
+        for (int ei = 1; ei <= e2f.Extent(); ++ei) {
+            const TopoDS_Edge edge = TopoDS::Edge(e2f.FindKey(ei));
+            if (BRep_Tool::Degenerated(edge)) continue;     // parametric artifact (sphere pole): no 3D curve
+            try {
+                BRepAdaptor_Curve ad(edge);
+                const double u0 = ad.FirstParameter(), u1 = ad.LastParameter();
+                if (!(u1 > u0) || !std::isfinite(u0) || !std::isfinite(u1)) continue;
+                auto P = [&](double u) {                    // curve point -> metres (edge location applied)
+                    const gp_Pnt p = ad.Value(u);
+                    return glm::vec3(float(p.X() * s), float(p.Y() * s), float(p.Z() * s));
+                };
+                BRepEdge be;
+                int segments = 16;                          // Kind::Other default sampling
+                switch (ad.GetType()) {
+                    case GeomAbs_Line: {
+                        be.kind = BRepEdge::Line;
+                        be.p0 = P(u0); be.p1 = P(u1);
+                        const glm::vec3 d = be.p1 - be.p0;
+                        const float len = glm::length(d);
+                        if (len < 1e-9f) continue;          // zero-length edge: nothing to pick
+                        be.axisDir = d / len;
+                        segments = 1;                       // polyline = the 2 endpoints
+                        break; }
+                    case GeomAbs_Circle: {
+                        be.kind = BRepEdge::Circle;
+                        const gp_Circ c = ad.Circle();
+                        const gp_Pnt o = c.Location(); const gp_Dir d = c.Axis().Direction();
+                        be.center  = { float(o.X() * s), float(o.Y() * s), float(o.Z() * s) };
+                        be.axisDir = { float(d.X()), float(d.Y()), float(d.Z()) };
+                        be.radius  = float(c.Radius() * s);
+                        be.p0 = P(u0); be.p1 = P(u1);
+                        be.closed = glm::distance(be.p0, be.p1) < 1e-6f;   // full circle vs arc
+                        if (be.closed) be.p1 = be.p0;       // equal-when-closed, exactly
+                        segments = 32;
+                        break; }
+                    default:
+                        be.kind = BRepEdge::Other;          // polyline-only record (curve endpoints kept)
+                        be.p0 = P(u0); be.p1 = P(u1);
+                        break;
+                }
+                be.polyline.reserve(std::size_t(segments) + 1);
+                for (int k = 0; k <= segments; ++k)
+                    be.polyline.push_back(P(u0 + (u1 - u0) * double(k) / double(segments)));
+                if (be.kind == BRepEdge::Circle && be.closed)
+                    be.polyline.back() = be.polyline.front();              // close the pick loop exactly
+                // the two bounding B-Rep faces, in the SAME index space the triangles resolve to
+                const TopTools_ListOfShape& fl = e2f.FindFromIndex(ei);
+                for (TopTools_ListIteratorOfListOfShape it(fl); it.More(); it.Next()) {
+                    const int fi = faceIdx.FindIndex(it.Value());
+                    if (fi <= 0) continue;                  // face skipped at tessellation -> no index
+                    if      (be.faceA < 0)                       be.faceA = fi - 1;
+                    else if (be.faceB < 0 && fi - 1 != be.faceA) be.faceB = fi - 1;
+                }
+                // edgeKey: PART-LOCAL params, exactly the faceKey key-space rule (lines above).
+                if (localFromWorld) {
+                    const Eigen::Matrix4d& Mw = *localFromWorld;
+                    const Eigen::Matrix3d  Rw = Mw.block<3, 3>(0, 0);
+                    auto xp = [&](const glm::vec3& p) {
+                        const Eigen::Vector4d r = Mw * Eigen::Vector4d(p.x, p.y, p.z, 1.0);
+                        return glm::vec3(float(r.x()), float(r.y()), float(r.z()));
+                    };
+                    auto xd = [&](const glm::vec3& v) {
+                        const Eigen::Vector3d r = Rw * Eigen::Vector3d(v.x, v.y, v.z);
+                        const double L = r.norm();
+                        return (L > 1e-12) ? glm::vec3(float(r.x() / L), float(r.y() / L), float(r.z() / L)) : v;
+                    };
+                    BRepEdge le = be;
+                    le.center = xp(be.center); le.p0 = xp(be.p0); le.p1 = xp(be.p1);
+                    le.axisDir = xd(be.axisDir);
+                    be.edgeKey = computeEdgeKey(le);
+                } else {
+                    be.edgeKey = computeEdgeKey(be);        // identity placement: local == world
+                }
+                brepEdges.push_back(std::move(be));
+            } catch (...) { /* malformed edge (null/degenerate curve): skip, never crash the import */ }
+        }
+    }
+
     // --- exact B-Rep volume + mass channel ---
     GProp_GProps vprops; BRepGProp::VolumeProperties(solid, vprops);
     const double volume = std::abs(vprops.Mass()) * s * s * s; // GProp "Mass" = volume; scale^3
@@ -351,6 +446,7 @@ static entt::entity meshShapeIntoEntity(entt::registry& reg, const TopoDS_Shape&
     mesh.triFace = std::move(triFace);                     // GATE F: triangle -> B-Rep face id
     mesh.sourcePath = "occt_step";
     if (!brepFaces.empty()) reg.emplace<BRepFaceComponent>(e, std::move(brepFaces)); // GATE F
+    if (!brepEdges.empty()) reg.emplace<BRepEdgeComponent>(e, std::move(brepEdges)); // GATE EDGE
     reg.emplace<TransformComponent>(e, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f));
     reg.emplace<TagComponent>(e, tag);
     // Collide with the REAL shape, like every other spawned mesh (SceneBuilder pattern): CAD bodies

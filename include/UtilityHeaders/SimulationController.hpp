@@ -122,6 +122,12 @@ signals:
 private:
     void buildPhysicsWorld();
     void buildArticulation();   // Phase G: build the live PxArticulation from m_robotSpec
+    // Assembly constraints -> PxD6 joints between rigid actors (krs::constraint): each
+    // non-suppressed constraint locks the DOF its lockedDof() table names, so KINEMATIC types
+    // (Revolute/Slider/...) leave their axis free -- an undriven passive linkage articulates
+    // when the robot (or anything) pushes it. Joint frame: X = the A-anchor's primary axis
+    // (PhysX twist convention).
+    void buildConstraintJoints();
     void destroyPhysicsWorld();
     bool createActorForEntity(entt::entity entity);
     void removeActorForEntity(entt::entity entity);

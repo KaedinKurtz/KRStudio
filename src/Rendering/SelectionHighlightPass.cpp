@@ -3,6 +3,7 @@
 #include "Shader.hpp"
 #include "components.hpp"
 #include "SelectionService.hpp"   // krs::sel::SelectionState / indicator / buildIndicatorLines
+#include "EdgeSelect.hpp"         // krs::sel::resolveEdge -- TRUE-edge picks travel with their body
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <glm/glm.hpp>
@@ -92,12 +93,22 @@ void SelectionHighlightPass::execute(const RenderFrameContext& context)
 {
     auto& reg = context.registry;
     auto* st = reg.ctx().find<krs::sel::SelectionState>();
-    if (!st || !st->enabled) return;
+    if (!st) return;
+    // `enabled` gates INPUT, not display: the choose-bores mode DISARMS ITSELF once the pair is
+    // committed, but the operator still needs to SEE the two picked bores for Define. Only the
+    // hover preview dies with the mode.
+    if (!st->enabled) st->hover = krs::sel::Selection{};
     if (!st->hover.valid && st->selected.empty()) return;
     // Selections TRAVEL WITH their body: re-derive each committed pick's world frame from its
     // (entity, faceId) at the CURRENT transform every frame -- a bore selected on a link that then
     // moves (FK drive, IK drag) used to leave its ring orphaned in space where it was clicked.
     krs::sel::refreshSelections(*st, reg);
+    // TRUE-EDGE picks re-derive too (resolveEdge lives above SelectionService in the include graph).
+    for (auto& s : st->selected)
+        if (s.valid && s.edgeId >= 0 && reg.valid(s.entity)) {
+            krs::sel::Selection f = krs::sel::resolveEdge(reg, s.entity, s.edgeId);
+            if (f.valid) { f.groupId = s.groupId; s = f; }
+        }
     if (!st->hover.valid && st->selected.empty()) return;   // refresh may have dropped dead entries
 
     auto* gl = context.gl;

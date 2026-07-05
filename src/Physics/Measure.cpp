@@ -332,9 +332,32 @@ MItem buildItem(entt::registry& reg, std::vector<krs::sel::Selection> feats, std
             // for the segment math; pair readouts note the infinite-line fallback).
             it.p0 = glm::dvec3(f0.axisPos) - 0.5 * it.dir;
             it.p1 = glm::dvec3(f0.axisPos) + 0.5 * it.dir;
+            notes.push_back("untrimmed bore: no length extent");
         }
         if (f0.type == krs::sel::FeatureType::Cone)
             notes.push_back("cone measured by its reference (base) diameter + axis");
+        return it;
+    }
+    if (f0.type == krs::sel::FeatureType::EdgeCircle) {
+        // a TRUE circle edge measures like the axis LINE through its centre (angle = between the
+        // circle planes; distances anchor at the centre) + its own diameter.
+        it.kind = MItem::Kind::Line;
+        it.dir = glm::normalize(glm::dvec3(f0.axisDir));
+        it.diameter = 2.0 * double(f0.radius);
+        it.length = 0.0;
+        it.finite = true;
+        it.p0 = it.p1 = glm::dvec3(f0.axisPos);              // degenerate segment = the centre point
+        return it;
+    }
+    if (f0.type == krs::sel::FeatureType::EdgeLine) {
+        it.kind = MItem::Kind::Line;
+        it.p0 = glm::dvec3(f0.axisEnd0);
+        it.p1 = glm::dvec3(f0.axisEnd1);
+        const glm::dvec3 d = it.p1 - it.p0;
+        it.dir = (glm::dot(d, d) > 1e-18) ? glm::normalize(d) : glm::dvec3(f0.axisDir);
+        it.diameter = 0.0;
+        it.length = glm::length(d);
+        it.finite = true;
         return it;
     }
 
@@ -378,10 +401,8 @@ void appendItemLines(const MItem& it, const std::string& prefix, Readout& out) {
     using U = ReadoutLine::Unit;
     switch (it.kind) {
     case MItem::Kind::Line:
-        out.lines.push_back({ prefix + "Diameter", it.diameter, U::Length });
-        if (it.length > 0.0) out.lines.push_back({ prefix + "Length", it.length, U::Length });
-        else out.notes.push_back(prefix.empty() ? "untrimmed bore: no length extent"
-                                                : prefix + "untrimmed bore: no length extent");
+        if (it.diameter > 0.0) out.lines.push_back({ prefix + "Diameter", it.diameter, U::Length });
+        if (it.length > 0.0)   out.lines.push_back({ prefix + "Length", it.length, U::Length });
         break;
     case MItem::Kind::PlaneGroup:
     case MItem::Kind::Other:

@@ -48,6 +48,9 @@
 #include "WorldState.hpp"          // krs::world light task-level world model (P2) + gate
 #include "SkillRuntime.hpp"        // krs::skill live closed-loop task executor (P3) + gate
 #include "Measure.hpp"             // krs::measure ribbon Measure-tool math + gate
+#include "GroupOps.hpp"            // krs::group macro objects + gate
+#include "EdgeSelect.hpp"          // krs::sel true B-Rep edge picking + gate
+#include "Constraint.hpp"          // krs::constraint assembly-constraint suite + gate
 #include "TaskPlanner.hpp"         // krs::skill forward-search task planner (P5) + gate
 #include "GoalDoc.hpp"             // krs::goal .kgoal declarative goal document (G1) + gate
 #include "Hone.hpp"                // krs::hone population parameter honing (G4, sim-only) + gate
@@ -1286,6 +1289,25 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::measure::runMeasureGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // Object groups (macro objects): centroid root, delta fan-out, nesting, ungroup-promote.
+    if (qEnvironmentVariableIntValue("KRS_GROUP_SELFTEST") != 0) {
+        std::printf("\n================= KRS_GROUP_SELFTEST =================\n");
+        const bool ok = krs::group::runGroupGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    // TRUE B-Rep edge selection (circle/line edges): resolve exactness + proximity picking + keys.
+    if (qEnvironmentVariableIntValue("KRS_EDGE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_EDGE_SELFTEST =================\n");
+        const bool ok = krs::sel::runEdgeSelectGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    // Assembly constraints (Fusion-style): every CType snaps + verifies analytically; refusals;
+    // durable key re-anchoring; JSON round-trip; DOF table; chained linkage consistency.
+    if (qEnvironmentVariableIntValue("KRS_CONSTRAINT_SELFTEST") != 0) {
+        std::printf("\n================= KRS_CONSTRAINT_SELFTEST =================\n");
+        const bool ok = krs::constraint::runConstraintGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     // Process & Skills P4: composed pick+place with typed pre/effects, validated + executed closed-loop.
     if (qEnvironmentVariableIntValue("KRS_PICKPLACE_SELFTEST") != 0) {
         std::printf("\n================= KRS_PICKPLACE_SELFTEST =================\n");
@@ -2256,6 +2278,9 @@ void RenderingSystem::initializeSharedResources()
             { "GATE HONE (population honing: lift-weigh mass + tilt-settle CoM converge; blind excitation cannot fake confidence; sloshing water flagged Dynamic never mis-fit; deterministic)", krs::hone::runHoneGate() },
             { "GATE GOALLOOP (the story: file-authored primitives; .kgoal goal; regression + auto-excitation; honing writes the ledger; guarded execution reaches the goal; knowledge persists across save/load; invalidation-reappears neg-ctrl)", krs::skill::runGoalLoopGate() },
             { "GATE MEASURE (ribbon Measure math: world-space quad area exact; cylinder D/L under scale; tessellated-disk <1% honest-under; sphere distance exact; text applicable-fields-only; bad-faceId/no-BRep/zero-tri neg-ctrls)", krs::measure::runMeasureGate() },
+            { "GATE GROUP (macro objects: centroid root; translate/rotate fan-out exact; nesting reaches leaves; ungroup promotes without motion; cycle-guarded)", krs::group::runGroupGate() },
+            { "GATE EDGE (true B-Rep edge selection: circle centre/radius/axis exact under transform; proximity pick hit/miss; nearer edge wins; edgeKey stable/position-separated; neg-ctrls)", krs::sel::runEdgeSelectGate() },
+            { "GATE CONSTRAINT (Fusion-style suite: every CType snapped + verified analytically; suppressed/robot/stale-key refusals with zero motion; key re-anchoring over scrambles; JSON round-trip; DOF table; chained revolute linkage)", krs::constraint::runConstraintGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");

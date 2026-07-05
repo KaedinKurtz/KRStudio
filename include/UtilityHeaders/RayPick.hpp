@@ -76,6 +76,7 @@ inline std::optional<PickHit> pickMesh(entt::registry& reg, const Ray& ray)
 {
     PickHit best;
     for (auto e : reg.view<TransformComponent, RenderableMeshComponent>()) {
+        if (reg.any_of<HiddenComponent>(e)) continue;    // outliner-hidden: unclickable too
         const auto& xf = reg.get<TransformComponent>(e);
         const auto& mesh = reg.get<RenderableMeshComponent>(e);
         if (mesh.indices.size() < 3 || mesh.vertices.empty()) continue;
@@ -116,6 +117,7 @@ inline std::vector<PickHit> pickMeshAll(entt::registry& reg, const Ray& ray)
 {
     std::vector<PickHit> hits;
     for (auto e : reg.view<TransformComponent, RenderableMeshComponent>()) {
+        if (reg.any_of<HiddenComponent>(e)) continue;    // outliner-hidden: unclickable too
         const auto& xf = reg.get<TransformComponent>(e);
         const auto& mesh = reg.get<RenderableMeshComponent>(e);
         if (mesh.indices.size() < 3 || mesh.vertices.empty()) continue;

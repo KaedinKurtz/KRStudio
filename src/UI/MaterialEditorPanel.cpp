@@ -4,6 +4,7 @@
 #include "components.hpp"
 #include "SelectionService.hpp"
 #include "FaceMaterial.hpp"
+#include "GroupOps.hpp"           // krs::group -- macro-object apply expands to leaf members
 #include "KParts.hpp"
 
 #include <QVBoxLayout>
@@ -192,8 +193,12 @@ void MaterialEditorPanel::onApply() {
         const int n = krs::facemat::rebuildFaceOverlays(*m_scene, pick->entity);
         if (m_status) m_status->setText(QStringLiteral("Painted face %1 (%2 painted face(s) on this body).").arg(pick->faceId).arg(n));
     } else {
-        krs::facemat::applyToBody(reg, target, fm);
-        if (m_status) m_status->setText(QStringLiteral("Applied to the whole body."));
+        // A GROUP root expands to its leaf members (macro-object apply); a plain body is itself.
+        const std::vector<entt::entity> targets = krs::group::leafTargets(reg, target);
+        for (entt::entity t : targets) krs::facemat::applyToBody(reg, t, fm);
+        if (m_status) m_status->setText(targets.size() > 1
+            ? QStringLiteral("Applied to the whole group (%1 bodies).").arg(targets.size())
+            : QStringLiteral("Applied to the whole body."));
     }
 }
 

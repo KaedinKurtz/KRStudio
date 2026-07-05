@@ -7,6 +7,7 @@
 #include "RobotModel.hpp"      // krs::robot::RobotRegistry / LiveRobot (first-class Robot owner)
 #include "RobotBuilderScene.hpp"   // buildDemoGraph / spawnGraphBodies (ROBOT-COLLIDE gate fixture)
 #include "SettingsManager.hpp" // user-set physics knobs (gravity, solver, CCD, GPU gate, rate)
+#include "Constraint.hpp"      // krs::constraint -- assembly constraints -> PxD6 joints on build
 
 #include <QDebug>
 #include <algorithm>
@@ -85,6 +86,7 @@ struct SimulationController::PxImpl
     PxArticulationCache* articCache = nullptr;
     std::vector<PxArticulationLink*> articLinks;   // [0]=fixed root, [b+1]=joint b
     PxD6Joint* loopD6 = nullptr;                    // parallelogram closure (added in G.2)
+    std::vector<PxJoint*> constraintJoints;         // assembly-constraint D6s (released in destroy)
     // Phase V (V.3): per MOVING-link (0-based) solid entities + the rest link-pose
     // inverse, so writeBackArticulationViz drives each solid by its link delta-pose.
     std::vector<std::vector<entt::entity>> articVizEntities;
@@ -947,6 +949,8 @@ void SimulationController::buildPhysicsWorld()
 
     if (m_hasRobotSpec) buildArticulation();   // Phase G: live FANUC articulation
 
+    buildConstraintJoints();                   // assembly constraints -> PxD6 joints (passive linkages)
+
     qInfo() << "[Sim] world built:" << dynamicCount << "dynamic," << staticCount << "static bodies (+ground plane)";
 
     if (qEnvironmentVariableIsSet("KRS_BENCH")) {
@@ -965,6 +969,64 @@ void SimulationController::setRobotArticulationSpec(const krs::dyn::RobotArticSp
 {
     m_robotSpec = spec;
     m_hasRobotSpec = !spec.joints.empty();
+}
+
+void SimulationController::buildConstraintJoints()
+{
+#if defined(KR_WITH_PHYSX)
+    if (!m_px->scene || !m_px->physics || !m_scene) return;
+    auto& reg = m_scene->getRegistry();
+    auto* g = reg.ctx().find<krs::constraint::ConstraintGraphComponent>();
+    if (!g || g->constraints.empty()) return;
+    ensurePhysxExtensions();                       // PxD6Joint needs the extensions library
+    using namespace physx;
+    int made = 0, skipped = 0;
+    for (const auto& c : g->constraints) {
+        if (c.suppressed) { ++skipped; continue; }
+        const krs::constraint::AnchorWorldFrame wa = krs::constraint::anchorWorldFrame(reg, c.a);
+        const krs::constraint::AnchorWorldFrame wb = krs::constraint::anchorWorldFrame(reg, c.b);
+        if (!wa.valid || !wb.valid) { ++skipped; continue; }
+        auto itA = m_px->actors.find(c.a.body);
+        auto itB = m_px->actors.find(c.b.body);
+        PxRigidActor* actA = (itA != m_px->actors.end()) ? itA->second : nullptr;
+        PxRigidActor* actB = (itB != m_px->actors.end()) ? itB->second : nullptr;
+        if (!actA && !actB) { ++skipped; continue; }   // neither side is simulated
+        // JOINT world frame from the A anchor. PhysX's twist axis is local X; our anchors put the
+        // primary axis on Z -- so joint X = anchor Z, joint Y = anchor X, joint Z = anchor Y.
+        const glm::vec3 jx = wa.z;
+        glm::vec3 jy = wa.x - glm::dot(wa.x, jx) * jx;
+        if (glm::dot(jy, jy) < 1e-12f) {
+            jy = glm::cross(jx, glm::vec3(0, 0, 1));
+            if (glm::dot(jy, jy) < 1e-12f) jy = glm::cross(jx, glm::vec3(0, 1, 0));
+        }
+        jy = glm::normalize(jy);
+        const glm::vec3 jz = glm::cross(jx, jy);
+        const glm::quat q = glm::normalize(glm::quat_cast(glm::mat3(jx, jy, jz)));
+        const PxTransform jointW(PxVec3(wa.pos.x, wa.pos.y, wa.pos.z), PxQuat(q.x, q.y, q.z, q.w));
+        auto localPose = [&](PxRigidActor* act) {
+            return act ? act->getGlobalPose().transformInv(jointW) : jointW;   // null = world frame
+        };
+        PxD6Joint* d6 = PxD6JointCreate(*m_px->physics, actA, localPose(actA), actB, localPose(actB));
+        if (!d6) { ++skipped; continue; }
+        // lockedDof speaks the ANCHOR frame (Z primary): tz->eX, tx->eY, ty->eZ; rz->eTWIST,
+        // rx->eSWING1, ry->eSWING2 under the axis map above. Locked DOF freeze; the rest stay
+        // FREE -- that is exactly what lets a Revolute-constrained passive linkage swing when
+        // the robot shoves it.
+        const krs::constraint::DofSpec dof = krs::constraint::lockedDof(c.type);
+        d6->setMotion(PxD6Axis::eX,      dof.tz ? PxD6Motion::eLOCKED : PxD6Motion::eFREE);
+        d6->setMotion(PxD6Axis::eY,      dof.tx ? PxD6Motion::eLOCKED : PxD6Motion::eFREE);
+        d6->setMotion(PxD6Axis::eZ,      dof.ty ? PxD6Motion::eLOCKED : PxD6Motion::eFREE);
+        d6->setMotion(PxD6Axis::eTWIST,  dof.rz ? PxD6Motion::eLOCKED : PxD6Motion::eFREE);
+        d6->setMotion(PxD6Axis::eSWING1, dof.rx ? PxD6Motion::eLOCKED : PxD6Motion::eFREE);
+        d6->setMotion(PxD6Axis::eSWING2, dof.ry ? PxD6Motion::eLOCKED : PxD6Motion::eFREE);
+        d6->setConstraintFlag(PxConstraintFlag::eCOLLISION_ENABLED, false);   // jointed pairs may touch
+        m_px->constraintJoints.push_back(d6);
+        ++made;
+    }
+    if (made > 0 || skipped > 0)
+        qInfo() << "[Sim] assembly constraints:" << made << "PxD6 joint(s) created,"
+                << skipped << "skipped (suppressed/unresolved/no actor)";
+#endif
 }
 
 void SimulationController::buildArticulation()
@@ -1365,6 +1427,9 @@ void SimulationController::destroyPhysicsWorld()
     if (!m_px->scene) return;
     m_px->actors.clear();
     m_px->lastWritten.clear();
+    // Assembly-constraint joints go before their actors (the scene release frees the actors).
+    for (physx::PxJoint* j : m_px->constraintJoints) if (j) j->release();
+    m_px->constraintJoints.clear();
     // Phase G: tear the articulation down before the scene (cache + loop joint first).
     if (m_px->articCache)   { m_px->articCache->release();   m_px->articCache = nullptr; }
     if (m_px->loopD6)       { m_px->loopD6->release();       m_px->loopD6 = nullptr; }

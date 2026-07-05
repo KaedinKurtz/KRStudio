@@ -71,6 +71,7 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
             { "Fluid", "Fluid" }, { "Gas", "Gas" },
             { "Robot View", "Robot\nView" }, { "Node Editor", "Node\nEditor" },
             { "Data Recorder", "Data\nRecorder" }, { "Goal Workspace", "Goal\nWorkspace" },
+            { "Constraints", "Constraints" },
         };
         for (const auto& e : extra) {
             const QString title = QString::fromLatin1(e.title);

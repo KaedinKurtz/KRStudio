@@ -622,6 +622,21 @@ struct MateGraphComponent {
     std::uint64_t nextMateId = 1;                // monotonic, never reused (0 = unassigned)
 };
 
+// ===================== OBJECT GROUPS (nested macro objects) =====================
+// A GROUP is a first-class scene node: an empty ROOT entity (TransformComponent, no mesh) whose
+// members carry GroupMemberComponent. Clicking any member selects the GROUP (Alt+click selects the
+// member); gizmo edits on the root fan out as a rigid delta to every member (members keep WORLD
+// TransformComponents -- no re-parenting of the render path); texture/property applies expand to
+// the leaf members. Groups NEST (a member may itself be a group root).
+struct GroupComponent {
+    std::string name;
+    glm::mat4 lastXf{ 1.0f };   // the root transform LAST fanned out -- delta = current * inverse(lastXf)
+    bool visible = true;        // outliner eye toggle for the whole group
+};
+struct GroupMemberComponent {
+    entt::entity group = entt::null;   // the owning group ROOT
+};
+
 // Geometry-INVARIANT face key (FNV-1a-64) for the topological-naming mitigation: the SAME physical face
 // hashes to the SAME key across re-tessellation / re-import / array reordering, so a MateConnector can
 // re-anchor by key. Input MUST be a body-LOCAL BRepFace (placement-invariant channels only). 0 = degenerate.
