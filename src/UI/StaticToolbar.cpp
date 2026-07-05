@@ -71,7 +71,8 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
             { "Fluid", "Fluid" }, { "Gas", "Gas" },
             { "Robot View", "Robot\nView" }, { "Node Editor", "Node\nEditor" },
             { "Data Recorder", "Data\nRecorder" }, { "Goal Workspace", "Goal\nWorkspace" },
-            { "Constraints", "Constraints" },
+            { "Constraints", "Constraints" }, { "Assets", "Assets" },
+            { "Outliner", "Outliner" }, { "Diagnostics", "Diagnostics" },
         };
         for (const auto& e : extra) {
             const QString title = QString::fromLatin1(e.title);
@@ -264,16 +265,19 @@ void StaticToolbar::checkButtonForMenu(MenuType type)
 
 void StaticToolbar::setPanelButtonChecked(const QString& panelId, bool checked)
 {
-    auto it = m_panelButtons.constFind(panelId);
-    if (it == m_panelButtons.constEnd() || !it.value()) return;
-    QToolButton* btn = it.value();
-    if (btn->isChecked() == checked) return;
-    const QSignalBlocker block(btn);   // don't re-emit panelToggled -> avoid a feedback loop
-    btn->setChecked(checked);
+    // A dock can have SEVERAL toggle buttons (ribbon + Panels tab) -- sync every one.
+    for (auto it = m_panelButtons.constFind(panelId);
+         it != m_panelButtons.constEnd() && it.key() == panelId; ++it) {
+        QToolButton* btn = it.value();
+        if (!btn || btn->isChecked() == checked) continue;
+        const QSignalBlocker block(btn);   // don't re-emit panelToggled -> avoid a feedback loop
+        btn->setChecked(checked);
+    }
 }
 
 void StaticToolbar::selfTestClickPanel(const QString& panelId)
 {
+    // Click exactly ONE button (clicking every duplicate would double-toggle the dock).
     auto it = m_panelButtons.constFind(panelId);
     if (it != m_panelButtons.constEnd() && it.value()) it.value()->click(); // toggles + emits
 }

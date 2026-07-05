@@ -10,6 +10,10 @@
 #include "SimulationController.hpp"
 #include <glm/glm.hpp>
 #include <cmath>
+#if defined(_MSC_VER) && defined(_DEBUG)
+#  include <crtdbg.h>
+#  include <cstdlib>
+#endif
 
 // custom message handler (you can leave this out if you don�t need it)
 static void qtMessageOutput(QtMsgType type, const QMessageLogContext& ctx, const QString& msg)
@@ -54,6 +58,22 @@ static QSurfaceFormat createDefaultFormat()
 
 int main(int argc, char* argv[])
 {
+#if defined(_MSC_VER) && defined(_DEBUG)
+    // Debug CRT asserts (assert(), Qt's Q_ASSERT via qFatal, _CrtDbgReport) default
+    // to a MODAL DIALOG in a GUI app. If one fires during shutdown -- after the last
+    // window closed -- the dialog is invisible, pumps the event loop forever, and the
+    // process never exits (intermittent "app keeps running after close"). Route the
+    // reports to stderr and fail fast instead; a debugger still breaks via
+    // _CRTDBG_MODE_DEBUG. Set KRS_ASSERT_DIALOG=1 to restore the interactive dialogs.
+    if (qEnvironmentVariableIntValue("KRS_ASSERT_DIALOG") == 0) {
+        _set_error_mode(_OUT_TO_STDERR);                                  // assert() / _wassert
+        for (int rt : { _CRT_WARN, _CRT_ERROR, _CRT_ASSERT }) {
+            _CrtSetReportMode(rt, _CRTDBG_MODE_FILE | _CRTDBG_MODE_DEBUG);
+            _CrtSetReportFile(rt, _CRTDBG_FILE_STDERR);
+        }
+        _set_abort_behavior(0, _WRITE_ABORT_MSG);                         // no abort() dialog
+    }
+#endif
     qInstallMessageHandler(qtMessageOutput);
 
     // Identify the app so QSettings() resolves to a stable per-user store
@@ -140,11 +160,12 @@ int main(int argc, char* argv[])
     initShareRoot();
 
     // launch main window
+    int result = -1;
     try {
         MainWindow w;
         qInfo() << ">>> MainWindow constructed OK";
         w.show();
-        return app.exec();
+        result = app.exec();
     }
     catch (const std::exception& e) {
         qCritical() << "MainWindow threw std::exception:" << e.what();
@@ -155,9 +176,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    int result = app.exec();
-
-    // cleanly shut down DB
+    // cleanly shut down DB (previously dead code behind an early return)
     db::DatabaseManager::instance().shutdown();
     return result;
 }

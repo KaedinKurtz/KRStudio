@@ -78,6 +78,8 @@ signals:
 private:
     Ui::toolbarContainer* ui; // Pointer to the generated UI class
     ViewportManagerPopup* m_viewportManagerPopup;
-    QHash<QString, QToolButton*> m_panelButtons; // dock title -> its toolbar toggle button
-    QHash<QObject*, QString>     m_swatchThemes; // theme swatch frame -> theme id
+    // dock title -> its toggle button(s). MULTI: a dock may have both a dedicated ribbon button
+    // AND a Panels-tab button (Assets/Outliner/Diagnostics) -- checked-state sync updates all.
+    QMultiHash<QString, QToolButton*> m_panelButtons;
+    QHash<QObject*, QString>          m_swatchThemes; // theme swatch frame -> theme id
 };

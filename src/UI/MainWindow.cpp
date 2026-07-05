@@ -1647,7 +1647,16 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_fixedTopToolbar, &StaticToolbar::panelToggled, this,
         [this](const QString& title, bool on) {
             auto it = m_panelDocks.find(title);
-            if (it != m_panelDocks.end() && it.value()) it.value()->toggleView(on);
+            if (it == m_panelDocks.end() || !it.value()) return;
+            ads::CDockWidget* dock = it.value();
+            // RESTORE-ORPHAN-SAFE open: if a saved layout destroyed this dock's area, a bare
+            // toggleView(true) pops a FLOATING top-level window (the Assets-tab-unreachable
+            // class of bug) -- re-dock it into the right column instead.
+            if (on && dock->isClosed() && !dock->dockAreaWidget())
+                m_dockManager->addDockWidgetTab(ads::RightDockWidgetArea, dock);
+            else
+                dock->toggleView(on);
+            if (on) { dock->setAsCurrentTab(); dock->raise(); }
         });
     // Theme selector: persist via settings; the settings applier drives applyTheme().
     connect(m_fixedTopToolbar, &StaticToolbar::themeSelected, this,
@@ -2883,6 +2892,13 @@ MainWindow::MainWindow(QWidget* parent)
 // The destructor orchestrates a clean shutdown.
 MainWindow::~MainWindow()
 {
+    // Stop EVERY child timer (eval tick, ribbon sync, orb-reverse, panel refresh,
+    // spin, ...) before any member is torn down. If anything pumps the event loop
+    // mid-destruction (a modal dialog, a debug assert report), a live timer would
+    // fire its slot against half-destroyed members / a destroyed entt registry --
+    // observed as a cascade of assert dialogs that kept the closed app alive.
+    for (QTimer* t : findChildren<QTimer*>())
+        t->stop();
     m_masterRenderTimer->stop();
     m_menus.clear();
 

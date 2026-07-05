@@ -11,6 +11,13 @@
 #include <algorithm>
 #include <cstddef>
 
+// GL functions for the CURRENT context (nullptr when no context is current).
+// Texture2D no longer inherits QOpenGLFunctions_4_3_Core -- see Texture2D.hpp.
+static QOpenGLFunctions_4_3_Core* currentGl() {
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+    return ctx ? QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(ctx) : nullptr;
+}
+
 // Helper to get a fullscreen quad VAO, creating it if necessary.
 static GLuint getFullscreenQuadVAO(QOpenGLFunctions_4_3_Core* gl) {
     static GLuint quadVAO = 0;
@@ -38,14 +45,14 @@ static GLuint getFullscreenQuadVAO(QOpenGLFunctions_4_3_Core* gl) {
 }
 
 
-Texture2D::Texture2D() {
-    // Initialize OpenGL function pointers
-    initializeOpenGLFunctions();
-}
+Texture2D::Texture2D() = default;
 
 Texture2D::~Texture2D() {
     if (_id) {
-        glDeleteTextures(1, &_id);
+        // Texture ids live in the app-wide share group (AA_ShareOpenGLContexts), so
+        // any current context can delete them. With none current (late teardown) the
+        // id is reclaimed by the driver at context/process destruction.
+        if (auto* gl = currentGl()) gl->glDeleteTextures(1, &_id);
         _id = 0;
     }
 }
@@ -120,15 +127,17 @@ bool Texture2D::loadHDR(const std::string& path) {
     _internalFormat = internalFormat;
     _dataFormat = dataFormat;
 
-    if (!_id) glGenTextures(1, &_id);
-    glBindTexture(GL_TEXTURE_2D, _id);
+    auto* gl = currentGl();
+    if (!gl) { stbi_image_free(data); return false; }
+    if (!_id) gl->glGenTextures(1, &_id);
+    gl->glBindTexture(GL_TEXTURE_2D, _id);
     // GL_FLOAT upload — the key difference from generate(), which hardcodes
     // GL_UNSIGNED_BYTE and would clamp the HDR to 8-bit LDR.
-    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, w, h, 0, dataFormat, GL_FLOAT, data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, w, h, 0, dataFormat, GL_FLOAT, data);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     stbi_image_free(data);
     return true;
@@ -187,15 +196,17 @@ void Texture2D::generateFloat(int width, int height, GLenum internalFormat, GLen
     _internalFormat = internalFormat;
     _dataFormat = dataFormat;
 
-    if (!_id) glGenTextures(1, &_id);
-    glBindTexture(GL_TEXTURE_2D, _id);
+    auto* gl = currentGl();
+    if (!gl) return;
+    if (!_id) gl->glGenTextures(1, &_id);
+    gl->glBindTexture(GL_TEXTURE_2D, _id);
     // GL_FLOAT upload (the key difference from generate(), which uses GL_UNSIGNED_BYTE).
-    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_FLOAT, data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_FLOAT, data);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 bool Texture2D::generate(int width, int height, GLenum internalFormat, GLenum dataFormat, const void* data) {
@@ -212,32 +223,37 @@ bool Texture2D::generate(int width, int height, GLenum internalFormat, GLenum da
     _internalFormat = internalFormat;
     _dataFormat = dataFormat;
 
-    if (!_id) glGenTextures(1, &_id);
-    glBindTexture(GL_TEXTURE_2D, _id);
-    while (glGetError() != GL_NO_ERROR) {}          // drain stale errors
-    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_UNSIGNED_BYTE, data);
-    const GLenum err = glGetError();
+    auto* gl = currentGl();
+    if (!gl) {
+        qWarning() << "Texture2D::generate called with no current GL context";
+        return false;
+    }
+    if (!_id) gl->glGenTextures(1, &_id);
+    gl->glBindTexture(GL_TEXTURE_2D, _id);
+    while (gl->glGetError() != GL_NO_ERROR) {}      // drain stale errors
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_UNSIGNED_BYTE, data);
+    const GLenum err = gl->glGetError();
     if (err != GL_NO_ERROR) {
         qWarning() << "Texture2D::generate glTexImage2D failed err=" << err
                    << "internal=" << internalFormat << "data=" << dataFormat;
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glDeleteTextures(1, &_id); _id = 0;          // 0 -> callers fall back instead of binding black
+        gl->glBindTexture(GL_TEXTURE_2D, 0);
+        gl->glDeleteTextures(1, &_id); _id = 0;      // 0 -> callers fall back instead of binding black
         return false;
     }
 
     // Default parameters
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl->glGenerateMipmap(GL_TEXTURE_2D);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
     return true;
 }
 
 void Texture2D::bind(unsigned int unit) const {
-    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(QOpenGLContext::currentContext());
+    auto* gl = currentGl();
     if (gl) {
         gl->glActiveTexture(GL_TEXTURE0 + unit);
         gl->glBindTexture(GL_TEXTURE_2D, _id);
@@ -245,23 +261,29 @@ void Texture2D::bind(unsigned int unit) const {
 }
 
 void Texture2D::setWrap(GLenum wrapS, GLenum wrapT) {
-    glBindTexture(GL_TEXTURE_2D, _id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    auto* gl = currentGl();
+    if (!gl) return;
+    gl->glBindTexture(GL_TEXTURE_2D, _id);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Texture2D::setFilter(GLenum minFilter, GLenum magFilter) {
-    glBindTexture(GL_TEXTURE_2D, _id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    auto* gl = currentGl();
+    if (!gl) return;
+    gl->glBindTexture(GL_TEXTURE_2D, _id);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Texture2D::generateMipmaps() {
-    glBindTexture(GL_TEXTURE_2D, _id);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    auto* gl = currentGl();
+    if (!gl) return;
+    gl->glBindTexture(GL_TEXTURE_2D, _id);
+    gl->glGenerateMipmap(GL_TEXTURE_2D);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 bool Texture2D::downscale(int factorX, int factorY) {
@@ -270,10 +292,12 @@ bool Texture2D::downscale(int factorX, int factorY) {
     int newH = _height / factorY;
     if (newW < 1 || newH < 1) return false;
 
+    auto* gl = currentGl();
+    if (!gl) return false;
     int channels = (_dataFormat == GL_RGBA || _dataFormat == GL_SRGB_ALPHA) ? 4 : 3;
     std::vector<unsigned char> pixels(_width * _height * channels);
-    glBindTexture(GL_TEXTURE_2D, _id);
-    glGetTexImage(GL_TEXTURE_2D, 0, _dataFormat, GL_UNSIGNED_BYTE, pixels.data());
+    gl->glBindTexture(GL_TEXTURE_2D, _id);
+    gl->glGetTexImage(GL_TEXTURE_2D, 0, _dataFormat, GL_UNSIGNED_BYTE, pixels.data());
 
     std::vector<unsigned char> scaled(newW * newH * channels);
 
@@ -306,7 +330,8 @@ std::shared_ptr<Texture2D> Texture2D::tiled(int tileX, int tileY) const {
     int channels = (_dataFormat == GL_RGBA || _dataFormat == GL_SRGB_ALPHA) ? 4 : 3;
     std::vector<unsigned char> pixels(_width * _height * channels);
 
-    auto* gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_4_3_Core>(QOpenGLContext::currentContext());
+    auto* gl = currentGl();
+    if (!gl) return nullptr;
 
     gl->glBindTexture(GL_TEXTURE_2D, _id);
     gl->glGetTexImage(GL_TEXTURE_2D, 0, _dataFormat, GL_UNSIGNED_BYTE, pixels.data());

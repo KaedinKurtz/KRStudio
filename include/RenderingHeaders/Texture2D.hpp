@@ -10,8 +10,16 @@
 // A utility class for managing 2D OpenGL textures using Qt's QOpenGLFunctions_4_3_Core.
 // Supports loading from file, manual generation, wrapping/filtering settings,
 // mipmap generation, downscaling, and tiling.
+//
+// Deliberately NOT derived from QOpenGLFunctions_4_3_Core: an inherited functions
+// object binds backends of whichever context is current at CONSTRUCTION and derefs
+// them at destruction. Textures are shared_ptrs that routinely outlive that context
+// (e.g. main-renderer textures freed during the Robot View renderer's teardown), and
+// the stale deref underflows Qt's backend refcount -> Q_ASSERT -> an invisible CRT
+// dialog that keeps the closed app alive. GL calls resolve the CURRENT context's
+// functions per call instead.
 
-class Texture2D : protected QOpenGLFunctions_4_3_Core {
+class Texture2D {
 public:
     // Constructors & Destructor
     Texture2D();
