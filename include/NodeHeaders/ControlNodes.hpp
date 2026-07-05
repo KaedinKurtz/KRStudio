@@ -25,6 +25,9 @@ class Kalman1DNode : public Node {
 public:
     Kalman1DNode();
     void compute() override;
+    // Estimate = f(measurement HISTORY): a recursive estimator, not a pure function of the
+    // current editable inputs (GATE INPUT-BIND drive-provable contract).
+    bool isPureInputFunction() const override { return false; }
 private:
     bool m_init = false; double m_x = 0.0, m_P = 1.0;
 };

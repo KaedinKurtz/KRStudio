@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -372,12 +374,25 @@ static bool loopbackFrameIntegrity() {
     return pass;
 }
 
+// Open a crossed UDP pair (tx:rx / rx:tx) on the first FREE port pair. Any Windows service can
+// squat a fixed UDP port (seen live: svchost holding 57110 -> "open FAILED" with no code defect),
+// so a single hardcoded pair makes the gate environmental. Walks a few bases before giving up.
+static bool openCrossedPair(IVirtualCAN& a, IVirtualCAN& b, std::initializer_list<int> bases) {
+    for (int base : bases) {
+        const std::string ab = std::to_string(base + 1) + ":" + std::to_string(base);
+        const std::string ba = std::to_string(base) + ":" + std::to_string(base + 1);
+        if (a.open(ab) && b.open(ba)) return true;
+        a.close(); b.close();
+    }
+    return false;
+}
+
 static bool canBidirectional() {
     auto A = makeVirtualCAN(), B = makeVirtualCAN();
 #ifdef __linux__
     bool ok = A->open("vcan0") && B->open("vcan0");
 #else
-    bool ok = A->open("57101:57100") && B->open("57100:57101"); // crossed UDP ports
+    bool ok = openCrossedPair(*A, *B, { 57100, 57200, 57300, 58400 }); // crossed UDP ports
 #endif
     if (!ok) { std::fprintf(stderr, "[HIL] CAN bridge open FAILED\n"); return false; }
     const int N = 64; int got = 0, bad = 0;
@@ -412,9 +427,9 @@ bool runCanPlantSelfTest() {
 #ifdef __linux__
     bool ok = host->open("vcan0") && plant->open("vcan0");
 #else
-    bool ok = host->open("57111:57110") && plant->open("57110:57111");
+    bool ok = openCrossedPair(*host, *plant, { 57110, 57210, 57310, 58410 });
 #endif
-    if (!ok) { std::fprintf(stderr, "[HIL] CAN_PLANT open FAILED\n"); return false; }
+    if (!ok) { std::fprintf(stderr, "[HIL] CAN_PLANT open FAILED (all fallback port pairs in use)\n"); return false; }
 
     const int axis = 0; const float m = 1.0f, dt = 0.001f; const float fx = 8.0f;
     float cmd[3] = { fx, 0, 0 };

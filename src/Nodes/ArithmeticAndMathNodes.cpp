@@ -360,7 +360,12 @@ namespace NodeLibrary {
         auto input = getInput<float>("Input");
         auto min = getInput<float>("Min");
         auto max = getInput<float>("Max");
-        if (input && min && max) setOutput("Result", std::clamp(*input, *min, *max));
+        // Order the bounds: an operator (or a wire) can feed Min > Max, and std::clamp with
+        // inverted bounds is UB (debug CRT asserts, release returns garbage).
+        if (input && min && max) {
+            const float lo = std::min(*min, *max), hi = std::max(*min, *max);
+            setOutput("Result", std::clamp(*input, lo, hi));
+        }
     }
     namespace {
         struct ClampRegistrar {

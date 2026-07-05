@@ -61,6 +61,9 @@ namespace NodeLibrary {
         CustomScriptNode();
         void compute() override;
         void parseAndRebuildPorts();
+        // Outputs defer to the USER SCRIPT (an external program; execution not yet implemented),
+        // so they are not a pure function of the editable inputs (GATE INPUT-BIND contract).
+        bool isPureInputFunction() const override { return false; }
     private:
         std::any m_compiledScript;
     };

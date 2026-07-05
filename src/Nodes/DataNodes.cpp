@@ -268,7 +268,10 @@ public:
                            enumRow(this, QStringLiteral("Interp"), "Interp", { QStringLiteral("Nearest"), QStringLiteral("Linear"), QStringLiteral("Cubic") }) });
     }
 
-    bool isPureInputFunction() const override { return true; }                     // Value = f(Axis) given a file
+    // Value = f(Axis) only GIVEN a file -- an external resource, so the output is NOT a pure
+    // function of the editable inputs (GATE INPUT-BIND: without a file the Axis widget provably
+    // cannot drive Value, which is correct behavior, not a binding defect).
+    bool isPureInputFunction() const override { return false; }
 
     void compute() override {
         ensureLoaded();
@@ -332,7 +335,9 @@ public:
         return stackRows({ strRow(this, QStringLiteral("LUT"), "file", QStringLiteral("LUT (*.klut)")) });
     }
 
-    bool isPureInputFunction() const override { return true; }                     // Value = f(X,Y) given a file
+    // Value = f(X,Y) only GIVEN a .klut -- an external resource, so NOT a pure function of the
+    // editable inputs (GATE INPUT-BIND: no file -> X/Y widgets provably cannot drive Value).
+    bool isPureInputFunction() const override { return false; }
 
     void compute() override {
         ensureLoaded();

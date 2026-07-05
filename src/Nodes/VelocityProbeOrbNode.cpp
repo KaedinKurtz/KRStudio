@@ -34,6 +34,10 @@ public:
         m_ports.push_back({ "Count",    { "int", "unitless" },  Port::Direction::Output, this });
     }
 
+    // Outputs come from PROBING THE LIVE FLUID SCENE at the orb's volume -- scene state, not a
+    // pure function of the editable inputs (GATE INPUT-BIND drive-provable contract).
+    bool isPureInputFunction() const override { return false; }
+
     void compute() override {
         if (!m_scene) return;
         auto& reg = m_scene->getRegistry();
