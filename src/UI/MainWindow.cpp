@@ -6,6 +6,7 @@
 #include "SubgraphNode.hpp"       // krs::nodes::registerDiscoveredKNodes
 #include "KParts.hpp"             // krs::parts::PartLibrary
 #include "DataRecorderPanel.hpp"  // the Data Recorder / logging-graph dock panel
+#include "GoalWorkspacePanel.hpp" // the Goal Workspace dock (goal stack + plan & knowledge to-do)
 #include "PropertyCatalog.hpp"    // krs::twin catalog + the unconditional per-tick state publisher
 #include "WorldState.hpp"         // krs::world task-level world model (P2), refreshed per eval tick
 #include "SkillRuntime.hpp"       // krs::skill live closed-loop task executor (P3), pumped per eval tick
@@ -1391,6 +1392,15 @@ MainWindow::MainWindow(QWidget* parent)
     recorderDock->setStyleSheet(sidePanelStyle);
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, recorderDock, m_propertiesArea);
     registerPanelDock(QStringLiteral("Data Recorder"), recorderDock);
+
+    // Goal Workspace: the declarative goal-definition dock -- world browser (knowledge badges),
+    // goal stack with live truth, [Plan] -> regression + knowledge to-do, [Execute] -> the live
+    // SkillRuntime this window's eval loop pumps.
+    auto* goalDock = new ads::CDockWidget(QStringLiteral("Goal Workspace"));
+    goalDock->setWidget(new GoalWorkspacePanel(m_scene.get(), this));
+    goalDock->setStyleSheet(sidePanelStyle);
+    m_dockManager->addDockWidget(ads::RightDockWidgetArea, goalDock, m_propertiesArea);
+    registerPanelDock(QStringLiteral("Goal Workspace"), goalDock);
 
     connect(graphModel.get(), &QtNodes::AbstractGraphModel::nodeCreated,
         this, [this, graphModel](QtNodes::NodeId nodeId) {
