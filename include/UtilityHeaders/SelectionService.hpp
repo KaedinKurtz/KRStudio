@@ -26,12 +26,14 @@
 
 namespace krs::sel {
 
-enum class FeatureType { None = -1, Plane = 0, Cylinder = 1, Cone = 2, Sphere = 3, Other = 4 };
+enum class FeatureType { None = -1, Plane = 0, Cylinder = 1, Cone = 2, Sphere = 3, Other = 4,
+                         Vertex = 5 };   // Vertex: a measure-mode point pick (nearest tessellation vertex)
 
 struct Selection {
     bool valid = false;                    // a B-Rep face was resolved
     entt::entity entity = entt::null;
     int faceId = -1;
+    int groupId = 0;                       // measure-mode ITEM id: shift-extended faces share one group
     FeatureType type = FeatureType::None;
     glm::vec3 hitPoint{ 0.0f };            // ray-surface intersection (world)
     // analytic feature params in WORLD frame (from the B-Rep, never a mesh fit):
@@ -243,10 +245,18 @@ inline bool sameFeature(const Selection& a, const Selection& b) {
 // is the accumulating SET a CLICK commits (the multi-feature selection the robot-
 // builder needs). Both store the EXACT krs::sel::pick result -- no re-derivation.
 struct SelectionState {
-    bool enabled = true;                 // feature-selection mode (View toggle)
+    // Feature picking is a TRIGGERED MODE, never the ambient default: with it always-on, every
+    // stray click committed a persistent glowing feature (and armed the mate workflow), which made
+    // selecting ANYTHING hazardous. Armed by: the Builder's "Choose joint bores" button (with a
+    // boreQuota that auto-disarms), the ribbon Measure mode, or the View-menu manual override.
+    bool enabled = false;
     bool fifoTwoBores = false;           // robot-builder bore picking: keep AT MOST 2 CYLINDER (bore-edge)
                                          // selections, FIFO -- clicking a 3rd bore evicts the OLDEST, so
                                          // there are only ever 2 bore edges selected at a time.
+    int  boreQuota = 0;                  // choose-bores mode: >0 auto-DISARMS (enabled=false) once this many
+                                         // bores are committed; the picks stay selected for the Define/Mate.
+    bool measureMode = false;            // Onshape-style measure: FIFO-2 ITEMS (groups), any feature kind
+    int  nextGroupId = 1;                // measure item id allocator
     Selection hover;                     // current hovered feature (valid==false => none)
     std::vector<Selection> selected;     // committed set (accumulates across clicks)
 };
@@ -279,6 +289,16 @@ inline void updateHover(SelectionState& st, entt::registry& reg, const krs::pick
     st.hover = pickPreferCylinder(reg, ray);   // bores win over the flat face around them
 }
 
+// CHOOSE-BORES completion: once the quota of committed bores is reached the mode DISARMS ITSELF
+// (enabled=false) with the picks kept selected -- the operator clicks exactly the bores they want
+// and the viewport goes back to normal clicking, no lingering pick-anything hazard.
+inline void autoDisarmOnQuota(SelectionState& st) {
+    if (!st.fifoTwoBores || st.boreQuota <= 0) return;
+    int n = 0;
+    for (const auto& q : st.selected) if (q.valid && q.type == FeatureType::Cylinder) ++n;
+    if (n >= st.boreQuota) { st.enabled = false; st.boreQuota = 0; }
+}
+
 // CLICK / COMMIT: resolve the ray; on a hit ADD the feature to the selected SET
 // (it ACCUMULATES -- a second pick does NOT clear the first). Re-picking an already-
 // selected feature TOGGLES it off. A miss leaves the set untouched (does not clear).
@@ -305,6 +325,7 @@ inline Selection commitSelection(SelectionState& st, entt::registry& reg,
     st.selected.push_back(s);
     enforceFifoTwoBores(st);                             // keep only the 2 most-recent bore edges (FIFO)
     enforceSelectionCap(st);                             // global FIFO cap (no unbounded overlay pile-up)
+    autoDisarmOnQuota(st);                               // choose-bores mode ends itself once the pair is in
     return s;
 }
 
@@ -331,6 +352,73 @@ inline Selection commitSelectionCycled(SelectionState& st, entt::registry& reg,
     st.selected.push_back(s);
     enforceFifoTwoBores(st);                             // keep only the 2 most-recent bore edges (FIFO)
     enforceSelectionCap(st);                             // global FIFO cap (no unbounded overlay pile-up)
+    autoDisarmOnQuota(st);                               // choose-bores mode ends itself once the pair is in
+    return s;
+}
+
+// ---------------------------------------------------------------------------
+// MEASURE MODE (Onshape-style) -- the FIFO-2 ITEM buffer.
+// An ITEM (groupId) is one logical measurand: usually a single feature, or a
+// shift-extended set of faces treated as one plane (areas sum). A plain click
+// STARTS a new item; shift-click JOINS the current one; at most two items live
+// (the OLDEST is evicted whole). Re-picking a face toggles it off.
+// ---------------------------------------------------------------------------
+
+// Vertex pick (measure mode, Ctrl+click): the nearest vertex of the hit triangle. On a
+// tessellated B-Rep the tessellation vertices lie on model edges/corners, so a corner click
+// lands on a TRUE model vertex; on a raw mesh it is honestly the nearest mesh vertex.
+inline Selection pickVertex(entt::registry& reg, const krs::pick::Ray& ray) {
+    const auto hit = krs::pick::pickMesh(reg, ray);
+    if (!hit) return Selection{};
+    const auto* mesh = reg.try_get<RenderableMeshComponent>(hit->entity);
+    if (!mesh || hit->tri < 0 || std::size_t(hit->tri) * 3 + 2 >= mesh->indices.size()) return Selection{};
+    glm::mat4 M(1.0f);
+    if (const auto* xf = reg.try_get<TransformComponent>(hit->entity)) M = xf->getTransform();
+    float bestD = 3.4e38f; glm::vec3 bestP(0.0f);
+    for (int k = 0; k < 3; ++k) {
+        const glm::vec3 p = glm::vec3(M * glm::vec4(
+            mesh->vertices[mesh->indices[std::size_t(hit->tri) * 3 + std::size_t(k)]].position, 1.0f));
+        const float d = glm::distance(p, hit->worldPos);
+        if (d < bestD) { bestD = d; bestP = p; }
+    }
+    Selection s;
+    s.valid = true; s.entity = hit->entity; s.faceId = -1;
+    s.type = FeatureType::Vertex;
+    s.hitPoint = bestP;
+    return s;
+}
+
+// Measure commit: extend=true (shift) joins the current item; vertexPick=true (ctrl) snaps to the
+// nearest tessellation vertex instead of resolving a face. Returns the resolved Selection.
+inline Selection commitMeasure(SelectionState& st, entt::registry& reg,
+                               const krs::pick::Ray& ray, bool extend, bool vertexPick = false) {
+    Selection s = vertexPick ? pickVertex(reg, ray) : pickPreferCylinder(reg, ray);
+    if (!s.valid) return s;                              // miss -> buffer untouched
+    if (s.faceId >= 0) {                                 // vertices never toggle (faceId -1 is not an identity)
+        for (std::size_t i = 0; i < st.selected.size(); ++i)
+            if (sameFeature(st.selected[i], s)) {
+                st.selected.erase(st.selected.begin() + std::ptrdiff_t(i));
+                return s;
+            }
+    }
+    if (extend && !st.selected.empty()) s.groupId = st.selected.back().groupId;   // join the current item
+    else                                s.groupId = st.nextGroupId++;             // start a new item
+    st.selected.push_back(s);
+    // FIFO-2 items: while more than two DISTINCT groups live, evict the oldest group whole.
+    auto distinctGroups = [&st] {
+        std::vector<int> g;
+        for (const auto& q : st.selected)
+            if (std::find(g.begin(), g.end(), q.groupId) == g.end()) g.push_back(q.groupId);
+        return g;
+    };
+    std::vector<int> ids = distinctGroups();
+    while (ids.size() > 2) {
+        const int oldest = ids.front();
+        st.selected.erase(std::remove_if(st.selected.begin(), st.selected.end(),
+                              [oldest](const Selection& q) { return q.groupId == oldest; }),
+                          st.selected.end());
+        ids = distinctGroups();
+    }
     return s;
 }
 
@@ -350,6 +438,7 @@ inline void refreshSelections(SelectionState& st, entt::registry& reg) {
             if (f.valid) {
                 const bool nearEnd0 = glm::distance(s.hitPoint, s.axisEnd0) <= glm::distance(s.hitPoint, s.axisEnd1);
                 f.hitPoint = nearEnd0 ? f.axisEnd0 : f.axisEnd1;
+                f.groupId = s.groupId;                   // the measure ITEM id survives the re-derivation
                 s = f;
             }
         }

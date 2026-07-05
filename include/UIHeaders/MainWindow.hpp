@@ -85,6 +85,9 @@ protected:
     // No changes needed here
     void setDockManagerBaseStyle();
     void applyCameraColorToDock(ads::CDockWidget* dock, entt::entity camEntity);
+    // HOT-RELOAD snapshot happens HERE (not aboutToQuit): the camera rig + viewports are still
+    // alive, so the saved .kstate keeps the camera pose the restore puts back.
+    void closeEvent(QCloseEvent* event) override;
 
 private:
 

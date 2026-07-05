@@ -94,6 +94,7 @@ private:
     bool m_hasSignaledReady = false;
 
     QLabel* m_statsOverlay;
+    class MeasureHud* m_measureHud = nullptr;    // measure-mode corner readout (self-hiding)
 
     QPoint m_pressPos;
     bool   m_maybeClick = false;

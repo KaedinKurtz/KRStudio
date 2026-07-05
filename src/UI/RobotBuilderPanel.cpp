@@ -197,6 +197,16 @@ void RobotBuilderPanel::initializeUI()
         "Oppose = axes face each other (child flipped 180°). Re-Define to change."));
     alignForm->addRow(QStringLiteral("Alignment"), m_alignCombo);
     layout->addWidget(alignBox);
+    // CHOOSE-BORES is a TRIGGERED MODE (Onshape-style), not the ambient default: latch the button,
+    // click the two bores (the mode disarms ITSELF after the pair), then Define. Feature picking
+    // being always-on made every stray click commit a persistent glowing feature.
+    m_chooseBoresBtn = new QPushButton(QStringLiteral("Choose Joint Bores  (click 2)"), content);
+    m_chooseBoresBtn->setObjectName(QStringLiteral("rbChooseBoresButton"));
+    m_chooseBoresBtn->setCheckable(true);
+    m_chooseBoresBtn->setToolTip(QStringLiteral(
+        "Arms bore picking: click the two bores to joint. The mode turns itself off once both are "
+        "picked (they stay selected for Define). Click again to cancel."));
+    layout->addWidget(m_chooseBoresBtn);
     m_defineBtn = new QPushButton(QStringLiteral("Define Revolute from 2 Selected Bores"), content);
     m_defineBtn->setObjectName(QStringLiteral("rbDefineFromFeaturesButton"));
     layout->addWidget(m_defineBtn);
@@ -333,6 +343,26 @@ void RobotBuilderPanel::setupConnections()
     connect(m_deleteBtn,     &QPushButton::clicked,           this, &RobotBuilderPanel::onDeleteJoint);
     connect(m_defineBtn,     &QPushButton::clicked,           this, &RobotBuilderPanel::onDefineFromFeatures);
     connect(m_clearSelBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onClearSelection);
+    // Choose-bores mode: latch -> arm picking with a quota of 2 (the backend disarms itself once
+    // both bores are in; refreshBoreSlots syncs the latch back). Unlatch manually -> cancel.
+    connect(m_chooseBoresBtn, &QPushButton::toggled, this, [this](bool on) {
+        if (!m_scene) return;
+        auto& reg = m_scene->getRegistry();
+        auto* st = reg.ctx().find<krs::sel::SelectionState>();
+        if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
+        if (on) {
+            krs::sel::clearSelection(*st);
+            st->enabled = true;
+            st->fifoTwoBores = true;
+            st->measureMode = false;
+            st->boreQuota = 2;
+            setStatus(QStringLiteral("Bore picking armed: click bore 1 of 2 (hover shows the ring)."));
+        } else {
+            st->enabled = false;
+            st->boreQuota = 0;
+            setStatus(QStringLiteral("Bore picking off."));
+        }
+    });
     connect(m_applyLimitBtn, &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyLimit);
     connect(m_applyAxisBtn,  &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyAxisOrigin);
     connect(m_applyDirBtn,   &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyAxisDir);
@@ -604,7 +634,7 @@ void RobotBuilderPanel::onLoadDemo()
             reg.emplace_or_replace<TagComponent>(lr->root, std::string("Demo Robot"));
         }
     }
-    if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) { st->enabled = true; st->fifoTwoBores = true; }  // bore-picking live, FIFO 2
+    // (bore picking is NOT auto-armed anymore -- it is the Choose Joint Bores triggered mode)
     {   // ksave provenance: the demo rebuilds from its recipe (builder 0, no CAD source)
         auto* sr = reg.ctx().find<krs::ksave::RobotSourceRegistry>();
         if (!sr) sr = &reg.ctx().emplace<krs::ksave::RobotSourceRegistry>();
@@ -628,9 +658,9 @@ void RobotBuilderPanel::editRobot(int robotId)
     if (m_isUpdatingUI || !m_scene) return;
     auto& reg = m_scene->getRegistry();
 
-    // Authoring intent -> ensure feature (bore) picking is live so "Define from 2 bores" can collect
-    // them (the View toggle may have turned it off; binding a robot for editing turns it back on).
-    if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) { st->enabled = true; st->fifoTwoBores = true; }
+    // Bore picking is NOT auto-armed on bind anymore: with it always-on, clicking a robot in the
+    // outliner silently turned every subsequent viewport click into a persistent feature commit.
+    // The operator arms it deliberately via the Choose Joint Bores button (quota-2, self-disarming).
 
     // Authoring graph already represents this robot -> edit it directly (keeps any
     // un-jointed bodies / bore features authored this session).
@@ -924,18 +954,23 @@ void RobotBuilderPanel::onDefineFromFeatures()
     }
 
     // The joint frame = the interface: origin at the (now coincident) faces, axis concentric to both.
+    // Derived from the POST-SNAP freshened pick (snapA/snapB), NEVER the pre-snap pf: the snap
+    // rotates a whole subtree, and on the delete-then-re-mate path the pre-snap frame is stale --
+    // it stamped a joint axis TILTED off the mated bores (the J0 re-mate bug) even though the
+    // snap itself and defineFromFeatures' own derivation were correct.
+    const krs::rbuild::RBJoint pfSnap = aIsParent ? faceFrame(snapA) : faceFrame(snapB);
     const int pj = g->jointBetween(parent, child);
     if (pj >= 0) {
         krs::rbuild::EditController c2{ g };
-        c2.setJointAxis(pj, pf.axisDir);             // concentric axis (normal to the selected faces)
-        g->joints[pj].axisPos = pf.axisPos;          // origin at the interface of the two faces
+        c2.setJointAxis(pj, pfSnap.axisDir);         // concentric axis, normal to the SNAPPED faces
+        g->joints[pj].axisPos = pfSnap.axisPos;      // origin at the coincident interface
     }
 
     if (sel) krs::sel::clearSelection(*sel);   // consume the pair so the next joint starts fresh
     setStatus(QStringLiteral("Mated B%1 (child) onto B%2 (parent): interface (%3, %4, %5), axis (%6, %7, %8). DOF %9->%10")
         .arg(child).arg(parent)
-        .arg(pf.axisPos.x, 0, 'f', 3).arg(pf.axisPos.y, 0, 'f', 3).arg(pf.axisPos.z, 0, 'f', 3)
-        .arg(pf.axisDir.x, 0, 'f', 3).arg(pf.axisDir.y, 0, 'f', 3).arg(pf.axisDir.z, 0, 'f', 3)
+        .arg(pfSnap.axisPos.x, 0, 'f', 3).arg(pfSnap.axisPos.y, 0, 'f', 3).arg(pfSnap.axisPos.z, 0, 'f', 3)
+        .arg(pfSnap.axisDir.x, 0, 'f', 3).arg(pfSnap.axisDir.y, 0, 'f', 3).arg(pfSnap.axisDir.z, 0, 'f', 3)
         .arg(before).arg(ctrl.dof()));
     refresh();
     emit graphChanged();
@@ -1106,6 +1141,24 @@ void RobotBuilderPanel::refreshBoreSlots()
     auto& reg = m_scene->getRegistry();
     auto* sel = reg.ctx().find<krs::sel::SelectionState>();
     auto* g   = graph();
+
+    // Sync the choose-bores latch with the backend: the mode DISARMS ITSELF once the pair is
+    // committed (autoDisarmOnQuota), so unlatch without re-triggering the toggle handler, and
+    // count down on the label while armed.
+    if (m_chooseBoresBtn) {
+        const bool armed = sel && sel->enabled && sel->fifoTwoBores && sel->boreQuota > 0;
+        if (m_chooseBoresBtn->isChecked() && !armed) {
+            QSignalBlocker block(m_chooseBoresBtn);
+            m_chooseBoresBtn->setChecked(false);
+        }
+        int cyls = 0;
+        if (sel) for (const auto& s : sel->selected)
+            if (s.valid && s.type == krs::sel::FeatureType::Cylinder) ++cyls;
+        const QString label = armed
+            ? QStringLiteral("Click bore %1 of 2…  (click again to cancel)").arg(std::min(cyls + 1, 2))
+            : QStringLiteral("Choose Joint Bores  (click 2)");
+        if (m_chooseBoresBtn->text() != label) m_chooseBoresBtn->setText(label);
+    }
 
     std::vector<const krs::sel::Selection*> cyls;
     if (sel) for (const auto& s : sel->selected)

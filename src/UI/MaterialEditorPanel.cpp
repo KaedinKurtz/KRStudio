@@ -160,6 +160,11 @@ void MaterialEditorPanel::armFacePick() {
 void MaterialEditorPanel::disarmFacePick() {
     m_facePickArmed = false;
     if (m_pickFaceBtn && m_pickFaceBtn->isChecked()) { const QSignalBlocker b(m_pickFaceBtn); m_pickFaceBtn->setChecked(false); }
+    // Feature picking is a triggered mode now (default OFF) -- release it, unless another mode
+    // (choose-bores / measure) armed it for its own workflow.
+    if (m_scene)
+        if (auto* st = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>())
+            if (!st->fifoTwoBores && !st->measureMode) st->enabled = false;
 }
 
 void MaterialEditorPanel::onApply() {

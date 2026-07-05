@@ -11,7 +11,9 @@
 #include "WorldState.hpp"         // krs::world task-level world model (P2), refreshed per eval tick
 #include "SkillRuntime.hpp"       // krs::skill live closed-loop task executor (P3), pumped per eval tick
 #include "Measure.hpp"            // krs::measure -- the ribbon Measure tool's math (B-Rep features)
+#include "MeasureHud.hpp"         // measure-mode viewport readout (theme colors set in applyTheme)
 #include <QStandardPaths>
+#include <QCloseEvent>
 #include <QFile>
 #include <QSettings>
 #include <QProcessEnvironment>
@@ -980,22 +982,55 @@ MainWindow::MainWindow(QWidget* parent)
     bool anyKrsEnv = false;
     for (const QString& k : QProcessEnvironment::systemEnvironment().keys())
         if (k.startsWith(QStringLiteral("KRS_"))) { anyKrsEnv = true; break; }
-    if (bootFanuc && !anyKrsEnv) {
-        const QString last = QSettings().value(QStringLiteral("ksave/lastScene")).toString();
-        if (!last.isEmpty() && QFile::exists(last)) {
-            const krs::ksave::Report rep = krs::ksave::loadScene(*m_scene, last.toStdString());
-            qInfo() << "[ksave] reopened last scene" << last << ":" << rep.robots << "robot(s),"
-                    << rep.joints << "joint(s)," << rep.warnings.size() << "warning(s)";
-            for (const QString& w : rep.warnings) qInfo() << "[ksave]   " << w;
-        }
+    // KRS_SESSION_TEST=1 opts the hot-reload path back IN under a KRS_* environment (the blanket
+    // suppression keeps gates deterministic, but it also made this path untestable headlessly).
+    const bool sessionTest = qEnvironmentVariableIntValue("KRS_SESSION_TEST") != 0;
+    if (bootFanuc && (!anyKrsEnv || sessionTest)
+        && krs::SettingsManager::instance().value(QStringLiteral("session/hotReload")).toBool()) {
+        // HOT RELOAD: prefer the full SESSION SNAPSHOT written on every close (covers scenes the
+        // user never explicitly saved); fall back to the last explicitly opened .kscene. The
+        // snapshot lives in appdata -- the user's own files are never silently rewritten.
+        // Deferred one beat past the ctor so EVERYTHING the restore touches exists: the primary
+        // camera (the .kstate pose applies through scene.getPrimaryCamera), the node-graph model,
+        // and the panels to refresh -- at this point in the ctor NONE of them do.
+        QTimer::singleShot(0, this, [this]() {
+            if (!m_scene) return;
+            const QString snap = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                                 + QStringLiteral("/session/last.kscene");
+            QString toLoad;
+            if (QFile::exists(snap)) toLoad = snap;
+            else {
+                const QString last = QSettings().value(QStringLiteral("ksave/lastScene")).toString();
+                if (!last.isEmpty() && QFile::exists(last)) toLoad = last;
+            }
+            if (toLoad.isEmpty()) return;
+            const krs::ksave::Report rep = krs::ksave::loadScene(*m_scene, toLoad.toStdString());
+            qInfo() << "[session] hot-reloaded workspace from" << toLoad << ":" << rep.robots
+                    << "robot(s)," << rep.joints << "joint(s)," << rep.warnings.size() << "warning(s)";
+            for (const QString& w : rep.warnings) qInfo() << "[session]   " << w;
+            if (toLoad == snap) {
+                // A snapshot restore must not hijack Ctrl+S: re-point the open-scene path to the
+                // file the user actually works in (empty => Save Scene asks, same as before quit).
+                const std::string orig =
+                    QSettings().value(QStringLiteral("session/openScenePath")).toString().toStdString();
+                auto& info = m_scene->getRegistry().ctx().emplace<krs::ksave::OpenSceneInfo>();
+                info.kscenePath = orig;
+            }
+            const QFileInfo si(toLoad);
+            const QString gpath = si.absoluteDir().filePath(si.completeBaseName() + QStringLiteral(".kgraph"));
+            if (QFile::exists(gpath)) loadNodeGraphFrom(gpath);
+            applyCtxToEnvironment();
+            krs::robot::rebuildJointNameRegistry(m_scene->getRegistry());
+            if (m_robotBuilderPanel) m_robotBuilderPanel->refresh();
+            if (m_robotViewport)     m_robotViewport->refreshFromLive();
+            refreshGizmoAndProperties();
+            statusBar()->showMessage(QStringLiteral("Workspace restored from your last session."), 6000);
+        });
     }
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() {
-        if (m_scene)
-            if (auto* info = m_scene->getRegistry().ctx().find<krs::ksave::OpenSceneInfo>())
-                if (!info->kscenePath.empty())
-                    krs::ksave::saveSessionState(*m_scene, info->kscenePath);
         // .klayout: the dock arrangement (which bays each panel lives in) is a per-USER preference,
         // separate from the scene -- persist it to QSettings so the workspace comes back as arranged.
+        // (The workspace SNAPSHOT is written in closeEvent, while the camera rig is still alive.)
         if (m_dockManager)
             QSettings().setValue(QStringLiteral("layout/dockState"), m_dockManager->saveState());
     });
@@ -1249,6 +1284,9 @@ MainWindow::MainWindow(QWidget* parent)
     // ---------------------------------------------------------------------------
     ViewportWidget* viewport1 = new ViewportWidget(
         m_scene.get(), m_renderingSystem.get(), cameraEntity1, this);
+    // Register the MAIN scene's primary camera (only the Robot View / preview scenes ever called
+    // this): ksave's .kstate camera domain saves/restores through it.
+    m_scene->setPrimaryCamera(cameraEntity1);
 
     auto* viewportDock1 = new ads::CDockWidget(QStringLiteral("3D Viewport 1"));
     viewportDock1->setWidget(viewport1);
@@ -3344,6 +3382,15 @@ void MainWindow::applyTheme(const QString& theme)
     if (t == QLatin1String("light"))                                        style = lightPanelStyle;
     else if (auto it = kThemes.constFind(t); it != kThemes.constEnd())      style = buildPanelStyle(it.value());
     else /* "dark", empty, unknown */                                       style = sidePanelStyle;
+
+    // Viewport overlays (the measure HUD) follow the theme too.
+    if (auto it = kThemes.constFind(t); it != kThemes.constEnd())
+        MeasureHud::setThemeColors(QColor(it.value().panel), QColor(it.value().border),
+                                   QColor(it.value().text), QColor(it.value().accent));
+    else if (t == QLatin1String("light"))
+        MeasureHud::setThemeColors(QColor("#e6e8ec"), QColor("#c2c7d0"), QColor("#20242b"), QColor("#0078d7"));
+    else
+        MeasureHud::setThemeColors(QColor("#353b46"), QColor("#4a5260"), QColor("#d5d5d5"), QColor("#0078d7"));
     // Restyle ONLY the panel docks' contents. Do NOT touch the dock manager (its default ads
     // stylesheet draws the tab close 'X' buttons -- our panel sheet's QToolButton rule bloats
     // them) or the ribbon toolbar (our sheet darkened its dividers). Viewports (GL) untouched.
@@ -3351,6 +3398,44 @@ void MainWindow::applyTheme(const QString& theme)
         if (it.value()) it.value()->setStyleSheet(style);
     for (auto it = m_menus.constBegin(); it != m_menus.constEnd(); ++it)
         if (it.value().dock) it.value().dock->setStyleSheet(style);
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    // HOT-RELOAD SNAPSHOT: the whole workspace (scene + robots + objects + lights + camera pose
+    // via the .kstate sidecar + node graph) to appdata on every close, so an UNSAVED scene
+    // survives a restart. Done HERE -- not aboutToQuit -- because the viewport camera rig is
+    // torn down before aboutToQuit fires and the camera pose would be lost. Suppressed under
+    // KRS_* env (gates must not leave snapshots) except the KRS_SESSION_TEST opt-in.
+    if (m_scene) {
+        auto& reg = m_scene->getRegistry();
+        bool anyKrs = false;
+        for (const QString& k : QProcessEnvironment::systemEnvironment().keys())
+            if (k.startsWith(QStringLiteral("KRS_"))) { anyKrs = true; break; }
+        if (qEnvironmentVariableIntValue("KRS_SESSION_TEST") != 0) anyKrs = false;   // testability opt-in
+        // The MAIN scene's primary camera was never registered (only the Robot View / preview
+        // scenes called setPrimaryCamera), so ksave's camera domain silently never saved for it.
+        // Register the primary viewport's camera before writing the sidecars.
+        if (ViewportWidget* vp = primaryViewport())
+            m_scene->setPrimaryCamera(vp->getCameraEntity());
+        // The user's .kstate sidecar FIRST (against their real .kscene path) -- the snapshot
+        // save below re-points OpenSceneInfo at the appdata snapshot.
+        const auto* info0 = reg.ctx().find<krs::ksave::OpenSceneInfo>();
+        const std::string origPath = info0 ? info0->kscenePath : std::string();
+        if (!origPath.empty())
+            krs::ksave::saveSessionState(*m_scene, origPath);
+        if (!anyKrs) {
+            const QString sessDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                                    + QStringLiteral("/session");
+            QDir().mkpath(sessDir);
+            QSettings().setValue(QStringLiteral("session/openScenePath"), QString::fromStdString(origPath));
+            syncEnvironmentToCtx();
+            krs::ksave::saveScene(*m_scene, (sessDir + QStringLiteral("/last.kscene")).toStdString());
+            saveNodeGraphTo(sessDir + QStringLiteral("/last.kgraph"));
+            qInfo() << "[session] workspace snapshot written to" << sessDir;
+        }
+    }
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::registerPanelDock(const QString& title, ads::CDockWidget* dock)
@@ -4597,41 +4682,25 @@ void MainWindow::dispatchToolbarAction(const QString& id)
         || id == QLatin1String("wireframe_view_button")) {
         toast(QStringLiteral("Render-mode switching isn't wired into the deferred pipeline yet."));
 
-    // ---- measure (uses the committed B-Rep feature selection) ----
+    // ---- measure MODE (Onshape-style): toggle; picks feed the FIFO-2 buffer + viewport HUD ----
     } else if (id == QLatin1String("measurement_tool")) {
         if (!m_scene) return;
         auto& reg = m_scene->getRegistry();
         auto* st = reg.ctx().find<krs::sel::SelectionState>();
-        if (!st || st->selected.empty()) {
-            toast(QStringLiteral("Measure: click a CAD face first (View menu > Enable Feature Picking), then press Measure."));
-            return;
+        if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
+        const bool on = !st->measureMode;
+        st->measureMode = on;
+        st->enabled = on;
+        st->fifoTwoBores = false;
+        st->boreQuota = 0;
+        krs::sel::clearSelection(*st);
+        if (QToolButton* btn = m_fixedTopToolbar->buttonById(QStringLiteral("measurement_tool"))) {
+            QSignalBlocker block(btn);
+            btn->setChecked(on);
         }
-        const krs::sel::Selection& cur = st->selected.back();
-        const krs::measure::Measurement m = krs::measure::measureFeature(reg, cur.entity, cur.faceId);
-        if (!m.ok) {
-            toast(QStringLiteral("Measure: the selected feature could not be resolved (was the object deleted?)."));
-            return;
-        }
-        // Convert SI meters into the ribbon's unit choice.
-        const QString u = m_fixedTopToolbar->lengthUnit();
-        const double f = (u == QLatin1String("cm")) ? 100.0
-                       : (u == QLatin1String("mm")) ? 1000.0
-                       : (u == QLatin1String("in")) ? 39.3700787402 : 1.0;
-        QString msg = QStringLiteral("Feature: %1").arg(QString::fromStdString(m.kind));
-        if (m.diameterM > 0.0) msg += QStringLiteral("\nDiameter: %1 %2").arg(m.diameterM * f, 0, 'g', 6).arg(u);
-        if (m.lengthM   > 0.0) msg += QStringLiteral("\nLength: %1 %2").arg(m.lengthM * f, 0, 'g', 6).arg(u);
-        if (m.areaM2    > 0.0) msg += QStringLiteral("\nArea: %1 %2%3").arg(m.areaM2 * f * f, 0, 'g', 6)
-                                          .arg(u).arg(QChar(0x00B2));
-        // Two committed features -> also report the distance between them (select A, select B, Measure).
-        if (st->selected.size() >= 2) {
-            const krs::sel::Selection& prev = st->selected[st->selected.size() - 2];
-            const krs::measure::Measurement d =
-                krs::measure::measureDistance(reg, prev.entity, prev.faceId, cur.entity, cur.faceId);
-            if (d.ok) msg += QStringLiteral("\n\nDistance to previous feature: %1 %2").arg(d.lengthM * f, 0, 'g', 6).arg(u);
-        }
-        QMessageBox::information(this, QStringLiteral("Measure"), msg);
-        QString flat = msg; flat.replace(QLatin1Char('\n'), QStringLiteral("    "));
-        statusBar()->showMessage(flat, 15000);
+        toast(on ? QStringLiteral("Measure mode ON — click faces/bores (Shift extends the item, Ctrl picks a "
+                                  "vertex); two items give distance + angle in the viewport readout.")
+                 : QStringLiteral("Measure mode OFF."));
 
     // ---- layout slots ----
     } else if (id == QLatin1String("save_layout_button")) {
@@ -4812,6 +4881,40 @@ void MainWindow::buildRibbonMenus()
                 "QToolButton { background-color:#b91c1c; color:white; font-weight:bold; border-radius:4px; }"
                 "QToolButton:hover { background-color:#dc2626; }"
                 "QToolButton:pressed { background-color:#7f1d1d; }"));
+
+    // Measure is a MODE: the ribbon button latches, and a light poll keeps the latch honest when
+    // another workflow (choose-bores) or the E-STOP path steals the selection mode underneath it.
+    if (QToolButton* mb = m_fixedTopToolbar->buttonById(QStringLiteral("measurement_tool"))) {
+        mb->setCheckable(true);
+        mb->setToolTip(QStringLiteral(
+            "Measure mode (Onshape-style): click a face or bore; Shift+click adds faces to the same item;\n"
+            "Ctrl+click picks a vertex. The last TWO items measure against each other (angle, min distance,\n"
+            "parallel distance). Readout appears in the viewport corner."));
+        auto* sync = new QTimer(this);
+        sync->setInterval(500);
+        connect(sync, &QTimer::timeout, this, [this, mb] {
+            if (!m_scene) return;
+            const auto* st = m_scene->getRegistry().ctx().find<krs::sel::SelectionState>();
+            const bool on = st && st->measureMode;
+            if (mb->isChecked() != on) { QSignalBlocker block(mb); mb->setChecked(on); }
+        });
+        sync->start();
+    }
+
+    // Mirror the ribbon's length unit into the ctx MeasureUiPrefs (the HUD converts from SI with
+    // zero widget coupling). Applied now and on every combo change.
+    auto applyUnits = [this] {
+        if (!m_scene || !m_fixedTopToolbar) return;
+        const QString u = m_fixedTopToolbar->lengthUnit();
+        auto& prefs = m_scene->getRegistry().ctx().emplace<krs::measure::MeasureUiPrefs>();
+        prefs.lengthUnit = u.toStdString();
+        prefs.lengthFactor = (u == QLatin1String("cm")) ? 100.0
+                           : (u == QLatin1String("mm")) ? 1000.0
+                           : (u == QLatin1String("in")) ? 39.3700787402 : 1.0;
+    };
+    applyUnits();
+    if (QComboBox* uc = m_fixedTopToolbar->comboById(QStringLiteral("units_length_input")))
+        connect(uc, &QComboBox::currentTextChanged, this, [applyUnits](const QString&) { applyUnits(); });
 }
 
 void MainWindow::importStepFile()

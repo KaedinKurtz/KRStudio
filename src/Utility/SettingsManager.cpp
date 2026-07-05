@@ -60,8 +60,13 @@ void SettingsManager::buildRegistry() {
     m_defs.push_back(F("render/sunLux", "Sun (Key Light) [lux]", "Lighting", 2000.0, 0.0, 150000.0, 100.0, 0));
     m_defs.push_back(F("render/exposureEV", "Camera Exposure [EV100]", "Lighting", 10.0, 0.0, 20.0, 0.25, 2));
     m_defs.push_back(E("ui/theme", "UI Theme", "Theme", QStringLiteral("dark"),
-        { QStringLiteral("Dark"), QStringLiteral("Light") },
-        { QStringLiteral("dark"), QStringLiteral("light") }));
+        { QStringLiteral("Dark"), QStringLiteral("Light"), QStringLiteral("Slate"), QStringLiteral("Graphite"),
+          QStringLiteral("Ocean"), QStringLiteral("Forest"), QStringLiteral("Amber"), QStringLiteral("High Contrast") },
+        { QStringLiteral("dark"), QStringLiteral("light"), QStringLiteral("slate"), QStringLiteral("graphite"),
+          QStringLiteral("ocean"), QStringLiteral("forest"), QStringLiteral("amber"), QStringLiteral("contrast") }));
+    // --- Session ---
+    m_defs.push_back(B("session/hotReload", "Reopen Last Workspace at Launch", "Session", true,
+        "Restore the scene, node graph, layout and theme exactly as they were when the app closed."));
     m_defs.push_back(C("render/sunColor", "Sun Color", "Lighting", QColor::fromRgbF(1.0, 0.967, 0.9)));
     m_defs.push_back(V3("render/sunDirection", "Sun Direction", "Lighting", glm::vec3(-0.4f, -1.0f, -0.3f)));
 

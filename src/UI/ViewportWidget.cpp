@@ -28,6 +28,7 @@
 #include "Camera.hpp"
 #include "RayPick.hpp"   // GATE 3.1: hardened ray-triangle pick (krs::pick)
 #include "SelectionService.hpp"   // SELECTION-HIGHLIGHTS: face-level hover/commit (krs::sel)
+#include "MeasureHud.hpp"         // measure-mode corner readout overlay
 #include "Shader.hpp"
 #include "components.hpp"
 #include "IntersectionSystem.hpp"
@@ -173,7 +174,8 @@ static void featureHover(Scene& scene, const Camera& cam, int px, int py, int vp
     krs::sel::updateHover(*st, reg, ray);
 }
 
-static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int vpW, int vpH, bool additive)
+static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int vpW, int vpH, bool additive,
+                          Qt::KeyboardModifiers mods = Qt::NoModifier)
 {
     auto& reg = scene.getRegistry();
     auto* st = reg.ctx().find<krs::sel::SelectionState>();
@@ -182,6 +184,13 @@ static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int v
     const glm::mat4 V = cam.getViewMatrix();
     const krs::pick::Ray ray = krs::pick::makeRayFromScreen(P, V, px, py, vpW, vpH);
     if (!std::isfinite(ray.dir.x)) return;
+    if (st->measureMode) {
+        // Onshape-style measure buffer: plain click = new item, Shift = extend the current item
+        // (multi-face plane), Ctrl = vertex pick. FIFO-2 items.
+        krs::sel::commitMeasure(*st, reg, ray,
+                                mods.testFlag(Qt::ShiftModifier), mods.testFlag(Qt::ControlModifier));
+        return;
+    }
     krs::sel::commitSelection(*st, reg, ray, additive);
 }
 
@@ -258,6 +267,8 @@ ViewportWidget::ViewportWidget(Scene* scene, RenderingSystem* renderingSystem, e
     m_statsOverlay->setAttribute(Qt::WA_TranslucentBackground);
     m_statsOverlay->show();
 
+    // Measure-mode corner readout (self-hiding: only visible while measure mode is armed).
+    m_measureHud = new MeasureHud(m_scene, this);
 }
 
 void ViewportWidget::setRenderingSystem(RenderingSystem* system)
@@ -295,6 +306,7 @@ void ViewportWidget::resizeGL(int w, int h) {
     if (m_statsOverlay) {
         m_statsOverlay->move(10, 10);
     }
+    if (m_measureHud) m_measureHud->reposition();   // keep the measure readout pinned top-right
     // The RenderingSystem will handle FBO resizing automatically in its renderFrame() loop.
 }
 
@@ -589,7 +601,8 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* ev)
             if (m_xrayIdx > 0 && std::isfinite(ray.dir.x))
                 featureCommitCycled(*m_scene, ray, m_xrayIdx, /*additive*/ true);
             else
-                featureCommit(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(), width(), height(), /*additive*/ true);
+                featureCommit(*m_scene, getCamera(), ev->pos().x(), ev->pos().y(), width(), height(),
+                              /*additive*/ true, ev->modifiers());
 
             QVector<entt::entity> currentSelection;
             for (auto eSel : reg.view<SelectedComponent>()) currentSelection.push_back(eSel);

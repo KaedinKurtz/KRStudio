@@ -31,6 +31,9 @@
 #include <glm/glm.hpp>
 #include <entt/entt.hpp>
 #include <string>
+#include <vector>
+
+#include "SelectionService.hpp"   // krs::sel::Selection -- the measure-mode buffer entries
 
 namespace krs::measure {
 
@@ -60,10 +63,54 @@ Measurement measureFeature(entt::registry& reg, entt::entity e, int faceId);
 Measurement measureDistance(entt::registry& reg, entt::entity ea, int faceIdA,
                             entt::entity eb, int faceIdB);
 
+// ===========================================================================
+// MEASURE MODE (Onshape-style) -- the pair/single readout over the committed
+// viewport selections (krs::sel), grouped by Selection.groupId: one GROUP is
+// one measurand (a shift-extended face set is ONE plane item; areas sum).
+//
+// Semantics (all SI -- meters / m^2 / degrees; the HUD converts units):
+//   line·line   : angle via acos(|d1·d2|) (0..90, reads a truthful ~0 when
+//                 parallel). Parallel -> "Parallel distance" (perpendicular
+//                 axis-to-axis). Otherwise -> min distance between the two
+//                 SEGMENTS (closest points; rim-to-rim extents). An untrimmed
+//                 bore falls back to infinite-line math (noted).
+//   plane·plane : angle between normals; parallel -> gap along the normal +
+//                 min face-to-face distance; else angle + min distance.
+//                 A multi-face group is treated as ONE plane (areas summed;
+//                 non-coplanar groups measure but say so).
+//   plane·line  : angle (line to plane) + min distance (cylinder surface
+//                 sampled against the face triangles -- noted as sampled).
+//   sphere·X    : centre distance + surface min distance.
+//   vertex·X    : point distance (vertex = a measure-mode point pick).
+// Single item  : line -> diameter + length; plane group -> total area;
+//                 sphere -> diameter; vertex -> its coordinates.
+// ===========================================================================
+struct ReadoutLine {
+    enum class Unit { Length, Area, Angle, Count };
+    std::string label;
+    double value = 0.0;
+    Unit unit = Unit::Length;
+};
+struct Readout {
+    bool ok = false;                      // something measurable resolved
+    std::vector<ReadoutLine> lines;       // pair lines first, then per-item lines (A ·/B · prefixed)
+    std::vector<std::string> notes;       // honest caveats (sampled min-distance, non-coplanar sum, ...)
+};
+Readout measureSelections(entt::registry& reg, const std::vector<krs::sel::Selection>& sel);
+
+// HUD unit preferences (registry ctx). MainWindow mirrors the ribbon's units combo here, so the
+// HUD converts SI meters without any widget coupling. display = meters * lengthFactor.
+struct MeasureUiPrefs {
+    double lengthFactor = 1.0;
+    std::string lengthUnit = "m";
+};
+
 // Headless self-test (env KRS_MEASURE_SELFTEST): world-space-exact quad area,
 // cylinder D/L under identity + uniform scale, tessellated-disk 1% honesty,
-// exact sphere distance, text() applicable-fields-only, and NEG-CTRLs
-// (out-of-range faceId, missing BRepFaceComponent, zero-triangle face).
+// exact sphere distance, text() applicable-fields-only, NEG-CTRLs
+// (out-of-range faceId, missing BRepFaceComponent, zero-triangle face), and
+// the measure-mode pair math (skew/parallel lines, parallel plane gap,
+// multi-face area sum, vertex distance).
 bool runMeasureGate();
 
 } // namespace krs::measure
