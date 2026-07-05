@@ -66,17 +66,67 @@ a goal is declarative (a state description). But *dynamic* goals ARE dataflow �
 `goal_maintain` node references a `.kgoal`, re-evaluates every n ticks, and replans on violation.
 Both idioms, each where it belongs.
 
+## Round 2 (user ideation + agreed formalization)
+
+**Observability-weighted estimation (SETTLED: population + info-weighted updates).** The hypothesis
+population measures observability EMPIRICALLY: the spread of the N hypotheses' twin-predicted
+trajectories under an excitation IS the empirical Fisher information (∂y/∂θ by simulation). High
+spread → residuals discriminate → posterior collapses hard (high influence); low spread → the
+parameter is unobservable from that excitation → sigma honestly barely moves. Consequence:
+excitations are SCORED IN THE TWIN BEFORE the robot moves (expected information gain per candidate
+routine = optimal experiment design) — the to-do shows "lift_weigh: expected σ 0.4→0.05;
+slide_test: σ 0.4→0.38 (mass unobservable from sliding)". Handles mass/friction identifiability by
+choosing decorrelating excitations. Convergence in tens of samples is the expected regime for 1–3
+params/object. In-house precedent: krs::imu::runExcitationObservGate. Priors seed from CAD:
+MaterialComponent density×volume → massKg = provenance "Prior (from material)" with wide sigma.
+
+**Residual-triggered belief invalidation ("every interaction is a free excitation").** The
+twin-vs-real residual runs during EVERY skill execution, not just excitation: matching reality
+tightens beliefs for free; an integral residual ∫|y_real−y_twin|dt crossing threshold in the first
+reconstruction samples INVALIDATES the touched object's parameters (sigma bumps, provenance →
+Suspect) — staleness IS sigma; the planner re-sees the gap naturally. Credit assignment v1: bump
+all params of the touched object; v2: match the residual signature against per-parameter
+sensitivity directions (same population spread). The later "visibly changed" perception pipeline is
+just a second writer to the same sigma.
+
+**Traits → envelopes → intersection propagation (SETTLED: requirements are DERIVED, never
+user-mandatory).** Intrinsic needs live on the primitive TYPE, authored once by the skill author
+(grasp needs mass/friction/graspable-geometry). CONSTRAINT MODIFIERS live on objects as TRAITS
+(liquid-container → {maxTilt, maxAccel}; fragile → {maxForce}; sharp; hot); binding a skill to an
+object injects its traits' constraints into the skill's execution ENVELOPE. Propagation =
+INTERSECTION down the decomposition tree (the move inside carry(glass) inherits maxTilt; most
+restrictive wins); knowledge gaps bubble UP the same tree — the annotated decomposition tree is the
+"tree structure graph that falls out". Constraints compile to TWO artifacts: (a) planner filters,
+and (b) auto-injected RUNTIME GUARDS (live Condition/BT nodes watching actual tilt/force, tripping
+retry/replan) — boundary conditions must reach the running controller or they are decorative.
+User-modifiable at the subgraph level (tighten freely; loosening = loud logged override).
+IN-PROCESS observables (e.g. bolt-head torque): needs flagged observe-in-process — the skill's
+instrumentation must publish them as live channels (recorder taps); pre-check is only "is the
+estimator for this channel available?".
+
+**Primitives ARE subgraphs (the OCCT/OMPL counter-argument dissolves).** The heavy machinery is
+already node-wrapped (ompl_planner, ik_target, physics_config_drive nodes; the avoidance
+FieldSolver; gated When/If/While control-flow nodes) — a move_to primitive-subgraph COMPOSES the
+C++ planner node with reactive field-following and boolean timing logic ("while EE >10cm from
+grasp: follow field gradient"). No unzipping required. Primitives as .knodes = instrumentable,
+tunable, shareable (.knodepack), versioned; the P1 hybrid contract stays the OUTER interface so
+the planner never sees the interior.
+
 ## Open decisions (awaiting user)
 
-1. **Workspace surface**: dedicated panel + `.kgoal` first, goal-blocks on the node canvas, or
-   panel-first with dynamic-goal nodes later *(recommended)*.
-2. **Excitation autonomy**: auto-insert excitation skills into plans vs always queue for approval
-   *(recommended: ask-first default with a per-routine "auto-OK" flag)*.
-3. **Estimator flavor**: population/CEM (robust, visualizes the converging cloud, matches the
-   description) vs RLS/EKF (cheaper, Gaussian) *(recommended: population)*.
-4. **Round-one scope**: `.kgoal` + panel + `planBackward` with `needs[]`/gaps + to-do UI, honing
-   **sim-only** (twin-vs-twin with injected truth parameters proves the estimator honestly) before
-   any hardware excitation *(recommended)*.
+1. **Workspace surface**: dedicated panel + `.kgoal` first, dynamic-goal nodes later *(recommended)*.
+2. **Excitation autonomy**: auto-insert vs ask-first queue *(recommended: ask-first + per-routine
+   "auto-OK" flag)*.
+3. ~~Estimator flavor~~ **SETTLED round 2**: population/CEM with information-weighted updates.
+4. **Round-one scope**: sim-only honing first (twin-vs-twin, injected truth) *(recommended)*.
+5. **Trait ontology seed set**: liquid-container / fragile / rigid-deformable / mass-source;
+   manual assignment in the properties panel first, perception-assigned later?
+6. **Envelope persistence**: traits in `.kscene`, intrinsic needs+envelopes in the skill `.knode`
+   manifest, COMPOSED envelope stamped into the plan artifact at plan time (auditable "this move
+   was tilt-limited because glass was liquid-filled")?
+7. **First three excitation routines**: lift_weigh (mass), push_probe (friction), tilt_settle
+   (CoM) — each a primitive-subgraph with CLAIMED information gain, gated by the twin's MEASURED
+   population collapse matching the claim (+ an uninformative-routine ~zero-collapse neg-ctrl)?
 
 ## Phased build sketch (each gated, house idiom)
 
