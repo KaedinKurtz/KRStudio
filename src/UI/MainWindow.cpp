@@ -2501,13 +2501,16 @@ MainWindow::MainWindow(QWidget* parent)
                 // (ADS hides anything absent from the saved state) -- which made freshly shipped
                 // panels invisible with no hint they existed. We track which panels this install
                 // has SEEN (layout/knownPanels); a registered panel not on that list is brand new
-                // -> open it once so the feature surfaces. Known panels keep the user's layout.
+                // -> RE-DOCK it into the right column via addDockWidgetTab (a bare toggleView(true)
+                // on a restore-orphaned dock pops a FLOATING top-level window, because the restore
+                // destroyed its dock area). Known panels keep the user's layout.
                 QStringList known = QSettings().value(QStringLiteral("layout/knownPanels")).toStringList();
                 bool grew = false;
                 for (auto it = m_panelDocks.constBegin(); it != m_panelDocks.constEnd(); ++it) {
                     if (!it.value()) continue;
                     if (!known.contains(it.key())) {
-                        if (it.value()->isClosed()) it.value()->toggleView(true);
+                        if (it.value()->isClosed() || it.value()->isFloating())
+                            m_dockManager->addDockWidgetTab(ads::RightDockWidgetArea, it.value());
                         known << it.key();
                         grew = true;
                     }
