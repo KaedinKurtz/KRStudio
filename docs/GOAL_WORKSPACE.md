@@ -1,6 +1,18 @@
 # Goal Workspace — declarative goals, regression planning, and parameter discovery
 
-Status: **design agreed in principle / open decisions marked below — not yet built.**
+Status: **G1–G5 BUILT AND GATED** (2026-07-04, commits b23bf22d / 01b41c98 / 6c24bee2). Gates:
+`KRS_KGOAL` (.kgoal doc+builder), `KRS_GOALPLAN` (regression + gaps + envelopes + live guards),
+`KRS_HONE` (population honing: observability honesty + Dynamic slosh detection), `KRS_GOALLOOP`
+(the full story incl. persistence + invalidation), knowledge ledger in `KRS_WORLDSTATE`/
+`KRS_SCENESAVE`. Round-3 decisions (user): trait seeding = best guesses from material/visual
+properties; **SimOnly/R2S learn-tags per object** gate extraction AND persist learned params with
+the scene (yesterday's glass never re-derived); 6-DoF FT sensor assumed for excitations (CoM =
+tilt-and-read-moment); DYNAMIC parameters (sloshing water) must be flagged, never mis-fit —
+`krs::hone` half-fit drift detection ships this. RANSAC recognition against an explored object
+library = future perception work; divergence-marking is covered by residual-triggered
+invalidation ("not a problem until it becomes a problem"). Primitive bodies ship as
+`assets/skills/{move_to,grasp,place,push}.knode`. Remaining: hardware excitation via telemetry,
+grasp-pose synthesis for the primitive interiors, `goal_maintain` dynamic-goal node, RANSAC library.
 Builds directly on the shipped Process & Skills layer (P0–P5: `krs::skill` SkillSpec/Predicate,
 `krs::world::WorldState`, `SkillRuntime`, `planTask`) and the data ecosystem (`.klut`, `.rec`,
 Data Recorder, `krs::act::Param`, `RlEnv`).
