@@ -4568,6 +4568,27 @@ void MainWindow::dispatchToolbarAction(const QString& id)
             toast(now ? QStringLiteral("Collision shapes ON (green static / orange dynamic / cyan kinematic).")
                       : QStringLiteral("Collision shapes OFF."));
         }
+    } else if (id == QLatin1String("show_axes_button")) {
+        if (m_scene) {
+            auto view = m_scene->getRegistry().view<GridComponent>();
+            bool now = true, any = false;
+            for (auto e : view) {
+                auto& g = view.get<GridComponent>(e);
+                if (!any) { now = !g.showAxes; any = true; }
+                g.showAxes = now;
+            }
+            if (any) toast(now ? QStringLiteral("Grid axes ON.") : QStringLiteral("Grid axes OFF."));
+        }
+    } else if (id == QLatin1String("grid_snapp_toggle_switch") || id == QLatin1String("grid_snapp_toggle_switch_2")) {
+        if (m_gizmoSystem) {
+            static bool snapOn = false;      // ribbon-level toggle over the gizmo's snap steps
+            snapOn = !snapOn;
+            m_gizmoSystem->setSnapTranslateStep(snapOn ? 0.1f : 0.0f);
+            m_gizmoSystem->setSnapRotateSegments(snapOn ? 24 : 0);      // 15 degree detents
+            m_gizmoSystem->setSnapScaleStep(snapOn ? 0.1f : 0.0f);
+            toast(snapOn ? QStringLiteral("Snapping ON: 0.1 m translate, 15° rotate, 0.1 scale.")
+                         : QStringLiteral("Snapping OFF."));
+        }
     } else if (id == QLatin1String("orbit_button") || id == QLatin1String("pan_button")) {
         toast(QStringLiteral("Viewport navigation: right-drag orbits, middle-drag pans, wheel zooms."));
     } else if (id == QLatin1String("perpective_button") || id == QLatin1String("orthographic_button")) {
