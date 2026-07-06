@@ -27,6 +27,8 @@
     "urdfdom-headers",
     "opencascade",
     "mosquitto",
-    "ompl"
+    "ompl",
+    "python3",
+    "pybind11"
   ]
 }

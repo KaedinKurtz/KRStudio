@@ -73,6 +73,7 @@ StaticToolbar::StaticToolbar(QWidget* parent) :
             { "Data Recorder", "Data\nRecorder" }, { "Goal Workspace", "Goal\nWorkspace" },
             { "Constraints", "Constraints" }, { "Assets", "Assets" },
             { "Outliner", "Outliner" }, { "Diagnostics", "Diagnostics" },
+            { "Effector Studio", "Effector\nStudio" },
         };
         for (const auto& e : extra) {
             const QString title = QString::fromLatin1(e.title);

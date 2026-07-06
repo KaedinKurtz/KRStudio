@@ -479,6 +479,41 @@ else()
   message(STATUS "libmosquitto not found; MQTT bridge compiled out (MqttBridge stub).")
 endif()
 
+# --- Embedded Python (krs::py: user-scriptable robotics algorithms) ---
+# pybind11::embed hosts a CPython interpreter inside the app so user scripts
+# (e.g. a caliper-search grasp strategy) run against the curated `krs` module.
+# KR_WITH_PYTHON=OFF (or missing packages) compiles krs::py down to a stub:
+# available()==false, runScript() returns ok=false, gate reports SKIP.
+option(KR_WITH_PYTHON "Embed CPython via pybind11 for krs::py user scripting" ON)
+set(KR_HAS_PYTHON 0)
+if(KR_WITH_PYTHON)
+  # Pin discovery to the vcpkg-installed python3 so the headers/libs we compile
+  # against match the python3xx.dll that vcpkg applocal deploys next to the exe.
+  if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+    set(Python3_ROOT_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/python3")
+    set(Python3_FIND_REGISTRY NEVER)
+  endif()
+  find_package(Python3 QUIET COMPONENTS Interpreter Development.Embed)
+  find_package(pybind11 CONFIG QUIET)
+  if(Python3_FOUND AND pybind11_FOUND)
+    target_link_libraries(RoboticsSoftware PRIVATE pybind11::embed)
+    set(KR_HAS_PYTHON 1)
+    # Bake the dev-machine stdlib location into the one TU that boots the
+    # interpreter: PyScript.cpp verifies os.py exists there before init so a
+    # missing stdlib degrades to available()==false instead of the CPython
+    # fatal-abort. Deployed builds override via KRS_PYTHONHOME or exe-relative
+    # ./python (see PyScript.cpp home resolution order).
+    # Python3_STDLIB arrives with native backslashes on Windows -- normalize to
+    # forward slashes or the C++ string literal silently corrupts (\t, \b, ...).
+    file(TO_CMAKE_PATH "${Python3_STDLIB}" KRS_PY_STDLIB_FWD)
+    set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Physics/PyScript.cpp"
+      PROPERTIES COMPILE_DEFINITIONS "KRS_PYTHON_STDLIB=\"${KRS_PY_STDLIB_FWD}\"")
+    message(STATUS "Python ${Python3_VERSION} + pybind11 found; krs::py scripting enabled (KR_WITH_PYTHON). stdlib=${Python3_STDLIB}")
+  else()
+    message(STATUS "KR_WITH_PYTHON is ON but Python3/pybind11 were not found; krs::py compiled out (stub).")
+  endif()
+endif()
+
 # --- ONNX Runtime (Phase 5: learned-surrogate inference; build-OPTIONAL) ---
 # Not in vcpkg.json by default (heavy). When a surrogate trained on the FEM oracle
 # exists, add `onnxruntime` to vcpkg.json; this enables the OnnxSurrogate path.
@@ -549,6 +584,7 @@ target_compile_definitions(RoboticsSoftware PRIVATE
   $<$<BOOL:${KR_HAS_CHRONO}>:KR_WITH_CHRONO=1>
   $<$<BOOL:${KR_HAS_SPLISH}>:KR_WITH_SPLISHSPLASH=1>
   $<$<BOOL:${ENABLE_COACD}>:KR_WITH_COACD=1>
+  $<$<BOOL:${KR_HAS_PYTHON}>:KR_WITH_PYTHON=1>
 )
 
 # Finalize the Qt executable (handles moc, uic, rcc steps).

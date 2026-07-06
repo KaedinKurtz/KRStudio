@@ -53,6 +53,9 @@
 #include "EdgeSelect.hpp"          // krs::sel true B-Rep edge picking + gate
 #include "BRepVertex.hpp"          // BRepVertexComponent -- pick-buffer vertex instances
 #include "Snap.hpp"                // krs::snap -- Onshape candidate/frame inference + gate
+#include "KEE.hpp"                 // krs::kee -- .kee end-effector document + gate
+#include "GraspQuery.hpp"          // krs::graspq -- open grasp contract + reference solver + gate
+#include "PyScript.hpp"            // krs::py -- embedded Python runtime + gate
 #include "Constraint.hpp"          // krs::constraint assembly-constraint suite + gate
 #include "TaskPlanner.hpp"         // krs::skill forward-search task planner (P5) + gate
 #include "GoalDoc.hpp"             // krs::goal .kgoal declarative goal document (G1) + gate
@@ -1327,6 +1330,25 @@ void RenderingSystem::initializeSharedResources()
         const bool ok = krs::snap::runSnapGate();
         std::fflush(stdout); std::_Exit(ok ? 0 : 1);
     }
+    // .kee end-effector document: parallel-gripper round-trip field-exact; honest validation;
+    // corrupt/wrong-major refused; content-hash tamper detected.
+    if (qEnvironmentVariableIntValue("KRS_KEE_SELFTEST") != 0) {
+        std::printf("\n================= KRS_KEE_SELFTEST =================\n");
+        const bool ok = krs::kee::runKeeGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    // The open grasp-solving contract: solver registry seam + role-respecting reference solver.
+    if (qEnvironmentVariableIntValue("KRS_GRASPQ_SELFTEST") != 0) {
+        std::printf("\n================= KRS_GRASPQ_SELFTEST =================\n");
+        const bool ok = krs::graspq::runGraspQueryGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
+    // Embedded Python (krs::py): interpreter, capture, isolation, the bound `krs` module.
+    if (qEnvironmentVariableIntValue("KRS_PY_SELFTEST") != 0) {
+        std::printf("\n================= KRS_PY_SELFTEST =================\n");
+        const bool ok = krs::py::runPyGate();
+        std::fflush(stdout); std::_Exit(ok ? 0 : 1);
+    }
     // Process & Skills P4: composed pick+place with typed pre/effects, validated + executed closed-loop.
     if (qEnvironmentVariableIntValue("KRS_PICKPLACE_SELFTEST") != 0) {
         std::printf("\n================= KRS_PICKPLACE_SELFTEST =================\n");
@@ -2301,6 +2323,9 @@ void RenderingSystem::initializeSharedResources()
             { "GATE EDGE (true B-Rep edge selection: circle centre/radius/axis exact under transform; proximity pick hit/miss; nearer edge wins; edgeKey stable/position-separated; neg-ctrls)", krs::sel::runEdgeSelectGate() },
             { "GATE CONSTRAINT (Fusion-style suite: every CType snapped + verified analytically; suppressed/robot/stale-key refusals with zero motion; key re-anchoring over scrambles; JSON round-trip; DOF table; chained revolute linkage)", krs::constraint::runConstraintGate() },
             { "GATE SNAP (Onshape mate-connector inference: face centroid/vertices/midpoints/arc-centres + cylinder axis triplet exact; +Z out of material; deterministic X + flip/rotate-90 corrections; world-transform exactness; neg-ctrls)", krs::snap::runSnapGate() },
+            { "GATE KEE (.kee end-effector document: parallel-gripper round-trip field-exact incl. roles/TCPs/actuation; validation honest; corrupt + wrong-major refused; tamper detected)", krs::kee::runKeeGate() },
+            { "GATE GRASPQ (open grasp contract: solver registry seam; reference antipodal respects Grip/KeepOut roles; box + cylinder apertures exact; honest empty when jaws too small; deterministic)", krs::graspq::runGraspQueryGate() },
+            { "GATE PY (embedded Python: interpreter + stdout capture + exception surfacing + per-run isolation + bound krs module round-trip; SKIP when compiled out)", krs::py::runPyGate() },
         };
         int fails = 0, skips = 0;
         std::printf("\n--------------- OVERNIGHT BENCH DASHBOARD ---------------\n");
