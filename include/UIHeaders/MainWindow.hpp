@@ -104,6 +104,14 @@ private:
     void registerPanelDock(const QString& title, ads::CDockWidget* dock);
     void applyTheme(const QString& theme);
 
+    // Every CDockWidget* we cache as a RAW pointer (m_dockContainers, m_panelDocks, m_menus) can be
+    // deleted out from under us by ADS -- e.g. a layout restoreState() during boot destroys docks not
+    // in the saved state. A later widget()/setWindowTitle() on that dangling pointer is a use-after-free
+    // (crash was ads::CDockWidget::widget() -> DockWidget.cpp:503 reading a freed private). trackDockLifetime
+    // wires the dock's QObject::destroyed() to scrub it from ALL our containers, so no dead pointer ever
+    // survives to be dereferenced. Call it at every site that stashes a dock pointer.
+    void trackDockLifetime(ads::CDockWidget* dock);
+
     void handleMenuToggle(MenuType type, bool checked);
     void showMenu(MenuType type);
     void hideMenu(MenuType type);
@@ -127,6 +135,15 @@ private:
 
     void syncViewportManagerPopup();
 
+    // DANGLING-ALIAS INVARIANT (see trackDockLifetime): the raw widget pointers below
+    // (m_flowVisualizerMenu + the panel aliases m_physicsPanel..m_dataRecorder) ALIAS widgets
+    // OWNED by their ADS dock (setWidget reparents them under the dock). trackDockLifetime scrubs
+    // the three dock-POINTER containers, but NOT these inner-widget aliases. They are safe today
+    // ONLY because no panel dock is created with DockWidgetDeleteOnClose/DeleteContentOnClose, and
+    // ADS restoreState() HIDES/reparents unassigned docks (flagAsUnassigned) rather than deleting
+    // them -- so the aliased widget never dies under us. If you ever give a dock delete-on-close
+    // semantics, null its cached alias from a QObject::destroyed() scrub too, or this reintroduces
+    // the use-after-free that trackDockLifetime fixed.
     FlowVisualizerMenu* m_flowVisualizerMenu = nullptr;  // set when the menu opens; null when closed
     QTimer* m_rsPollTimer;
     std::unique_ptr<RealSenseManager> m_realSenseManager;

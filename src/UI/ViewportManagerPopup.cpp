@@ -37,13 +37,14 @@ void ViewportManagerPopup::updateUi(const QList<ads::CDockWidget*>& viewportDock
     ui->ViewportNumberLabel
         ->setText(QString("[ %1 ]").arg(viewportDocks.size()));
 
-    // 2) Clear out the old “Show N” buttons
+    // 2) Clear out the old ï¿½Show Nï¿½ buttons
     clearLayout(ui->activeViewportWidget);
 
     // 3) Rebuild them
     int row = 0, col = 0;
     for (int i = 0; i < viewportDocks.size(); ++i) {
         auto* dock = viewportDocks.at(i);
+        if (!dock) continue;  // a scrubbed/destroyed dock can leave a null slot; never deref it
         auto* vp = qobject_cast<ViewportWidget*>(dock->widget());
         if (!vp || !scene) continue;
 

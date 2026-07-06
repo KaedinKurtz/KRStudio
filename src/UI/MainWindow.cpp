@@ -1320,6 +1320,7 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     m_dockContainers << viewportDock1;
+    trackDockLifetime(viewportDock1);
     applyCameraColorToDock(viewportDock1, cameraEntity1);
 
     viewport1->setGizmoSystem(m_gizmoSystem.get());
@@ -3389,6 +3390,7 @@ void MainWindow::updateViewportLayouts()
 {
     for (ads::CDockWidget* dock : std::as_const(m_dockContainers))
     {
+        if (!dock) continue;                         // scrubbed slot -> never deref
         // The *real* viewport is now the direct child of the dock widget
         auto* vp = qobject_cast<ViewportWidget*>(dock->widget());
         if (!vp)                                     // safety guard
@@ -3444,6 +3446,7 @@ void MainWindow::addViewport() {
     auto* dock = new ads::CDockWidget("");
     dock->setWidget(vp);
     m_dockContainers.append(dock);
+    trackDockLifetime(dock);
 
     vp->setGizmoSystem(m_gizmoSystem.get());
     connect(vp, &ViewportWidget::selectionChanged, this, &MainWindow::onSelectionChanged);
@@ -3578,6 +3581,7 @@ void MainWindow::syncViewportManagerPopup()
 {
     // 1) Renumber the visible docks
     for (int i = 0; i < m_dockContainers.size(); ++i) {
+        if (!m_dockContainers[i]) continue;  // defensive: never title a scrubbed slot
         m_dockContainers[i]
             ->setWindowTitle(QStringLiteral("3D Viewport %1").arg(i + 1));
     }
@@ -3586,6 +3590,31 @@ void MainWindow::syncViewportManagerPopup()
     if (m_viewportManagerPopup) {
         m_viewportManagerPopup->updateUi(m_dockContainers, m_scene.get());
     }
+}
+
+void MainWindow::trackDockLifetime(ads::CDockWidget* dock)
+{
+    if (!dock) return;
+    // Scrub the dock from every raw-pointer container the instant it is destroyed. We only ever
+    // COMPARE the incoming pointer (never dereference it), so it is safe to run from within the
+    // dock's ~QObject. CDockWidget derives QObject at offset 0 (QWidget's primary base), so the
+    // QObject* handed to destroyed() equals the stored CDockWidget* -- the static_cast is a no-op.
+    connect(dock, &QObject::destroyed, this, [this](QObject* obj) {
+        auto* dead = static_cast<ads::CDockWidget*>(obj);
+        m_dockContainers.removeAll(dead);
+        for (auto it = m_panelDocks.begin(); it != m_panelDocks.end(); ) {
+            if (it.value() == dead) it = m_panelDocks.erase(it);
+            else ++it;
+        }
+        for (auto it = m_menus.begin(); it != m_menus.end(); ) {
+            if (it.value().dock == dead) it = m_menus.erase(it);
+            else ++it;
+        }
+        // The popup caches nothing across calls, but refresh it so a destroyed viewport dock stops
+        // being listed. Guarded because the popup itself may already be gone during teardown.
+        if (m_viewportManagerPopup)
+            m_viewportManagerPopup->updateUi(m_dockContainers, m_scene.get());
+    });
 }
 
 // Add this new slot
@@ -3788,6 +3817,7 @@ void MainWindow::registerPanelDock(const QString& title, ads::CDockWidget* dock)
 {
     if (!dock) return;
     m_panelDocks.insert(title, dock);
+    trackDockLifetime(dock);
     // Reverse-sync: reflect the dock's open/closed state on its toolbar button (covers the tab
     // 'x' close + programmatic toggles). setPanelButtonChecked blocks signals to avoid a loop.
     connect(dock, &ads::CDockWidget::viewToggled, this, [this, title](bool open) {
@@ -3847,6 +3877,7 @@ void MainWindow::showMenu(MenuType type)
         entry.dock = new ads::CDockWidget(title, this);
         entry.dock->setWidget(entry.menu->widget());
         entry.dock->setStyleSheet(sidePanelStyle);
+        trackDockLifetime(entry.dock);
 
         if (existingArea) {
             m_dockManager->addDockWidget(ads::CenterDockWidgetArea, entry.dock, existingArea);
