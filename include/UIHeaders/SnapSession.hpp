@@ -38,6 +38,10 @@ struct SnapSessionState {
     // a consumer LATCH: when true, the next committed result becomes a persistent
     // MateConnector on its body (the Constraints panel's Place-Connector button arms this).
     bool connectorAuthoring = false;
+
+    // viewport layer toggle: every placed MateConnector renders as the orange/white
+    // quadrant glyph (UR orange, UL white, LL orange, LR white) at its body-local frame.
+    bool showConnectors = true;
 };
 
 inline SnapSessionState& snapSession(entt::registry& reg) {

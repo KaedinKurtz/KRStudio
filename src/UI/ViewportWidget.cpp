@@ -196,10 +196,19 @@ static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int v
     // commitResolved -- only the far-side-bore CPU picker is gone). The CPU-ray paths below
     // serve the first-frame bridge only.
     const bool gpuHover = gpuHoverDriven;
-    // Pin the CLICK's surface point onto the committed selection so rim-nearest anchoring lands
-    // on the side of the body the operator actually clicked (the analytic hitPoint of a
-    // through-bore can be the FAR rim).
+    // CAD click semantics: plain click = REPLACE selection (re-clicking the same feature toggles
+    // it off), Shift+click = ADD -- cross-body multi-select is just shift-clicking around the
+    // scene. Bore-collect keeps its accumulate-FIFO behavior.
+    const bool additiveEff = st->fifoTwoBores ? true : mods.testFlag(Qt::ShiftModifier);
+    // Anchor the committed selection where the operator AIMED: the ACTIVE snap candidate wins
+    // (arc centre, rim point, midpoint -- the glyph they saw), else the click's true surface
+    // point (so through-bores anchor to the clicked rim, never the analytic far side).
     auto pinClickPoint = [&](krs::sel::Selection s) {
+        const auto& ss = krs::snapui::snapSession(reg);
+        if (ss.activeIdx >= 0 && ss.activeIdx < int(ss.candidates.size())) {
+            const auto& c = ss.candidates[std::size_t(ss.activeIdx)];
+            if (c.entity == s.entity) { s.hitPoint = c.pos; return s; }
+        }
         if (const auto mh = krs::pick::pickMesh(reg, ray); mh && mh->entity == s.entity)
             s.hitPoint = mh->worldPos;
         return s;
@@ -217,8 +226,9 @@ static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int v
         return;
     }
     if (gpuHover) {
-        if (st->hover.valid) krs::sel::commitResolved(*st, pinClickPoint(st->hover), additive);
-        return;                                            // a highlighted MISS commits nothing
+        if (st->hover.valid) krs::sel::commitResolved(*st, pinClickPoint(st->hover), additiveEff);
+        else if (!additiveEff) st->selected.clear();       // plain click on empty space DESELECTS
+        return;
     }
     // CPU fallback (first frame / no renderer): true-edge preference within ~6 px, then faces.
     krs::sel::Selection edgePick;
@@ -228,8 +238,8 @@ static void featureCommit(Scene& scene, const Camera& cam, int px, int py, int v
         const float tol = std::max(0.003f, 0.006f * depth);
         edgePick = krs::sel::pickEdge(reg, ray, tol);
     }
-    if (edgePick.valid) { krs::sel::commitResolved(*st, edgePick, additive); return; }
-    krs::sel::commitSelection(*st, reg, ray, additive);
+    if (edgePick.valid) { krs::sel::commitResolved(*st, edgePick, additiveEff); return; }
+    krs::sel::commitSelection(*st, reg, ray, additiveEff);
 }
 
 // X-RAY feature commit: same as featureCommit but resolves the cycleIndex-th body the ray pierces

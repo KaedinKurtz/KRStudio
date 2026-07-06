@@ -70,5 +70,7 @@ private:
     krs::sel::Selection m_selA, m_selB;
     bool m_haveA = false, m_haveB = false;
     int  m_armWhich = 0;         // 0 = none, 1 = collecting A, 2 = collecting B
+    QString m_armSig;            // newest-pick signature at arm time (harvest only NEW commits)
+    QString currentPickSig() const;
     QString m_lastListSig;
 };

@@ -17,6 +17,7 @@
 #include "BRepEdge.hpp"           // synthetic edge rig for the KRS_PICK_SELFTEST gate
 #include "BRepVertex.hpp"         // synthetic vertex rig for the KRS_PICK_SELFTEST gate
 #include "SnapSession.hpp"        // krs::snapui -- the KRS_SNAPUI_SELFTEST gate asserts the session
+#include "EffectorStudioPanel.hpp" // the .kee authoring + attach dock (EE stack)
 #include <QStandardPaths>
 #include <QCloseEvent>
 #include <QFile>
@@ -1453,6 +1454,14 @@ MainWindow::MainWindow(QWidget* parent)
     m_dockManager->addDockWidget(ads::RightDockWidgetArea, constraintsDock, m_propertiesArea);
     registerPanelDock(QStringLiteral("Constraints"), constraintsDock);
 
+    // Effector Studio: the .kee authoring + attach workspace (face roles, interface mate,
+    // TCP capture, actuation, validate/save/load, attach-by-connector-id).
+    auto* eeDock = new ads::CDockWidget(QStringLiteral("Effector Studio"));
+    eeDock->setWidget(new EffectorStudioPanel(m_scene.get(), this));
+    eeDock->setStyleSheet(sidePanelStyle);
+    m_dockManager->addDockWidget(ads::RightDockWidgetArea, eeDock, m_propertiesArea);
+    registerPanelDock(QStringLiteral("Effector Studio"), eeDock);
+
     connect(graphModel.get(), &QtNodes::AbstractGraphModel::nodeCreated,
         this, [this, graphModel](QtNodes::NodeId nodeId) {
             auto* delegate = graphModel->delegateModel<NodeDelegate>(nodeId);
@@ -2104,10 +2113,14 @@ MainWindow::MainWindow(QWidget* parent)
             const RenderingSystem::PickIdHit h = (m_renderingSystem && primaryViewport())
                 ? m_renderingSystem->latestPick(primaryViewport()) : RenderingSystem::PickIdHit{};
             const bool pass = h.fromGpu && ok(h);
-            rig->lines << QStringLiteral("%1  %2  (fromGpu=%3 valid=%4 kind=%5 id=%6 e=%7 d=%8)")
+            QString tag;                                       // NAME the hit entity (diagnosis)
+            if (m_scene && m_scene->getRegistry().valid(h.entity))
+                if (const auto* t = m_scene->getRegistry().try_get<TagComponent>(h.entity))
+                    tag = QString::fromStdString(t->tag);
+            rig->lines << QStringLiteral("%1  %2  (fromGpu=%3 valid=%4 kind=%5 id=%6 e=%7 '%8' d=%9)")
                               .arg(pass ? "PASS" : "FAIL").arg(QLatin1String(name))
                               .arg(h.fromGpu).arg(h.valid).arg(h.kind).arg(h.id)
-                              .arg(std::uint32_t(h.entity)).arg(h.screenDist, 0, 'f', 1);
+                              .arg(std::uint32_t(h.entity)).arg(tag).arg(h.screenDist, 0, 'f', 1);
             if (!pass) ++rig->fails;
         };
         // 1) face pick at the box centre pixel
@@ -5287,20 +5300,35 @@ void MainWindow::buildRibbonMenus()
         sync->start();
     }
 
-    // Mirror the ribbon's length unit into the ctx MeasureUiPrefs (the HUD converts from SI with
-    // zero widget coupling). Applied now and on every combo change.
+    // UNITS -- ONE source of truth: the registry setting `units/length` (Settings dialog,
+    // "Units & Display"). The ribbon combo is a VIEW of it (two-way synced), and the ctx
+    // MeasureUiPrefs mirrors it for the HUD. The old code mirrored only the ribbon combo, so
+    // changing units in Settings left every measurement in metres.
     auto applyUnits = [this] {
-        if (!m_scene || !m_fixedTopToolbar) return;
-        const QString u = m_fixedTopToolbar->lengthUnit();
+        if (!m_scene) return;
         auto& prefs = m_scene->getRegistry().ctx().emplace<krs::measure::MeasureUiPrefs>();
-        prefs.lengthUnit = u.toStdString();
-        prefs.lengthFactor = (u == QLatin1String("cm")) ? 100.0
-                           : (u == QLatin1String("mm")) ? 1000.0
-                           : (u == QLatin1String("in")) ? 39.3700787402 : 1.0;
+        prefs.lengthFactor = krs::units::metersToDisplay(1.0);
+        prefs.lengthUnit = krs::units::lengthSuffix().trimmed().toStdString();
+        if (m_fixedTopToolbar) {
+            if (QComboBox* uc = m_fixedTopToolbar->comboById(QStringLiteral("units_length_input"))) {
+                const QString u = QString::fromStdString(prefs.lengthUnit);
+                if (uc->currentText() != u) {
+                    QSignalBlocker block(uc);
+                    if (uc->findText(u) < 0) uc->addItem(u);   // "ft" lives in Settings but not the combo
+                    uc->setCurrentText(u);
+                }
+            }
+        }
     };
     applyUnits();
+    connect(&krs::SettingsManager::instance(), &krs::SettingsManager::changed, this,
+            [applyUnits](const QString& key, const QVariant&) {
+                if (key.startsWith(QLatin1String("units/"))) applyUnits();
+            });
     if (QComboBox* uc = m_fixedTopToolbar->comboById(QStringLiteral("units_length_input")))
-        connect(uc, &QComboBox::currentTextChanged, this, [applyUnits](const QString&) { applyUnits(); });
+        connect(uc, &QComboBox::currentTextChanged, this, [](const QString& u) {
+            krs::SettingsManager::instance().set(QStringLiteral("units/length"), u);
+        });
 }
 
 void MainWindow::importStepFile()

@@ -279,11 +279,11 @@ inline bool sameFeature(const Selection& a, const Selection& b) {
 // is the accumulating SET a CLICK commits (the multi-feature selection the robot-
 // builder needs). Both store the EXACT krs::sel::pick result -- no re-derivation.
 struct SelectionState {
-    // Feature picking is a TRIGGERED MODE, never the ambient default: with it always-on, every
-    // stray click committed a persistent glowing feature (and armed the mate workflow), which made
-    // selecting ANYTHING hazardous. Armed by: the Builder's "Choose joint bores" button (with a
-    // boreQuota that auto-disarms), the ribbon Measure mode, or the View-menu manual override.
-    bool enabled = false;
+    // Feature picking is AMBIENT (always available) since the WYSIWYG selector: plain click =
+    // replace-select (re-clicking the same feature toggles it off), Shift+click = add. The old
+    // always-on hazards (accumulating giant rings, accidental mate arming) died with the ring UI.
+    // MODES (bore-collect quota, measure) layer on top; the View-menu toggle remains the override.
+    bool enabled = true;
     bool fifoTwoBores = false;           // robot-builder bore picking: keep AT MOST 2 CYLINDER (bore-edge)
                                          // selections, FIFO -- clicking a 3rd bore evicts the OLDEST, so
                                          // there are only ever 2 bore edges selected at a time.
@@ -323,14 +323,15 @@ inline void updateHover(SelectionState& st, entt::registry& reg, const krs::pick
     st.hover = pickPreferCylinder(reg, ray);   // bores win over the flat face around them
 }
 
-// CHOOSE-BORES completion: once the quota of committed bores is reached the mode DISARMS ITSELF
-// (enabled=false) with the picks kept selected -- the operator clicks exactly the bores they want
-// and the viewport goes back to normal clicking, no lingering pick-anything hazard.
+// CHOOSE-BORES completion: once the quota of committed bores is reached the MODE ends itself
+// (fifoTwoBores off) with the picks kept selected -- the operator clicks exactly the bores they
+// want and the viewport returns to AMBIENT selection (picking stays available; only the
+// cylinder-only FIFO filter disarms).
 inline void autoDisarmOnQuota(SelectionState& st) {
     if (!st.fifoTwoBores || st.boreQuota <= 0) return;
     int n = 0;
     for (const auto& q : st.selected) if (q.valid && q.type == FeatureType::Cylinder) ++n;
-    if (n >= st.boreQuota) { st.enabled = false; st.boreQuota = 0; }
+    if (n >= st.boreQuota) { st.fifoTwoBores = false; st.boreQuota = 0; }
 }
 
 // CLICK / COMMIT: resolve the ray; on a hit ADD the feature to the selected SET

@@ -358,9 +358,11 @@ void RobotBuilderPanel::setupConnections()
             st->boreQuota = 2;
             setStatus(QStringLiteral("Bore picking armed: click bore 1 of 2 (hover shows the ring)."));
         } else {
-            st->enabled = false;
+            // end the MODE only -- ambient feature selection stays live (selection-first Define
+            // consumes the last two cylinder picks from normal clicking anyway)
+            st->fifoTwoBores = false;
             st->boreQuota = 0;
-            setStatus(QStringLiteral("Bore picking off."));
+            setStatus(QStringLiteral("Bore picking off (normal selection still active)."));
         }
     });
     connect(m_applyLimitBtn, &QPushButton::clicked,           this, &RobotBuilderPanel::onApplyLimit);

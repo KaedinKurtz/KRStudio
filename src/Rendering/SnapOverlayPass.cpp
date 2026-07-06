@@ -4,6 +4,7 @@
 #include "Shader.hpp"
 #include "SnapSession.hpp"     // krs::snapui::SnapSessionState (ctx)
 #include "Snap.hpp"            // krs::snap corrections (flipZ / rotateX90)
+#include "components.hpp"      // MateConnectorComponent -- the persistent-connector layer
 
 #include <QOpenGLFunctions_4_3_Core>
 #include <glm/glm.hpp>
@@ -137,11 +138,57 @@ void SnapOverlayPass::drawFan(const RenderFrameContext& ctx,
 void SnapOverlayPass::execute(const RenderFrameContext& context)
 {
     auto* ss = context.registry.ctx().find<krs::snapui::SnapSessionState>();
-    if (!ss || !ss->armed || ss->candidates.empty()) return;
+    const bool wantSession = ss && ss->armed && !ss->candidates.empty();
+    const bool wantConnectors = !ss || ss->showConnectors;
+    if (!wantSession && !wantConnectors) return;
 
     auto* gl = context.gl;
     gl->glDisable(GL_DEPTH_TEST);
     gl->glDepthMask(GL_FALSE);
+
+    // ---- PERSISTENT MATE CONNECTORS: the orange/white quadrant glyph (UR orange, UL white,
+    //      LL orange, LR white) at every placed connector's body-local frame, riding its body.
+    if (wantConnectors) {
+        auto& reg = context.registry;
+        for (auto e : reg.view<MateConnectorComponent, TransformComponent>(entt::exclude<HiddenComponent>)) {
+            const glm::mat4 M = reg.get<TransformComponent>(e).getTransform();
+            const glm::mat3 R(M);
+            for (const MateConnector& mc : reg.get<MateConnectorComponent>(e).connectors) {
+                const glm::vec3 p = glm::vec3(M * glm::vec4(mc.localPos, 1.0f));
+                const glm::vec3 z = glm::normalize(R * mc.localZ);
+                const glm::vec3 x = glm::normalize(R * mc.localX);
+                const glm::vec3 y = glm::normalize(glm::cross(z, x));
+                const float wpp = worldPerPixel(context.camera, p, context.viewportHeight);
+                const float r = 7.0f * wpp;
+                for (int q = 0; q < 4; ++q) {                  // q0=UR orange, q1=UL white, ...
+                    std::vector<glm::vec3> fan;
+                    fan.push_back(p);
+                    const int segs = 8;
+                    for (int i = 0; i <= segs; ++i) {
+                        const float a = glm::radians(90.0f) * (float(q) + float(i) / float(segs));
+                        fan.push_back(p + r * (std::cos(a) * x + std::sin(a) * y));
+                    }
+                    drawFan(context, fan, ((q & 1) == 0) ? kDiskBack : kDiskFront);
+                }
+                std::vector<glm::vec3> lines;                  // outline + short +Z stub
+                const int segs = 20;
+                for (int i = 0; i < segs; ++i) {
+                    const float a0 = 6.2831853f * float(i) / segs, a1 = 6.2831853f * float(i + 1) / segs;
+                    lines.push_back(p + r * (std::cos(a0) * x + std::sin(a0) * y));
+                    lines.push_back(p + r * (std::cos(a1) * x + std::sin(a1) * y));
+                }
+                lines.push_back(p);
+                lines.push_back(p + z * (2.0f * r));
+                drawLines(context, lines, kAxisZ);
+            }
+        }
+    }
+
+    if (!wantSession) {
+        gl->glDepthMask(GL_TRUE);
+        gl->glEnable(GL_DEPTH_TEST);
+        return;
+    }
 
     // camera basis for screen-facing glyphs
     const glm::vec3 right(context.view[0][0], context.view[1][0], context.view[2][0]);

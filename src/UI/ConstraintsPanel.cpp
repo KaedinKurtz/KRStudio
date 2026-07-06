@@ -130,17 +130,13 @@ ConstraintsPanel::ConstraintsPanel(Scene* scene, QWidget* parent)
         auto& ss = krs::snapui::snapSession(reg);
         ss.connectorAuthoring = on;
         ss.hasResult = false;                                   // stale commits never fire the latch
-        auto* st = reg.ctx().find<krs::sel::SelectionState>();
-        if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
         if (on) {
             if (m_pickABtn->isChecked()) { QSignalBlocker b(m_pickABtn); m_pickABtn->setChecked(false); }
             if (m_pickBBtn->isChecked()) { QSignalBlocker b(m_pickBBtn); m_pickBBtn->setChecked(false); }
             m_armWhich = 0;
-            st->enabled = true; st->fifoTwoBores = false; st->measureMode = false; st->boreQuota = 0;
+            if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) st->enabled = true;
             m_status->setText(QStringLiteral("Hover a face -- dots wake up; click the inference "
                                              "point you want (F flip, R rotate, Shift lock, Ctrl axes)."));
-        } else {
-            st->enabled = false;
         }
     });
     connect(m_applyBtn, &QPushButton::clicked, this, &ConstraintsPanel::onApply);
@@ -170,34 +166,43 @@ void ConstraintsPanel::onPickA(bool on)
 {
     if (!m_scene) return;
     auto& reg = m_scene->getRegistry();
-    auto* st = reg.ctx().find<krs::sel::SelectionState>();
-    if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
+    if (auto* st = reg.ctx().find<krs::sel::SelectionState>(); st && on)
+        st->enabled = true;                        // ensure ambient picking wasn't manually off
     if (on) {
         if (m_pickBBtn->isChecked()) { QSignalBlocker b(m_pickBBtn); m_pickBBtn->setChecked(false); }
-        krs::sel::clearSelection(*st);
-        st->enabled = true; st->fifoTwoBores = false; st->measureMode = false; st->boreQuota = 0;
-        m_armWhich = 1;
+        m_armWhich = 1;                            // harvest the NEXT commit; existing picks untouched
+        m_armSig = currentPickSig();
         m_status->setText(QStringLiteral("Click the FIRST feature in the viewport (faces and edges pick)."));
     } else if (m_armWhich == 1) {
-        st->enabled = false;
         m_armWhich = 0;
     }
+}
+
+QString ConstraintsPanel::currentPickSig() const
+{
+    if (!m_scene) return QString();
+    auto& reg = m_scene->getRegistry();
+    const auto* st = reg.ctx().find<krs::sel::SelectionState>();
+    if (!st) return QString();
+    for (auto it = st->selected.rbegin(); it != st->selected.rend(); ++it)
+        if (it->valid)
+            return QStringLiteral("%1/%2/%3/%4/%5").arg(std::uint32_t(it->entity))
+                .arg(it->faceId).arg(it->edgeId).arg(it->vertexId).arg(st->selected.size());
+    return QString();
 }
 
 void ConstraintsPanel::onPickB(bool on)
 {
     if (!m_scene) return;
     auto& reg = m_scene->getRegistry();
-    auto* st = reg.ctx().find<krs::sel::SelectionState>();
-    if (!st) st = &reg.ctx().emplace<krs::sel::SelectionState>();
+    if (auto* st = reg.ctx().find<krs::sel::SelectionState>(); st && on)
+        st->enabled = true;
     if (on) {
         if (m_pickABtn->isChecked()) { QSignalBlocker b(m_pickABtn); m_pickABtn->setChecked(false); }
-        krs::sel::clearSelection(*st);
-        st->enabled = true; st->fifoTwoBores = false; st->measureMode = false; st->boreQuota = 0;
         m_armWhich = 2;
+        m_armSig = currentPickSig();
         m_status->setText(QStringLiteral("Click the SECOND feature — its body is the one that snaps."));
     } else if (m_armWhich == 2) {
-        st->enabled = false;
         m_armWhich = 0;
     }
 }
@@ -206,20 +211,23 @@ void ConstraintsPanel::onTick()
 {
     if (!m_scene) return;
     auto& reg = m_scene->getRegistry();
-    // Harvest the armed pick: the newest committed selection becomes A or B, then disarm.
+    // Harvest the armed pick: the FIRST NEW commit after arming becomes A or B. The ambient
+    // selection is left exactly as the operator made it (no clearing, no disarming).
     if (m_armWhich != 0) {
         if (auto* st = reg.ctx().find<krs::sel::SelectionState>()) {
             const krs::sel::Selection* newest = nullptr;
             for (auto it = st->selected.rbegin(); it != st->selected.rend(); ++it)
                 if (it->valid) { newest = &*it; break; }
-            if (newest) {
+            const QString sig = newest
+                ? QStringLiteral("%1/%2/%3/%4/%5").arg(std::uint32_t(newest->entity))
+                      .arg(newest->faceId).arg(newest->edgeId).arg(newest->vertexId).arg(st->selected.size())
+                : QString();
+            if (newest && sig != m_armSig) {
                 if (m_armWhich == 1) { m_selA = *newest; m_haveA = true;
                                        QSignalBlocker b(m_pickABtn); m_pickABtn->setChecked(false); }
                 else                 { m_selB = *newest; m_haveB = true;
                                        QSignalBlocker b(m_pickBBtn); m_pickBBtn->setChecked(false); }
                 m_armWhich = 0;
-                st->enabled = false;
-                krs::sel::clearSelection(*st);
                 updatePickLabels();
                 m_status->setText((m_haveA && m_haveB)
                     ? QStringLiteral("Both features picked — choose the relation and Apply.")
@@ -257,8 +265,7 @@ void ConstraintsPanel::onTick()
                                       .arg(QString::number(c.key, 16)));
                 QSignalBlocker b(m_placeConnBtn);              // one placement per latch
                 m_placeConnBtn->setChecked(false);
-                ss.connectorAuthoring = false;
-                if (auto* st2 = reg.ctx().find<krs::sel::SelectionState>()) st2->enabled = false;
+                ss.connectorAuthoring = false;                 // ambient selection stays live
             }
         }
     }
@@ -300,8 +307,28 @@ void ConstraintsPanel::onTypeChanged(int idx)
 
 void ConstraintsPanel::onApply()
 {
-    if (!m_scene || !m_haveA || !m_haveB) return;
+    if (!m_scene) return;
     auto& reg = m_scene->getRegistry();
+    // SELECTION-FIRST: with no latched picks, Apply consumes the LAST TWO ambient selections
+    // (select feature A, shift-click feature B anywhere in the scene, press Apply).
+    if ((!m_haveA || !m_haveB)) {
+        if (const auto* st = reg.ctx().find<krs::sel::SelectionState>()) {
+            std::vector<const krs::sel::Selection*> picks;
+            for (auto it = st->selected.rbegin(); it != st->selected.rend() && picks.size() < 2; ++it)
+                if (it->valid) picks.push_back(&*it);
+            if (picks.size() == 2) {
+                m_selB = *picks[0];       // newest = B (the body that snaps)
+                m_selA = *picks[1];
+                m_haveA = m_haveB = true;
+                updatePickLabels();
+            }
+        }
+    }
+    if (!m_haveA || !m_haveB) {
+        m_status->setText(QStringLiteral("Pick two features first (click + Shift-click in the viewport, "
+                                         "or use the Pick A / Pick B latches)."));
+        return;
+    }
     auto& g = krs::constraint::constraintGraph(reg);
 
     krs::constraint::Constraint c;
