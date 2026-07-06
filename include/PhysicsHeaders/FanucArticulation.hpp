@@ -39,6 +39,16 @@ krs::dyn::RobotArticSpec canonicalSpec();
 // First existing FANUC STEP path among the deployed/working-dir candidates.
 std::string findStepAsset();
 
+// GATE FANUC-6DOF (E2.1): the REAL STEP through the DEFAULT boot pipeline
+// (parseAssembly -> buildNamedSerialChain) must yield a TRUE 6-DoF chain --
+// dof==6, zero ambiguous joints, quality axes (J0 vertical, no last-resort
+// guesses), FK(q=0)==parsed placements -- and articSpecFromGraph must convert it
+// into a spec PhysX builds with articDofCount()==6 and 6 INDEPENDENT dofs.
+// NEG-CTRLs: the legacy canonicalSpec is still 4 joints with J4 frozen (the cap
+// this gate retires), and an ambiguous joint truncates the spec honestly instead
+// of fabricating an axis. SKIPs (tri-state) when OCCT or the STEP asset is absent.
+bool runFanuc6Gate();
+
 struct Setup {
     bool ok = false;
     int  solids = 0;

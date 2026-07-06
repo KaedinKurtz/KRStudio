@@ -220,14 +220,28 @@ CPU subset green mandatory; nightly full-bench red pages the roadmap owner.
 
 ## EPOCH 2 — Robot Authoring Completion (the CAD promise)
 
-### E2.1 STEPCAF Phase-4: true 6-DoF FANUC re-import (L)
-The standing plan (memory: robot-builder roadmap Option A): re-import the FANUC via the
-assembly-aware STEPCAF path so all 6 joints exist (canonicalSpec currently hand-caps at 4, J4
-frozen). Auto-infer the remaining joints from coaxial bores (AUTO-PARSE machinery exists).
-GATE extension to `KRS_AUTOPARSE_SELFTEST`: dof()==6 on the real FANUC STEP; each inferred axis
-matches the interface geometry < 1e-6; FK at zero config matches parsed placements < 1e-6;
-NEG-CTRL: the parallelogram linkage bodies do NOT produce a fake 7th joint. Then flip the boot
-path to the 6-DoF spec and re-green D1-D4/H/V gates (expect tuning).
+### E2.1 STEPCAF Phase-4: true 6-DoF FANUC re-import (L) — **STATUS 2026-07-05: substantially DONE**
+RECON CORRECTION (verified in code, do not re-plan from the old premise): the DEFAULT app boot
+is ALREADY the STEPCAF 6-DoF path — `MainWindow` (≈line 908) does `importStepAssembly` →
+`krs::rbuild::buildNamedSerialChain(parts)` (name-driven base→j1..j6 grouping, axes from best
+coaxial bore per link pair, J1 verticality prior) → authoring overlay → `instantiateFromGraph`
+→ LiveRobot "FANUC-430" FK viz. The 4-joint `canonicalSpec` (J4 frozen) is ONLY the
+`KRS_FANUC_LEGACY` fallback + the D/H/V/node gate rig spec.
+LANDED (this session): `krs::rbuild::articSpecFromGraph(RobotGraph) -> krs::dyn::RobotArticSpec`
+(RobotBuilder.hpp — world-aligned frames at each joint's axisPos, canonicalSpec's exact
+convention, ambiguous joints truncate honestly with a report, limits carried, fixed joints fold)
+so ANY authored graph can back a PhysX reduced-coordinate articulation; plus GATE
+`KRS_FANUC6_SELFTEST` (`krs::fanuc::runFanuc6Gate`, FanucArticulation.cpp) measured on the REAL
+STEP: dof==6 + zero ambiguous, J1 vertical >0.999, per-joint residual <=1.5e-2 (never the
+residual-1.0 last-resort guess), FK(q=0)==parsed placements <1e-6, converter round-trip <1e-6,
+PhysX articDofCount()==6 with J4-only motion (the dof the legacy cap froze) + 30-step zero-g
+drift <5e-2; NEG-CTRLs: legacy spec stays 4-capped/frozen, ambiguous mid-chain joint truncates
+spec to 3 + report. Bench row added next to AUTO-PARSE-CHAIN; SKIPs without OCCT or the asset.
+REMAINING (deliberately deferred to E3): flipping the DEFAULT boot's physics from kinematic
+follower actors to the graph-derived dynamic articulation — that is the controller-manager /
+torque-control seam (E3.2), not an import problem. D/H/V and node gates keep their 4-DoF rig
+spec on purpose (self-contained rigs). Mass/inertia for the converted spec are unit defaults
+until E2.5 lands (articSpecFromGraph has a single injection point for it).
 
 ### E2.2 Mimic joints in the live model (M)
 `.kee` actuation declares mimic; the live LiveRobot/PhysX must enforce `q_follower = ratio * q_drive`.

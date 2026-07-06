@@ -98,6 +98,7 @@
 #include "RobotDynamics.hpp"    // Phase A GATE A oracle self-tests
 #include "ArticulationGate.hpp" // Phase A GATE A PhysX articulation gate
 #include "VisibleArticGate.hpp" // Phase V GATE V (V.1 / V-assign) solid->link assignment
+#include "FanucArticulation.hpp" // GATE FANUC-6DOF (E2.1) -- real-STEP 6-DoF chain + graph->PhysX spec
 #include "FemSystem.hpp"
 #include "FemVizPass.hpp"
 #include "SmokePass.hpp"
@@ -1033,6 +1034,14 @@ void RenderingSystem::initializeSharedResources()
     if (qEnvironmentVariableIntValue("KRS_PARSERECON_SELFTEST") != 0) {
         std::printf("\n================= KRS_PARSERECON_SELFTEST =================\n");
         const bool ok = krs::rbuild::runParseReconGate();
+        std::fflush(stdout);
+        std::_Exit(ok ? 0 : 1);
+    }
+
+    // ROBOT BUILDER Phase 4 (E2.1): true 6-DoF FANUC chain from the REAL STEP + graph->PhysX spec.
+    if (qEnvironmentVariableIntValue("KRS_FANUC6_SELFTEST") != 0) {
+        std::printf("\n================= KRS_FANUC6_SELFTEST =================\n");
+        const bool ok = krs::fanuc::runFanuc6Gate();
         std::fflush(stdout);
         std::_Exit(ok ? 0 : 1);
     }
@@ -2188,6 +2197,7 @@ void RenderingSystem::initializeSharedResources()
             { "GATE MULTI-SELECT (small-bore-on-large-part resolves to bore; set accumulates; dominant-resolver & non-accumulating-commit neg-ctrls)", krs::sel::runMultiSelectGate() },
             { "GATE PARSE-RECON (OCCT STEPCAF recovers FANUC part tree + placements; mates absent -> infer from geometry; real assembly)", krs::rbuild::runParseReconGate() },
             { "GATE AUTO-PARSE-CHAIN (inferred joint axes == interface geometry; FK==parsed placements; ambiguous/offset/planar NOT faked; wrong-axis neg-ctrl)", krs::rbuild::runAutoParseChainGate() },
+            { "GATE FANUC-6DOF (REAL STEP -> named chain dof==6, quality axes, FK==CAD; articSpecFromGraph -> PhysX 6 independent dofs; legacy-4-cap + ambiguous-truncation neg-ctrls)", krs::fanuc::runFanuc6Gate() },
             { "GATE BASE-AXIS-VERTICAL (J0 base-turntable axis = vertical part-Z, not the horizontal flange decoy; horizontal-coaxial-pair neg-ctrl)", krs::rbuild::runBaseAxisVerticalGate() },
             { "GATE MATE-SNAP (concentric transform aligns child bore to parent axis; subtreeOf collects sub-assembly; off-axis-before neg-ctrl)", krs::rbuild::runMateSnapGate() },
             { "GATE SPLIT-MERGE (cut joint -> base+branch trees; re-mate merges; DOF/body/FK round-trip; bad-index neg-ctrl)", krs::rbuild::runSplitMergeGate() },

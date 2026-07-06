@@ -28,6 +28,7 @@
 #include "components.hpp"        // BRepFace
 #include "JointTooling.hpp"      // krs::joint::deriveRevoluteFromBores (gated JOINT-FROM-FEATURE)
 #include "RobotModel.hpp"        // krs::robot::Robot / krs::dyn
+#include "ArticulationSpec.hpp"  // krs::dyn::RobotArticSpec (articSpecFromGraph -> PhysX boundary)
 
 namespace krs::rbuild {
 
@@ -817,6 +818,77 @@ inline RobotGraph buildNamedSerialChain(const std::vector<ParsedPart>& parts)
         g.addJoint(best);
     }
     return g;
+}
+
+// ---- GRAPH -> PHYSX ARTICULATION SPEC (Phase 4: the 6-DoF uncap) ------------
+// Convert the COMMITTED kinematic tree of a RobotGraph into the POD
+// krs::dyn::RobotArticSpec that SimulationController::buildArticulation consumes,
+// so an AUTHORED robot (the STEPCAF named chain, an edited graph, a merged robot)
+// can back a real PhysX reduced-coordinate articulation -- not just FK viz. This
+// retires the hand-authored 4-joint krs::fanuc::canonicalSpec as the only spec
+// source (it remains the KRS_FANUC_LEGACY fallback + gate rig).
+//
+// Frame convention (matches canonicalSpec, the boundary buildArticulation was
+// validated against): every joint frame is WORLD-ALIGNED at q=0 (Rtree = I), its
+// origin sits ON the joint axis (the graph's world axisPos), the axis is expressed
+// directly in that frame (= world axisDir), and ptree is the world-space offset
+// from the parent joint's frame origin (root-attached joints: from the world
+// origin, since the articulation root is at identity). buildArticulation's
+// wp0[b] = wp0[parent] * (Rtree, ptree) composition then reproduces each joint's
+// world position exactly.
+//
+// Honesty rules: ambiguous joints are never converted (chainOrder already skips
+// them), so a chain broken by an undefined axis yields FEWER dof plus a report
+// entry -- never a fabricated axis. Fixed joints fold their body onto the parent
+// link (no dof). The graph carries no inertia data yet, so links get
+// canonicalSpec's unit-mass defaults; limits/effort/velocity carry over from
+// JointLimits (0 == unspecified keeps the spec default). On a re-rooted traversal
+// the positive-q sense still follows the STORED axisDir (drive-sign convention).
+inline krs::dyn::RobotArticSpec articSpecFromGraph(const RobotGraph& g,
+                                                   std::vector<std::string>* report = nullptr)
+{
+    krs::dyn::RobotArticSpec spec; spec.fixBase = true;
+    const RobotGraph::ChainOrder co = g.chainOrder();
+    if (co.order.empty()) return spec;
+    std::vector<int> linkOf(g.bodies.size(), -1);      // body index -> emitted joint index (-1 = fixed root)
+    std::vector<glm::vec3> jointWorld;                 // emitted joint index -> world frame origin (axisPos)
+    std::vector<char> reached(g.bodies.size(), 0);
+    for (int b : co.order) if (b >= 0 && b < int(g.bodies.size())) reached[size_t(b)] = 1;
+    for (int b : co.order) {
+        if (b == co.order.front()) continue;           // the root body rides the fixed articulation root
+        const int ji = co.parentJoint[b];
+        const int pb = co.parentBody[b];
+        if (ji < 0 || pb < 0) continue;                // defensive: traversal invariant broken
+        const RBJoint& j = g.joints[ji];
+        if (j.type == JType::Fixed) {                  // rigid attachment: no dof, ride the parent's link
+            linkOf[size_t(b)] = linkOf[size_t(pb)];
+            if (report) report->push_back("folded fixed-joint body '" + g.bodies[b].name + "' onto its parent link");
+            continue;
+        }
+        krs::dyn::ArticJointSpec s;
+        s.parent   = linkOf[size_t(pb)];
+        s.revolute = (j.type == JType::Revolute);
+        const glm::vec3 a = (glm::length(j.axisDir) > 1e-9f) ? glm::normalize(j.axisDir) : glm::vec3(0, 0, 1);
+        s.axis  = { a.x, a.y, a.z };
+        s.Rtree = { 1,0,0, 0,1,0, 0,0,1 };
+        const glm::vec3 pw = (s.parent >= 0) ? jointWorld[size_t(s.parent)] : glm::vec3(0.0f);
+        const glm::vec3 d  = j.axisPos - pw;
+        s.ptree = { d.x, d.y, d.z };
+        s.mass = 1.0f; s.com = { 0, 0, 0 }; s.inertiaDiag = { 0.1f, 0.1f, 0.1f };
+        if (j.limits.enabled)        { s.qLower = float(j.limits.lower); s.qUpper = float(j.limits.upper); }
+        if (j.limits.velocity > 0.0) s.vMax      = float(j.limits.velocity);
+        if (j.limits.effort   > 0.0) s.effortMax = float(j.limits.effort);
+        s.frozen = false;                              // every committed joint is a DRIVEN dof (no hand-cap)
+        linkOf[size_t(b)] = int(spec.joints.size());
+        jointWorld.push_back(j.axisPos);
+        spec.joints.push_back(s);
+    }
+    if (report)
+        for (int b = 0; b < int(g.bodies.size()); ++b)
+            if (!reached[size_t(b)])
+                report->push_back("DROPPED body '" + g.bodies[b].name +
+                                  "' (unreachable: ambiguous/undefined joint on its path to the base)");
+    return spec;
 }
 
 // PHASE 1 -- parse a STEP assembly into bodies (name + world placement + analytic
