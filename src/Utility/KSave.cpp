@@ -1,6 +1,13 @@
 // KSave.cpp -- see KSave.hpp. The .kscene/.krobot/.kjoint/.kstate family: composition by
 // reference (relative path + id + content hash), deterministic geometry rebuild + kjoint overlay,
 // best-effort session state. All JSON, all versioned, nothing silently rebinds.
+//
+// v1.2 PERSISTENCE UNIFICATION (E1.1): constraints, groups, face roles, loose-body mate
+// connectors and effector attachments survive a save/load. Cross-entity relations are routed
+// through PersistentIdComponent pids minted at save (stable across re-saves); the loader spawns
+// everything first (PASS 1, building pid -> new entity), then resolves every relation (PASS 2).
+// A relation whose endpoint cannot resolve is DROPPED with a Report warning naming it -- never
+// a crash, never a guess. Old 1.x scenes (no new sections) load with zero warnings.
 #include "KSave.hpp"
 #include "RobotBuilder.hpp"
 #include "RobotBuilderScene.hpp"   // buildDemoGraph / spawnGraphBodies
@@ -10,6 +17,10 @@
 #include "WorldState.hpp"          // krs::world knowledge (learned params/traits/tags persist per object)
 #include "Scene.hpp"
 #include "components.hpp"
+#include "Constraint.hpp"          // krs::constraint -- REUSED Constraint/graph JSON codec; pids wrap the entity fields
+#include "FaceRole.hpp"            // FaceRoleComponent -- per-faceKey semantic roles on loose bodies
+#include "GroupOps.hpp"            // krs::group -- membership walk (save) + leaf expansion (visibility) + gate checks
+#include "EffectorStudioPanel.hpp" // krs::ee::AttachedEffectors / Attachment -- the ctx attachment registry
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -23,6 +34,8 @@
 
 #include <cstdio>
 #include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace krs::ksave {
 namespace {
@@ -46,9 +59,10 @@ Eigen::Matrix4d mat4FromJson(const QJsonValue& v) {
 QString u64ToJson(std::uint64_t v) { return QString::number(qulonglong(v)); }
 std::uint64_t u64FromJson(const QJsonValue& v) { return std::uint64_t(v.toString().toULongLong()); }
 
-bool formatOk(const QJsonObject& o, const char* family) {   // "kjoint/1" -> family match + major 1
-    const QString f = o["format"].toString();
-    return f.startsWith(QLatin1String(family)) && f.section('/', 1, 1).toInt() == 1;
+bool formatOk(const QJsonObject& o, const char* family) {   // "kjoint/1", "kscene/1.2" -> family match +
+    const QString f = o["format"].toString();               // MAJOR 1 (any 1.x minor is accepted; unknown
+    return f.startsWith(QLatin1String(family))              //  majors are refused -- the ksave contract)
+        && f.section('/', 1, 1).section('.', 0, 0).toInt() == 1;
 }
 bool writeJsonFile(const QString& path, const QJsonObject& o) {
     QDir().mkpath(QFileInfo(path).absolutePath());
@@ -312,6 +326,147 @@ bool isRobotOrLight(entt::registry& reg, entt::entity e) {
         || reg.all_of<LightEmitterTag>(e) || reg.all_of<LightComponent>(e);
 }
 
+// ==================== v1.2 PERSISTENT IDENTITY + RELATIONS (E1.1) ====================
+// Document-level pid allocator (registry ctx). Monotonic and NEVER reused within a session; the
+// .kscene stores "nextPid" so a later session continues where the document left off. A pid whose
+// entity was deleted between saves is simply RETIRED (relations that referenced it drop with a
+// warning at the next load).
+struct PidAllocator { std::uint64_t next = 1; };
+
+PidAllocator& pidAllocator(entt::registry& reg) {
+    auto* a = reg.ctx().find<PidAllocator>();
+    if (!a) a = &reg.ctx().emplace<PidAllocator>();
+    for (auto e : reg.view<PersistentIdComponent>())            // never mint below an existing pid
+        a->next = std::max(a->next, reg.get<PersistentIdComponent>(e).pid + 1);
+    return *a;
+}
+
+// Reuse an existing pid (repeated saves are stable) or mint a fresh one onto the entity.
+std::uint64_t mintPid(entt::registry& reg, PidAllocator& alloc, entt::entity e) {
+    if (const auto* p = reg.try_get<PersistentIdComponent>(e); p && p->pid != 0) return p->pid;
+    const std::uint64_t pid = alloc.next++;
+    reg.emplace_or_replace<PersistentIdComponent>(e, PersistentIdComponent{ pid });
+    return pid;
+}
+
+// The authoring graph for a robot id: the ACTIVE ctx graph when it is that robot's, else the
+// parked one in the AuthoringGraphStore. Null when the robot has no graph in this session.
+const krs::rbuild::RobotGraph* graphForRobot(entt::registry& reg, int robotId) {
+    if (const auto* g = reg.ctx().find<krs::rbuild::RobotGraph>())
+        if (g->robotId == robotId && !g->bodies.empty()) return g;
+    if (const auto* store = reg.ctx().find<krs::rbuild::AuthoringGraphStore>()) {
+        const auto it = store->byRobot.find(robotId);
+        if (it != store->byRobot.end()) return &it->second;
+    }
+    return nullptr;
+}
+
+// ROBOT MEMBERS never get pids: a relation endpoint that lives on a robot serializes as
+// { robot, body, slot, link } -- graph body INDEX as the fast hint, body NAME as the durable
+// fallback (the loader re-finds by name when the index drifted). false = not a resolvable
+// robot member (caller warns + drops the relation).
+bool robotMemberRefToJson(entt::registry& reg, entt::entity e, QJsonObject& out) {
+    const auto* sub = reg.try_get<RobotSubcomponentComponent>(e);
+    if (!sub) return false;
+    const auto* g = graphForRobot(reg, sub->robotId);
+    if (!g) return false;
+    int body = -1, slot = -1;
+    if (!entityToRef(*g, e, body, slot)) return false;
+    out["robot"] = sub->robotId;
+    out["body"]  = body;
+    out["slot"]  = slot;
+    out["link"]  = QString::fromStdString(g->bodies[std::size_t(body)].name);
+    return true;
+}
+entt::entity robotMemberRefFromJson(entt::registry& reg, const QJsonObject& o, QString* why) {
+    const int robotId = o["robot"].toInt(-1);
+    auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
+    if (!rr || !rr->get(robotId)) {
+        if (why) *why = QStringLiteral("robot %1 is not in the scene").arg(robotId);
+        return entt::null;
+    }
+    const auto* g = graphForRobot(reg, robotId);
+    if (!g) { if (why) *why = QStringLiteral("robot %1 has no authoring graph").arg(robotId); return entt::null; }
+    int body = o["body"].toInt(-1);
+    const int slot = o["slot"].toInt(0);
+    const std::string link = o["link"].toString().toStdString();
+    // The index is a HINT validated against the name; on drift the name re-finds the body.
+    if (body < 0 || body >= int(g->bodies.size())
+        || (!link.empty() && g->bodies[std::size_t(body)].name != link)) {
+        body = -1;
+        for (int i = 0; i < int(g->bodies.size()); ++i)
+            if (g->bodies[std::size_t(i)].name == link) { body = i; break; }
+    }
+    if (body < 0) {
+        if (why) *why = QStringLiteral("link \"%1\" not found on robot %2")
+                            .arg(QString::fromStdString(link)).arg(robotId);
+        return entt::null;
+    }
+    const entt::entity e = refToEntity(*g, body, slot);
+    if (e == entt::null || !reg.valid(e)) {
+        if (why) *why = QStringLiteral("link \"%1\" on robot %2 resolved to a dead entity")
+                            .arg(QString::fromStdString(link)).arg(robotId);
+        return entt::null;
+    }
+    return e;
+}
+
+// BRepFace <-> JSON: the durable identity layer of a LOOSE body. Persisted with the object
+// because keyed anchors (constraint anchors, connector sourceFaceKeys, role faceKeys) can only
+// re-find their geometry through the body's BRepFaceComponent (anchorWorldFrame contract) --
+// a loaded loose body without its faces would strand every keyed relation on it.
+QJsonObject brepFaceToJson(const BRepFace& f) {
+    QJsonObject o;
+    o["type"] = f.type;
+    o["axisPos"] = vec3ToJson(f.axisPos); o["axisDir"] = vec3ToJson(f.axisDir);
+    o["normal"] = vec3ToJson(f.normal);   o["radius"] = double(f.radius);
+    o["end0"] = vec3ToJson(f.axisEnd0);   o["end1"] = vec3ToJson(f.axisEnd1);
+    o["key"] = u64ToJson(f.faceKey);
+    return o;
+}
+BRepFace brepFaceFromJson(const QJsonObject& o) {
+    BRepFace f;
+    f.type = o["type"].toInt(0);
+    f.axisPos = vec3FromJson(o["axisPos"]); f.axisDir = vec3FromJson(o["axisDir"], { 0, 0, 1 });
+    f.normal = vec3FromJson(o["normal"], { 0, 0, 1 }); f.radius = float(o["radius"].toDouble(0.0));
+    f.axisEnd0 = vec3FromJson(o["end0"]); f.axisEnd1 = vec3FromJson(o["end1"]);
+    f.faceKey = u64FromJson(o["key"]);
+    return f;
+}
+
+// MateConnectorComponent <-> JSON -- THE connector codec (the .krobot connectorSets entries and
+// the v1.2 loose-body "connectors" section share it, so the two paths cannot drift).
+QJsonObject connectorSetToJson(const MateConnectorComponent& mc) {
+    QJsonObject o;
+    o["nextId"] = int(mc.nextConnectorId);
+    QJsonArray list;
+    for (const auto& c : mc.connectors) {
+        QJsonObject co;
+        co["id"] = int(c.id); co["name"] = QString::fromStdString(c.name);
+        co["pos"] = vec3ToJson(c.localPos); co["z"] = vec3ToJson(c.localZ); co["x"] = vec3ToJson(c.localX);
+        co["key"] = u64ToJson(c.sourceFaceKey); co["ftype"] = c.sourceFaceType; co["radius"] = double(c.radius);
+        list.push_back(co);
+    }
+    o["connectors"] = list;
+    return o;
+}
+void connectorSetFromJson(const QJsonObject& o, MateConnectorComponent& mc) {
+    mc.connectors.clear();
+    std::uint32_t maxId = 0;
+    for (const QJsonValue& cv : o["connectors"].toArray()) {
+        const QJsonObject co = cv.toObject();
+        MateConnector c;
+        c.id = std::uint32_t(co["id"].toInt(0)); c.name = co["name"].toString().toStdString();
+        c.localPos = vec3FromJson(co["pos"]); c.localZ = vec3FromJson(co["z"], { 0, 0, 1 });
+        c.localX = vec3FromJson(co["x"], { 1, 0, 0 });
+        c.sourceFaceKey = u64FromJson(co["key"]); c.sourceFaceType = co["ftype"].toInt(1);
+        c.radius = float(co["radius"].toDouble(0.0));
+        maxId = std::max(maxId, c.id);
+        mc.connectors.push_back(std::move(c));
+    }
+    mc.nextConnectorId = std::max(std::uint32_t(o["nextId"].toInt(1)), maxId + 1);
+}
+
 } // namespace
 
 // ================================================================================================
@@ -396,17 +551,8 @@ Report saveScene(Scene& scene, const std::string& kscenePath)
         for (auto e : reg.view<MateConnectorComponent>()) {
             int body = -1, slot = -1;
             if (!entityToRef(g, e, body, slot)) continue;
-            const auto& mc = reg.get<MateConnectorComponent>(e);
-            QJsonObject o; o["body"] = body; o["slot"] = slot; o["nextId"] = int(mc.nextConnectorId);
-            QJsonArray list;
-            for (const auto& c : mc.connectors) {
-                QJsonObject co;
-                co["id"] = int(c.id); co["name"] = QString::fromStdString(c.name);
-                co["pos"] = vec3ToJson(c.localPos); co["z"] = vec3ToJson(c.localZ); co["x"] = vec3ToJson(c.localX);
-                co["key"] = u64ToJson(c.sourceFaceKey); co["ftype"] = c.sourceFaceType; co["radius"] = double(c.radius);
-                list.push_back(co);
-            }
-            o["connectors"] = list;
+            QJsonObject o = connectorSetToJson(reg.get<MateConnectorComponent>(e));
+            o["body"] = body; o["slot"] = slot;
             conns.push_back(o);
         }
         ro["connectorSets"] = conns;
@@ -429,9 +575,15 @@ Report saveScene(Scene& scene, const std::string& kscenePath)
     }
 
     QJsonObject sc;
-    sc["format"] = QStringLiteral("kscene/1");
+    sc["format"] = QStringLiteral("kscene/1.2");    // v1.2: relations (pids); loaders accept any 1.x
     sc["name"] = sceneInfo.completeBaseName();
     sc["robots"] = instances;
+
+    // ---- v1.2: persistent-id allocator; pids ride on the object/light/group entries below, and
+    //      savedPids is the loader's RESOLVABLE UNIVERSE -- a relation referencing anything else
+    //      is dropped NOW with a warning (never write a relation that cannot load). ----
+    PidAllocator& pidAlloc = pidAllocator(reg);
+    std::unordered_set<std::uint64_t> savedPids;
 
     // ---- v1.1: environment (renderer knobs mirrored into ctx) + fog/background ----
     if (auto* env = reg.ctx().find<EnvironmentSettings>()) sc["environment"] = environmentToJson(*env);
@@ -467,6 +619,10 @@ Report saveScene(Scene& scene, const std::string& kscenePath)
         if (reg.all_of<TransformComponent>(e)) lo["transform"] = transformToJson(reg.get<TransformComponent>(e));
         if (reg.all_of<TagComponent>(e))       lo["name"]      = QString::fromStdString(reg.get<TagComponent>(e).tag);
         if (reg.all_of<MaterialComponent>(e))  lo["material"]  = materialToJson(reg.get<MaterialComponent>(e));
+        const std::uint64_t lpid = mintPid(reg, pidAlloc, e);            // v1.2 identity
+        lo["pid"] = u64ToJson(lpid);
+        savedPids.insert(lpid);
+        if (reg.all_of<HiddenComponent>(e)) lo["hidden"] = true;         // outliner-eye state
         lights.push_back(lo);
         ++rep.lights;
     }
@@ -486,10 +642,206 @@ Report saveScene(Scene& scene, const std::string& kscenePath)
         oo["transform"] = transformToJson(reg.get<TransformComponent>(e));
         if (reg.all_of<TagComponent>(e))      oo["name"]     = QString::fromStdString(reg.get<TagComponent>(e).tag);
         if (reg.all_of<MaterialComponent>(e)) oo["material"] = materialToJson(reg.get<MaterialComponent>(e));
+        const std::uint64_t opid = mintPid(reg, pidAlloc, e);            // v1.2 identity
+        oo["pid"] = u64ToJson(opid);
+        savedPids.insert(opid);
+        if (reg.all_of<HiddenComponent>(e)) oo["hidden"] = true;         // outliner-eye state
+        // v1.2: the body's durable-identity faces (keyed anchors re-find through these on load).
+        if (const auto* fc = reg.try_get<BRepFaceComponent>(e); fc && !fc->faces.empty()) {
+            QJsonArray fa;
+            for (const auto& f : fc->faces) fa.push_back(brepFaceToJson(f));
+            oo["brepFaces"] = fa;
+        }
         objects.push_back(oo);
         ++rep.objects;
     }
     sc["objects"] = objects;
+
+    // ================================ v1.2 RELATIONS ================================
+    // All sections are OPTIONAL on load (old 1.x scenes simply have none). Every relation whose
+    // endpoint is not in this document is dropped HERE with a warning naming it.
+
+    // ---- groups: each ROOT is a meshless first-class node -> its own entry. Flat membership;
+    //      NESTING RECONSTRUCTS FROM memberPids (a member pid that is itself a group root's pid
+    //      re-nests the subtree; parentGroupPid is written as a redundant readability channel,
+    //      the loader does not need it). ----
+    {
+        for (auto e : reg.view<GroupComponent>())                        // mint roots FIRST so
+            savedPids.insert(mintPid(reg, pidAlloc, e));                 // nested refs resolve
+        QJsonArray groups;
+        for (auto e : reg.view<GroupComponent>()) {
+            const auto& gc = reg.get<GroupComponent>(e);
+            QJsonObject go;
+            go["pid"] = u64ToJson(reg.get<PersistentIdComponent>(e).pid);
+            go["name"] = QString::fromStdString(gc.name);
+            go["visible"] = gc.visible;
+            if (reg.all_of<TransformComponent>(e))
+                go["transform"] = transformToJson(reg.get<TransformComponent>(e));
+            QJsonArray memberPids, memberRoots;
+            for (entt::entity m : krs::group::groupMembers(reg, e)) {
+                if (const auto* rrc = reg.try_get<RobotRootComponent>(m)) {   // robot roots: by robotId
+                    memberRoots.push_back(rrc->robotId);
+                    continue;
+                }
+                const auto* p = reg.try_get<PersistentIdComponent>(m);
+                if (p && p->pid != 0 && savedPids.count(p->pid)) {
+                    memberPids.push_back(u64ToJson(p->pid));
+                } else {
+                    QString nm = reg.all_of<TagComponent>(m)
+                        ? QString::fromStdString(reg.get<TagComponent>(m).tag) : QStringLiteral("<unnamed>");
+                    rep.warnings << QStringLiteral("Group \"%1\": member \"%2\" is not persisted in this "
+                                                   "document (no object recipe) -- membership dropped.")
+                                        .arg(QString::fromStdString(gc.name), nm);
+                }
+            }
+            go["memberPids"] = memberPids;
+            if (!memberRoots.isEmpty()) go["memberRobotRoots"] = memberRoots;
+            std::uint64_t parentPid = 0;
+            if (const auto* gm = reg.try_get<GroupMemberComponent>(e))
+                if (reg.valid(gm->group) && reg.all_of<GroupComponent>(gm->group)
+                    && reg.all_of<PersistentIdComponent>(gm->group))
+                    parentPid = reg.get<PersistentIdComponent>(gm->group).pid;
+            go["parentGroupPid"] = u64ToJson(parentPid);
+            groups.push_back(go);
+        }
+        if (!groups.isEmpty()) sc["groups"] = groups;
+    }
+
+    // ---- faceRoles: per-pid role maps for LOOSE bodies (robot-member roles are .kee territory). ----
+    {
+        QJsonArray faceRoles;
+        for (auto e : reg.view<FaceRoleComponent>()) {
+            const auto& fr = reg.get<FaceRoleComponent>(e);
+            if (fr.byFaceKey.empty()) continue;
+            if (reg.any_of<RobotSubcomponentComponent, RobotRootComponent>(e)) continue;  // rides with the .kee
+            const auto* p = reg.try_get<PersistentIdComponent>(e);
+            if (!p || p->pid == 0 || !savedPids.count(p->pid)) {
+                QString nm = reg.all_of<TagComponent>(e)
+                    ? QString::fromStdString(reg.get<TagComponent>(e).tag) : QStringLiteral("<unnamed>");
+                rep.warnings << QStringLiteral("Face roles on \"%1\" (%2 face(s)): body is not persisted in "
+                                               "this document -- roles dropped.").arg(nm).arg(int(fr.byFaceKey.size()));
+                continue;
+            }
+            QJsonObject o; o["pid"] = u64ToJson(p->pid);
+            QJsonArray roles;
+            for (const auto& [key, en] : fr.byFaceKey) {
+                QJsonObject ro;
+                ro["key"] = u64ToJson(key);
+                ro["role"] = int(en.role);
+                ro["tag"] = QString::fromStdString(en.tag);
+                ro["friction"] = double(en.friction);
+                ro["maxNormalForceN"] = double(en.maxNormalForceN);
+                roles.push_back(ro);
+            }
+            o["roles"] = roles;
+            faceRoles.push_back(o);
+        }
+        if (!faceRoles.isEmpty()) sc["faceRoles"] = faceRoles;
+    }
+
+    // ---- connectors: LOOSE-body mate-connector sets, per pid (robot sets ride in the .krobot). ----
+    {
+        QJsonArray looseConns;
+        for (auto e : reg.view<MateConnectorComponent>()) {
+            if (reg.any_of<RobotSubcomponentComponent, RobotRootComponent>(e)) continue;
+            const auto& mc = reg.get<MateConnectorComponent>(e);
+            if (mc.connectors.empty()) continue;
+            const auto* p = reg.try_get<PersistentIdComponent>(e);
+            if (!p || p->pid == 0 || !savedPids.count(p->pid)) {
+                QString nm = reg.all_of<TagComponent>(e)
+                    ? QString::fromStdString(reg.get<TagComponent>(e).tag) : QStringLiteral("<unnamed>");
+                rep.warnings << QStringLiteral("Mate connectors on \"%1\" (%2): body is not persisted in "
+                                               "this document -- connectors dropped.").arg(nm).arg(int(mc.connectors.size()));
+                continue;
+            }
+            QJsonObject o = connectorSetToJson(mc);
+            o["pid"] = u64ToJson(p->pid);
+            looseConns.push_back(o);
+        }
+        if (!looseConns.isEmpty()) sc["connectors"] = looseConns;
+    }
+
+    // ---- constraints: the ctx graph, REUSING krs::constraint::toJson per item; the two anchor
+    //      entity fields are meaningless across the save boundary, so they are zeroed and the
+    //      endpoints travel as bodyPidA/bodyPidB instead (unwrapped through pidMap on load). ----
+    if (const auto* cg = reg.ctx().find<krs::constraint::ConstraintGraphComponent>();
+        cg && (!cg->constraints.empty() || cg->nextId > 1)) {
+        QJsonObject co;
+        co["nextId"] = u64ToJson(cg->nextId);
+        co["showIcons"] = cg->showIcons;
+        QJsonArray items;
+        for (const auto& c : cg->constraints) {
+            const auto endpointPid = [&](entt::entity body, const char* side, std::uint64_t& out) {
+                const QString ident = QStringLiteral("Constraint #%1 (%2)")
+                    .arg(qulonglong(c.id)).arg(QLatin1String(krs::constraint::cTypeName(c.type)));
+                if (body == entt::null || !reg.valid(body)) {
+                    rep.warnings << QStringLiteral("%1: anchor %2 body is dead -- constraint not saved.")
+                                        .arg(ident, QLatin1String(side));
+                    return false;
+                }
+                if (reg.any_of<RobotSubcomponentComponent, RobotRootComponent>(body)) {
+                    rep.warnings << QStringLiteral("%1: anchor %2 is a robot member (constraints refuse robot "
+                                                   "members) -- constraint not saved.").arg(ident, QLatin1String(side));
+                    return false;
+                }
+                const auto* p = reg.try_get<PersistentIdComponent>(body);
+                if (!p || p->pid == 0 || !savedPids.count(p->pid)) {
+                    rep.warnings << QStringLiteral("%1: anchor %2 body is not persisted in this document -- "
+                                                   "constraint not saved.").arg(ident, QLatin1String(side));
+                    return false;
+                }
+                out = p->pid;
+                return true;
+            };
+            std::uint64_t pa = 0, pb = 0;
+            if (!endpointPid(c.a.body, "A", pa) || !endpointPid(c.b.body, "B", pb)) continue;
+            QJsonObject o = krs::constraint::toJson(c);
+            QJsonObject ja = o["a"].toObject(); ja["body"] = 0.0; o["a"] = ja;
+            QJsonObject jb = o["b"].toObject(); jb["body"] = 0.0; o["b"] = jb;
+            o["bodyPidA"] = u64ToJson(pa);
+            o["bodyPidB"] = u64ToJson(pb);
+            items.push_back(o);
+        }
+        co["items"] = items;
+        sc["constraints"] = co;
+    }
+
+    // ---- attachments: robotId + flange (robot-member ref) + connectorId + effector body pids. ----
+    if (const auto* ae = reg.ctx().find<krs::ee::AttachedEffectors>(); ae && !ae->list.empty()) {
+        QJsonArray atts;
+        for (const auto& at : ae->list) {
+            const QString ident = QStringLiteral("Attachment \"%1\" (robot %2, connector %3)")
+                .arg(at.effectorName).arg(at.robotId).arg(at.connectorId);
+            QJsonObject flange;
+            if (!reg.valid(at.flangeBody) || !robotMemberRefToJson(reg, at.flangeBody, flange)) {
+                rep.warnings << QStringLiteral("%1: flange body is not a resolvable robot member -- "
+                                               "attachment not saved.").arg(ident);
+                continue;
+            }
+            QJsonArray bodyPids;
+            bool bodiesOk = true;
+            for (entt::entity be : at.effectorBodies) {
+                const auto* p = reg.valid(be) ? reg.try_get<PersistentIdComponent>(be) : nullptr;
+                if (!p || p->pid == 0 || !savedPids.count(p->pid)) { bodiesOk = false; break; }
+                bodyPids.push_back(u64ToJson(p->pid));
+            }
+            if (!bodiesOk) {
+                rep.warnings << QStringLiteral("%1: an effector body is not persisted in this document "
+                                               "(mesh-asset bodies are a follow-up) -- attachment not saved.").arg(ident);
+                continue;
+            }
+            QJsonObject o;
+            o["robotId"] = at.robotId;
+            o["flange"] = flange;
+            o["connectorId"] = int(at.connectorId);
+            o["effectorName"] = at.effectorName;
+            o["effectorBodyPids"] = bodyPids;
+            atts.push_back(o);
+        }
+        if (!atts.isEmpty()) sc["attachments"] = atts;
+    }
+
+    sc["nextPid"] = u64ToJson(pidAlloc.next);       // the document-level allocator (never reused)
 
     if (!writeJsonFile(sceneInfo.absoluteFilePath(), sc)) {
         rep.error = QStringLiteral("Cannot write %1").arg(sceneInfo.absoluteFilePath());
@@ -599,14 +951,16 @@ Report loadScene(Scene& scene, const std::string& kscenePath)
     const QDir sceneDir = QFileInfo(QString::fromStdString(kscenePath)).absoluteDir();
 
     // REPLACE semantics: the document owns the robots AND the loose non-robot content (lights +
-    // recipe-tagged objects). Clear all of them first. (Procedural/gizmo entities with no
-    // SceneObjectComponent and no LightComponent are left untouched, as in v1.)
+    // recipe-tagged objects + group roots + the relation registries). Clear all of them first.
+    // (Procedural/gizmo entities with no SceneObjectComponent and no LightComponent are left
+    // untouched, as in v1.)
     {
         std::vector<entt::entity> kill;
         for (auto e : reg.view<RobotSubcomponentComponent>()) kill.push_back(e);
         for (auto e : reg.view<RobotRootComponent>()) kill.push_back(e);
         for (auto e : reg.view<LightComponent>()) kill.push_back(e);
         for (auto e : reg.view<SceneObjectComponent>()) kill.push_back(e);
+        for (auto e : reg.view<GroupComponent>()) kill.push_back(e);          // v1.2: group roots
         std::sort(kill.begin(), kill.end());
         kill.erase(std::unique(kill.begin(), kill.end()), kill.end());
         for (auto e : kill) if (reg.valid(e)) reg.destroy(e);
@@ -614,7 +968,21 @@ Report loadScene(Scene& scene, const std::string& kscenePath)
         if (auto* g = reg.ctx().find<krs::rbuild::RobotGraph>()) *g = krs::rbuild::RobotGraph{};
         if (auto* mg = reg.ctx().find<MateGraphComponent>()) { mg->mates.clear(); }
         if (auto* store = reg.ctx().find<krs::rbuild::AuthoringGraphStore>()) store->byRobot.clear();
+        // v1.2: the document owns the relation registries too (absent sections load as EMPTY).
+        if (auto* cg = reg.ctx().find<krs::constraint::ConstraintGraphComponent>())
+            *cg = krs::constraint::ConstraintGraphComponent{};
+        if (auto* ae = reg.ctx().find<krs::ee::AttachedEffectors>()) ae->list.clear();
     }
+
+    // v1.2 PASS-1 identity table: pid -> freshly spawned entity. Filled by the light/object/group
+    // spawn loops below; every relation resolves through it in PASS 2 (after everything exists).
+    std::unordered_map<std::uint64_t, entt::entity> pidMap;
+    const auto adoptPid = [&](entt::entity e, const QJsonObject& src) {
+        const std::uint64_t pid = u64FromJson(src["pid"]);
+        if (pid == 0) return;                                  // old 1.x entry: no identity carried
+        reg.emplace_or_replace<PersistentIdComponent>(e, PersistentIdComponent{ pid });
+        pidMap[pid] = e;
+    };
     auto* srcReg = reg.ctx().find<RobotSourceRegistry>();
     if (!srcReg) srcReg = &reg.ctx().emplace<RobotSourceRegistry>();
     srcReg->entries.clear();
@@ -703,21 +1071,7 @@ Report loadScene(Scene& scene, const std::string& kscenePath)
             const QJsonObject o = sv.toObject();
             const entt::entity e = refToEntity(g, o["body"].toInt(-1), o["slot"].toInt(-1));
             if (e == entt::null || !reg.valid(e)) continue;
-            auto& mc = reg.get_or_emplace<MateConnectorComponent>(e);
-            mc.connectors.clear();
-            std::uint32_t maxId = 0;
-            for (const QJsonValue& cv : o["connectors"].toArray()) {
-                const QJsonObject co = cv.toObject();
-                MateConnector c;
-                c.id = std::uint32_t(co["id"].toInt(0)); c.name = co["name"].toString().toStdString();
-                c.localPos = vec3FromJson(co["pos"]); c.localZ = vec3FromJson(co["z"], { 0, 0, 1 });
-                c.localX = vec3FromJson(co["x"], { 1, 0, 0 });
-                c.sourceFaceKey = u64FromJson(co["key"]); c.sourceFaceType = co["ftype"].toInt(1);
-                c.radius = float(co["radius"].toDouble(0.0));
-                maxId = std::max(maxId, c.id);
-                mc.connectors.push_back(std::move(c));
-            }
-            mc.nextConnectorId = std::max(std::uint32_t(o["nextId"].toInt(1)), maxId + 1);
+            connectorSetFromJson(o, reg.get_or_emplace<MateConnectorComponent>(e));
         }
 
         // ---- go live ----
@@ -802,6 +1156,8 @@ Report loadScene(Scene& scene, const std::string& kscenePath)
         reg.emplace_or_replace<TransformComponent>(e, xf);           // exact saved orientation + scale
         if (lo.contains("material") && reg.all_of<MaterialComponent>(e))
             materialFromJson(lo["material"].toObject(), reg.get<MaterialComponent>(e));
+        adoptPid(e, lo);                                             // v1.2 identity
+        if (lo["hidden"].toBool(false)) reg.emplace_or_replace<HiddenComponent>(e);
         ++rep.lights;
     }
 
@@ -827,7 +1183,190 @@ Report loadScene(Scene& scene, const std::string& kscenePath)
             auto& m = reg.get_or_emplace<MaterialComponent>(e);
             materialFromJson(oo["material"].toObject(), m);
         }
+        adoptPid(e, oo);                                             // v1.2 identity
+        if (oo["hidden"].toBool(false)) reg.emplace_or_replace<HiddenComponent>(e);
+        if (oo.contains("brepFaces")) {                              // durable-identity faces back on
+            auto& fc = reg.emplace_or_replace<BRepFaceComponent>(e); // the body (keyed anchors re-find)
+            for (const QJsonValue& fv : oo["brepFaces"].toArray())
+                fc.faces.push_back(brepFaceFromJson(fv.toObject()));
+        }
         ++rep.objects;
+    }
+
+    // ================================ v1.2 RELATIONS: PASS 1 tail + PASS 2 ================================
+    // Group ROOTS are meshless entities the document owns -- spawn them (finishing PASS 1) ...
+    const QJsonArray groupsArr = sc["groups"].toArray();
+    for (const QJsonValue& gv : groupsArr) {
+        const QJsonObject go = gv.toObject();
+        const entt::entity root = reg.create();
+        TransformComponent xf; transformFromJson(go["transform"].toObject(), xf);
+        reg.emplace<TransformComponent>(root, xf);
+        auto& gc = reg.emplace<GroupComponent>(root);
+        gc.name = go["name"].toString().toStdString();
+        gc.visible = go["visible"].toBool(true);
+        gc.lastXf = xf.getTransform();                    // fan-out baseline = the loaded pose (no motion)
+        reg.emplace<TagComponent>(root, gc.name);
+        adoptPid(root, go);
+    }
+
+    // ... then resolve EVERY relation now that everything exists (PASS 2). Anything that cannot
+    // resolve drops with ONE warning naming it; nothing crashes, nothing guesses, nothing moves.
+
+    // ---- groups: membership via pidMap (nesting falls out of member pids that are group roots). ----
+    for (const QJsonValue& gv : groupsArr) {
+        const QJsonObject go = gv.toObject();
+        const auto itR = pidMap.find(u64FromJson(go["pid"]));
+        if (itR == pidMap.end()) continue;                            // guard (roots were just spawned)
+        const entt::entity root = itR->second;
+        const QString gname = go["name"].toString();
+        for (const QJsonValue& mv : go["memberPids"].toArray()) {
+            const std::uint64_t mp = u64FromJson(mv);
+            const auto itM = pidMap.find(mp);
+            if (itM == pidMap.end()) {
+                rep.warnings << QStringLiteral("Group \"%1\": member pid %2 did not resolve -- membership "
+                                               "dropped.").arg(gname).arg(qulonglong(mp));
+                continue;
+            }
+            reg.emplace_or_replace<GroupMemberComponent>(itM->second, GroupMemberComponent{ root });
+        }
+        for (const QJsonValue& rv : go["memberRobotRoots"].toArray()) {
+            const int rid = rv.toInt(-1);
+            auto* rr = reg.ctx().find<krs::robot::RobotRegistry>();
+            krs::robot::LiveRobot* lrb = rr ? rr->get(rid) : nullptr;
+            if (!lrb || !reg.valid(lrb->root)) {
+                rep.warnings << QStringLiteral("Group \"%1\": robot root %2 is not in the scene -- membership "
+                                               "dropped.").arg(gname).arg(rid);
+                continue;
+            }
+            reg.emplace_or_replace<GroupMemberComponent>(lrb->root, GroupMemberComponent{ root });
+        }
+    }
+    // Visibility AFTER all memberships exist (leaf expansion walks the nested tree): an invisible
+    // group re-hides its leaves -- the outliner-eye contract.
+    for (const QJsonValue& gv : groupsArr) {
+        const auto itR = pidMap.find(u64FromJson(gv.toObject()["pid"]));
+        if (itR == pidMap.end()) continue;
+        const auto* gc = reg.try_get<GroupComponent>(itR->second);
+        if (gc && !gc->visible)
+            for (entt::entity m : krs::group::leafTargets(reg, itR->second))
+                reg.emplace_or_replace<HiddenComponent>(m);
+    }
+
+    // ---- faceRoles onto pidMap targets ----
+    for (const QJsonValue& v : sc["faceRoles"].toArray()) {
+        const QJsonObject o = v.toObject();
+        const std::uint64_t pid = u64FromJson(o["pid"]);
+        const auto it = pidMap.find(pid);
+        if (it == pidMap.end()) {
+            rep.warnings << QStringLiteral("Face roles for pid %1 did not resolve to a body -- roles "
+                                           "dropped.").arg(qulonglong(pid));
+            continue;
+        }
+        auto& fr = reg.get_or_emplace<FaceRoleComponent>(it->second);
+        fr.byFaceKey.clear();
+        for (const QJsonValue& rv : o["roles"].toArray()) {
+            const QJsonObject ro = rv.toObject();
+            FaceRoleEntry en;
+            en.role = FaceRole(ro["role"].toInt(0));
+            en.tag = ro["tag"].toString().toStdString();
+            en.friction = float(ro["friction"].toDouble(0.8));
+            en.maxNormalForceN = float(ro["maxNormalForceN"].toDouble(50.0));
+            fr.byFaceKey[u64FromJson(ro["key"])] = en;
+        }
+    }
+
+    // ---- loose-body connector sets onto pidMap targets ----
+    for (const QJsonValue& v : sc["connectors"].toArray()) {
+        const QJsonObject o = v.toObject();
+        const std::uint64_t pid = u64FromJson(o["pid"]);
+        const auto it = pidMap.find(pid);
+        if (it == pidMap.end()) {
+            rep.warnings << QStringLiteral("Mate connectors for pid %1 did not resolve to a body -- "
+                                           "connectors dropped.").arg(qulonglong(pid));
+            continue;
+        }
+        connectorSetFromJson(o, reg.get_or_emplace<MateConnectorComponent>(it->second));
+    }
+
+    // ---- constraints: unwrap bodyPidA/bodyPidB -> entities; VALIDATE, never re-snap (the saved
+    //      poses already satisfy them -- zero motion on load). A missing pid drops the constraint;
+    //      an anchor whose key cannot re-find its face is KEPT but warned (the durable-key
+    //      contract: stale today may re-anchor after a re-import, and dropping would lose data). ----
+    if (sc.contains("constraints")) {
+        const QJsonObject co = sc["constraints"].toObject();
+        auto& cg = krs::constraint::constraintGraph(reg);
+        cg.constraints.clear();
+        cg.showIcons = co["showIcons"].toBool(true);
+        cg.nextId = std::max<std::uint64_t>(u64FromJson(co["nextId"]), 1);
+        for (const QJsonValue& iv : co["items"].toArray()) {
+            const QJsonObject o = iv.toObject();
+            krs::constraint::Constraint c;
+            if (!krs::constraint::fromJson(o, c)) {
+                rep.warnings << QStringLiteral("A constraint entry is malformed -- dropped.");
+                continue;
+            }
+            const QString ident = QStringLiteral("Constraint #%1 (%2)")
+                .arg(qulonglong(c.id)).arg(QLatin1String(krs::constraint::cTypeName(c.type)));
+            const std::uint64_t pa = u64FromJson(o["bodyPidA"]), pb = u64FromJson(o["bodyPidB"]);
+            const auto ia = pidMap.find(pa), ib = pidMap.find(pb);
+            if (ia == pidMap.end() || ib == pidMap.end()) {
+                rep.warnings << QStringLiteral("%1: body pid %2 did not resolve -- constraint dropped.")
+                                    .arg(ident).arg(qulonglong(ia == pidMap.end() ? pa : pb));
+                continue;
+            }
+            c.a.body = ia->second;
+            c.b.body = ib->second;
+            const auto A = krs::constraint::anchorWorldFrame(reg, c.a);
+            const auto B = krs::constraint::anchorWorldFrame(reg, c.b);
+            if (!A.valid || !B.valid)
+                rep.warnings << QStringLiteral("%1: anchor %2 does not resolve on the loaded body (stale "
+                                               "key?) -- kept, but it cannot solve until re-anchored.")
+                                    .arg(ident, QLatin1String(!A.valid ? "A" : "B"));
+            cg.nextId = std::max(cg.nextId, c.id + 1);
+            cg.constraints.push_back(std::move(c));
+        }
+    }
+
+    // ---- attachments: flange = robot-member ref (registry + graph, name fallback); effector
+    //      bodies via pidMap. A missing robot / body drops the attachment with a warning. ----
+    for (const QJsonValue& av : sc["attachments"].toArray()) {
+        const QJsonObject o = av.toObject();
+        krs::ee::Attachment at;
+        at.robotId = o["robotId"].toInt(-1);
+        at.connectorId = std::uint32_t(o["connectorId"].toInt(0));
+        at.effectorName = o["effectorName"].toString();
+        const QString ident = QStringLiteral("Attachment \"%1\" (robot %2, connector %3)")
+            .arg(at.effectorName).arg(at.robotId).arg(at.connectorId);
+        QString why;
+        at.flangeBody = robotMemberRefFromJson(reg, o["flange"].toObject(), &why);
+        if (at.flangeBody == entt::null) {
+            rep.warnings << QStringLiteral("%1: %2 -- attachment dropped.").arg(ident, why);
+            continue;
+        }
+        bool bodiesOk = true;
+        for (const QJsonValue& pv : o["effectorBodyPids"].toArray()) {
+            const std::uint64_t bp = u64FromJson(pv);
+            const auto it = pidMap.find(bp);
+            if (it == pidMap.end()) {
+                rep.warnings << QStringLiteral("%1: effector body pid %2 did not resolve -- attachment "
+                                               "dropped.").arg(ident).arg(qulonglong(bp));
+                bodiesOk = false;
+                break;
+            }
+            at.effectorBodies.push_back(it->second);
+        }
+        if (!bodiesOk) continue;
+        auto* ae = reg.ctx().find<krs::ee::AttachedEffectors>();
+        if (!ae) ae = &reg.ctx().emplace<krs::ee::AttachedEffectors>();
+        ae->list.push_back(std::move(at));
+    }
+
+    // ---- the document-level pid allocator continues where the file left off (never reuse). ----
+    {
+        auto* alloc = reg.ctx().find<PidAllocator>();
+        if (!alloc) alloc = &reg.ctx().emplace<PidAllocator>();
+        alloc->next = std::max(alloc->next, u64FromJson(sc["nextPid"]));
+        for (const auto& [pid, e] : pidMap) alloc->next = std::max(alloc->next, pid + 1);
     }
 
     krs::robot::rebuildJointNameRegistry(reg);
@@ -1265,8 +1804,381 @@ bool runSceneObjectsGate()
                negOk ? "yes" : "NO", negOk ? "REJECTS(non-vacuous)" : "VACUOUS!");
     }
 
-    const bool pass = savedOk && envOk && propsOk && lightsOk && objectsOk && negOk;
-    printf("[scenesave] %s\n", pass ? "ALL PASS (environment/skybox + fog + lights (all params) + loose objects (transform incl. rotation + full material) round-trip a save/load; recipe-less mesh objects skipped honestly)"
+    // ================================================================================
+    // v1.2 RELATIONS chapter (E1.1): pids + constraints + nested groups + face roles +
+    // loose-body connectors + effector attachments survive save -> WIPE -> load.
+    // ================================================================================
+    printf("[scenesave]   -- v1.2 RELATIONS: constraints/groups/roles/connectors/attachments through pid remap --\n");
+    bool relSaveOk = false, relLoadOk = false, relPidOk = false, relConOk = false, relMotionOk = false,
+         relGroupOk = false, relRoleOk = false, relConnOk = false, relAttOk = false,
+         negDelOk = false, negPidOk = false, negOldOk = false;
+    {
+        const std::string relPath = QDir(dir).filePath("relations.kscene").toStdString();
+
+        // Synthetic body-LOCAL identity faces (identical on each box -- keys are per-body).
+        BRepFace cylF; cylF.type = 1; cylF.axisPos = { 0, 0, 0 }; cylF.axisDir = { 0, 0, 1 };
+        cylF.radius = 0.05f; cylF.axisEnd0 = { 0, 0, -0.2f }; cylF.axisEnd1 = { 0, 0, 0.2f };
+        cylF.faceKey = computeFaceKey(cylF);
+        BRepFace plF; plF.type = 0; plF.normal = { 0, 0, 1 }; plF.axisPos = { 0, 0, 0.2f };
+        plF.faceKey = computeFaceKey(plF);
+        const std::uint64_t keyCyl = cylF.faceKey, keyPl = plF.faceKey;
+        const auto cylAnchor = [&](entt::entity body) {
+            krs::constraint::Anchor a;
+            a.body = body; a.key = keyCyl; a.faceId = 0;
+            a.pos = { 0, 0, 0 }; a.axisZ = { 0, 0, 1 }; a.axisX = { 1, 0, 0 };
+            a.radius = 0.05f; a.from = krs::constraint::AnchorSource::CylFace;
+            return a;
+        };
+
+        std::uint64_t pidA0 = 0, pidB0 = 0, pidC0 = 0, pidIn0 = 0, pidOut0 = 0, nextPid1 = 0, nextPid2 = 0;
+        TransformComponent xfA0, xfB0, xfC0;
+
+        // ---- author: demo robot + 3 keyed boxes + 2 constraints (1 kinematic) + nested groups
+        //      + roles + a loose connector + an attachment; save. ----
+        {
+            Scene sA;
+            auto& rA = sA.getRegistry();
+            rA.ctx().emplace<RobotSourceRegistry>().set(0, "", /*builder demo*/ 0);
+            krs::rbuild::RobotGraph rg = krs::rbuild::buildDemoGraph();
+            rg.robotId = 0;
+            krs::rbuild::spawnGraphBodies(sA, rg, 0);
+            rA.ctx().emplace<krs::rbuild::RobotGraph>(rg);
+            krs::robot::LiveRobot* rl = krs::robot::instantiateFromGraph(sA, rg, 0);
+            if (rl) { rl->name = rl->model.name = "RelBot"; rl->useRobotFkViz = true; }
+
+            const auto mkBox = [&](const char* nm, const glm::vec3& pos) {
+                entt::entity e = SceneBuilder::spawnPrimitive(sA, int(Primitive::Cube), pos, { 0.4f, 0.4f, 0.4f }, nm);
+                auto& fc = rA.emplace<BRepFaceComponent>(e);
+                fc.faces = { cylF, plF };
+                return e;
+            };
+            const entt::entity A = mkBox("BoxA", { 0, 0.5f, 0 });
+            const entt::entity B = mkBox("BoxB", { 0.9f, 0.7f, 0.3f });
+            const entt::entity C = mkBox("BoxC", { -0.8f, 0.4f, 0.6f });
+
+            auto& cg = krs::constraint::constraintGraph(rA);
+            krs::constraint::Constraint c1;
+            c1.id = cg.nextId++; c1.type = krs::constraint::CType::Concentric;
+            c1.a = cylAnchor(A); c1.b = cylAnchor(B);
+            const bool snap1 = krs::constraint::applyConstraintSnap(rA, c1);   // satisfied at save
+            cg.constraints.push_back(c1);
+            krs::constraint::Constraint c2;
+            c2.id = cg.nextId++; c2.type = krs::constraint::CType::Revolute;   // KINEMATIC type
+            c2.a = cylAnchor(B); c2.b = cylAnchor(C);
+            const bool snap2 = krs::constraint::applyConstraintSnap(rA, c2);
+            cg.constraints.push_back(c2);
+
+            auto& fr = rA.emplace<FaceRoleComponent>(A);                       // roles on 2 keys of A
+            fr.byFaceKey[keyCyl] = { FaceRole::GripSurface, "vacuum-pad", 0.42f, 77.5f };
+            fr.byFaceKey[keyPl]  = { FaceRole::KeepOut, "camera-window", 0.42f, 50.0f };
+
+            auto& mcC = rA.emplace<MateConnectorComponent>(C);                 // connector id 7 on C
+            MateConnector k;
+            k.id = 7; k.name = "toolseat"; k.localPos = { 0.1f, 0.2f, 0.3f };
+            k.localZ = { 0, 0, 1 }; k.localX = { 1, 0, 0 };
+            k.sourceFaceKey = keyCyl; k.sourceFaceType = 1; k.radius = 0.05f;
+            mcC.connectors.push_back(k);
+            mcC.nextConnectorId = 8;
+
+            const entt::entity inner = krs::group::makeGroup(rA, "inner", { A, B });   // {A,B}
+            const entt::entity outer = krs::group::makeGroup(rA, "outer", { inner, C }); // {{A,B},C}
+
+            auto& ae = rA.ctx().emplace<krs::ee::AttachedEffectors>();
+            krs::ee::Attachment at;
+            at.robotId = 0;
+            at.flangeBody = entt::entity(std::uint32_t(rg.bodies[2].entity));  // a REAL robot member
+            at.connectorId = 7;
+            at.effectorName = "GateGripper";
+            at.effectorBodies = { C };
+            ae.list.push_back(at);
+
+            xfA0 = rA.get<TransformComponent>(A);                              // pre-save poses
+            xfB0 = rA.get<TransformComponent>(B);
+            xfC0 = rA.get<TransformComponent>(C);
+
+            const Report rs = saveScene(sA, relPath);
+            const auto pidOfA = [&](entt::entity e) {
+                return rA.all_of<PersistentIdComponent>(e) ? rA.get<PersistentIdComponent>(e).pid : 0ull;
+            };
+            pidA0 = pidOfA(A); pidB0 = pidOfA(B); pidC0 = pidOfA(C);
+            pidIn0 = pidOfA(inner); pidOut0 = pidOfA(outer);
+            {
+                QJsonObject sj; readJsonFile(QString::fromStdString(relPath), sj);
+                nextPid1 = u64FromJson(sj["nextPid"]);
+            }
+            relSaveOk = rs.ok && rs.robots == 1 && rs.objects == 3 && rs.warnings.isEmpty()
+                     && snap1 && snap2
+                     && pidA0 && pidB0 && pidC0 && pidIn0 && pidOut0
+                     && pidA0 != pidB0 && pidA0 != pidC0 && pidB0 != pidC0
+                     && nextPid1 == 6;
+            printf("[scenesave]   v1.2 save: ok=%s robots=%d objects=%d snaps=%s/%s warnings=%d pids A/B/C/in/out=%llu/%llu/%llu/%llu/%llu nextPid=%llu (want 6)  %s\n",
+                   rs.ok ? "yes" : "NO", rs.robots, rs.objects, snap1 ? "yes" : "NO", snap2 ? "yes" : "NO",
+                   int(rs.warnings.size()),
+                   (unsigned long long)pidA0, (unsigned long long)pidB0, (unsigned long long)pidC0,
+                   (unsigned long long)pidIn0, (unsigned long long)pidOut0, (unsigned long long)nextPid1,
+                   relSaveOk ? "PASS" : "FAIL");
+        }
+
+        // ---- WIPE (fresh Scene) -> load -> every relation intact, ZERO motion. ----
+        {
+            Scene sB;
+            auto& rB = sB.getRegistry();
+            const Report rl2 = loadScene(sB, relPath);
+
+            const auto findObj = [&](const char* nm) -> entt::entity {
+                for (auto e : rB.view<SceneObjectComponent, TagComponent>())
+                    if (rB.get<TagComponent>(e).tag == nm) return e;
+                return entt::null;
+            };
+            const auto findGrp = [&](const char* nm) -> entt::entity {
+                for (auto e : rB.view<GroupComponent>())
+                    if (rB.get<GroupComponent>(e).name == nm) return e;
+                return entt::null;
+            };
+            const entt::entity A2 = findObj("BoxA"), B2 = findObj("BoxB"), C2 = findObj("BoxC");
+            const entt::entity in2 = findGrp("inner"), out2 = findGrp("outer");
+            relLoadOk = rl2.ok && rl2.warnings.isEmpty()
+                     && A2 != entt::null && B2 != entt::null && C2 != entt::null
+                     && in2 != entt::null && out2 != entt::null;
+
+            // constraints: count 2, types + ids intact, anchors resolve on BOTH sides.
+            int anchorsValid = 0;
+            auto* cg2 = rB.ctx().find<krs::constraint::ConstraintGraphComponent>();
+            if (relLoadOk && cg2 && cg2->constraints.size() == 2) {
+                for (auto& c : cg2->constraints) {
+                    if (krs::constraint::anchorWorldFrame(rB, c.a).valid) ++anchorsValid;
+                    if (krs::constraint::anchorWorldFrame(rB, c.b).valid) ++anchorsValid;
+                }
+                relConOk = cg2->constraints[0].type == krs::constraint::CType::Concentric
+                        && cg2->constraints[1].type == krs::constraint::CType::Revolute
+                        && cg2->constraints[0].id == 1 && cg2->constraints[1].id == 2
+                        && cg2->constraints[0].a.body == A2 && cg2->constraints[0].b.body == B2
+                        && cg2->constraints[1].a.body == B2 && cg2->constraints[1].b.body == C2
+                        && cg2->nextId == 3 && anchorsValid == 4;
+            }
+
+            // ZERO body motion during load (the saved poses already satisfy the constraints).
+            double maxMove = 1e9; bool rotOk = false;
+            if (relLoadOk) {
+                const auto d = [&](entt::entity e, const TransformComponent& x0) {
+                    const auto& x = rB.get<TransformComponent>(e);
+                    return double(glm::length(x.translation - x0.translation))
+                         + double(glm::length(x.scale - x0.scale));
+                };
+                maxMove = std::max({ d(A2, xfA0), d(B2, xfB0), d(C2, xfC0) });
+                const auto rq = [&](entt::entity e, const TransformComponent& x0) {
+                    return std::abs(glm::dot(rB.get<TransformComponent>(e).rotation, x0.rotation)) > 1.0f - 1e-6f;
+                };
+                rotOk = rq(A2, xfA0) && rq(B2, xfB0) && rq(C2, xfC0);
+            }
+            relMotionOk = relLoadOk && maxMove < 1e-6 && rotOk;
+            printf("[scenesave]   v1.2 load: ok=%s warnings=%d constraints=%d/2 anchors valid=%d/4 nextId=%llu (want 3) maxMotion=%.3e (<1e-6) rot-exact=%s  %s\n",
+                   rl2.ok ? "yes" : "NO", int(rl2.warnings.size()),
+                   cg2 ? int(cg2->constraints.size()) : -1, anchorsValid,
+                   cg2 ? (unsigned long long)cg2->nextId : 0ull,
+                   maxMove, rotOk ? "yes" : "NO",
+                   (relLoadOk && relConOk && relMotionOk) ? "PASS" : "FAIL");
+
+            // roles exact (friction 0.42 on both painted keys of A).
+            const auto* fr2 = (A2 != entt::null) ? rB.try_get<FaceRoleComponent>(A2) : nullptr;
+            relRoleOk = fr2 && fr2->byFaceKey.size() == 2
+                     && fr2->byFaceKey.count(keyCyl) && fr2->byFaceKey.count(keyPl)
+                     && fr2->byFaceKey.at(keyCyl).role == FaceRole::GripSurface
+                     && fr2->byFaceKey.at(keyCyl).tag == "vacuum-pad"
+                     && std::abs(fr2->byFaceKey.at(keyCyl).friction - 0.42f) < 1e-7f
+                     && std::abs(fr2->byFaceKey.at(keyCyl).maxNormalForceN - 77.5f) < 1e-4f
+                     && fr2->byFaceKey.at(keyPl).role == FaceRole::KeepOut
+                     && std::abs(fr2->byFaceKey.at(keyPl).friction - 0.42f) < 1e-7f;
+            printf("[scenesave]   v1.2 roles: n=%d/2 friction=%.6f (want 0.420000) grip-tag=%s  %s\n",
+                   fr2 ? int(fr2->byFaceKey.size()) : -1,
+                   (fr2 && fr2->byFaceKey.count(keyCyl)) ? fr2->byFaceKey.at(keyCyl).friction : -1.0,
+                   (fr2 && fr2->byFaceKey.count(keyCyl)) ? fr2->byFaceKey.at(keyCyl).tag.c_str() : "<none>",
+                   relRoleOk ? "PASS" : "FAIL");
+
+            // connector id 7 on C, frame exact.
+            const auto* mc2 = (C2 != entt::null) ? rB.try_get<MateConnectorComponent>(C2) : nullptr;
+            relConnOk = mc2 && mc2->connectors.size() == 1 && mc2->connectors[0].id == 7
+                     && glm::length(mc2->connectors[0].localPos - glm::vec3(0.1f, 0.2f, 0.3f)) < 1e-7f
+                     && glm::length(mc2->connectors[0].localZ - glm::vec3(0, 0, 1)) < 1e-7f
+                     && glm::length(mc2->connectors[0].localX - glm::vec3(1, 0, 0)) < 1e-7f
+                     && mc2->connectors[0].sourceFaceKey == keyCyl
+                     && std::abs(mc2->connectors[0].radius - 0.05f) < 1e-7f
+                     && mc2->nextConnectorId == 8;
+            printf("[scenesave]   v1.2 connector: id=%u (want 7) pos=(%.3f,%.3f,%.3f) (want 0.1,0.2,0.3) nextId=%u (want 8)  %s\n",
+                   (mc2 && !mc2->connectors.empty()) ? mc2->connectors[0].id : 0u,
+                   (mc2 && !mc2->connectors.empty()) ? mc2->connectors[0].localPos.x : 0.0f,
+                   (mc2 && !mc2->connectors.empty()) ? mc2->connectors[0].localPos.y : 0.0f,
+                   (mc2 && !mc2->connectors.empty()) ? mc2->connectors[0].localPos.z : 0.0f,
+                   mc2 ? mc2->nextConnectorId : 0u, relConnOk ? "PASS" : "FAIL");
+
+            // attachment: robot-member flange resolved, connectorId intact, effector body == C.
+            auto* ae2 = rB.ctx().find<krs::ee::AttachedEffectors>();
+            const auto* g2 = rB.ctx().find<krs::rbuild::RobotGraph>();
+            if (ae2 && ae2->list.size() == 1 && g2 && g2->bodies.size() > 2) {
+                const auto& at2 = ae2->list[0];
+                relAttOk = at2.robotId == 0 && at2.connectorId == 7 && at2.effectorName == "GateGripper"
+                        && rB.valid(at2.flangeBody)
+                        && at2.flangeBody == entt::entity(std::uint32_t(g2->bodies[2].entity))
+                        && rB.all_of<RobotSubcomponentComponent>(at2.flangeBody)
+                        && at2.effectorBodies.size() == 1 && at2.effectorBodies[0] == C2;
+            }
+            printf("[scenesave]   v1.2 attachment: entries=%d/1 robot=%d connectorId=%u (want 7) flange==graph-body2=%s effectorBody==BoxC=%s  %s\n",
+                   ae2 ? int(ae2->list.size()) : -1,
+                   (ae2 && !ae2->list.empty()) ? ae2->list[0].robotId : -1,
+                   (ae2 && !ae2->list.empty()) ? ae2->list[0].connectorId : 0u,
+                   (ae2 && !ae2->list.empty() && g2 && g2->bodies.size() > 2
+                    && ae2->list[0].flangeBody == entt::entity(std::uint32_t(g2->bodies[2].entity))) ? "yes" : "NO",
+                   (ae2 && !ae2->list.empty() && !ae2->list[0].effectorBodies.empty()
+                    && ae2->list[0].effectorBodies[0] == C2) ? "yes" : "NO",
+                   relAttOk ? "PASS" : "FAIL");
+
+            // pid round-trip: a RE-SAVE reuses every pid (stable identity across saves).
+            const Report rs2 = saveScene(sB, QDir(dir).filePath("relations2.kscene").toStdString());
+            {
+                QJsonObject sj; readJsonFile(QDir(dir).filePath("relations2.kscene"), sj);
+                nextPid2 = u64FromJson(sj["nextPid"]);
+            }
+            const auto pidOfB = [&](entt::entity e) {
+                return (e != entt::null && rB.all_of<PersistentIdComponent>(e))
+                     ? rB.get<PersistentIdComponent>(e).pid : 0ull;
+            };
+            relPidOk = rs2.ok
+                    && pidOfB(A2) == pidA0 && pidOfB(B2) == pidB0 && pidOfB(C2) == pidC0
+                    && pidOfB(in2) == pidIn0 && pidOfB(out2) == pidOut0
+                    && nextPid2 == nextPid1;
+            printf("[scenesave]   v1.2 pids: stable across re-save=%s (A %llu->%llu B %llu->%llu C %llu->%llu) nextPid %llu->%llu  %s\n",
+                   relPidOk ? "yes" : "NO",
+                   (unsigned long long)pidA0, (unsigned long long)pidOfB(A2),
+                   (unsigned long long)pidB0, (unsigned long long)pidOfB(B2),
+                   (unsigned long long)pidC0, (unsigned long long)pidOfB(C2),
+                   (unsigned long long)nextPid1, (unsigned long long)nextPid2,
+                   relPidOk ? "PASS" : "FAIL");
+
+            // nested topology identical + fan-out still works (move outer root, A follows).
+            bool nestOk = false; float fanDx = 0.0f;
+            if (relLoadOk) {
+                nestOk = krs::group::topGroupOf(rB, A2) == out2
+                      && rB.all_of<GroupMemberComponent>(A2) && rB.get<GroupMemberComponent>(A2).group == in2
+                      && rB.all_of<GroupMemberComponent>(in2) && rB.get<GroupMemberComponent>(in2).group == out2
+                      && rB.all_of<GroupMemberComponent>(C2) && rB.get<GroupMemberComponent>(C2).group == out2;
+                const float ax0 = rB.get<TransformComponent>(A2).translation.x;
+                rB.get<TransformComponent>(out2).translation.x += 0.5f;
+                krs::group::applyRootDelta(rB, out2);
+                fanDx = rB.get<TransformComponent>(A2).translation.x - ax0;
+            }
+            relGroupOk = nestOk && std::abs(fanDx - 0.5f) < 1e-5f;
+            printf("[scenesave]   v1.2 groups: topGroupOf(A)==outer + A-in-inner + inner-in-outer + C-in-outer=%s fan-out dx=%.6f (want 0.500000)  %s\n",
+                   nestOk ? "yes" : "NO", fanDx, relGroupOk ? "PASS" : "FAIL");
+        }
+
+        // ---- NEG-CTRL: hand-delete BoxB's object entry -> BOTH constraints drop, warned BY NAME,
+        //      load stays ok, A/C land intact. ----
+        {
+            QJsonObject sj; readJsonFile(QString::fromStdString(relPath), sj);
+            QJsonArray objs = sj["objects"].toArray();
+            for (int i = 0; i < objs.size(); ++i)
+                if (objs[i].toObject()["name"].toString() == QLatin1String("BoxB")) { objs.removeAt(i); break; }
+            sj["objects"] = objs;
+            const std::string p = QDir(dir).filePath("relations_noB.kscene").toStdString();
+            writeJsonFile(QString::fromStdString(p), sj);
+            Scene sC;
+            auto& rC = sC.getRegistry();
+            const Report rn = loadScene(sC, p);
+            int dropped = 0; bool namedCon = false, namedRev = false;
+            for (const QString& w : rn.warnings)
+                if (w.contains(QLatin1String("constraint dropped"))) {
+                    ++dropped;
+                    if (w.contains(QLatin1String("Concentric"))) namedCon = true;
+                    if (w.contains(QLatin1String("Revolute")))   namedRev = true;
+                }
+            auto* cgC = rC.ctx().find<krs::constraint::ConstraintGraphComponent>();
+            entt::entity A3 = entt::null, C3 = entt::null;
+            for (auto e : rC.view<SceneObjectComponent, TagComponent>()) {
+                if (rC.get<TagComponent>(e).tag == "BoxA") A3 = e;
+                if (rC.get<TagComponent>(e).tag == "BoxC") C3 = e;
+            }
+            const bool intact = A3 != entt::null && C3 != entt::null
+                && glm::length(rC.get<TransformComponent>(A3).translation - xfA0.translation) < 1e-6f
+                && glm::length(rC.get<TransformComponent>(C3).translation - xfC0.translation) < 1e-6f;
+            negDelOk = rn.ok && dropped == 2 && namedCon && namedRev
+                    && cgC && cgC->constraints.empty() && intact;
+            printf("[scenesave]   NEG-CTRL deleted body: ok=%s dropped=%d/2 named(Concentric/Revolute)=%s/%s remaining=%d/0 A+C intact=%s  %s\n",
+                   rn.ok ? "yes" : "NO", dropped, namedCon ? "yes" : "NO", namedRev ? "yes" : "NO",
+                   cgC ? int(cgC->constraints.size()) : -1, intact ? "yes" : "NO",
+                   negDelOk ? "REJECTS(non-vacuous)" : "VACUOUS!");
+        }
+
+        // ---- NEG-CTRL: corrupt one bodyPid to an unknown value -> ONLY that constraint drops. ----
+        {
+            QJsonObject sj; readJsonFile(QString::fromStdString(relPath), sj);
+            QJsonObject cons = sj["constraints"].toObject();
+            QJsonArray items = cons["items"].toArray();
+            QJsonObject i0 = items[0].toObject();
+            i0["bodyPidA"] = QStringLiteral("999999");
+            items.replace(0, i0);
+            cons["items"] = items; sj["constraints"] = cons;
+            const std::string p = QDir(dir).filePath("relations_badpid.kscene").toStdString();
+            writeJsonFile(QString::fromStdString(p), sj);
+            Scene sD;
+            auto& rD = sD.getRegistry();
+            const Report rn = loadScene(sD, p);
+            int dropped = 0; bool named999 = false;
+            for (const QString& w : rn.warnings)
+                if (w.contains(QLatin1String("constraint dropped"))) {
+                    ++dropped;
+                    if (w.contains(QLatin1String("999999"))) named999 = true;
+                }
+            auto* cgD = rD.ctx().find<krs::constraint::ConstraintGraphComponent>();
+            negPidOk = rn.ok && dropped == 1 && named999
+                    && cgD && cgD->constraints.size() == 1
+                    && cgD->constraints[0].type == krs::constraint::CType::Revolute;
+            printf("[scenesave]   NEG-CTRL corrupt pid: ok=%s dropped=%d/1 names-999999=%s survivor=%s (want Revolute)  %s\n",
+                   rn.ok ? "yes" : "NO", dropped, named999 ? "yes" : "NO",
+                   (cgD && cgD->constraints.size() == 1)
+                       ? krs::constraint::cTypeName(cgD->constraints[0].type) : "<none>",
+                   negPidOk ? "REJECTS(non-vacuous)" : "VACUOUS!");
+        }
+
+        // ---- NEG-CTRL: an OLD v1.1 scene (no new sections, no pids) loads with ZERO warnings and
+        //      ZERO relations -- backwards compatibility is not allowed to invent anything. ----
+        {
+            QJsonObject old;
+            old["format"] = QStringLiteral("kscene/1");
+            old["name"] = QStringLiteral("v11");
+            old["robots"] = QJsonArray{};
+            QJsonObject obj;
+            obj["primitive"] = int(Primitive::Cube); obj["mesh"] = QString();
+            obj["name"] = QStringLiteral("OldBox");
+            obj["transform"] = QJsonObject{ { "t", QJsonArray{ 1, 2, 3 } }, { "r", QJsonArray{ 1, 0, 0, 0 } },
+                                            { "s", QJsonArray{ 1, 1, 1 } } };
+            old["objects"] = QJsonArray{ obj };
+            old["lights"] = QJsonArray{};
+            const std::string p = QDir(dir).filePath("v11.kscene").toStdString();
+            writeJsonFile(QString::fromStdString(p), old);
+            Scene sE;
+            auto& rE = sE.getRegistry();
+            const Report rn = loadScene(sE, p);
+            int loose = 0; entt::entity oldBox = entt::null;
+            for (auto e : rE.view<SceneObjectComponent>()) { ++loose; oldBox = e; }
+            int groupsN = 0; for (auto e : rE.view<GroupComponent>()) { (void)e; ++groupsN; }
+            auto* cgE = rE.ctx().find<krs::constraint::ConstraintGraphComponent>();
+            auto* aeE = rE.ctx().find<krs::ee::AttachedEffectors>();
+            negOldOk = rn.ok && rn.warnings.isEmpty() && loose == 1 && groupsN == 0
+                    && oldBox != entt::null && !rE.all_of<PersistentIdComponent>(oldBox)
+                    && (!cgE || cgE->constraints.empty()) && (!aeE || aeE->list.empty());
+            printf("[scenesave]   NEG-CTRL v1.1 scene: ok=%s warnings=%d (want 0) objects=%d/1 groups=%d/0 constraints=%d/0 attachments=%d/0 pid-free=%s  %s\n",
+                   rn.ok ? "yes" : "NO", int(rn.warnings.size()), loose, groupsN,
+                   cgE ? int(cgE->constraints.size()) : 0, aeE ? int(aeE->list.size()) : 0,
+                   (oldBox != entt::null && !rE.all_of<PersistentIdComponent>(oldBox)) ? "yes" : "NO",
+                   negOldOk ? "PASS" : "FAIL");
+        }
+    }
+
+    const bool relPass = relSaveOk && relLoadOk && relPidOk && relConOk && relMotionOk
+                      && relGroupOk && relRoleOk && relConnOk && relAttOk
+                      && negDelOk && negPidOk && negOldOk;
+    const bool pass = savedOk && envOk && propsOk && lightsOk && objectsOk && negOk && relPass;
+    printf("[scenesave] %s\n", pass ? "ALL PASS (environment/lights/objects round-trip; v1.2 relations: pids stable across re-save, 2 constraints (1 kinematic) anchor-resolve with zero load motion, nested groups fan out, roles/connectors exact, attachment intact; dropped relations warn BY NAME; old 1.x scenes load clean)"
                                     : "FAILURES PRESENT");
     std::fflush(stdout);
     return pass;

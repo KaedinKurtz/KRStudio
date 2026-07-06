@@ -143,22 +143,27 @@ Ordering encodes dependencies. Within an epoch, items marked ∥ are agent-paral
 
 ## EPOCH 1 — Debt Retirement & Platform Hardening (do FIRST, everything stands on it)
 
-### E1.1 Persistence Unification (L) — THE most load-bearing item on this list
-Constraints, groups, face roles, mate connectors on NON-robot bodies, attached effectors, and
-snap-session prefs currently live only in the registry. Extend `.kscene` (bump minor → v1.2):
-- Serialize: `ConstraintGraphComponent` (toJson exists in `Constraint.hpp` — wire it),
-  `GroupComponent`/`GroupMemberComponent`, `FaceRoleComponent`, `MateConnectorComponent` for
-  loose bodies, `krs::ee::AttachedEffectors`.
-- **The hard part is entity remap on load**: constraints/groups reference `entt::entity` values
-  that don't survive a load. Design: ksave already assigns per-object persistent ids — route ALL
-  cross-references through a `loadIdMap` (persistentId → new entity) resolved in a second pass.
-  Anchors additionally re-find by faceKey/edgeKey (already supported — `anchorWorldFrame`
-  re-find path).
-- GATE `KRS_SCENESAVE` extension: author a scene with 2 constraints (1 kinematic), a nested
-  group, painted roles, a loose-body connector, an attachment → save → load → EVERY relation
-  intact (constraint solves again with ZERO motion — the loaded state already satisfies it;
-  group fan-out still works; attachment listed). NEG-CTRL: delete a referenced body from the
-  JSON by hand → loader drops the constraint with a WARNING naming it, never crashes.
+### E1.1 Persistence Unification (L) — **STATUS 2026-07-05: DONE (kscene/1.2)**
+LANDED (KSave.cpp 1275→2187 lines; KSave.hpp untouched): `.kscene` v1.2 with
+`PersistentIdComponent{pid}` (components.hpp) + doc-level `nextPid` (monotonic PidAllocator ctx,
+never rewinds/reuses); objects/lights/group-roots mint pids at save; robot MEMBERS never get
+pids (addressed as {robot, body, slot, link} index-hint + name-fallback refs). New sections:
+`groups` (nesting reconstructs from memberPids), `faceRoles`, `connectors` (shared
+connectorSetToJson/FromJson used by BOTH .krobot and loose paths so they cannot drift),
+`constraints` (Constraint.hpp toJson wrapped with bodyPidA/B), `attachments`, plus per-object
+`brepFaces` — LOAD-BEARING addition: anchorWorldFrame refuses keyed anchors whose faceKey is
+absent, and spawnPrimitive rebuilds loose bodies faceless, so keyed relations on loose bodies
+would strand without persisted faces (keys stored verbatim, not re-minted). TWO-PASS load:
+pass 1 spawns + adopts pids into pidMap; pass 2 resolves all relations through pidMap; missing
+pid = DROP with a warning naming the relation; stale faceKey = KEEP + warn (a re-import can
+re-anchor; dropping would destroy authored intent); NO re-snap on load (validate only, zero
+body motion <1e-6). Relations referencing unsaved bodies drop AT SAVE with named warnings.
+GATE (extended SCENESAVE, in-app verified): pids stable across re-save, 2 constraints
+(1 kinematic) anchor-resolve with zero load motion, nested groups fan out, roles/connectors
+exact, attachment intact; NEG-CTRLs: deleted body drops both constraints BY NAME, corrupt pid
+drops 1/1 named, v1.1 scenes load clean with 0 warnings. REMAINING (E1.3 territory): mesh-asset
+loose bodies still don't respawn on load; legacy MateGraphComponent mates + snap prefs not
+persisted (deliberate punts).
 
 ### E1.2 System-wide Undo/Redo (XL — decompose) 
 Today undo = gizmo transforms only. An enterprise tool needs command-pattern undo everywhere.

@@ -622,6 +622,15 @@ struct MateGraphComponent {
     std::uint64_t nextMateId = 1;                // monotonic, never reused (0 = unassigned)
 };
 
+// ===================== PERSISTENT IDENTITY (ksave v1.2 relations) =====================
+// entt entity values do NOT survive save/load. Anything that must be referenced ACROSS the
+// save boundary (constraint anchors' bodies, group membership, attachments) carries a
+// PersistentIdComponent minted at SAVE time (stable across subsequent saves of the same
+// session). The .kscene stores relations as pids; the loader builds pid -> new-entity and
+// resolves relations in a SECOND pass (with faceKey/edgeKey re-anchor as the fallback).
+// pid 0 = unassigned. The allocator lives in the scene document itself ("nextPid").
+struct PersistentIdComponent { std::uint64_t pid = 0; };
+
 // ===================== OBJECT GROUPS (nested macro objects) =====================
 // A GROUP is a first-class scene node: an empty ROOT entity (TransformComponent, no mesh) whose
 // members carry GroupMemberComponent. Clicking any member selects the GROUP (Alt+click selects the
