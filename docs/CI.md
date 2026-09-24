@@ -225,3 +225,86 @@ a SKIP is distinct from a genuine PASS in the dashboard tally, so a vacuous gree
 `mosquitto` port ships only the **client library** (`libmosquitto`), *not* the broker daemon — so vcpkg cannot
 satisfy this. Install the broker from the official Mosquitto distribution (or point `KRS_MOSQUITTO_EXE` at it) to
 exercise the 3 MQTT gates for real; otherwise they `SKIP`.
+
+---
+
+## Phase 5 — cross-platform harness: Linux disk root cause, macOS compile gate, tag-driven releases (2026-09-24)
+
+State walking in: `ci-win` green (self-contained dist artifact verified), `ci-linux` failing every run,
+`ci-mac` parked on manual dispatch.
+
+### Linux root cause — found and fixed
+The Actions log of run #39 (`ci-linux`, commit `fd2fef5`) shows the actual killer, deep in the vcpkg
+dependency build, while linking gtk3's tools:
+
+```
+/usr/bin/ld: final link failed: No space left on device
+ninja: build stopped: subcommand failed.
+...
+vcpkg install failed.
+```
+
+Not a code problem — the runner's disk filled up. Two compounding causes, three fixes:
+
+1. **gtk3 should never have been in the build at all.** vcpkg's `opencv4` port has `gtk` in its
+   *default features* on Linux, dragging in the whole GTK stack (gtk3, pango, cairo, gdk-pixbuf,
+   at-spi2, …) — for a Qt application that never opens an OpenCV window. `vcpkg.json` now depends on
+   `opencv4` with `default-features: false` and an explicit feature list that replicates the port's
+   defaults **minus `gtk`**. The list keeps the Windows-resolved set byte-identical (the Windows
+   platform-qualified features are spelled out), so the primed Windows binary cache stays fully hot.
+2. **vcpkg accumulated every port's buildtree.** ~200 ports × their build dirs = tens of GB by
+   mid-run. CI now configures with `-DVCPKG_INSTALL_OPTIONS=--clean-after-build`: each port's
+   buildtree is deleted right after its package is exported to the binary cache, so peak disk is
+   (installed tree + ONE buildtree). Passed on the CI command line only — local developer builds keep
+   incremental state. Install options are not part of vcpkg's package ABI → the binary cache stays valid.
+3. **The runner ships ~30 GB of toolchains this job never uses.** A new first step evicts the Android
+   SDK, dotnet, ghc/ghcup, CodeQL, docker images, etc., with `df -h` printed before/after; two more
+   `df -h` telemetry steps (after configure, after build) make any future disk squeeze visible in the
+   log instead of manifesting as a mystery `ld` failure.
+
+Deliberately **not** switched Linux to a release-only triplet: the triplet file's content is part of
+every package's ABI hash, so changing it invalidates the entire primed binary cache and forces one
+cold multi-hour rebuild. The stock `x64-linux` cache is mostly primed from prior runs. If disk still
+busts, the prepared fallback is `triplets/x64-linux-ci.cmake` (release-only, halves size) — wire it
+into the `linux-ninja-release` preset and eat one cold rebuild.
+
+### CMake portability hardening
+- The SPlisHSPlasH superbuild block is now explicitly gated `WIN32` (it links MSVC-named `.lib`
+  byproducts and compiles the adapter TU with `/arch:AVX2`); other platforms get a STATUS message and
+  the already-existing DFSPH stub path. Previously this only worked by accident of the submodule
+  being absent in CI.
+- The shaders/icons/assets/`simple_arm.urdf` POST_BUILD deploy moved out of `if(WIN32)` — it is
+  platform-neutral, and the Linux/mac artifacts now carry the runtime data tree (the renderer loads
+  `.glsl` from `shaders/` at runtime). The Linux Archive step zips exactly that tree.
+
+### macOS — re-enabled as a compile+link gate (honest boundary unchanged)
+The "cannot run GL 4.3 compute on macOS" fact stands — but "cannot run" had been conflated with
+"cannot compile". The compute path is written against Qt's `QOpenGLFunctions_4_3_Core` wrapper
+classes, which compile on every desktop Qt platform (entry points resolve at *runtime*). So `ci-mac`
+now builds on every push as a real cross-platform compile gate for the whole codebase — clang/AppleClang
+strictness, 64-bit arm, case-sensitive-ish FS, no MSVC permissiveness — while the workflow header and
+the artifact name say loudly that the product is **not runnable** until the Metal/Vulkan (MoltenVK)
+renderer port happens. Enablers:
+- `physx` platform-qualified `!osx` in `vcpkg.json` (the vcpkg port supports windows x64 + linux
+  only); CMake's PhysX path was already optional → compiles the stub.
+- New `triplets/arm64-osx-ci.cmake` overlay (release-only `arm64-osx`) + `macos-ci-release` /
+  `mac-ci-release` presets. No prior mac cache existed, so the halved cold build is free money.
+- Same rolling `vcpkg-mac-*` binary-cache scheme as win/linux; a failed mid-prime run still banks its
+  completed packages (post-step saves on failure, not on cancellation).
+- Runner's preinstalled vcpkg, with a bootstrap-clone fallback if the image drops it.
+
+### CD — `release.yml`
+Pushing a `v*` tag (or dispatching from one) publishes a GitHub Release that carries the **exact
+artifacts CI already built** for that commit — it downloads the green `ci-win`/`ci-linux` run
+artifacts (`gh run list --commit … --status success` → `gh run download`) and attaches them; no
+rebuild, so a release can never diverge from what CI validated. Missing green win/linux runs fail the
+release with instructions; the mac compile-check artifact is attached when present but never blocks.
+
+### Expectations for the next runs
+- `ci-win`: cache-hot rebuild (vcpkg.json hash changed → new primary key, prefix restore-keys pick up
+  the old cache; opencv4's Windows ABI is unchanged).
+- `ci-linux`: restores the primed cache, skips the gtk stack entirely, builds the remaining ports with
+  per-port cleanup, then compiles the app with gcc for the first time. **Any failures from here are
+  ordinary gcc/clang compile errors in app code — iterate per error; the cache makes each retry cheap.**
+- `ci-mac`: one cold dependency prime (possibly needing a resume run if it brushes the 6 h limit),
+  then the first-ever clang compile of the app.

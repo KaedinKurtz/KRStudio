@@ -211,7 +211,13 @@ target_include_directories(xatlas PUBLIC "${xatlas_SOURCE_DIR}/source/xatlas")
 # clones its own deps (CompactNSearch/Discregrid/GenericParameters/PBD) at
 # build time — add_subdirectory would hijack this project's build graph.
 set(KR_HAS_SPLISH 0)
-if(ENABLE_SPLISH_SPLASH AND EXISTS "${CMAKE_SOURCE_DIR}/external/SPlisHSPlasH/CMakeLists.txt")
+# The superbuild wiring below is Windows-only: it links MSVC-named .lib byproducts and
+# compiles the adapter TU with /arch:AVX2. On other platforms the DFSPH backend stubs out
+# (same as when the submodule is absent) until the byproduct/flag wiring is ported.
+if(ENABLE_SPLISH_SPLASH AND NOT WIN32)
+  message(STATUS "SPlisHSPlasH superbuild is wired for Windows only; DFSPH backend compiled out on this platform.")
+endif()
+if(ENABLE_SPLISH_SPLASH AND WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/external/SPlisHSPlasH/CMakeLists.txt")
   include(ExternalProject)
   set(SPLISH_SRC   "${CMAKE_SOURCE_DIR}/external/SPlisHSPlasH")
   set(SPLISH_BUILD "${CMAKE_BINARY_DIR}/splishsplash-build")
@@ -629,22 +635,6 @@ if(WIN32)
     endif()
   endif()
 
-  # Copy project assets like shaders and icons to the output directory.
-  add_custom_command(TARGET RoboticsSoftware POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:RoboticsSoftware>/shaders"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/icons"   "$<TARGET_FILE_DIR:RoboticsSoftware>/icons"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/simple_arm.urdf" "$<TARGET_FILE_DIR:RoboticsSoftware>/simple_arm.urdf"
-  )
-  add_custom_command(TARGET RoboticsSoftware POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E echo "---- Deploying assets to $<TARGET_FILE_DIR:RoboticsSoftware> ----"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${CMAKE_SOURCE_DIR}/assets"
-          "$<TARGET_FILE_DIR:RoboticsSoftware>/assets"
-)
-
   # windeployqt copies the qsqlite plugin but not its vcpkg dependency:
   # without sqlite3.dll next to the exe the QSQLITE driver fails to load
   # and the app exits at database init.
@@ -669,6 +659,21 @@ if(WIN32)
       COMMENT "Deploying PhysX GPU runtime (PhysXGpu_64.dll, PhysXDevice64.dll)")
   endif()
 endif()
+
+# Copy project data (shaders, icons, assets, sample URDF) next to the executable on every
+# platform — the renderer loads .glsl from shaders/ at runtime, and the CI artifacts lift
+# this tree as the distributable.
+add_custom_command(TARGET RoboticsSoftware POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E echo "---- Deploying app data to $<TARGET_FILE_DIR:RoboticsSoftware> ----"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:RoboticsSoftware>/shaders"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/icons"   "$<TARGET_FILE_DIR:RoboticsSoftware>/icons"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/assets"  "$<TARGET_FILE_DIR:RoboticsSoftware>/assets"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "${CMAKE_SOURCE_DIR}/simple_arm.urdf" "$<TARGET_FILE_DIR:RoboticsSoftware>/simple_arm.urdf"
+)
 
 # Define installation rules for creating a distributable package.
 install(TARGETS RoboticsSoftware RUNTIME DESTINATION bin BUNDLE DESTINATION .)

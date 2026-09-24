@@ -1,41 +1,98 @@
 name: ci-mac
 
-# DISABLED ON PURPOSE -- macOS is out of scope for KRStudio builds.
+# COMPILE + LINK CHECK ONLY — the app cannot RENDER on macOS yet.
 #
-# macOS caps OpenGL at 4.1 and has deprecated GL entirely. KRStudio's renderer requires GL 4.3 COMPUTE shaders
-# (introduced in 4.3, never available on macOS), so the compute pipeline cannot run as written. Making a Mac
-# build work means porting the renderer from OpenGL to Vulkan via MoltenVK -- a large separate project, NOT a
-# build-config fix. Until that port exists, this workflow only runs on manual dispatch (it will not compile the
-# compute path) and never on push/PR, so it stops failing every commit. See docs/CI.md.
+# macOS caps OpenGL at 4.1 (and has deprecated GL), while KRStudio's renderer uses GL 4.3 compute
+# shaders. The compute path is written against Qt's QOpenGLFunctions_4_3_Core wrapper classes, which
+# COMPILE on every desktop Qt platform (they resolve GL entry points at runtime), so a macOS build is
+# a meaningful cross-platform compile+link gate for the whole codebase — it just returns a null
+# functions object at runtime until the renderer is ported to Metal/Vulkan (MoltenVK). That port is a
+# separate project; see docs/CI.md. The uploaded artifact is therefore NOT a runnable app on macOS.
+#
+# PhysX has no macOS support (vcpkg port supports windows/linux only) — vcpkg.json platform-qualifies
+# it out and CMake's optional-PhysX path compiles the stub. Everything else in the manifest builds on
+# arm64-osx.
+
 on:
+  push:
+  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ci-mac-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: macos-14
     env:
-      VCPKG_DEFAULT_TRIPLET: arm64-osx
+      # Release-only overlay triplet (triplets/arm64-osx-ci.cmake): CI never debugs dependency
+      # internals, and skipping debug variants halves the cold multi-hour dependency build.
+      VCPKG_DEFAULT_TRIPLET: arm64-osx-ci
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-bincache,readwrite"
     steps:
+      # submodules: false -- external/SPlisHSPlasH is an orphaned gitlink with no .gitmodules;
+      # recursive clone fails checkout. The superbuild is Windows-only anyway (CMake gates it).
       - uses: actions/checkout@v4
         with:
           submodules: false
 
-      - uses: lukka/run-vcpkg@v11
-        with:
-          setupOnly: true
+      # Build tools the vcpkg ports need on macOS (autotools chain for python3/libusb/etc., nasm for
+      # jpeg-turbo SIMD, bison for several ports). cmake + git ship on the runner image already.
+      - name: Install build tools (brew)
+        run: brew install ninja autoconf automake autoconf-archive libtool pkg-config nasm bison
 
+      - name: Prepare vcpkg binary cache dir
+        run: mkdir -p "${{ github.workspace }}/vcpkg-bincache"
+
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-bincache
+          # Rolling key (same scheme as win/linux): each run saves a fresh complete cache under a
+          # unique key and restores the newest prior one via the prefix restore-keys, so a failed
+          # mid-prime run still banks its completed packages and the next run resumes, not restarts.
+          key: vcpkg-mac-${{ hashFiles('vcpkg.json', 'triplets/arm64-osx-ci.cmake') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            vcpkg-mac-${{ hashFiles('vcpkg.json', 'triplets/arm64-osx-ci.cmake') }}-
+            vcpkg-mac-
+
+      # Prefer the runner's preinstalled vcpkg; bootstrap a fresh clone if the image ever drops it.
+      - name: Resolve VCPKG_ROOT
+        run: |
+          if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -e "$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" ]; then
+            echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+          else
+            git clone https://github.com/microsoft/vcpkg "$HOME/vcpkg"
+            "$HOME/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+            echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
+          fi
+
+      # Manifest-mode vcpkg installs the deps during configure (the long step on a cold cache).
+      # --clean-after-build keeps peak disk at (installed tree + one buildtree); it does not change
+      # package ABIs, so the binary cache stays valid.
       - name: Configure (Release)
-        run: cmake --preset macos-ninja-release
+        run: cmake --preset macos-ci-release -DVCPKG_INSTALL_OPTIONS=--clean-after-build
+
+      - name: Disk after dependency install
+        if: always()
+        run: df -h /
 
       - name: Build
-        run: cmake --build --preset mac-release --parallel
+        run: cmake --build --preset mac-ci-release --parallel
 
-      - name: Archive
+      # qt_add_executable produces a RoboticsSoftware.app bundle on macOS. Zip whichever landed.
+      - name: Archive (compile-check artifact — NOT runnable on macOS, see header)
         run: |
-          cd build/macos-release
-          /usr/bin/zip -r KRStudio-macOS.zip .
+          cd build/macos-ci-release
+          if [ -d RoboticsSoftware.app ]; then
+            /usr/bin/zip -r KRStudio-macOS.zip RoboticsSoftware.app
+          else
+            /usr/bin/zip -r KRStudio-macOS.zip RoboticsSoftware shaders icons assets simple_arm.urdf
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: KRStudio-macOS
-          path: build/macos-release/KRStudio-macOS.zip
+          path: build/macos-ci-release/KRStudio-macOS.zip
+          if-no-files-found: warn

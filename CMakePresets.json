@@ -50,6 +50,19 @@
       }
     },
     {
+      "name": "macos-ci-release",
+      "displayName": "macOS CI (Release, release-only overlay triplet)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/macos-ci-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "arm64-osx-ci",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
+        "VCPKG_FEATURE_FLAGS": "manifests"
+      }
+    },
+    {
       "name": "linux-ninja-release",
       "displayName": "Linux + vcpkg (Release)",
       "generator": "Ninja",
@@ -91,6 +104,11 @@
     {
       "name": "mac-release",
       "configurePreset": "macos-ninja-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "mac-ci-release",
+      "configurePreset": "macos-ci-release",
       "configuration": "Release"
     },
     {

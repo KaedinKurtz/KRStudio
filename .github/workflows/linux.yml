@@ -21,6 +21,21 @@ jobs:
         with:
           submodules: false
 
+      # ROOT CAUSE of the historical ci-linux failure (run #39 and earlier): "/usr/bin/ld: final link failed:
+      # No space left on device" mid-way through the vcpkg dependency build. Two fixes work together:
+      #  1) this step evicts ~25-30 GB of preinstalled toolchains the job never uses, and
+      #  2) the Configure step passes --clean-after-build so vcpkg deletes each port's buildtree after the
+      #     package is exported, instead of accumulating ~200 buildtrees (tens of GB) over the run.
+      - name: Free runner disk space (the dependency build needs the headroom)
+        run: |
+          echo "=== disk before ==="; df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+                      /usr/local/share/powershell /usr/share/swift /usr/local/julia* \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          sudo docker image prune --all --force > /dev/null 2>&1 || true
+          sudo apt-get clean
+          echo "=== disk after ==="; df -h /
+
       # System packages vcpkg's qtbase + the GL/windowing stack need to BUILD and LINK on Linux. (The runner has
       # no GPU/display -- this verifies compile+link, not rendering.)
       - name: Install build + GL/X11/Wayland system deps
@@ -61,11 +76,23 @@ jobs:
       - name: Point VCPKG_ROOT at the runner's vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
 
+      # --clean-after-build: vcpkg removes each port's buildtrees/ and packages/ dirs once the built package is
+      # exported to the binary cache — peak disk becomes (installed tree + ONE port's buildtree) instead of the
+      # sum of all of them. Passed on the command line (not in the preset) so local developer builds keep their
+      # incremental port build state. It does not affect vcpkg's package ABI, so the existing binary cache stays hot.
       - name: Configure (Release)
-        run: cmake --preset linux-ninja-release
+        run: cmake --preset linux-ninja-release -DVCPKG_INSTALL_OPTIONS=--clean-after-build
+
+      - name: Disk after dependency install
+        if: always()
+        run: df -h /
 
       - name: Build
         run: cmake --build --preset linux-release --parallel
+
+      - name: Disk after build
+        if: always()
+        run: df -h /
 
       # Phase 2.3 -- honest link/start check (NOT a render test; the runner has no GPU).
       - name: Link + headless-start smoke (best-effort, non-fatal)
@@ -79,10 +106,13 @@ jobs:
             echo "no binary produced at $BIN"
           fi
 
+      # CMake's platform-neutral POST_BUILD step already copied shaders/ icons/ assets/ and the sample URDF
+      # next to the binary, so the zip is the runnable tree (host still provides Qt-linked system libs + GL driver).
       - name: Archive
         run: |
           cd build/linux-release
-          zip -r KRStudio-Linux.zip RoboticsSoftware assets 2>/dev/null || zip -r KRStudio-Linux.zip . -x 'CMakeFiles/*' '*.o' '*.ninja*'
+          zip -r KRStudio-Linux.zip RoboticsSoftware shaders icons assets simple_arm.urdf 2>/dev/null \
+            || zip -r KRStudio-Linux.zip . -x 'CMakeFiles/*' '*.o' '*.ninja*' -x 'vcpkg_installed/*' -x '.qt/*' -x '*_autogen/*'
 
       - uses: actions/upload-artifact@v4
         with:

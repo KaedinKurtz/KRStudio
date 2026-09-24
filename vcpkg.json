@@ -10,7 +10,28 @@
     "imgui",
     "qttools",
     "qtimageformats",
-    "opencv4",
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": [
+        "calib3d",
+        { "name": "directml", "platform": "windows & !uwp & !mingw" },
+        { "name": "dnn", "platform": "!android" },
+        { "name": "dshow", "platform": "windows & !uwp" },
+        "fs",
+        { "name": "gapi", "platform": "!uwp" },
+        "highgui",
+        "intrinsics",
+        "jpeg",
+        { "name": "msmf", "platform": "windows & !uwp & !mingw" },
+        "png",
+        "quirc",
+        "thread",
+        "tiff",
+        "webp",
+        { "name": "win32ui", "platform": "windows & !uwp" }
+      ]
+    },
     "assimp",
     "glm",
     "realsense2",
@@ -18,7 +39,10 @@
     "tbb",
     "zlib",
     "blosc",
-    "physx",
+    {
+      "name": "physx",
+      "platform": "!osx"
+    },
     "fcl",
     "ccd",
     "v-hacd",

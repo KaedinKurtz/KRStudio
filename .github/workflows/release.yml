@@ -1,0 +1,90 @@
+name: release
+
+# CD: pushing a tag like v0.2.0 publishes a GitHub Release carrying the EXACT artifacts the CI
+# workflows already built and validated for that commit — no rebuild, so the release can never
+# diverge from what CI tested. Flow: tag a commit whose ci-win + ci-linux runs are green, push the
+# tag, download those runs' artifacts, attach them to the release. If CI hasn't gone green on the
+# tagged commit yet, this fails with a clear message — re-run it (workflow_dispatch or re-run from
+# the Actions UI) after CI is green.
+#
+# ci-mac is attached when available but never blocks a release: the macOS artifact is a
+# compile-check product, not a runnable app (see mac.yml header).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # workflow_dispatch must be launched FROM a tag (Actions UI → Run workflow → pick the tag),
+      # otherwise there is no version to release under.
+      - name: Require a tag ref
+        run: |
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "::error::release must run on a tag ref (got ${GITHUB_REF_TYPE} '${GITHUB_REF_NAME}'). Push a v* tag, or dispatch this workflow from the tag."
+            exit 1
+          fi
+
+      - name: Collect artifacts from green CI runs for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          missing=""
+          for wf in ci-win ci-linux ci-mac; do
+            run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --commit "$GITHUB_SHA" \
+                       --status success --limit 1 --json databaseId -q '.[0].databaseId' || true)
+            if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+              if [ "$wf" = "ci-mac" ]; then
+                echo "note: no green ci-mac run for $GITHUB_SHA — releasing without the macOS compile-check artifact."
+              else
+                missing="$missing $wf"
+              fi
+              continue
+            fi
+            echo "$wf: downloading artifacts of run $run_id"
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --dir "out/$wf"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::No successful run of:$missing for commit $GITHUB_SHA. Wait for CI to go green on the tagged commit, then re-run this workflow."
+            exit 1
+          fi
+
+      - name: Stage release assets
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME:-manual}"
+          mkdir -p assets-out
+          # Windows artifact is an uploaded DIRECTORY tree (dist/) — zip it structure-preserving.
+          (cd out/ci-win/KRStudio-Windows && zip -r "$GITHUB_WORKSPACE/assets-out/KRStudio-Windows-$ver.zip" .)
+          cp out/ci-linux/KRStudio-Linux/KRStudio-Linux.zip "assets-out/KRStudio-Linux-$ver.zip"
+          if [ -f out/ci-mac/KRStudio-macOS/KRStudio-macOS.zip ]; then
+            cp out/ci-mac/KRStudio-macOS/KRStudio-macOS.zip "assets-out/KRStudio-macOS-compilecheck-$ver.zip"
+          fi
+          ls -la assets-out
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="Built by CI from $GITHUB_SHA.
+
+          - **KRStudio-Windows**: self-contained windeployqt bundle — unzip and run RoboticsSoftware.exe from inside the folder (needs a GL 4.3 GPU + VC++ 2015-2022 x64 redistributable).
+          - **KRStudio-Linux**: binary + shaders/icons/assets — chmod +x RoboticsSoftware (needs a GL 4.3 driver; built on Ubuntu 22.04, host provides system libs).
+          - **KRStudio-macOS-compilecheck** (if present): proves the codebase compiles/links on macOS; NOT runnable until the renderer's Metal/Vulkan port (macOS has no GL 4.3)."
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --title "KRStudio $GITHUB_REF_NAME" --notes "$notes" \
+            assets-out/*
