@@ -2,7 +2,21 @@ name: ci-linux
 
 on:
   push:
+    paths-ignore:
+      - 'engine/**'
+      - 'docs/**'
+      - '.github/workflows/graphics-ci.yml'
+      - '.github/workflows/release.yml'
+      - 'scripts/check_engine_boundary.py'
+      - 'scripts/engine_boundary_baseline.json'
   pull_request:
+    paths-ignore:
+      - 'engine/**'
+      - 'docs/**'
+      - '.github/workflows/graphics-ci.yml'
+      - '.github/workflows/release.yml'
+      - 'scripts/check_engine_boundary.py'
+      - 'scripts/engine_boundary_baseline.json'
   workflow_dispatch:
 
 concurrency:
