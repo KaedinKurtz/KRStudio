@@ -6,6 +6,7 @@
 #include <librealsense2/rs.hpp>
 #include <vector>
 #include <numeric>
+#include <cstring>  // memcpy
 
 /**
  * @brief A static library of functions for converting between common

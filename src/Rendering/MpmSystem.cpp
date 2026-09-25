@@ -1,4 +1,6 @@
 #include "MpmSystem.hpp"
+#include <cstdio>   // printf/setvbuf (self-test gates)
+#include <cstdlib>  // getenv
 #include "RenderingSystem.hpp"
 #include "SmokeSystem.hpp"
 #include "Shader.hpp"

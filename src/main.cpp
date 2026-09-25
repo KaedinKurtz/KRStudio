@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QtWidgets>
+#include <cstdio>  // fprintf in the Qt message handler
 #include "MainWindow.hpp"
 #include "DatabaseManager.hpp"
 #include "SettingsManager.hpp"

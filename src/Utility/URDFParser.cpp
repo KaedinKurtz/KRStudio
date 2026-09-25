@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <sstream>
+#include <cstring>  // strcmp (libstdc++ does not provide it transitively; MSVC/libc++ did)
 
 // Helper function to parse a "x y z" string into a glm::vec3
 static glm::vec3 parseVec3(const char* str)

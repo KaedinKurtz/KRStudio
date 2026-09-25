@@ -1,4 +1,6 @@
 #include "DfsphBackend.hpp"
+#include <cstdio>   // printf/setvbuf (self-test gates)
+#include <cstdlib>  // getenv
 #include "RenderingSystem.hpp"
 #include "FluidSystem.hpp"
 #include "components.hpp"

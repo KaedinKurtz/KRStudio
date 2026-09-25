@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <cctype>
+#include <cstring>  // strlen
 
 namespace fs = std::filesystem;
 

@@ -1,4 +1,6 @@
 #include "SimulationController.hpp"
+#include <cstdio>   // printf/setvbuf (self-test gates)
+#include <cstdlib>  // getenv
 #include "Scene.hpp"
 #include "components.hpp"
 #include "CollisionCookingService.hpp"
