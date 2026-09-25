@@ -113,14 +113,17 @@ void ObservableDataManager::publish(const std::string& id, ProfiledData<T>&& dat
         // ToDo: Update timestamp and frequency data
     }
     else {
-        // Create new source on-the-fly
-        m_dataSources[id] = {
+        // Create new source on-the-fly. NOTE: must be emplace, not operator[]=:
+        // DataSource carries a const std::type_info& member, so it is copy-
+        // CONSTRUCTIBLE but not assignable (and not default-constructible) —
+        // Clang/GCC reject the assignment form MSVC happened to accept.
+        m_dataSources.emplace(id, DataSource{
             any_ptr,
             nullptr, // No fetcher for published data
             "Published data source",
             typeid(T),
             HealthStatus::Active
-        };
+        });
     }
 
     // ToDo: Add to global event buffer
@@ -141,13 +144,14 @@ void ObservableDataManager::registerDataSource(const std::string& id, std::funct
         return std::any(fetcher());
         };
 
-    m_dataSources[id] = {
+    // emplace, not operator[]= — see the note in publish() (reference member).
+    m_dataSources.emplace(id, DataSource{
         nullptr, // No data until first polled
         anyFetcher,
         description,
         typeid(T),
         HealthStatus::Stale
-    };
+    });
 
     // ToDo: Implement derivative source creation if create_derivatives is true
 }
