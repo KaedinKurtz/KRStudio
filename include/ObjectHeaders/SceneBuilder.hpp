@@ -2,7 +2,7 @@
 #include "RobotDescription.hpp"
 #include "Scene.hpp" // Needs to know about the scene
 #include "Types.hpp"
-#include "Components.hpp" // Needs to know about components it will add
+#include "components.hpp" // Needs to know about components it will add (lowercase on disk; case matters on Linux)
 #include "PrimitiveBuilders.hpp"
 #include "SceneQuery.hpp"
 #include <vector>          

@@ -85,8 +85,15 @@ jobs:
       # Manifest-mode vcpkg installs the deps during configure (the long step on a cold cache).
       # --clean-after-build keeps peak disk at (installed tree + one buildtree); it does not change
       # package ABIs, so the binary cache stays valid.
+      # VCPKG_HOST_TRIPLET=arm64-osx-ci: without it, vcpkg builds host-tool dependencies
+      # (qttools' qtbase etc.) a second time under the stock arm64-osx triplet — debug+release
+      # and without the overlay fixes. Pinning host==target dedupes that entire second build
+      # (same lesson as ci-linux run 42; CLI -D verified to beat preset cacheVariables).
       - name: Configure (Release)
-        run: cmake --preset macos-ci-release -DVCPKG_INSTALL_OPTIONS=--clean-after-build
+        run: >
+          cmake --preset macos-ci-release
+          -DVCPKG_INSTALL_OPTIONS=--clean-after-build
+          -DVCPKG_HOST_TRIPLET=arm64-osx-ci
 
       - name: Disk after dependency install
         if: always()
