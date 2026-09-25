@@ -109,7 +109,10 @@ jobs:
       - name: Run consumer
         shell: bash
         run: |
-          bin=$(find build/consume -name 'krsg_consume*' -type f | head -1)
+          # Exact names only: 'krsg_consume*' also matched MSBuild's
+          # krsg_consume.exe.recipe XML on Windows and tried to execute it.
+          bin=$(find build/consume \( -name 'krsg_consume' -o -name 'krsg_consume.exe' \) -type f | head -1)
+          [ -n "$bin" ] || { echo "::error::consumer binary not found"; exit 1; }
           "$bin"
 
   s4-gpu-lavapipe:
