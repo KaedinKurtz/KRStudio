@@ -308,3 +308,64 @@ release with instructions; the mac compile-check artifact is attached when prese
   ordinary gcc/clang compile errors in app code — iterate per error; the cache makes each retry cheap.**
 - `ci-mac`: one cold dependency prime (possibly needing a resume run if it brushes the 6 h limit),
   then the first-ever clang compile of the app.
+
+---
+
+## Phase 6 — the drive to green (2026-09-25): every workflow passing
+
+Final board, all on the `claude/awesome-davinci-r1k104` branch:
+
+| Workflow | Run | Commit | Result |
+|---|---|---|---|
+| `ci-win` | #224 | `3d715ab` | ✅ green (5h25m quota-evicted cold rebuild, fresh cache banked) |
+| `ci-linux` | #46 | `1e04b8a` | ✅ green — **first successful Linux build of KRStudio** |
+| `ci-mac` | #141 | `cd0ebbf` | ✅ green — **first successful macOS (arm64) build of KRStudio** |
+| `graphics-ci` | #3+ | `3f57036` | ✅ green (all 7 jobs: lint/shader-gate/4-toolchain build/unit/lavapipe GPU) |
+
+`ci-win` and `ci-mac` were re-dispatched on the final head (`1e04b8a` + this docs commit)
+as a closing verification so every platform is proven against one code state.
+
+### What it took — the Linux chain (runs 39→46)
+1. **Disk exhaustion** (run 39): gtk3-for-opencv dragged in a desktop stack that overflowed the
+   runner → opencv4 `default-features: false` + explicit feature list minus gtk, ~30 GB
+   preinstalled-toolchain eviction, `--clean-after-build`.
+2. **physx overlay port** (run 40): upstream passes an empty `GENERATOR` on Linux
+   ("Unable to determine appropriate generator for: Linux-x64-external") — overlay port drops the line.
+3. **Cache-quota economics** (run 41): the repo's 10 GB Actions-cache quota is a three-platform
+   eviction war; run 41 restored *nothing*, rebuilt cold, and lost its runner 2.8h in. Response:
+   `x64-linux-ci` release-only overlay triplet (halves build + cache footprint) — the cold cost was
+   already sunk.
+4. **Cold qtbase truths** (run 42): `libxcb-xinput-dev` is a hard qtbase requirement the old cache
+   had been masking, and the failing qtbase was the *host-triplet duplicate* build —
+   `VCPKG_HOST_TRIPLET=x64-linux-ci` dedupes it (mac.yml got the same treatment).
+5. **First GCC app compile** (runs 43→46), each a genuine portability class MSVC had been absorbing:
+   - `#include "Components.hpp"` vs `components.hpp` on disk — case-insensitive filesystems resolved
+     it for years; a repo-wide audit (every quoted include vs all 14 include dirs) proved it was the
+     only instance.
+   - `view.get<Component>(...)` on a dependent type without the `template` keyword
+     (`Helpers.hpp`) — two-phase lookup, enforced by GCC and Clang alike.
+   - `strcmp` without `<cstring>` (`URDFParser.cpp`) — libstdc++ doesn't provide it transitively;
+     swept the tree and added the missing `<cstring>/<cstdio>/<cstdlib>` includes in 7 files.
+   - `_blosc_*` undefined at link: static `libopenvdb.a` needs blosc appended explicitly (the vcpkg
+     OpenVDB config doesn't propagate it); ordering matters for GNU ld's single-pass resolution.
+
+### The macOS chain (runs 136→141)
+- `v-hacd` is `!arm`, `mosquitto` is `!osx` (its cmake wrapper hard-errors on release-only triplets;
+  an overlay wrapper keeps MQTT alive on Linux).
+- `ObservableDataManager`: `operator[]=` on a map of structs holding `const std::type_info&` —
+  copy-constructible but not assignable; `emplace` at both insert sites.
+- Apple's GL headers stop at 4.1: exactly 8 enum constants (compute/SSBO/barrier bits) force-included
+  from `GlCompat43.h` on APPLE only — a compile gate, not a runnable claim.
+- The same `template`-keyword fix as Linux, then the link: the no-MQTT `#else` branch of
+  `MqttNodes.cpp` had stubbed the registration functions but not `runMqttNodeGate()` (vacuous-pass
+  stub added, matching `MqttBridge.cpp`), plus the blosc append above.
+
+### Standing risks / notes for future maintainers
+- **The 10 GB Actions-cache quota is systemic**: three platforms' vcpkg caches evict each other.
+  Windows cold rebuilds cost ~5.5h when evicted (runs 41/224 both went cold). If this recurs
+  often, candidates: trim the Windows cache (release-only triplet there too), or an external
+  binary-cache backend (NuGet/GHPackages).
+- A `[skip ci]` push + manual `workflow_dispatch` is the established way to land fixes while other
+  platforms' cold builds are in flight (a push trigger concurrency-cancels them, and cancellation
+  skips the cache save; failure does not).
+- GitHub's 6h job limit is real for cold Windows runs — #224 finished at 5h25m.
