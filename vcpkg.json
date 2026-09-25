@@ -53,7 +53,10 @@
     "urdfdom",
     "urdfdom-headers",
     "opencascade",
-    "mosquitto",
+    {
+      "name": "mosquitto",
+      "platform": "!osx"
+    },
     "ompl",
     "python3",
     "pybind11"
