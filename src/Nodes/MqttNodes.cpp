@@ -280,4 +280,7 @@ namespace NodeLibrary {
 int autoRegisterMqttTopicNodes(const std::string&, int) { return 0; }
 int autoRegisterCanonicalMqttNodes() { return 0; }
 } // namespace NodeLibrary
+namespace krs::nodes {
+bool runMqttNodeGate() { return true; } // no MQTT -> vacuous pass, keeps the bench green (same as MqttBridge.cpp)
+} // namespace krs::nodes
 #endif

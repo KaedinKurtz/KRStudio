@@ -452,6 +452,27 @@ if(ENABLE_OPENVDB)
   find_package(TBB CONFIG QUIET)
   if(TARGET OpenVDB::openvdb AND TARGET TBB::tbb)
     target_link_libraries(RoboticsSoftware PRIVATE OpenVDB::openvdb TBB::tbb)
+    # STATIC openvdb (the osx/linux CI triplets) references Blosc's C API, but the
+    # vcpkg OpenVDB config does not put blosc on the app's link line there (ci-mac
+    # run 140: "_blosc_init ... referenced from openvdb::initialize()"); Windows'
+    # dynamic openvdb.dll resolves it internally, which is why MSVC never noticed.
+    # Append blosc and its codec deps AFTER openvdb — GNU ld resolves archives in
+    # a single left-to-right pass, so re-listing zstd/zlib here is deliberate.
+    find_library(KR_BLOSC_LIB NAMES blosc libblosc)
+    if(KR_BLOSC_LIB)
+      target_link_libraries(RoboticsSoftware PRIVATE "${KR_BLOSC_LIB}")
+      foreach(codec lz4 snappy zstd)
+        find_library(KR_BLOSC_DEP_${codec} NAMES ${codec} lib${codec})
+        if(KR_BLOSC_DEP_${codec})
+          target_link_libraries(RoboticsSoftware PRIVATE "${KR_BLOSC_DEP_${codec}}")
+        endif()
+      endforeach()
+      find_package(ZLIB QUIET)
+      if(TARGET ZLIB::ZLIB)
+        target_link_libraries(RoboticsSoftware PRIVATE ZLIB::ZLIB)
+      endif()
+      message(STATUS "OpenVDB static codec deps appended: ${KR_BLOSC_LIB}")
+    endif()
     message(STATUS "OpenVDB and TBB found and linked.")
   else()
     message(WARNING "ENABLE_OPENVDB is ON but OpenVDB/TBB packages were not found. Install 'openvdb' with vcpkg.")
