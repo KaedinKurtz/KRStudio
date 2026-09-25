@@ -45,7 +45,10 @@
     },
     "fcl",
     "ccd",
-    "v-hacd",
+    {
+      "name": "v-hacd",
+      "platform": "!arm"
+    },
     "libigl",
     "urdfdom",
     "urdfdom-headers",
