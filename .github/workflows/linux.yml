@@ -80,8 +80,16 @@ jobs:
       # exported to the binary cache — peak disk becomes (installed tree + ONE port's buildtree) instead of the
       # sum of all of them. Passed on the command line (not in the preset) so local developer builds keep their
       # incremental port build state. It does not affect vcpkg's package ABI, so the existing binary cache stays hot.
+      #
+      # VCPKG_OVERLAY_PORTS=vcpkg-overlay/ports-fixes carries the physx port with its Linux generator bug fixed
+      # (upstream passes an empty GENERATOR that only MSBuild-on-Windows ignores — ci-linux run 40 died on
+      # "Unable to determine appropriate generator for: Linux-x64-external"). Linux-only wiring: Windows builds
+      # the baseline port fine and keeps its cache.
       - name: Configure (Release)
-        run: cmake --preset linux-ninja-release -DVCPKG_INSTALL_OPTIONS=--clean-after-build
+        run: >
+          cmake --preset linux-ninja-release
+          -DVCPKG_INSTALL_OPTIONS=--clean-after-build
+          -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}/vcpkg-overlay/ports-fixes
 
       - name: Disk after dependency install
         if: always()
