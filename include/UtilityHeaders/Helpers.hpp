@@ -10,5 +10,8 @@ Component& firstComponent(entt::registry& registry)
         // This prevents a crash and is easier to debug.
         throw std::runtime_error("Attempted to get the first component from an empty view.");
     }
-    return view.get<Component>(view.front());
+    // view's type depends on Component, so two-phase lookup (GCC/Clang) requires
+    // the 'template' keyword for this member-template call; MSVC merely tolerates
+    // its absence.
+    return view.template get<Component>(view.front());
 }
