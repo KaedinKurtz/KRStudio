@@ -6,7 +6,7 @@
 #include <cstdint>
 
 #define KRSG_VERSION_MAJOR 0
-#define KRSG_VERSION_MINOR 1
+#define KRSG_VERSION_MINOR 2
 #define KRSG_VERSION_PATCH 0
 
 // Placeholder until shared builds land (WP1 adds real export handling).

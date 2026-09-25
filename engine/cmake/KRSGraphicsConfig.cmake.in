@@ -1,12 +1,9 @@
 @PACKAGE_INIT@
 
-include(CMakeFindDependencyMacro)
-
-# Static library: consumers must resolve our private link deps.
-set(KRSG_ENABLE_VULKAN @KRSG_ENABLE_VULKAN@)
-if(KRSG_ENABLE_VULKAN)
-  find_dependency(Vulkan)
-endif()
+# KRS Graphics installed package. The Vulkan loader is resolved at RUNTIME by
+# the vendored volk (dlopen/LoadLibrary), and the allocator/headers are
+# compiled into the library — consumers need no Vulkan SDK and no third-party
+# find_dependency calls (ADR-003).
 
 include("${CMAKE_CURRENT_LIST_DIR}/KRSGraphicsTargets.cmake")
 

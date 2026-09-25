@@ -1,11 +1,13 @@
 # KRS Graphics — standalone library build. This project must configure, build,
-# install, and test WITHOUT the KRStudio app or its vcpkg dependency set
-# (ADR-003): third-party needs are Vulkan headers+loader only (system/SDK for
-# now; volk+VMA arrive vendored in WP1).
+# install, and test WITHOUT the KRStudio app or its vcpkg dependency set.
+# Third-party policy (ADR-003): the ONLY dependencies are vendored, pinned
+# FetchContent checkouts — Vulkan-Headers, volk (runtime loader, no SDK link),
+# and VulkanMemoryAllocator — compiled INTO the library so the installed
+# package exports no foreign targets and consumers need nothing but CMake.
 cmake_minimum_required(VERSION 3.24)
-project(KRSGraphics VERSION 0.1.0 LANGUAGES CXX)
+project(KRSGraphics VERSION 0.2.0 LANGUAGES CXX)
 
-option(KRSG_ENABLE_VULKAN "Build the Vulkan backend (requires Vulkan headers + loader)" ON)
+option(KRSG_ENABLE_VULKAN "Build the Vulkan backend (vendored headers/loader; no SDK needed)" ON)
 option(KRSG_WERROR "Treat warnings as errors (always ON in CI)" OFF)
 option(KRSG_BUILD_TESTS "Build unit/gpu tests" ON)
 
@@ -29,10 +31,56 @@ target_include_directories(krsg
 )
 
 if(KRSG_ENABLE_VULKAN)
-  find_package(Vulkan REQUIRED)
-  target_sources(krsg PRIVATE src/rhi/vulkan/vulkan_backend.cpp)
-  target_link_libraries(krsg PRIVATE Vulkan::Vulkan)
-  target_compile_definitions(krsg PRIVATE KRSG_HAS_VULKAN=1)
+  include(FetchContent)
+  # Pinned vendored dependencies (ADR-003). Update ritual: bump all three to a
+  # matching Vulkan SDK release in ONE commit, with the WP2 capability table
+  # re-checked. GIT_SHALLOW keeps CI clones to seconds.
+  FetchContent_Declare(krsg_vulkan_headers
+    GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
+    GIT_TAG        v1.3.290
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  _no_cmake_ # populate only; we consume include/ directly
+  )
+  FetchContent_Declare(krsg_volk
+    GIT_REPOSITORY https://github.com/zeux/volk.git
+    GIT_TAG        vulkan-sdk-1.3.290.0
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  _no_cmake_
+  )
+  FetchContent_Declare(krsg_vma
+    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+    GIT_TAG        v3.1.0
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  _no_cmake_
+  )
+  FetchContent_MakeAvailable(krsg_vulkan_headers krsg_volk krsg_vma)
+
+  target_sources(krsg PRIVATE
+    src/rhi/vulkan/vulkan_backend.cpp
+    src/rhi/vulkan/vk_resources.cpp
+    src/rhi/vulkan/vk_compute.cpp
+    src/rhi/vulkan/vk_vma.cpp
+    ${krsg_volk_SOURCE_DIR}/volk.c
+  )
+  # volk.c is C; the project only enables CXX — compile it as C++ (volk supports
+  # this) to keep the toolchain surface single-language.
+  set_source_files_properties(${krsg_volk_SOURCE_DIR}/volk.c PROPERTIES LANGUAGE CXX)
+
+  # SYSTEM silences third-party headers under our -Werror wall.
+  target_include_directories(krsg SYSTEM PRIVATE
+    ${krsg_vulkan_headers_SOURCE_DIR}/include
+    ${krsg_volk_SOURCE_DIR}
+    ${krsg_vma_SOURCE_DIR}/include
+  )
+  target_compile_definitions(krsg PRIVATE
+    KRSG_HAS_VULKAN=1
+    VK_NO_PROTOTYPES              # all entry points come through volk
+    VMA_STATIC_VULKAN_FUNCTIONS=0
+    VMA_DYNAMIC_VULKAN_FUNCTIONS=1
+  )
+  if(UNIX AND NOT APPLE)
+    target_link_libraries(krsg PRIVATE ${CMAKE_DL_LIBS}) # volk dlopens the loader
+  endif()
 endif()
 
 # Engine code is warning-clean by contract (CI_PIPELINE.md S2); the app tree is not
@@ -77,7 +125,10 @@ install(FILES
 if(KRSG_BUILD_TESTS)
   enable_testing()
 
-  add_executable(krsg_unit_tests tests/unit/test_device_null.cpp)
+  add_executable(krsg_unit_tests
+    tests/unit/test_device_null.cpp
+    tests/unit/test_resources_null.cpp
+  )
   target_link_libraries(krsg_unit_tests PRIVATE krsg)
   target_include_directories(krsg_unit_tests PRIVATE tests/unit)
   add_test(NAME unit COMMAND krsg_unit_tests)
@@ -88,5 +139,6 @@ if(KRSG_BUILD_TESTS)
     # set so S3 stays honest on GPU-less machines).
     add_executable(krsg_gpu_tests tests/gpu/test_vulkan_device.cpp)
     target_link_libraries(krsg_gpu_tests PRIVATE krsg)
+    target_include_directories(krsg_gpu_tests PRIVATE tests/gpu)
   endif()
 endif()

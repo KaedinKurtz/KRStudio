@@ -1,0 +1,24 @@
+#version 450
+// GPU execution test kernel (S4 lavapipe / S5 MoltenVK): a deterministic
+// transform the CPU can replay exactly — out[i] = in[i]*3 + i + seed.
+// Exercises the full v0 foundation: SSBO set-0 layout convention, push
+// constants, dispatch, compute->host visibility, readback.
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Push {
+    uint elementCount;
+    uint seed;
+} pc;
+
+layout(set = 0, binding = 0, std430) readonly buffer InBuf { uint data[]; } inBuf;
+layout(set = 0, binding = 1, std430) writeonly buffer OutBuf { uint data[]; } outBuf;
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= pc.elementCount) {
+        return;
+    }
+    outBuf.data[i] = inBuf.data[i] * 3u + i + pc.seed;
+}

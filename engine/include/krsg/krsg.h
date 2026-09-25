@@ -7,5 +7,6 @@
 // the installed KRSGraphics package: find_package(KRSGraphics CONFIG REQUIRED),
 // target_link_libraries(app PRIVATE krsg::krsg).
 
+#include <krsg/device.h>
 #include <krsg/types.h>
 #include <krsg/version.h>

@@ -9,6 +9,14 @@
       "sets": []
     },
     {
+      "file": "test_checksum.comp",
+      "stage": "compute",
+      "entry": "main",
+      "origin": "new (WP1 gpu-test kernel; embedded copy: engine/tests/gpu/checksum_spirv.h)",
+      "sets": [ { "set": 0, "bindings": ["0: ssbo in", "1: ssbo out"] } ],
+      "push_constants": { "size": 8, "members": ["elementCount: uint", "seed: uint"] }
+    },
+    {
       "file": "solid_color.frag",
       "stage": "fragment",
       "entry": "main",
