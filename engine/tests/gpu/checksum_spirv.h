@@ -11,6 +11,7 @@
 namespace krsg_test
 {
 
+// clang-format off
 inline constexpr std::uint32_t kChecksumSpirv[] = {
     0x07230203u, 0x00010500u, 0x0008000bu, 0x00000037u, 0x00000000u, 0x00020011u,
     0x00000001u, 0x0006000bu, 0x00000001u, 0x4c534c47u, 0x6474732eu, 0x3035342eu,
@@ -81,5 +82,6 @@ inline constexpr std::uint32_t kChecksumSpirv[] = {
 };
 inline constexpr std::size_t kChecksumSpirvWords =
     sizeof(kChecksumSpirv) / sizeof(kChecksumSpirv[0]);
+// clang-format on
 
 } // namespace krsg_test

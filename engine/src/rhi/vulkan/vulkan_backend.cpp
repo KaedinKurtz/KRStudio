@@ -317,7 +317,7 @@ ResultCode CreateVulkanDevice(const DeviceDesc& desc, core::DeviceImpl* impl)
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(state->physical, &props);
     impl->capsData.backend = BackendKind::Vulkan;
-    std::strncpy(impl->capsData.deviceName, props.deviceName, sizeof(impl->capsData.deviceName) - 1);
+    core::CopyName(impl->capsData.deviceName, sizeof(impl->capsData.deviceName), props.deviceName);
     impl->capsData.apiMajor = VK_API_VERSION_MAJOR(props.apiVersion);
     impl->capsData.apiMinor = VK_API_VERSION_MINOR(props.apiVersion);
     impl->capsData.softwareRasterizer = (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU);

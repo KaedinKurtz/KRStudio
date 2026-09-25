@@ -47,6 +47,20 @@ void EmitDebug(Severity severity, const char* message)
     }
 }
 
+void CopyName(char* dst, std::size_t capacity, const char* src)
+{
+    if (dst == nullptr || capacity == 0) {
+        return;
+    }
+    std::size_t i = 0;
+    if (src != nullptr) {
+        for (; i + 1 < capacity && src[i] != '\0'; ++i) {
+            dst[i] = src[i];
+        }
+    }
+    dst[i] = '\0';
+}
+
 std::uint32_t FormatTexelSize(Format format)
 {
     switch (format) {
@@ -108,7 +122,7 @@ Result<Device*> Device::Create(const DeviceDesc& desc)
     switch (desc.backend) {
     case BackendKind::Null: {
         impl->capsData.backend = BackendKind::Null;
-        std::strncpy(impl->capsData.deviceName, "KRS Null Device", sizeof(impl->capsData.deviceName) - 1);
+        core::CopyName(impl->capsData.deviceName, sizeof(impl->capsData.deviceName), "KRS Null Device");
         impl->capsData.softwareRasterizer = true;
         return {impl, ResultCode::Ok};
     }

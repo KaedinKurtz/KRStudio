@@ -63,6 +63,10 @@ struct DeviceImpl : Device {
 
 void EmitDebug(Severity severity, const char* message);
 
+// Bounded, always-terminated string copy (replaces strncpy, which MSVC's
+// /W4 /WX wall rejects as C4996 and which does not guarantee termination).
+void CopyName(char* dst, std::size_t capacity, const char* src);
+
 // Bytes per texel for the public Format enum (0 for Unknown). Shared by
 // facade validation and both backends.
 std::uint32_t FormatTexelSize(Format format);
