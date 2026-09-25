@@ -1,0 +1,21 @@
+{
+  "comment": "Source of truth for engine/shaders (CI stage S1, engine/tools/shader_gate.py). Every shader file must have a row here; 'retired' names may never reappear on disk. The 'uniforms' field will carry the GL->set/binding mapping rows as conversion waves land (IMPLEMENTATION_PLAN.md, shader changeover).",
+  "shaders": [
+    {
+      "file": "fullscreen_triangle.vert",
+      "stage": "vertex",
+      "entry": "main",
+      "origin": "new (WP0 skeleton)",
+      "sets": []
+    },
+    {
+      "file": "solid_color.frag",
+      "stage": "fragment",
+      "entry": "main",
+      "origin": "new (WP0 skeleton)",
+      "sets": [],
+      "push_constants": { "size": 16, "members": ["color: vec4"] }
+    }
+  ],
+  "retired": []
+}

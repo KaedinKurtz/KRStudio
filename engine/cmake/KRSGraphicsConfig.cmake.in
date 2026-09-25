@@ -1,0 +1,13 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Static library: consumers must resolve our private link deps.
+set(KRSG_ENABLE_VULKAN @KRSG_ENABLE_VULKAN@)
+if(KRSG_ENABLE_VULKAN)
+  find_dependency(Vulkan)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/KRSGraphicsTargets.cmake")
+
+check_required_components(KRSGraphics)

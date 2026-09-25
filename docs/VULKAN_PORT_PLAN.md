@@ -1,5 +1,16 @@
 # KRStudio Renderer Port Plan — QRhi Parallel Backend (Vulkan on Linux/Windows, native Metal on macOS)
 
+> **DECISION RECORD — 2026-09-25 (supersedes this document's recommendation).** After this plan was
+> written, the owner added a requirement that changes the architecture calculus: the new backend must
+> become a **standalone, precompiled graphics library with a Qt-free public API, reusable from any 3D
+> program** — and a hard codebase split between the graphics engine and the robotics application.
+> QRhi cannot satisfy that (it makes Qt a permanent dependency of the library), so the owner selected
+> **§4.1 Direct-Vulkan** as the plan of record, structured as the `engine/` library in this monorepo.
+> The plan of record now lives in **`docs/graphics/`** (ARCHITECTURE.md, IMPLEMENTATION_PLAN.md,
+> CI_PIPELINE.md). **Sections 2 (inventory) and 3.5 (red-team verdicts) of this document remain the
+> authoritative evidence base** — every census number and hazard carries over; the direct-Vulkan plan
+> recovers push constants, indirect execution, and integer texture formats that §3 works around.
+
 Honest boundary up front: **this is a plan, not a port.** Every claim below that could be checked against the
 repo has been checked (file:line citations throughout); every claim about Qt 6.8.3 APIs was verified against the
 headers actually installed under `vcpkg_installed/`. The effort numbers are estimates by construction. The plan's

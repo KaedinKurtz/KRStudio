@@ -1,0 +1,151 @@
+name: graphics-ci
+
+# The KRS Graphics verification pipeline (spec: docs/graphics/CI_PIPELINE.md).
+# Deliberately independent of the app's multi-hour vcpkg CI: the engine vendors a
+# tiny dependency set (ADR-003), so this whole pipeline runs in minutes on every
+# push — that speed is what makes the test-first, gate-driven port loop viable.
+#
+# Stages here: S0 boundary/hygiene, S1 shader gate, S2 build+package matrix,
+# S3 unit tests, S4 GPU-on-lavapipe. S5 (MoltenVK GPU) joins as required in WP2;
+# S6 parity and S7 perf are nightly jobs added in WP6/WP7 per the spec.
+
+on:
+  push:
+    paths:
+      - 'engine/**'
+      - 'scripts/check_engine_boundary.py'
+      - 'scripts/engine_boundary_baseline.json'
+      - '.github/workflows/graphics-ci.yml'
+  pull_request:
+    paths:
+      - 'engine/**'
+      - 'scripts/check_engine_boundary.py'
+      - 'scripts/engine_boundary_baseline.json'
+      - '.github/workflows/graphics-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: graphics-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  s0-boundary:
+    name: "S0 boundary + hygiene"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Boundary lint (engine/app split, layer direction, GL ratchet)
+        run: python3 scripts/check_engine_boundary.py
+      - name: Public headers compile standalone (IWYU/self-containment)
+        run: |
+          set -euo pipefail
+          for h in engine/include/krsg/*.h; do
+            name="krsg/$(basename "$h")"
+            echo "#include <$name>" | g++ -std=c++17 -fsyntax-only -Iengine/include -xc++ - \
+              || { echo "::error::public header $name is not self-contained"; exit 1; }
+            echo "self-contained: $name"
+          done
+      - name: clang-format check (engine tree only)
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find engine -name '*.cpp' -o -name '*.h' -o -name '*.hpp' | grep -v tests/consume || true)
+          clang-format --dry-run -Werror "${files[@]}"
+
+  s1-shaders:
+    name: "S1 shader gate"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Install glslang + spirv-tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq glslang-tools spirv-tools
+      - name: Validate all engine shaders against the manifest
+        run: python3 engine/tools/shader_gate.py
+
+  s2-s3-build-test:
+    name: "S2/S3 ${{ matrix.name }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-gcc,    os: ubuntu-22.04,   cc: gcc,   cxx: g++,     vulkan: ON,  config: Debug }
+          - { name: linux-clang,  os: ubuntu-22.04,   cc: clang, cxx: clang++, vulkan: ON,  config: Release }
+          # Vulkan flips ON for windows/macos in WP1 when volk (dlopen loader) is
+          # vendored — today those legs verify the Qt-free build + package + null
+          # backend, which is the WP0 contract.
+          - { name: windows-msvc, os: windows-latest, cc: '',    cxx: '',      vulkan: OFF, config: Release }
+          - { name: macos-arm64,  os: macos-14,       cc: '',    cxx: '',      vulkan: OFF, config: Release }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Install Vulkan headers + loader (Linux)
+        if: matrix.vulkan == 'ON'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libvulkan-dev
+      - name: Configure
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.cc }}" ]; then export CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}; fi
+          cmake -S engine -B build/engine \
+            -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+            -DKRSG_WERROR=ON \
+            -DKRSG_ENABLE_VULKAN=${{ matrix.vulkan }} \
+            -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/krsg-prefix"
+      - name: Build (warnings are errors)
+        run: cmake --build build/engine --config ${{ matrix.config }} --parallel
+      - name: S3 unit tests
+        run: ctest --test-dir build/engine -C ${{ matrix.config }} --output-on-failure
+      - name: Install package
+        run: cmake --install build/engine --config ${{ matrix.config }}
+      - name: Consume test (builds against the INSTALLED package only)
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.cc }}" ]; then export CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}; fi
+          cmake -S engine/tests/consume -B build/consume \
+            -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/krsg-prefix"
+          cmake --build build/consume --config ${{ matrix.config }} --parallel
+      - name: Run consumer
+        shell: bash
+        run: |
+          bin=$(find build/consume -name 'krsg_consume*' -type f | head -1)
+          "$bin"
+
+  s4-gpu-lavapipe:
+    name: "S4 GPU (lavapipe + validation)"
+    runs-on: ubuntu-22.04
+    needs: [s2-s3-build-test]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Install lavapipe + validation layers + tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvulkan-dev mesa-vulkan-drivers vulkan-tools \
+            vulkan-validationlayers
+      - name: ICD preflight (a gate that cannot run is a failure, not a skip)
+        run: |
+          set -euo pipefail
+          vulkaninfo --summary | tee /tmp/vkinfo.txt
+          grep -qi "llvmpipe\|lavapipe" /tmp/vkinfo.txt \
+            || { echo "::error::lavapipe did not enumerate — S4 cannot verify GPU behavior"; exit 1; }
+      - name: Build engine (Vulkan ON)
+        run: |
+          cmake -S engine -B build/engine -DCMAKE_BUILD_TYPE=Debug -DKRSG_WERROR=ON -DKRSG_ENABLE_VULKAN=ON
+          cmake --build build/engine --parallel
+      - name: Run GPU tests under validation (any validation message = failure)
+        run: |
+          set -euo pipefail
+          out=$(./build/engine/krsg_gpu_tests 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          # The harness prints validation messages through the debug sink; the test
+          # binary already fails on Error-severity callbacks. Belt-and-suspenders:
+          if echo "$out" | grep -qi "validation"; then
+            echo "::error::validation layer emitted messages — treated as failure (CI_PIPELINE.md S4)"
+            exit 1
+          fi
