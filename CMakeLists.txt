@@ -329,6 +329,16 @@ target_include_directories(RoboticsSoftware PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/external"
 )
 
+# Apple's OpenGL headers stop at GL 4.1: the compute-era enum VALUES the renderer
+# uses are absent there even though Qt's QOpenGLFunctions_4_3_Core declares the
+# functions on every platform. Force-include the spec-fixed constants (all
+# #ifndef-guarded) so macOS serves as a compile gate; RUNNING the 4.3 paths on
+# macOS still requires the KRS Graphics port (docs/graphics/).
+if(APPLE)
+  target_compile_options(RoboticsSoftware PRIVATE
+    -include "${CMAKE_CURRENT_SOURCE_DIR}/include/UtilityHeaders/GlCompat43.h")
+endif()
+
 
 # -----------------------------
 #  Link Libraries

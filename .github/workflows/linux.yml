@@ -70,6 +70,7 @@ jobs:
             libxcb1-dev libxcb-glx0-dev libxcb-util-dev libxcb-keysyms1-dev libxcb-image0-dev \
             libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev \
             libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-xkb-dev libxcb-cursor-dev \
+            libxcb-xinput-dev \
             libxkbcommon-dev libxkbcommon-x11-dev libfontconfig1-dev libfreetype6-dev \
             libwayland-dev libwayland-egl-backend-dev wayland-protocols libdbus-1-dev \
             libglib2.0-dev libpcre2-dev libcups2-dev libnss3-dev libnspr4-dev \
@@ -110,6 +111,7 @@ jobs:
           -DVCPKG_INSTALL_OPTIONS=--clean-after-build
           -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}/vcpkg-overlay/ports-fixes
           -DVCPKG_TARGET_TRIPLET=x64-linux-ci
+          -DVCPKG_HOST_TRIPLET=x64-linux-ci
           -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/triplets
 
       - name: Disk after dependency install
