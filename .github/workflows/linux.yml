@@ -28,7 +28,12 @@ jobs:
     # 22.04 (gcc 11) is the safer base for this heavy from-source dependency set than 24.04.
     runs-on: ubuntu-22.04
     env:
-      VCPKG_DEFAULT_TRIPLET: x64-linux
+      # Release-only overlay triplet (triplets/x64-linux-ci.cmake), wired 2026-09-25: the
+      # debug+release x64-linux binary cache lost the repo's 10 GB Actions-cache quota fight
+      # (three platforms' multi-GB caches evict each other; run 41 restored NOTHING and went
+      # cold anyway), so the one-time cold-rebuild cost of switching was already sunk. Release-
+      # only halves both the cold build and the cache footprint, making eviction less likely.
+      VCPKG_DEFAULT_TRIPLET: x64-linux-ci
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-bincache,readwrite"
     steps:
       - uses: actions/checkout@v4
@@ -82,9 +87,9 @@ jobs:
           # run_id alone repeats across re-run attempts) and restores the most recent prior one (same manifest first,
           # then any vcpkg-linux-*). Keeps the binary cache from sticking on a single immutable seed and self-heals a
           # partial cache; LRU eviction keeps the newest, which the restore-keys prefix then picks up.
-          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json', 'triplets/x64-linux-ci.cmake') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            vcpkg-linux-${{ hashFiles('vcpkg.json') }}-
+            vcpkg-linux-${{ hashFiles('vcpkg.json', 'triplets/x64-linux-ci.cmake') }}-
             vcpkg-linux-
 
       - name: Point VCPKG_ROOT at the runner's vcpkg
@@ -104,6 +109,8 @@ jobs:
           cmake --preset linux-ninja-release
           -DVCPKG_INSTALL_OPTIONS=--clean-after-build
           -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}/vcpkg-overlay/ports-fixes
+          -DVCPKG_TARGET_TRIPLET=x64-linux-ci
+          -DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/triplets
 
       - name: Disk after dependency install
         if: always()

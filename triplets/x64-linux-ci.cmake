@@ -1,11 +1,10 @@
-# FALLBACK CI triplet for Linux: identical to the built-in x64-linux except release-only
-# (halves dependency build time + disk). NOT wired by default — ci-linux deliberately keeps
-# the stock x64-linux triplet because its GitHub Actions binary cache is already primed with
-# most of the ~200 built ports, and any triplet change invalidates every cached package
-# (the triplet file content is part of vcpkg's package ABI hash). Switch the
-# linux-ninja-release preset to this triplet only if the runner still exhausts its disk
-# after the free-space + --clean-after-build measures; the first run after switching pays
-# one full cold dependency rebuild. See docs/CI.md.
+# CI triplet for Linux: identical to the built-in x64-linux except release-only
+# (halves dependency build time + disk + binary-cache size). WIRED into ci-linux
+# since 2026-09-25: the debug+release cache repeatedly lost the repository's 10 GB
+# Actions-cache quota to the other platforms' caches (run 41 restored nothing and
+# rebuilt cold regardless), so the one-time cold rebuild that switching triplets
+# costs had already been paid. Local developer builds keep the stock x64-linux
+# triplet via the unchanged linux-ninja-release preset defaults.
 set(VCPKG_TARGET_ARCHITECTURE x64)
 set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE static)
